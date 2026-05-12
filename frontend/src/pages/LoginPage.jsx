@@ -40,19 +40,21 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex bg-white">
-      <div className="hidden lg:flex w-1/2 relative" style={{
+      <div className="hidden lg:flex w-1/2 relative flex-col items-center" style={{
         backgroundImage: "url(https://images.pexels.com/photos/30179908/pexels-photo-30179908.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080&w=1920)",
         backgroundSize: "cover", backgroundPosition: "center"
       }}>
         <div className="absolute inset-0 bg-gradient-to-br from-[#ec9324]/40 to-black/40" />
-        <div className="relative z-10 m-auto text-white p-12 max-w-md">
-          <div className="bg-white rounded-xl p-4 inline-flex mb-6">
+        <div className="relative z-10 w-full flex flex-col items-center pt-16 px-8">
+          <div className="bg-white rounded-2xl p-6 shadow-xl">
             <img
               src="https://customer-assets.emergentagent.com/job_support-core-4/artifacts/w6k7hdz0_Infollion%20Logo.svg"
-              alt="Infollion" className="h-10 w-auto"
+              alt="Infollion" className="h-20 xl:h-24 w-auto"
             />
           </div>
-          <h1 className="text-4xl font-bold leading-tight">Infollion Expert Profile Update</h1>
+          <h1 className="mt-10 text-4xl xl:text-5xl font-bold leading-tight text-white text-center max-w-md drop-shadow-md">
+            Infollion Expert Profile Update
+          </h1>
         </div>
       </div>
       <div className="w-full lg:w-1/2 flex items-center justify-center px-6 py-12">
