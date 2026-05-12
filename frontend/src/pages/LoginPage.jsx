@@ -41,10 +41,12 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex bg-white">
       <div className="hidden lg:flex w-1/2 relative flex-col items-center" style={{
-        backgroundImage: "url(https://images.pexels.com/photos/30179908/pexels-photo-30179908.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080&w=1920)",
-        backgroundSize: "cover", backgroundPosition: "center"
+        backgroundImage: "url(https://customer-assets.emergentagent.com/job_support-core-4/artifacts/5ftyl5zc_Screenshot%202026-05-12%20at%205.39.38%E2%80%AFPM.png)",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundColor: "#1a2332"
       }}>
-        <div className="absolute inset-0 bg-gradient-to-br from-[#ec9324]/40 to-black/40" />
         <div className="relative z-10 w-full flex flex-col items-center pt-16 px-8">
           <div className="bg-white rounded-2xl p-6 shadow-xl">
             <img
