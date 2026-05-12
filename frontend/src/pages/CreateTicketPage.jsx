@@ -9,10 +9,13 @@ import { Textarea } from "../components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { toast } from "sonner";
 import { Upload, Loader2 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 export default function CreateTicketPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [subject, setSubject] = useState("");
+  const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("Medium");
   const [dueDate, setDueDate] = useState("");
   const [profiles, setProfiles] = useState(0);
@@ -30,12 +33,13 @@ export default function CreateTicketPage() {
         attachment_path = up.data.path; attachment_name = up.data.filename;
       }
       const r = await api.post("/tickets", {
-        subject, priority, due_date: dueDate || null,
+        subject, description, priority, due_date: dueDate || null,
         number_of_profiles: Number(profiles) || 0,
         attachment_path, attachment_name
       });
       toast.success(`Ticket ${r.data.ticket_id} created`);
-      navigate("/ra/tickets");
+      const dest = user?.type === "Admin" ? "/admin/open-tickets" : "/ra/tickets";
+      navigate(dest);
     } catch (e) {
       toast.error(formatApiError(e?.response?.data?.detail) || "Failed to create");
     } finally { setLoading(false); }
@@ -49,7 +53,13 @@ export default function CreateTicketPage() {
         <div>
           <Label htmlFor="subject">Subject *</Label>
           <Input id="subject" required value={subject} onChange={(e) => setSubject(e.target.value)}
-            data-testid="ticket-subject-input" className="mt-1.5" placeholder="e.g. Update LinkedIn profiles for client X"/>
+            data-testid="ticket-subject-input" className="mt-1.5" placeholder="e.g. Expert Profile Not Updated"/>
+        </div>
+        <div>
+          <Label htmlFor="description">Description</Label>
+          <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)}
+            data-testid="ticket-description-input" className="mt-1.5" rows={4}
+            placeholder="Brief details about the request, expectations, profiles affected..."/>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>

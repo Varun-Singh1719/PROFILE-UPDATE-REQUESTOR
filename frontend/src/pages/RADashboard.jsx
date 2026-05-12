@@ -3,8 +3,9 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import Layout from "../components/Layout";
 import MetricCard from "../components/MetricCard";
-import TicketCard from "../components/TicketCard";
-import { Ticket, AlertCircle, CheckCircle2, Loader } from "lucide-react";
+import RecentUpdateCard from "../components/RecentUpdateCard";
+import { Button } from "../components/ui/button";
+import { Ticket, AlertCircle, CheckCircle2, Loader, Plus } from "lucide-react";
 
 export default function RADashboard() {
   const [stats, setStats] = useState({});
@@ -20,11 +21,18 @@ export default function RADashboard() {
 
   return (
     <Layout>
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Dashboard</h1>
           <p className="text-gray-500 mt-1">Your ticket activity at a glance.</p>
         </div>
+        <Button
+          onClick={() => navigate("/ra/create")}
+          data-testid="create-new-ticket-btn"
+          className="bg-[#ec9324] hover:bg-[#d4811f] text-white shadow-sm"
+        >
+          <Plus size={16} className="mr-1.5" /> Create New Ticket
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
@@ -34,10 +42,10 @@ export default function RADashboard() {
         <MetricCard label="Closed" value={stats.closed} color="#b2b2b2" icon={CheckCircle2} onClick={() => goto("Closed")} />
       </div>
 
-      <h2 className="text-xl font-semibold text-gray-900 mt-12 mb-4">Recently Updated Tickets</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      <h2 className="text-xl font-semibold text-gray-900 mt-12 mb-4">Recent Updates</h2>
+      <div className="grid grid-cols-1 gap-4">
         {recent.length === 0 && <div className="text-sm text-gray-400">No tickets yet. Create your first ticket.</div>}
-        {recent.map((t) => <TicketCard key={t.id} ticket={t} basePath="/ra/tickets" />)}
+        {recent.map((t) => <RecentUpdateCard key={t.id} ticket={t} basePath="/ra/tickets" />)}
       </div>
     </Layout>
   );

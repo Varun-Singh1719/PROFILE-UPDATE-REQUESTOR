@@ -26,12 +26,14 @@ Multi-role internal ticketing platform with three roles (Admin, Research Associa
 
 ## What's been implemented (2026-05-12)
 - Login + role-based redirect (Admin → /admin, RA → /ra, DQ → /dq).
-- Admin Dashboard: 4 metric cards, DQ Performance grid (clickable to filter), recently updated tickets cards.
-- RA Dashboard: 4 metric cards + recently updated cards.
-- DQ Dashboard: 4 metric cards (scoped to user) + new ticket cards.
-- Ticket Listing tables: search, status/priority filters, sticky headers, hover, bulk select, per-row actions (View / Assign-to-Me / Status / Manage).
-- Ticket Detail: status/priority badges, assignment dropdown (Admin/DQ self), update status, attachment preview, Comments + Activity timeline.
-- Create Ticket form with attachment upload.
+- **Google Sign-In via Emergent Auth** — only emails registered as Active contacts can sign in. JWT cookie issued on success.
+- Branding: Infollion logo in sidebar + login; tagline "Infollion Expert Profile Update".
+- Admin Dashboard: 4 metric cards, DQ Performance grid (Open + In Progress only), Recent Updates (1 card/row horizontal layout).
+- RA Dashboard + DQ Dashboard: 4 metric cards + Recent Updates section.
+- "Create New Ticket" button on Admin Dashboard, RA Dashboard, Open Tickets, Unassigned Tickets, My Tickets.
+- Ticket Listing tables: search, status/priority filters, sticky headers, hover, bulk select, per-row actions.
+- Ticket Detail: status/priority badges, assignment dropdown, comments + activity timeline, attachment download.
+- Create Ticket form with subject + description + priority + due date + profiles + attachment.
 - Admin Unassigned Tickets, Admin Contact List with Add Contact + Active/Inactive toggle.
 - 25/25 backend pytest pass, all frontend flows verified.
 

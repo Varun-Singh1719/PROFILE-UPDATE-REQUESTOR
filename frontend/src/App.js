@@ -3,6 +3,7 @@ import "./App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import LoginPage from "./pages/LoginPage";
+import AuthCallback from "./pages/AuthCallback";
 import AdminDashboard from "./pages/AdminDashboard";
 import RADashboard from "./pages/RADashboard";
 import DQDashboard from "./pages/DQDashboard";
@@ -40,6 +41,7 @@ function App() {
           <Routes>
             <Route path="/" element={<HomeRedirect />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
 
             {/* Admin */}
             <Route path="/admin" element={<ProtectedRoute roles={["Admin"]}><AdminDashboard /></ProtectedRoute>} />
@@ -50,6 +52,7 @@ function App() {
               <TicketListPage scope="unassigned" title="Unassigned Tickets" basePath="/admin/tickets" />
             </ProtectedRoute>} />
             <Route path="/admin/contacts" element={<ProtectedRoute roles={["Admin"]}><ContactListPage /></ProtectedRoute>} />
+            <Route path="/admin/create" element={<ProtectedRoute roles={["Admin"]}><CreateTicketPage /></ProtectedRoute>} />
             <Route path="/admin/tickets/:id" element={<ProtectedRoute roles={["Admin"]}><TicketDetailPage /></ProtectedRoute>} />
 
             {/* Research Associate */}

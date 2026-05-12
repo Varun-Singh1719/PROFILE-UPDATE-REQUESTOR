@@ -3,8 +3,9 @@ import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import Layout from "../components/Layout";
 import MetricCard from "../components/MetricCard";
-import TicketCard from "../components/TicketCard";
-import { Ticket, AlertCircle, CheckCircle2, Loader, Users } from "lucide-react";
+import RecentUpdateCard from "../components/RecentUpdateCard";
+import { Button } from "../components/ui/button";
+import { Ticket, AlertCircle, CheckCircle2, Loader, Users, Plus } from "lucide-react";
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({});
@@ -23,8 +24,19 @@ export default function AdminDashboard() {
 
   return (
     <Layout>
-      <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Admin Dashboard</h1>
-      <p className="text-gray-500 mt-1">Organization-wide ticket overview.</p>
+      <div className="flex items-start justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Admin Dashboard</h1>
+          <p className="text-gray-500 mt-1">Organization-wide ticket overview.</p>
+        </div>
+        <Button
+          onClick={() => navigate("/admin/create")}
+          data-testid="create-new-ticket-btn"
+          className="bg-[#ec9324] hover:bg-[#d4811f] text-white shadow-sm"
+        >
+          <Plus size={16} className="mr-1.5" /> Create New Ticket
+        </Button>
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
         <MetricCard label="Total Tickets" value={stats.total} icon={Ticket} onClick={() => goto()} />
@@ -54,19 +66,24 @@ export default function AdminDashboard() {
                 <div className="text-xs text-gray-500">{m.email}</div>
               </div>
             </div>
-            <div className="grid grid-cols-4 gap-2 mt-4 text-center">
-              <div><div className="text-lg font-bold text-gray-900">{m.total}</div><div className="text-[10px] uppercase tracking-wide text-gray-500">Total</div></div>
-              <div><div className="text-lg font-bold text-[#ec9324]">{m.open}</div><div className="text-[10px] uppercase tracking-wide text-gray-500">Open</div></div>
-              <div><div className="text-lg font-bold text-green-600">{m.in_progress}</div><div className="text-[10px] uppercase tracking-wide text-gray-500">In Prog</div></div>
-              <div><div className="text-lg font-bold text-gray-500">{m.closed}</div><div className="text-[10px] uppercase tracking-wide text-gray-500">Closed</div></div>
+            <div className="grid grid-cols-2 gap-3 mt-4 text-center">
+              <div className="bg-[#ec9324]/5 rounded-lg py-2">
+                <div className="text-2xl font-bold text-[#ec9324]">{m.open}</div>
+                <div className="text-[10px] uppercase tracking-wide text-gray-500 mt-0.5">Open</div>
+              </div>
+              <div className="bg-green-50 rounded-lg py-2">
+                <div className="text-2xl font-bold text-green-600">{m.in_progress}</div>
+                <div className="text-[10px] uppercase tracking-wide text-gray-500 mt-0.5">In Progress</div>
+              </div>
             </div>
           </button>
         ))}
       </div>
 
-      <h2 className="text-xl font-semibold text-gray-900 mt-12 mb-4">Recently Updated Tickets</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        {recent.map((t) => <TicketCard key={t.id} ticket={t} basePath="/admin/tickets" />)}
+      <h2 className="text-xl font-semibold text-gray-900 mt-12 mb-4">Recent Updates</h2>
+      <div className="grid grid-cols-1 gap-4">
+        {recent.length === 0 && <div className="text-sm text-gray-400">No recent updates.</div>}
+        {recent.map((t) => <RecentUpdateCard key={t.id} ticket={t} basePath="/admin/tickets" />)}
       </div>
     </Layout>
   );

@@ -131,6 +131,9 @@ class LoginIn(BaseModel):
     email: EmailStr
     password: str
 
+class GoogleSessionIn(BaseModel):
+    session_id: str
+
 class ContactCreate(BaseModel):
     email: EmailStr
     name: str
@@ -146,6 +149,7 @@ class ContactUpdate(BaseModel):
 
 class TicketCreate(BaseModel):
     subject: str
+    description: Optional[str] = ""
     priority: TicketPriority
     due_date: Optional[str] = None
     number_of_profiles: int = 0
@@ -174,6 +178,43 @@ async def login(body: LoginIn, response: Response):
         raise HTTPException(403, "Account is inactive")
     if not verify_password(body.password, user.get("password_hash", "")):
         raise HTTPException(401, "Invalid credentials")
+    token = create_access_token(user["id"], user["email"], user["type"])
+    response.set_cookie("access_token", token, httponly=True, secure=False, samesite="lax", max_age=43200, path="/")
+    await db.contacts.update_one({"id": user["id"]}, {"$set": {"last_login": now_iso()}})
+    user.pop("_id", None); user.pop("password_hash", None)
+    return {"user": user, "access_token": token}
+
+# REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
+@api_router.post("/auth/google-session")
+async def google_session(body: GoogleSessionIn, response: Response):
+    """Exchange a session_id from Emergent Auth for an app session.
+    Only allows users whose email already exists in the contacts table as Active.
+    """
+    try:
+        r = requests.get(
+            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+            headers={"X-Session-ID": body.session_id},
+            timeout=15,
+        )
+        if r.status_code != 200:
+            raise HTTPException(401, "Invalid Google session")
+        data = r.json()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Google session exchange failed: {e}")
+        raise HTTPException(500, "Auth service unavailable")
+
+    email = (data.get("email") or "").lower().strip()
+    if not email:
+        raise HTTPException(401, "No email returned from Google")
+
+    user = await db.contacts.find_one({"email": email})
+    if not user:
+        raise HTTPException(403, "This email is not registered. Contact your administrator.")
+    if user.get("status") != "Active":
+        raise HTTPException(403, "Account is inactive")
+
     token = create_access_token(user["id"], user["email"], user["type"])
     response.set_cookie("access_token", token, httponly=True, secure=False, samesite="lax", max_age=43200, path="/")
     await db.contacts.update_one({"id": user["id"]}, {"$set": {"last_login": now_iso()}})
@@ -312,6 +353,7 @@ async def create_ticket(body: TicketCreate, user=Depends(get_current_user)):
         "id": str(uuid.uuid4()),
         "ticket_id": f"TKT-{1000 + count + 1}",
         "subject": body.subject,
+        "description": body.description or "",
         "priority": body.priority,
         "due_date": body.due_date,
         "number_of_profiles": body.number_of_profiles,

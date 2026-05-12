@@ -163,10 +163,10 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
             </DropdownMenu>
           )}
           <Button variant="outline" onClick={load} data-testid="refresh-btn"><RefreshCw size={16}/></Button>
-          {allowCreate && isRA && (
-            <Button onClick={() => navigate("/ra/create")} data-testid="create-ticket-btn"
+          {(isRA || isAdmin) && (
+            <Button onClick={() => navigate(isAdmin ? "/admin/create" : "/ra/create")} data-testid="create-new-ticket-btn"
               className="bg-[#ec9324] hover:bg-[#d4811f] text-white">
-              <Plus size={16} className="mr-1"/> New Ticket
+              <Plus size={16} className="mr-1"/> Create New Ticket
             </Button>
           )}
         </div>

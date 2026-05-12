@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import Layout from "../components/Layout";
 import MetricCard from "../components/MetricCard";
-import TicketCard from "../components/TicketCard";
+import RecentUpdateCard from "../components/RecentUpdateCard";
 import { Ticket, AlertCircle, CheckCircle2, Loader } from "lucide-react";
 
 export default function DQDashboard() {
@@ -30,10 +30,10 @@ export default function DQDashboard() {
         <MetricCard label="Closed" value={stats.closed} color="#b2b2b2" icon={CheckCircle2} onClick={() => goto("Closed")} />
       </div>
 
-      <h2 className="text-xl font-semibold text-gray-900 mt-12 mb-4">New & Recently Updated Tickets</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      <h2 className="text-xl font-semibold text-gray-900 mt-12 mb-4">Recent Updates</h2>
+      <div className="grid grid-cols-1 gap-4">
         {recent.length === 0 && <div className="text-sm text-gray-400">Nothing assigned yet.</div>}
-        {recent.map((t) => <TicketCard key={t.id} ticket={t} basePath="/dq/tickets" />)}
+        {recent.map((t) => <RecentUpdateCard key={t.id} ticket={t} basePath="/dq/tickets" />)}
       </div>
     </Layout>
   );

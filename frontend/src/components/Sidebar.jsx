@@ -38,9 +38,13 @@ export default function Sidebar() {
     <aside data-testid="sidebar" className="w-64 bg-white h-screen border-r border-gray-200 flex flex-col sticky top-0">
       <div className="px-6 py-6 border-b border-gray-100">
         <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-lg bg-[#ec9324] flex items-center justify-center text-white font-bold">T</div>
+          <img
+            src="https://customer-assets.emergentagent.com/job_support-core-4/artifacts/w6k7hdz0_Infollion%20Logo.svg"
+            alt="Infollion"
+            className="h-8 w-auto"
+          />
           <div>
-            <div className="font-bold text-gray-900 text-lg leading-none">TicketDesk</div>
+            <div className="font-bold text-gray-900 text-lg leading-none">Infollion</div>
             <div className="text-xs text-gray-500 mt-0.5">{user?.type}</div>
           </div>
         </div>

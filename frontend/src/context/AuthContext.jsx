@@ -8,6 +8,11 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const fetchMe = async () => {
+    // If returning from OAuth callback, skip /me check; AuthCallback will set the session.
+    if (typeof window !== "undefined" && window.location.hash?.includes("session_id=")) {
+      setLoading(false);
+      return;
+    }
     try {
       const { data } = await api.get("/auth/me");
       setUser(data);
