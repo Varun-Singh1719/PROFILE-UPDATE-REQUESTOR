@@ -40,7 +40,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex bg-white">
-      <div className="hidden lg:flex w-1/2 relative flex-col items-center" style={{
+      <div className="hidden md:flex md:w-1/2 relative flex-col items-center" style={{
         backgroundImage: "url(https://customer-assets.emergentagent.com/job_support-core-4/artifacts/5ftyl5zc_Screenshot%202026-05-12%20at%205.39.38%E2%80%AFPM.png)",
         backgroundSize: "cover",
         backgroundPosition: "center",
@@ -54,14 +54,14 @@ export default function LoginPage() {
               alt="Infollion" className="h-20 xl:h-24 w-auto"
             />
           </div>
-          <h1 className="mt-10 text-4xl xl:text-5xl font-bold leading-tight text-white text-center max-w-md drop-shadow-md">
+          <h1 className="mt-10 text-3xl xl:text-5xl font-bold leading-tight text-white text-center max-w-md drop-shadow-md">
             Infollion Expert Profile Update
           </h1>
         </div>
       </div>
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-6 py-12">
+      <div className="w-full md:w-1/2 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md">
-          <div className="flex items-center gap-3 mb-8 lg:hidden">
+          <div className="flex items-center gap-3 mb-8 md:hidden">
             <img
               src="https://customer-assets.emergentagent.com/job_support-core-4/artifacts/w6k7hdz0_Infollion%20Logo.svg"
               alt="Infollion" className="h-9 w-auto"
