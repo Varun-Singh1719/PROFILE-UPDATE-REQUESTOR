@@ -76,6 +76,11 @@ export default function AdminDashboard() {
                 <div className="text-[10px] uppercase tracking-wide text-gray-500 mt-0.5">In Progress</div>
               </div>
             </div>
+            <div className="mt-3 bg-gray-50 rounded-lg py-2.5 px-3 flex items-center justify-between"
+              data-testid={`dq-open-profiles-${m.email}`}>
+              <div className="text-[11px] uppercase tracking-wide text-gray-500 font-medium">Open Ticket Profiles</div>
+              <div className="text-lg font-bold text-gray-900">{m.open_profiles ?? 0}</div>
+            </div>
           </button>
         ))}
       </div>

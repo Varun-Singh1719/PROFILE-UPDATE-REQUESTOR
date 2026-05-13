@@ -568,12 +568,19 @@ async def dq_performance(user=Depends(require_role("Admin"))):
     out = []
     for m in members:
         base = {"assigned_to_id": m["id"]}
+        # Sum profiles for Open tickets assigned to this member
+        agg = await db.tickets.aggregate([
+            {"$match": {**base, "status": "Open"}},
+            {"$group": {"_id": None, "total": {"$sum": "$number_of_profiles"}}}
+        ]).to_list(1)
+        open_profiles = agg[0]["total"] if agg else 0
         out.append({
             "id": m["id"], "name": m["name"], "email": m["email"],
             "total": await db.tickets.count_documents(base),
             "open": await db.tickets.count_documents({**base, "status": "Open"}),
             "in_progress": await db.tickets.count_documents({**base, "status": "In Progress"}),
             "closed": await db.tickets.count_documents({**base, "status": "Closed"}),
+            "open_profiles": open_profiles,
         })
     return out
 
