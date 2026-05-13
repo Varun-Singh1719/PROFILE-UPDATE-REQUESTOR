@@ -189,9 +189,10 @@ export default function ContactListPage() {
                     <Button
                       size="sm" variant="outline" onClick={() => openEdit(c)}
                       data-testid={`edit-${c.email}`}
-                      className="border-gray-300 text-gray-700 hover:bg-[#ec9324]/10 hover:text-[#ec9324] hover:border-[#ec9324]"
+                      className="border-gray-300 text-gray-700 hover:bg-[#ec9324]/10 hover:text-[#ec9324] hover:border-[#ec9324] h-8 w-8 p-0"
+                      aria-label="Edit employee"
                     >
-                      <Pencil size={14} className="mr-1.5"/> Edit
+                      <Pencil size={14}/>
                     </Button>
                   </td>
                 </tr>
