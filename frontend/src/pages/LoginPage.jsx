@@ -68,9 +68,9 @@ export default function LoginPage() {
             />
             <div className="font-bold text-gray-900 text-lg">Infollion</div>
           </div>
-          <div className="text-xs uppercase tracking-widest text-[#ec9324] font-semibold mb-2">Infollion Expert Profile Update</div>
-          <h2 className="text-3xl font-bold text-gray-900 tracking-tight" data-testid="login-title">Sign in</h2>
-          <p className="mt-2 text-gray-500">Use your registered email to access your dashboard.</p>
+          <div className="text-sm uppercase tracking-widest text-[#ec9324] font-semibold mb-3 text-center">Infollion Expert Profile Update</div>
+          <h2 className="text-3xl font-bold text-gray-900 tracking-tight text-center" data-testid="login-title">Sign in</h2>
+          <p className="mt-2 text-gray-500 text-center">Use your registered email to access your dashboard.</p>
 
           <Button
             type="button"
@@ -94,18 +94,22 @@ export default function LoginPage() {
             <div className="flex-1 h-px bg-gray-200"></div>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" data-testid="login-email-input" className="mt-1.5" />
+              <Input id="email" type="email" required value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email: you@company.com"
+                data-testid="login-email-input" className="h-11" />
             </div>
             <div>
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" data-testid="login-password-input" className="mt-1.5" />
+              <Input id="password" type="password" required value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password: ••••••••"
+                data-testid="login-password-input" className="h-11" />
             </div>
-            {error && <div className="text-sm text-red-600" data-testid="login-error">{error}</div>}
+            {error && <div className="text-sm text-red-600 text-center" data-testid="login-error">{error}</div>}
             <Button type="submit" disabled={loading} data-testid="login-submit-btn"
-              className="w-full bg-[#ec9324] hover:bg-[#d4811f] text-white">
+              className="w-full h-11 bg-[#ec9324] hover:bg-[#d4811f] text-white">
               {loading ? <><Loader2 className="animate-spin mr-2" size={16}/> Signing in...</> : "Sign in"}
             </Button>
           </form>

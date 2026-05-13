@@ -211,9 +211,9 @@ async def google_session(body: GoogleSessionIn, response: Response):
 
     user = await db.contacts.find_one({"email": email})
     if not user:
-        raise HTTPException(403, "This email is not registered. Contact your administrator.")
+        raise HTTPException(403, "User does not exist.")
     if user.get("status") != "Active":
-        raise HTTPException(403, "Account is inactive")
+        raise HTTPException(403, "User does not exist.")
 
     token = create_access_token(user["id"], user["email"], user["type"])
     response.set_cookie("access_token", token, httponly=True, secure=False, samesite="lax", max_age=43200, path="/")
