@@ -4,24 +4,32 @@ import api from "../lib/api";
 import Layout from "../components/Layout";
 import MetricCard from "../components/MetricCard";
 import RecentUpdateCard from "../components/RecentUpdateCard";
+import DateFilter, { getCurrentMonthRange, dateFilterToParams } from "../components/DateFilter";
 import { Ticket, AlertCircle, CheckCircle2, Loader } from "lucide-react";
 
 export default function DQDashboard() {
   const [stats, setStats] = useState({});
   const [recent, setRecent] = useState([]);
+  const [dateFilter, setDateFilter] = useState(getCurrentMonthRange());
   const navigate = useNavigate();
 
   useEffect(() => {
-    api.get("/dashboard/stats").then((r) => setStats(r.data));
-    api.get("/dashboard/recent", { params: { kind: "new", limit: 6 } }).then((r) => setRecent(r.data));
-  }, []);
+    const params = dateFilterToParams(dateFilter);
+    api.get("/dashboard/stats", { params }).then((r) => setStats(r.data));
+    api.get("/dashboard/recent", { params: { kind: "new", limit: 6, ...params } }).then((r) => setRecent(r.data));
+  }, [dateFilter]);
 
   const goto = (status) => navigate(`/dq/tickets${status ? `?status=${encodeURIComponent(status)}` : ""}`);
 
   return (
     <Layout>
-      <h1 className="text-3xl font-bold text-gray-900 tracking-tight">DQ Dashboard</h1>
-      <p className="text-gray-500 mt-1">Tickets assigned to you.</p>
+      <div className="flex items-start justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">DQ Dashboard</h1>
+          <p className="text-gray-500 mt-1">Tickets assigned to you.</p>
+        </div>
+        <DateFilter value={dateFilter} onChange={setDateFilter} />
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
         <MetricCard label="Total Tickets" value={stats.total} icon={Ticket} onClick={() => goto()} />

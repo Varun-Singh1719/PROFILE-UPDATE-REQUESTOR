@@ -541,8 +541,30 @@ async def download(path: str, request: Request, auth: Optional[str] = Query(None
     return FastResponse(content=data, media_type=record.get("content_type") or ct)
 
 # ---------- Dashboard ----------
+def _date_match(date_from, date_to):
+    """Build a Mongo match clause on created_on (ISO string). Inclusive on both ends."""
+    if not date_from and not date_to:
+        return {}
+    cond = {}
+    if date_from:
+        cond["$gte"] = f"{date_from}T00:00:00"
+    if date_to:
+        # Exclusive upper-bound at next day's midnight => inclusive of date_to
+        try:
+            d = datetime.fromisoformat(date_to).date()
+            next_day = (datetime(d.year, d.month, d.day) + timedelta(days=1)).date().isoformat()
+            cond["$lt"] = f"{next_day}T00:00:00"
+        except Exception:
+            cond["$lte"] = f"{date_to}T23:59:59"
+    return {"created_on": cond}
+
 @api_router.get("/dashboard/stats")
-async def dashboard_stats(user=Depends(get_current_user), member_id: Optional[str] = None):
+async def dashboard_stats(
+    user=Depends(get_current_user),
+    member_id: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
     role = user["type"]
     base = {}
     if role == "Research Associate":
@@ -551,6 +573,9 @@ async def dashboard_stats(user=Depends(get_current_user), member_id: Optional[st
         base["assigned_to_id"] = user["id"]
     elif role == "Admin" and member_id:
         base["assigned_to_id"] = member_id
+
+    date_match = _date_match(date_from, date_to)
+    base = {**base, **date_match}
 
     async def cnt(extra):
         q = {**base, **extra}
@@ -563,12 +588,16 @@ async def dashboard_stats(user=Depends(get_current_user), member_id: Optional[st
     return {"total": total, "open": open_c, "in_progress": inprog, "closed": closed}
 
 @api_router.get("/dashboard/dq-performance")
-async def dq_performance(user=Depends(require_role("Admin"))):
+async def dq_performance(
+    user=Depends(require_role("Admin")),
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
     members = await db.contacts.find({"type": "DQ Team", "status": "Active"}, {"_id": 0, "password_hash": 0}).to_list(500)
+    date_match = _date_match(date_from, date_to)
     out = []
     for m in members:
-        base = {"assigned_to_id": m["id"]}
-        # Sum profiles for Open tickets assigned to this member
+        base = {"assigned_to_id": m["id"], **date_match}
         agg = await db.tickets.aggregate([
             {"$match": {**base, "status": "Open"}},
             {"$group": {"_id": None, "total": {"$sum": "$number_of_profiles"}}}
@@ -585,13 +614,20 @@ async def dq_performance(user=Depends(require_role("Admin"))):
     return out
 
 @api_router.get("/dashboard/recent")
-async def dashboard_recent(user=Depends(get_current_user), kind: str = "updated", limit: int = 8):
+async def dashboard_recent(
+    user=Depends(get_current_user),
+    kind: str = "updated",
+    limit: int = 8,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
     base = {}
     role = user["type"]
     if role == "Research Associate":
         base["created_by_id"] = user["id"]
     elif role == "DQ Team":
         base["assigned_to_id"] = user["id"]
+    base = {**base, **_date_match(date_from, date_to)}
     sort_field = "created_on" if kind == "new" else "updated_on"
     items = await db.tickets.find(base, {"_id": 0}).sort(sort_field, -1).to_list(limit)
     return items
