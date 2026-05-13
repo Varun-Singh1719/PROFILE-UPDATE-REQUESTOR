@@ -6,10 +6,16 @@ import { Button } from "./ui/button";
 import { Eye } from "lucide-react";
 
 function fmt(iso) { if (!iso) return "-"; try { return new Date(iso).toLocaleDateString(); } catch { return iso; } }
+function numericId(tid) {
+  if (!tid) return "";
+  const m = String(tid).match(/\d+/);
+  return m ? m[0] : tid;
+}
 
 export default function TicketTable({
   tickets, selectable = false, selected = [], onToggle, onToggleAll,
   showCheckbox = true, basePath = "/tickets", actions = null,
+  showView = true, numericIdOnly = false,
 }) {
   const navigate = useNavigate();
   const allSelected = tickets.length > 0 && selected.length === tickets.length;
@@ -34,6 +40,7 @@ export default function TicketTable({
               <th className="px-4 py-3">Assigned To</th>
               <th className="px-4 py-3">Priority</th>
               <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">No. of Records</th>
               <th className="px-4 py-3">Due Date</th>
               <th className="px-4 py-3">Created</th>
               <th className="px-4 py-3">Updated</th>
@@ -42,7 +49,7 @@ export default function TicketTable({
           </thead>
           <tbody>
             {tickets.length === 0 && (
-              <tr><td colSpan={11} className="px-6 py-12 text-center text-gray-400">No requests found</td></tr>
+              <tr><td colSpan={12} className="px-6 py-12 text-center text-gray-400">No requests found</td></tr>
             )}
             {tickets.map((t) => (
               <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50/80 transition-colors" data-testid={`ticket-row-${t.ticket_id}`}>
@@ -55,20 +62,32 @@ export default function TicketTable({
                     />
                   </td>
                 )}
-                <td className="px-4 py-3 font-mono text-xs text-[#ec9324] font-semibold">{t.ticket_id}</td>
+                <td className="px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`${basePath}/${t.id}`)}
+                    data-testid={`request-id-link-${t.ticket_id}`}
+                    className="font-mono text-xs text-[#ec9324] font-semibold hover:underline"
+                  >
+                    {numericIdOnly ? numericId(t.ticket_id) : t.ticket_id}
+                  </button>
+                </td>
                 <td className="px-4 py-3 font-medium text-gray-900 max-w-xs truncate">{t.subject}</td>
                 <td className="px-4 py-3 text-gray-600">{t.created_by_name}</td>
                 <td className="px-4 py-3 text-gray-600">{t.assigned_to_name || <span className="text-gray-400 italic">Unassigned</span>}</td>
                 <td className="px-4 py-3"><PriorityBadge priority={t.priority} /></td>
                 <td className="px-4 py-3"><StatusBadge status={t.status} /></td>
+                <td className="px-4 py-3 text-gray-700 font-medium">{t.number_of_profiles ?? "-"}</td>
                 <td className="px-4 py-3 text-gray-600">{t.due_date || "-"}</td>
                 <td className="px-4 py-3 text-gray-500">{fmt(t.created_on)}</td>
                 <td className="px-4 py-3 text-gray-500">{fmt(t.updated_on)}</td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex justify-end gap-1">
-                    <Button size="sm" variant="ghost" data-testid={`view-ticket-${t.ticket_id}`} onClick={() => navigate(`${basePath}/${t.id}`)}>
-                      <Eye size={14}/>
-                    </Button>
+                    {showView && (
+                      <Button size="sm" variant="ghost" data-testid={`view-ticket-${t.ticket_id}`} onClick={() => navigate(`${basePath}/${t.id}`)}>
+                        <Eye size={14}/>
+                      </Button>
+                    )}
                     {actions && actions(t)}
                   </div>
                 </td>

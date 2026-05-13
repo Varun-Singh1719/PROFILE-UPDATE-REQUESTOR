@@ -59,12 +59,12 @@ export default function TicketDetailPage() {
       </button>
 
       <div className="bg-white rounded-xl shadow-soft border border-gray-100 p-6">
-        <div className="flex items-start justify-between flex-wrap gap-4">
-          <div>
-            <div className="text-xs font-mono text-[#ec9324] font-semibold" data-testid="ticket-id">{ticket.ticket_id}</div>
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight mt-1" data-testid="ticket-subject">{ticket.subject}</h1>
-            <div className="mt-3 flex gap-2"><StatusBadge status={ticket.status}/><PriorityBadge priority={ticket.priority}/></div>
-          </div>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 tracking-tight" data-testid="ticket-subject">{ticket.subject}</h1>
+          <div className="text-xs font-mono text-[#ec9324] font-semibold mt-1" data-testid="ticket-id">{ticket.ticket_id}</div>
+          <div className="mt-3 flex gap-2"><StatusBadge status={ticket.status}/><PriorityBadge priority={ticket.priority}/></div>
+        </div>
           <div className="flex gap-2">
             {canUpdateStatus && (
               <DropdownMenu>
@@ -104,22 +104,34 @@ export default function TicketDetailPage() {
           <Field label="Created By" icon={User} value={ticket.created_by_name}/>
           <Field label="Assigned To" icon={User} value={ticket.assigned_to_name || "Unassigned"}/>
           <Field label="Due Date" icon={Calendar} value={ticket.due_date || "-"}/>
-          <Field label="Number of Profiles" icon={Hash} value={ticket.number_of_profiles}/>
+          <Field label="No. of Records" icon={Hash} value={ticket.number_of_profiles}/>
           <Field label="Created On" icon={Calendar} value={fmt(ticket.created_on)}/>
           <Field label="Updated On" icon={Calendar} value={fmt(ticket.updated_on)}/>
         </div>
 
-        {ticket.attachment_path && (
+        {ticket.description && (
+          <div className="mt-6 p-4 rounded-lg border border-gray-100 bg-gray-50/50">
+            <div className="text-xs uppercase tracking-wider text-gray-500 mb-2 font-semibold">Description</div>
+            <div className="text-sm text-gray-800 whitespace-pre-wrap" data-testid="ticket-description">{ticket.description}</div>
+          </div>
+        )}
+
+        {(ticket.attachments?.length > 0 || ticket.attachment_path) && (
           <div className="mt-6 p-4 rounded-lg border border-gray-200 bg-gray-50">
-            <div className="text-xs uppercase tracking-wider text-gray-500 mb-2">Attachment</div>
-            <a
-              href={`${api.defaults.baseURL}/files/${ticket.attachment_path}?auth=${localStorage.getItem("access_token") || ""}`}
-              target="_blank" rel="noreferrer"
-              className="inline-flex items-center gap-2 text-[#ec9324] font-medium hover:underline"
-              data-testid="attachment-link"
-            >
-              <Paperclip size={14}/> {ticket.attachment_name}
-            </a>
+            <div className="text-xs uppercase tracking-wider text-gray-500 mb-2 font-semibold">Attachments</div>
+            <div className="flex flex-wrap gap-2">
+              {(ticket.attachments?.length ? ticket.attachments : [{ path: ticket.attachment_path, filename: ticket.attachment_name }]).map((a, i) => a?.path && (
+                <a
+                  key={i}
+                  href={`${api.defaults.baseURL}/files/${a.path}?auth=${localStorage.getItem("access_token") || ""}`}
+                  target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-2 text-[#ec9324] font-medium hover:underline bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs"
+                  data-testid={`attachment-link-${i}`}
+                >
+                  <Paperclip size={12}/> {a.filename || `Attachment ${i + 1}`}
+                </a>
+              ))}
+            </div>
           </div>
         )}
       </div>

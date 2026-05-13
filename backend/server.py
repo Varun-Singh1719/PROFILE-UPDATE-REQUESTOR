@@ -152,9 +152,10 @@ class TicketCreate(BaseModel):
     description: Optional[str] = ""
     priority: TicketPriority
     due_date: Optional[str] = None
-    number_of_profiles: int = 0
+    number_of_profiles: Optional[int] = None
     attachment_path: Optional[str] = None
     attachment_name: Optional[str] = None
+    attachments: Optional[List[dict]] = None
 
 class TicketUpdate(BaseModel):
     status: Optional[TicketStatus] = None
@@ -162,7 +163,11 @@ class TicketUpdate(BaseModel):
 
 class BulkAssign(BaseModel):
     ticket_ids: List[str]
-    assigned_to: Optional[str] = None  # if None and DQ user => assign to self
+    assigned_to: Optional[str] = None
+
+class BulkStatus(BaseModel):
+    ticket_ids: List[str]
+    status: TicketStatus
 
 class CommentCreate(BaseModel):
     content: str
@@ -354,6 +359,13 @@ async def list_tickets(
 async def create_ticket(body: TicketCreate, user=Depends(get_current_user)):
     if user["type"] not in ("Research Associate", "Admin"):
         raise HTTPException(403, "Only RA/Admin can create tickets")
+    # Validate number_of_profiles
+    if body.number_of_profiles is None:
+        raise HTTPException(400, "No. of Records is Blank")
+    if body.number_of_profiles == 0:
+        raise HTTPException(400, "No. of Records cannot be 0")
+    if body.number_of_profiles < 0:
+        raise HTTPException(400, "No. of Records must be greater than 0")
     count = await db.tickets.count_documents({})
     doc = {
         "id": str(uuid.uuid4()),
@@ -365,6 +377,7 @@ async def create_ticket(body: TicketCreate, user=Depends(get_current_user)):
         "number_of_profiles": body.number_of_profiles,
         "attachment_path": body.attachment_path,
         "attachment_name": body.attachment_name,
+        "attachments": body.attachments or ([{"path": body.attachment_path, "filename": body.attachment_name}] if body.attachment_path else []),
         "status": "Open",
         "created_by_id": user["id"],
         "created_by_name": user["name"],
@@ -387,6 +400,19 @@ async def get_ticket(ticket_id: str, user=Depends(get_current_user)):
     t = await db.tickets.find_one({"id": ticket_id}, {"_id": 0})
     if not t:
         raise HTTPException(404, "Not found")
+    # Auto-promote Open -> In Progress when DQ assignee opens the request
+    if user["type"] == "DQ Team" and t.get("assigned_to_id") == user["id"] and t.get("status") == "Open":
+        await db.tickets.update_one(
+            {"id": ticket_id},
+            {"$set": {"status": "In Progress", "updated_on": now_iso()}}
+        )
+        await db.activity.insert_one({
+            "id": str(uuid.uuid4()), "ticket_id": ticket_id, "action": "updated",
+            "by_id": user["id"], "by_name": user["name"], "at": now_iso(),
+            "detail": "Status changed from Open to In Progress"
+        })
+        t["status"] = "In Progress"
+        t["updated_on"] = now_iso()
     return t
 
 @api_router.patch("/tickets/{ticket_id}")
@@ -481,6 +507,30 @@ async def bulk_assign(body: BulkAssign, user=Depends(get_current_user)):
         })
         success += 1
     return {"assigned": success}
+
+@api_router.post("/tickets/bulk-status")
+async def bulk_status(body: BulkStatus, user=Depends(get_current_user)):
+    role = user["type"]
+    if role not in ("Admin", "DQ Team"):
+        raise HTTPException(403, "Forbidden")
+    success = 0
+    for tid in body.ticket_ids:
+        t = await db.tickets.find_one({"id": tid})
+        if not t:
+            continue
+        # DQ can only update tickets assigned to themselves
+        if role == "DQ Team" and t.get("assigned_to_id") != user["id"]:
+            continue
+        if t.get("status") == body.status:
+            continue
+        await db.tickets.update_one({"id": tid}, {"$set": {"status": body.status, "updated_on": now_iso()}})
+        await db.activity.insert_one({
+            "id": str(uuid.uuid4()), "ticket_id": tid, "action": "updated",
+            "by_id": user["id"], "by_name": user["name"], "at": now_iso(),
+            "detail": f"Status changed from {t.get('status')} to {body.status}"
+        })
+        success += 1
+    return {"updated": success}
 
 # ---------- Comments & Activity ----------
 @api_router.get("/tickets/{ticket_id}/activity")
@@ -605,11 +655,17 @@ async def dq_performance(
     out = []
     for m in members:
         base = {"assigned_to_id": m["id"], **date_match}
-        agg = await db.tickets.aggregate([
+        # Sum profiles by status
+        agg_open = await db.tickets.aggregate([
             {"$match": {**base, "status": "Open"}},
             {"$group": {"_id": None, "total": {"$sum": "$number_of_profiles"}}}
         ]).to_list(1)
-        open_profiles = agg[0]["total"] if agg else 0
+        agg_ip = await db.tickets.aggregate([
+            {"$match": {**base, "status": "In Progress"}},
+            {"$group": {"_id": None, "total": {"$sum": "$number_of_profiles"}}}
+        ]).to_list(1)
+        open_profiles = agg_open[0]["total"] if agg_open else 0
+        in_progress_profiles = agg_ip[0]["total"] if agg_ip else 0
         out.append({
             "id": m["id"], "name": m["name"], "email": m["email"],
             "total": await db.tickets.count_documents(base),
@@ -617,6 +673,8 @@ async def dq_performance(
             "in_progress": await db.tickets.count_documents({**base, "status": "In Progress"}),
             "closed": await db.tickets.count_documents({**base, "status": "Closed"}),
             "open_profiles": open_profiles,
+            "in_progress_profiles": in_progress_profiles,
+            "profiles_assigned": open_profiles + in_progress_profiles,
         })
     return out
 
@@ -629,12 +687,16 @@ async def dashboard_recent(
     date_to: Optional[str] = None,
     date_field: Optional[str] = "created_at",
 ):
-    base = {}
     role = user["type"]
+    base = {}
     if role == "Research Associate":
         base["created_by_id"] = user["id"]
     elif role == "DQ Team":
-        base["assigned_to_id"] = user["id"]
+        # DQ should see tickets assigned to them OR unassigned open tickets (incoming work)
+        base["$or"] = [
+            {"assigned_to_id": user["id"]},
+            {"$and": [{"assigned_to_id": {"$in": [None, ""]}}, {"status": "Open"}]},
+        ]
     base = {**base, **_date_match(date_from, date_to, date_field)}
     sort_field = "created_on" if kind == "new" else "updated_on"
     items = await db.tickets.find(base, {"_id": 0}).sort(sort_field, -1).to_list(limit)

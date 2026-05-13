@@ -8,7 +8,7 @@ import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { toast } from "sonner";
-import { Upload, Loader2 } from "lucide-react";
+import { Upload, Loader2, X, Paperclip } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 export default function CreateTicketPage() {
@@ -18,24 +18,61 @@ export default function CreateTicketPage() {
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("Medium");
   const [dueDate, setDueDate] = useState("");
-  const [profiles, setProfiles] = useState(0);
-  const [file, setFile] = useState(null);
+  const [profiles, setProfiles] = useState("1");
+  const [profilesError, setProfilesError] = useState("");
+  const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  const validateProfiles = (val) => {
+    if (val === "" || val === null || val === undefined) {
+      setProfilesError("No. of Records is Blank");
+      return false;
+    }
+    const n = Number(val);
+    if (Number.isNaN(n)) {
+      setProfilesError("No. of Records is Blank");
+      return false;
+    }
+    if (n === 0) {
+      setProfilesError("No. of Records cannot be 0");
+      return false;
+    }
+    if (n < 0) {
+      setProfilesError("No. of Records must be greater than 0");
+      return false;
+    }
+    setProfilesError("");
+    return true;
+  };
+
+  const handleFilesAdd = (e) => {
+    const list = Array.from(e.target.files || []);
+    setFiles((prev) => [...prev, ...list]);
+    e.target.value = "";
+  };
+
+  const removeFile = (idx) => setFiles((prev) => prev.filter((_, i) => i !== idx));
 
   const submit = async (e) => {
     e.preventDefault();
+    if (!validateProfiles(profiles)) return;
     setLoading(true);
     try {
-      let attachment_path = null, attachment_name = null;
-      if (file) {
-        const fd = new FormData(); fd.append("file", file);
+      // Upload all files
+      const attachments = [];
+      for (const f of files) {
+        const fd = new FormData(); fd.append("file", f);
         const up = await api.post("/upload", fd, { headers: { "Content-Type": "multipart/form-data" }});
-        attachment_path = up.data.path; attachment_name = up.data.filename;
+        attachments.push({ path: up.data.path, filename: up.data.filename });
       }
+      const first = attachments[0] || {};
       const r = await api.post("/tickets", {
-        subject, description, priority, due_date: dueDate || null,
-        number_of_profiles: Number(profiles) || 0,
-        attachment_path, attachment_name
+        subject, description, priority,
+        due_date: dueDate || null,
+        number_of_profiles: Number(profiles),
+        attachment_path: first.path || null,
+        attachment_name: first.filename || null,
+        attachments,
       });
       toast.success(`Request ${r.data.ticket_id} created`);
       const dest = user?.type === "Admin" ? "/admin/open-tickets" : "/ra/tickets";
@@ -80,17 +117,36 @@ export default function CreateTicketPage() {
           </div>
         </div>
         <div>
-          <Label htmlFor="profiles">Number of Profiles</Label>
-          <Input id="profiles" type="number" min="0" value={profiles}
-            onChange={(e) => setProfiles(e.target.value)} data-testid="ticket-profiles-input" className="mt-1.5" />
+          <Label htmlFor="profiles">No. of Profiles *</Label>
+          <Input
+            id="profiles" type="number" min="1" required value={profiles}
+            onChange={(e) => { setProfiles(e.target.value); validateProfiles(e.target.value); }}
+            onBlur={(e) => validateProfiles(e.target.value)}
+            data-testid="ticket-profiles-input"
+            className={`mt-1.5 ${profilesError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+          />
+          {profilesError && <div className="mt-1 text-sm text-red-600" data-testid="profiles-error">{profilesError}</div>}
         </div>
         <div>
-          <Label htmlFor="file">Attachment</Label>
-          <div className="mt-1.5 flex items-center gap-3">
-            <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 text-sm text-gray-600">
-              <Upload size={16}/> {file ? file.name : "Choose file"}
-              <input id="file" type="file" className="hidden" onChange={(e) => setFile(e.target.files?.[0])} data-testid="ticket-file-input"/>
+          <Label>Attachments</Label>
+          <div className="mt-1.5 space-y-2">
+            <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 text-sm text-gray-600 w-fit">
+              <Upload size={16}/> Add files
+              <input type="file" multiple className="hidden" onChange={handleFilesAdd} data-testid="ticket-file-input"/>
             </label>
+            {files.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {files.map((f, i) => (
+                  <div key={i} className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-700" data-testid={`attached-file-${i}`}>
+                    <Paperclip size={12} className="text-[#ec9324]"/>
+                    <span className="max-w-[200px] truncate">{f.name}</span>
+                    <button type="button" onClick={() => removeFile(i)} className="text-gray-400 hover:text-red-500" data-testid={`remove-file-${i}`}>
+                      <X size={12}/>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
         <div className="flex gap-3 pt-2">

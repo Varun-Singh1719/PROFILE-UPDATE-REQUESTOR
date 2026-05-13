@@ -88,6 +88,14 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
   };
 
+  const bulkUpdateStatus = async (st) => {
+    try {
+      const r = await api.post("/tickets/bulk-status", { ticket_ids: selected, status: st });
+      toast.success(`Updated ${r.data?.updated || 0} request(s) to ${st}`);
+      setSelected([]); load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+  };
+
   const updateStatus = async (id, st) => {
     try {
       await api.patch(`/tickets/${id}`, { status: st });
@@ -164,22 +172,49 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
         </div>
         <div className="flex gap-2">
           {selected.length > 0 && isDQ && (
-            <Button onClick={bulkAssignSelf} data-testid="bulk-assign-me-btn"
-              className="bg-[#ec9324] hover:bg-[#d4811f] text-white">
-              Assign Selected to Me ({selected.length})
-            </Button>
+            <>
+              <Button onClick={bulkAssignSelf} data-testid="bulk-assign-me-btn"
+                className="bg-[#ec9324] hover:bg-[#d4811f] text-white">
+                Assign Selected to Me ({selected.length})
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" data-testid="bulk-status-btn">
+                    Update Status ({selected.length})
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => bulkUpdateStatus("In Progress")} data-testid="bulk-status-in-progress">In Progress</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => bulkUpdateStatus("Closed")} data-testid="bulk-status-closed">Closed</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
           )}
           {selected.length > 0 && isAdmin && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button data-testid="bulk-assign-btn" className="bg-[#ec9324] hover:bg-[#d4811f] text-white">
-                  Assign Selected ({selected.length})
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {members.map(m => <DropdownMenuItem key={m.id} onClick={() => bulkAssignTo(m.id)}>{m.name}</DropdownMenuItem>)}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button data-testid="bulk-assign-btn" className="bg-[#ec9324] hover:bg-[#d4811f] text-white">
+                    Assign Selected ({selected.length})
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {members.map(m => <DropdownMenuItem key={m.id} onClick={() => bulkAssignTo(m.id)}>{m.name}</DropdownMenuItem>)}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" data-testid="bulk-status-btn">
+                    Update Status ({selected.length})
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => bulkUpdateStatus("Open")}>Open</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => bulkUpdateStatus("In Progress")}>In Progress</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => bulkUpdateStatus("Closed")}>Closed</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
           )}
           <Button variant="outline" onClick={load} data-testid="refresh-btn"><RefreshCw size={16}/></Button>
           {(isRA || isAdmin) && (
@@ -222,14 +257,16 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
             {creators.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Select value={assigneeFilter || "all"} onValueChange={(v) => setAssigneeFilter(v === "all" ? "" : v)}>
-          <SelectTrigger className="w-44" data-testid="filter-assigned-to"><SelectValue placeholder="Assigned To" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Assignees</SelectItem>
-            <SelectItem value="unassigned">Unassigned</SelectItem>
-            {members.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        {!isDQ && (
+          <Select value={assigneeFilter || "all"} onValueChange={(v) => setAssigneeFilter(v === "all" ? "" : v)}>
+            <SelectTrigger className="w-44" data-testid="filter-assigned-to"><SelectValue placeholder="Assigned To" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Assignees</SelectItem>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
+              {members.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
         <DateFilter value={dateFilter} onChange={setDateFilter} />
       </div>
 
@@ -242,6 +279,8 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
           onToggleAll={toggleAll}
           actions={rowActions}
           basePath={basePath}
+          showView={!isDQ}
+          numericIdOnly={isDQ}
         />
       </div>
     </Layout>

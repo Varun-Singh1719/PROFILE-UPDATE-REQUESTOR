@@ -43,7 +43,12 @@ export default function RecentUpdateCard({ ticket, basePath = "/tickets" }) {
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="text-base font-semibold text-gray-900 truncate">
-            <span className="text-[#ec9324] font-bold">{numericId(ticket.ticket_id)}</span>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); navigate(`${basePath}/${ticket.id}`); }}
+              className="text-[#ec9324] font-bold hover:underline"
+              data-testid={`recent-id-link-${ticket.ticket_id}`}
+            >{numericId(ticket.ticket_id)}</button>
             <span className="text-gray-400 mx-2">:</span>
             <span>{ticket.subject}</span>
           </div>
