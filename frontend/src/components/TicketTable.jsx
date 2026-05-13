@@ -28,7 +28,7 @@ export default function TicketTable({
                   />
                 </th>
               )}
-              <th className="px-4 py-3">Ticket ID</th>
+              <th className="px-4 py-3">Request ID</th>
               <th className="px-4 py-3">Subject</th>
               <th className="px-4 py-3">Created By</th>
               <th className="px-4 py-3">Assigned To</th>
@@ -42,7 +42,7 @@ export default function TicketTable({
           </thead>
           <tbody>
             {tickets.length === 0 && (
-              <tr><td colSpan={11} className="px-6 py-12 text-center text-gray-400">No tickets found</td></tr>
+              <tr><td colSpan={11} className="px-6 py-12 text-center text-gray-400">No requests found</td></tr>
             )}
             {tickets.map((t) => (
               <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50/80 transition-colors" data-testid={`ticket-row-${t.ticket_id}`}>

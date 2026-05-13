@@ -46,10 +46,10 @@ function App() {
             {/* Admin */}
             <Route path="/admin" element={<ProtectedRoute roles={["Admin"]}><AdminDashboard /></ProtectedRoute>} />
             <Route path="/admin/open-tickets" element={<ProtectedRoute roles={["Admin"]}>
-              <TicketListPage scope="all" title="All Tickets" basePath="/admin/tickets" />
+              <TicketListPage scope="all" title="All Requests" basePath="/admin/tickets" />
             </ProtectedRoute>} />
             <Route path="/admin/unassigned" element={<ProtectedRoute roles={["Admin"]}>
-              <TicketListPage scope="unassigned" title="Unassigned Tickets" basePath="/admin/tickets" />
+              <TicketListPage scope="unassigned" title="Unassigned Requests" basePath="/admin/tickets" />
             </ProtectedRoute>} />
             <Route path="/admin/contacts" element={<ProtectedRoute roles={["Admin"]}><ContactListPage /></ProtectedRoute>} />
             <Route path="/admin/create" element={<ProtectedRoute roles={["Admin"]}><CreateTicketPage /></ProtectedRoute>} />
@@ -58,7 +58,7 @@ function App() {
             {/* Research Associate */}
             <Route path="/ra" element={<ProtectedRoute roles={["Research Associate"]}><RADashboard /></ProtectedRoute>} />
             <Route path="/ra/tickets" element={<ProtectedRoute roles={["Research Associate"]}>
-              <TicketListPage scope="mine" title="My Tickets" basePath="/ra/tickets" allowCreate />
+              <TicketListPage scope="mine" title="My Requests" basePath="/ra/tickets" allowCreate />
             </ProtectedRoute>} />
             <Route path="/ra/create" element={<ProtectedRoute roles={["Research Associate"]}><CreateTicketPage /></ProtectedRoute>} />
             <Route path="/ra/tickets/:id" element={<ProtectedRoute roles={["Research Associate"]}><TicketDetailPage /></ProtectedRoute>} />
@@ -66,7 +66,7 @@ function App() {
             {/* DQ Team */}
             <Route path="/dq" element={<ProtectedRoute roles={["DQ Team"]}><DQDashboard /></ProtectedRoute>} />
             <Route path="/dq/tickets" element={<ProtectedRoute roles={["DQ Team"]}>
-              <TicketListPage scope="assigned" title="My Tickets" basePath="/dq/tickets" />
+              <TicketListPage scope="assigned" title="My Requests" basePath="/dq/tickets" />
             </ProtectedRoute>} />
             <Route path="/dq/unassigned" element={<ProtectedRoute roles={["DQ Team"]}>
               <TicketListPage scope="unassigned" title="Unassigned Tickets" basePath="/dq/tickets" />

@@ -8,18 +8,18 @@ import {
 const linksByRole = {
   Admin: [
     { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
-    { to: "/admin/open-tickets", label: "Open Tickets", icon: Ticket },
+    { to: "/admin/open-tickets", label: "Open Requests", icon: Ticket },
     { to: "/admin/unassigned", label: "Unassigned", icon: Inbox },
     { to: "/admin/contacts", label: "Contact List", icon: Users },
   ],
   "Research Associate": [
     { to: "/ra", label: "Dashboard", icon: LayoutDashboard, end: true },
-    { to: "/ra/tickets", label: "My Tickets", icon: ListChecks },
-    { to: "/ra/create", label: "Create Ticket", icon: FilePlus },
+    { to: "/ra/tickets", label: "My Requests", icon: ListChecks },
+    { to: "/ra/create", label: "New Request", icon: FilePlus },
   ],
   "DQ Team": [
     { to: "/dq", label: "Dashboard", icon: LayoutDashboard, end: true },
-    { to: "/dq/tickets", label: "My Tickets", icon: ListChecks },
+    { to: "/dq/tickets", label: "My Requests", icon: ListChecks },
     { to: "/dq/unassigned", label: "Unassigned", icon: Inbox },
   ],
 };

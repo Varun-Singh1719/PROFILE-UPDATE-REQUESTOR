@@ -37,7 +37,7 @@ export default function CreateTicketPage() {
         number_of_profiles: Number(profiles) || 0,
         attachment_path, attachment_name
       });
-      toast.success(`Ticket ${r.data.ticket_id} created`);
+      toast.success(`Request ${r.data.ticket_id} created`);
       const dest = user?.type === "Admin" ? "/admin/open-tickets" : "/ra/tickets";
       navigate(dest);
     } catch (e) {
@@ -47,8 +47,8 @@ export default function CreateTicketPage() {
 
   return (
     <Layout>
-      <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Create New Ticket</h1>
-      <p className="text-gray-500 mt-1">Provide ticket details below.</p>
+      <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Create New Request</h1>
+      <p className="text-gray-500 mt-1">Provide request details below.</p>
       <form onSubmit={submit} className="mt-8 max-w-2xl space-y-5 bg-white p-6 rounded-xl shadow-soft border border-gray-100">
         <div>
           <Label htmlFor="subject">Subject *</Label>
@@ -96,7 +96,7 @@ export default function CreateTicketPage() {
         <div className="flex gap-3 pt-2">
           <Button type="submit" disabled={loading} data-testid="submit-ticket-btn"
             className="bg-[#ec9324] hover:bg-[#d4811f] text-white">
-            {loading ? <><Loader2 className="animate-spin mr-2" size={16}/> Creating...</> : "Create Ticket"}
+            {loading ? <><Loader2 className="animate-spin mr-2" size={16}/> Creating...</> : "Create Request"}
           </Button>
           <Button type="button" variant="outline" onClick={() => navigate(-1)}>Cancel</Button>
         </div>

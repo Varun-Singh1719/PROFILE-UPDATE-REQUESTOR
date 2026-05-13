@@ -30,7 +30,7 @@ export default function AdminDashboard() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Admin Dashboard</h1>
-          <p className="text-gray-500 mt-1">Organization-wide ticket overview.</p>
+          <p className="text-gray-500 mt-1">Organization-wide request overview.</p>
         </div>
         <div className="flex items-center gap-2">
           <DateFilter value={dateFilter} onChange={setDateFilter} />
@@ -39,13 +39,13 @@ export default function AdminDashboard() {
             data-testid="create-new-ticket-btn"
             className="bg-[#ec9324] hover:bg-[#d4811f] text-white shadow-sm"
           >
-            <Plus size={16} className="mr-1.5" /> Create New Ticket
+            <Plus size={16} className="mr-1.5" /> New Request
           </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
-        <MetricCard label="Total Tickets" value={stats.total} icon={Ticket} onClick={() => goto()} />
+        <MetricCard label="Total Requests" value={stats.total} icon={Ticket} onClick={() => goto()} />
         <MetricCard label="Open" value={stats.open} color="#ec9324" icon={AlertCircle} onClick={() => goto("Open")} />
         <MetricCard label="In Progress" value={stats.in_progress} color="#22c55e" icon={Loader} onClick={() => goto("In Progress")} />
         <MetricCard label="Closed" value={stats.closed} color="#b2b2b2" icon={CheckCircle2} onClick={() => goto("Closed")} />
@@ -84,7 +84,7 @@ export default function AdminDashboard() {
             </div>
             <div className="mt-3 bg-gray-50 rounded-lg py-2.5 px-3 flex items-center justify-between"
               data-testid={`dq-open-profiles-${m.email}`}>
-              <div className="text-[11px] uppercase tracking-wide text-gray-500 font-medium">Open Ticket Profiles</div>
+              <div className="text-[11px] uppercase tracking-wide text-gray-500 font-medium">Open Request Profiles</div>
               <div className="text-lg font-bold text-gray-900">{m.open_profiles ?? 0}</div>
             </div>
           </button>
