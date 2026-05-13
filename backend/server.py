@@ -278,7 +278,7 @@ async def update_contact(contact_id: str, body: ContactUpdate, user=Depends(requ
     return contact
 
 # ---------- Tickets Routes ----------
-def parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date):
+def parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date, date_from=None, date_to=None, date_field="created_at"):
     query = {}
     if status:
         query["status"] = status
@@ -304,12 +304,15 @@ def parse_filters(status, priority, created_by, assigned_to, q, created_on, upda
         query["updated_on"] = {"$regex": f"^{updated_on}"}
     if due_date:
         query["due_date"] = due_date
+    # Date range filter on created_on or updated_on
+    if date_from or date_to:
+        query.update(_date_match(date_from, date_to, date_field))
     return query
 
 @api_router.get("/tickets")
 async def list_tickets(
     user=Depends(get_current_user),
-    scope: Optional[str] = None,  # mine|created|assigned|unassigned|open|all
+    scope: Optional[str] = None,
     status: Optional[str] = None,
     priority: Optional[str] = None,
     created_by: Optional[str] = None,
@@ -318,8 +321,11 @@ async def list_tickets(
     created_on: Optional[str] = None,
     updated_on: Optional[str] = None,
     due_date: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    date_field: Optional[str] = "created_at",
 ):
-    query = parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date)
+    query = parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date, date_from, date_to, date_field)
 
     role = user["type"]
     uid = user["id"]

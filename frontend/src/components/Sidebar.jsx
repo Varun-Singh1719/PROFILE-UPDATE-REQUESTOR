@@ -10,7 +10,7 @@ const linksByRole = {
     { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
     { to: "/admin/open-tickets", label: "Open Requests", icon: Ticket },
     { to: "/admin/unassigned", label: "Unassigned", icon: Inbox },
-    { to: "/admin/contacts", label: "Contact List", icon: Users },
+    { to: "/admin/contacts", label: "Employee List", icon: Users },
   ],
   "Research Associate": [
     { to: "/ra", label: "Dashboard", icon: LayoutDashboard, end: true },

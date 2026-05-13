@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Search, Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { StatusBadge } from "../components/Badges";
+import DateFilter, { dateFilterToParams } from "../components/DateFilter";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from "../components/ui/dropdown-menu";
@@ -23,25 +24,43 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
   const { user } = useAuth();
   const [selected, setSelected] = useState([]);
   const [members, setMembers] = useState([]);
+  const [creators, setCreators] = useState([]);
+  const [createdBy, setCreatedBy] = useState("");
+  const [assigneeFilter, setAssigneeFilter] = useState("");
+  const [dateFilter, setDateFilter] = useState({ field: "created_at", mode: "between", from: null, to: null });
 
   const status = params.get("status") || "";
   const priority = params.get("priority") || "";
-  const assigned_to = params.get("assigned_to") || "";
+  const urlAssignedTo = params.get("assigned_to") || "";
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      const dateParams = dateFilterToParams(dateFilter);
       const r = await api.get("/tickets", {
-        params: { scope, status: status || undefined, priority: priority || undefined,
-                  assigned_to: assigned_to || undefined, q: search || undefined }
+        params: {
+          scope,
+          status: status || undefined,
+          priority: priority || undefined,
+          assigned_to: assigneeFilter || urlAssignedTo || undefined,
+          created_by: createdBy || undefined,
+          q: search || undefined,
+          ...dateParams,
+        }
       });
       setTickets(r.data);
     } finally { setLoading(false); }
-  }, [scope, status, priority, assigned_to, search]);
+  }, [scope, status, priority, urlAssignedTo, assigneeFilter, createdBy, search, dateFilter]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    if (user?.type === "Admin") api.get("/contacts", { params: { type: "DQ Team" }}).then(r => setMembers(r.data));
+    // Fetch lists for dropdowns (only Admins see full lists; others get DQ list)
+    api.get("/contacts", { params: { type: "DQ Team" }}).then(r => setMembers(r.data)).catch(() => {});
+    // Creators = RAs + Admins (ticket creators)
+    api.get("/contacts").then(r => {
+      const list = (r.data || []).filter(c => c.type === "Research Associate" || c.type === "Admin");
+      setCreators(list);
+    }).catch(() => {});
   }, [user]);
 
   const setParam = (k, v) => {
@@ -179,7 +198,7 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
             className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <Select value={status || "all"} onValueChange={(v) => setParam("status", v === "all" ? "" : v)}>
-          <SelectTrigger className="w-44" data-testid="filter-status"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectTrigger className="w-40" data-testid="filter-status"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
             <SelectItem value="Open">Open</SelectItem>
@@ -188,7 +207,7 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
           </SelectContent>
         </Select>
         <Select value={priority || "all"} onValueChange={(v) => setParam("priority", v === "all" ? "" : v)}>
-          <SelectTrigger className="w-44" data-testid="filter-priority"><SelectValue placeholder="Priority" /></SelectTrigger>
+          <SelectTrigger className="w-40" data-testid="filter-priority"><SelectValue placeholder="Priority" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Priorities</SelectItem>
             <SelectItem value="High">High</SelectItem>
@@ -196,6 +215,22 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
             <SelectItem value="Low">Low</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={createdBy || "all"} onValueChange={(v) => setCreatedBy(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-44" data-testid="filter-created-by"><SelectValue placeholder="Created By" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Creators</SelectItem>
+            {creators.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={assigneeFilter || "all"} onValueChange={(v) => setAssigneeFilter(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-44" data-testid="filter-assigned-to"><SelectValue placeholder="Assigned To" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Assignees</SelectItem>
+            <SelectItem value="unassigned">Unassigned</SelectItem>
+            {members.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <DateFilter value={dateFilter} onChange={setDateFilter} />
       </div>
 
       <div className="mt-6">

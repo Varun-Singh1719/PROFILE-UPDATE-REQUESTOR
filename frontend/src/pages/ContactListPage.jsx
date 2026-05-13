@@ -10,9 +10,11 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter
 } from "../components/ui/dialog";
 import { toast } from "sonner";
-import { Search, UserPlus } from "lucide-react";
+import { Search, UserPlus, Pencil } from "lucide-react";
 
 function fmt(iso) { if (!iso) return "Never"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
+
+const EMPTY_FORM = { email: "", name: "", phone: "", type: "DQ Team", password: "Test@123" };
 
 export default function ContactListPage() {
   const [contacts, setContacts] = useState([]);
@@ -20,7 +22,8 @@ export default function ContactListPage() {
   const [type, setType] = useState("all");
   const [status, setStatus] = useState("all");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ email: "", name: "", phone: "", type: "DQ Team", password: "Test@123" });
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [editing, setEditing] = useState(null); // contact being edited, or null
 
   const load = async () => {
     const r = await api.get("/contacts", {
@@ -39,33 +42,63 @@ export default function ContactListPage() {
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
   };
 
-  const createContact = async (e) => {
+  const openCreate = () => {
+    setEditing(null);
+    setForm(EMPTY_FORM);
+    setOpen(true);
+  };
+
+  const openEdit = (c) => {
+    setEditing(c);
+    setForm({ email: c.email, name: c.name, phone: c.phone || "", type: c.type, password: "" });
+    setOpen(true);
+  };
+
+  const submit = async (e) => {
     e.preventDefault();
     try {
-      await api.post("/contacts", form);
-      toast.success("Contact created");
-      setOpen(false); setForm({ email: "", name: "", phone: "", type: "DQ Team", password: "Test@123" });
+      if (editing) {
+        const payload = { name: form.name, phone: form.phone, type: form.type };
+        await api.patch(`/contacts/${editing.id}`, payload);
+        toast.success("Employee updated");
+      } else {
+        await api.post("/contacts", form);
+        toast.success("Employee created");
+      }
+      setOpen(false);
+      setEditing(null);
+      setForm(EMPTY_FORM);
       load();
-    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Failed");
+    }
   };
 
   return (
     <Layout>
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Contact List</h1>
-          <p className="text-gray-500 mt-1">Manage all users in the system.</p>
+          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Employee List</h1>
+          <p className="text-gray-500 mt-1">Manage all employees in the system.</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="add-contact-btn">
-              <UserPlus size={16} className="mr-2"/> Add Contact
-            </Button>
-          </DialogTrigger>
+        <Button onClick={openCreate} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="add-contact-btn">
+          <UserPlus size={16} className="mr-2"/> Add Employee
+        </Button>
+        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditing(null); setForm(EMPTY_FORM); } }}>
           <DialogContent>
-            <DialogHeader><DialogTitle>Add New Contact</DialogTitle></DialogHeader>
-            <form onSubmit={createContact} className="space-y-4">
-              <div><Label>Email *</Label><Input type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="contact-email"/></div>
+            <DialogHeader>
+              <DialogTitle>{editing ? "Edit Employee" : "Add New Employee"}</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={submit} className="space-y-4">
+              <div>
+                <Label>Email {editing ? "" : "*"}</Label>
+                <Input
+                  type="email" required value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  data-testid="contact-email"
+                  disabled={!!editing}
+                />
+              </div>
               <div><Label>Name *</Label><Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="contact-name"/></div>
               <div><Label>Phone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} data-testid="contact-phone"/></div>
               <div>
@@ -79,9 +112,16 @@ export default function ContactListPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label>Password *</Label><Input type="text" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} data-testid="contact-password"/></div>
+              {!editing && (
+                <div>
+                  <Label>Password *</Label>
+                  <Input type="text" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} data-testid="contact-password"/>
+                </div>
+              )}
               <DialogFooter>
-                <Button type="submit" className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="submit-contact-btn">Create</Button>
+                <Button type="submit" className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="submit-contact-btn">
+                  {editing ? "Save Changes" : "Create"}
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -124,6 +164,7 @@ export default function ContactListPage() {
                 <th className="px-4 py-3 text-left">Created</th>
                 <th className="px-4 py-3 text-left">Last Login</th>
                 <th className="px-4 py-3 text-left">Active</th>
+                <th className="px-4 py-3 text-right">Edit</th>
               </tr>
             </thead>
             <tbody>
@@ -144,9 +185,18 @@ export default function ContactListPage() {
                       data-testid={`toggle-${c.email}`}
                     />
                   </td>
+                  <td className="px-4 py-3 text-right">
+                    <Button
+                      size="sm" variant="outline" onClick={() => openEdit(c)}
+                      data-testid={`edit-${c.email}`}
+                      className="border-gray-300 text-gray-700 hover:bg-[#ec9324]/10 hover:text-[#ec9324] hover:border-[#ec9324]"
+                    >
+                      <Pencil size={14} className="mr-1.5"/> Edit
+                    </Button>
+                  </td>
                 </tr>
               ))}
-              {contacts.length === 0 && <tr><td colSpan={7} className="text-center py-10 text-gray-400">No contacts</td></tr>}
+              {contacts.length === 0 && <tr><td colSpan={8} className="text-center py-10 text-gray-400">No employees</td></tr>}
             </tbody>
           </table>
         </div>
