@@ -541,22 +541,22 @@ async def download(path: str, request: Request, auth: Optional[str] = Query(None
     return FastResponse(content=data, media_type=record.get("content_type") or ct)
 
 # ---------- Dashboard ----------
-def _date_match(date_from, date_to):
-    """Build a Mongo match clause on created_on (ISO string). Inclusive on both ends."""
+def _date_match(date_from, date_to, field="created_at"):
+    """Build a Mongo match clause on created_on/updated_on (ISO string). Inclusive both ends."""
     if not date_from and not date_to:
         return {}
+    db_field = "updated_on" if field == "updated_at" else "created_on"
     cond = {}
     if date_from:
         cond["$gte"] = f"{date_from}T00:00:00"
     if date_to:
-        # Exclusive upper-bound at next day's midnight => inclusive of date_to
         try:
             d = datetime.fromisoformat(date_to).date()
             next_day = (datetime(d.year, d.month, d.day) + timedelta(days=1)).date().isoformat()
             cond["$lt"] = f"{next_day}T00:00:00"
         except Exception:
             cond["$lte"] = f"{date_to}T23:59:59"
-    return {"created_on": cond}
+    return {db_field: cond}
 
 @api_router.get("/dashboard/stats")
 async def dashboard_stats(
@@ -564,6 +564,7 @@ async def dashboard_stats(
     member_id: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    date_field: Optional[str] = "created_at",
 ):
     role = user["type"]
     base = {}
@@ -574,8 +575,7 @@ async def dashboard_stats(
     elif role == "Admin" and member_id:
         base["assigned_to_id"] = member_id
 
-    date_match = _date_match(date_from, date_to)
-    base = {**base, **date_match}
+    base = {**base, **_date_match(date_from, date_to, date_field)}
 
     async def cnt(extra):
         q = {**base, **extra}
@@ -592,9 +592,10 @@ async def dq_performance(
     user=Depends(require_role("Admin")),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    date_field: Optional[str] = "created_at",
 ):
     members = await db.contacts.find({"type": "DQ Team", "status": "Active"}, {"_id": 0, "password_hash": 0}).to_list(500)
-    date_match = _date_match(date_from, date_to)
+    date_match = _date_match(date_from, date_to, date_field)
     out = []
     for m in members:
         base = {"assigned_to_id": m["id"], **date_match}
@@ -620,6 +621,7 @@ async def dashboard_recent(
     limit: int = 8,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    date_field: Optional[str] = "created_at",
 ):
     base = {}
     role = user["type"]
@@ -627,7 +629,7 @@ async def dashboard_recent(
         base["created_by_id"] = user["id"]
     elif role == "DQ Team":
         base["assigned_to_id"] = user["id"]
-    base = {**base, **_date_match(date_from, date_to)}
+    base = {**base, **_date_match(date_from, date_to, date_field)}
     sort_field = "created_on" if kind == "new" else "updated_on"
     items = await db.tickets.find(base, {"_id": 0}).sort(sort_field, -1).to_list(limit)
     return items
