@@ -3,7 +3,7 @@ import os
 import pytest
 import requests
 
-BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://support-core-4.preview.emergentagent.com").rstrip("/")
+BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://profx-request-menu.preview.emergentagent.com").rstrip("/")
 API = f"{BASE}/api"
 
 CREDS = {

@@ -1,15 +1,23 @@
-import React from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
-  LayoutDashboard, Ticket, Users, Inbox, FilePlus, LogOut, ListChecks, Mail
+  LayoutDashboard, Ticket, Users, Inbox, FilePlus, LogOut, ListChecks, Mail,
+  ChevronDown, ChevronRight, Briefcase
 } from "lucide-react";
 
 const linksByRole = {
   Admin: [
     { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
-    { to: "/admin/open-tickets", label: "Open Requests", icon: Ticket },
-    { to: "/admin/unassigned", label: "Unassigned", icon: Inbox },
+    {
+      label: "ProfiX",
+      icon: Briefcase,
+      group: true,
+      children: [
+        { to: "/admin/open-tickets", label: "Open Requests", icon: Ticket },
+        { to: "/admin/unassigned", label: "Unassigned", icon: Inbox },
+      ],
+    },
     { to: "/admin/contacts", label: "Employee List", icon: Users },
   ],
   "Research Associate": [
@@ -24,9 +32,66 @@ const linksByRole = {
   ],
 };
 
+function CollapsibleGroup({ item, currentPath }) {
+  const childPaths = (item.children || []).map((c) => c.to);
+  const isChildActive = childPaths.some((p) => currentPath.startsWith(p));
+  const [open, setOpen] = useState(isChildActive);
+
+  useEffect(() => {
+    if (isChildActive) setOpen(true);
+  }, [isChildActive]);
+
+  const GroupIcon = item.icon;
+  const groupKey = item.label.toLowerCase().replace(/\s/g, "-");
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        data-testid={`sidebar-group-${groupKey}`}
+        aria-expanded={open}
+        className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+          isChildActive
+            ? "bg-[#ec9324]/10 text-[#ec9324] font-semibold"
+            : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium"
+        }`}
+      >
+        <span className="flex items-center gap-3">
+          <GroupIcon size={18} />
+          {item.label}
+        </span>
+        {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+      </button>
+      {open && (
+        <div className="mt-1 ml-3 pl-3 border-l border-gray-200 space-y-1">
+          {item.children.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              data-testid={`sidebar-link-${label.toLowerCase().replace(/\s/g, "-")}`}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                  isActive
+                    ? "bg-[#ec9324]/10 text-[#ec9324] font-semibold border-r-4 border-[#ec9324]"
+                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium"
+                }`
+              }
+            >
+              <Icon size={16} />
+              {label}
+            </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const links = linksByRole[user?.type] || [];
 
   const handleLogout = async () => {
@@ -50,24 +115,36 @@ export default function Sidebar() {
         </div>
       </div>
       <nav className="flex-1 px-3 py-4 space-y-1">
-        {links.map(({ to, label, icon: Icon, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            data-testid={`sidebar-link-${label.toLowerCase().replace(/\s/g, "-")}`}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                isActive
-                  ? "bg-[#ec9324]/10 text-[#ec9324] font-semibold border-r-4 border-[#ec9324]"
-                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium"
-              }`
-            }
-          >
-            <Icon size={18} />
-            {label}
-          </NavLink>
-        ))}
+        {links.map((item) => {
+          if (item.group) {
+            return (
+              <CollapsibleGroup
+                key={item.label}
+                item={item}
+                currentPath={location.pathname}
+              />
+            );
+          }
+          const { to, label, icon: Icon, end } = item;
+          return (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              data-testid={`sidebar-link-${label.toLowerCase().replace(/\s/g, "-")}`}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                  isActive
+                    ? "bg-[#ec9324]/10 text-[#ec9324] font-semibold border-r-4 border-[#ec9324]"
+                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium"
+                }`
+              }
+            >
+              <Icon size={18} />
+              {label}
+            </NavLink>
+          );
+        })}
       </nav>
       <div className="px-3 py-3 border-t border-gray-100">
         <div className="px-3 py-2 mb-2">
