@@ -55,10 +55,10 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     // Fetch lists for dropdowns (only Admins see full lists; others get DQ list)
-    api.get("/contacts", { params: { type: "DQ Team" }}).then(r => setMembers(r.data)).catch(() => {});
-    // Creators = RAs + Admins (ticket creators)
+    api.get("/contacts", { params: { role: "DQ Team" }}).then(r => setMembers(r.data)).catch(() => {});
+    // Creators = RAs + Admins + Managers (ticket creators)
     api.get("/contacts").then(r => {
-      const list = (r.data || []).filter(c => c.type === "Research Associate" || c.type === "Admin");
+      const list = (r.data || []).filter(c => c.role === "Research Associate" || c.role === "Admin" || c.role === "Manager");
       setCreators(list);
     }).catch(() => {});
   }, [user]);
@@ -118,9 +118,9 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
   };
 
-  const isDQ = user?.type === "DQ Team";
-  const isAdmin = user?.type === "Admin";
-  const isRA = user?.type === "Research Associate";
+  const isDQ = user?.role === "DQ Team";
+  const isAdmin = user?.role === "Admin" || user?.role === "Manager";
+  const isRA = user?.role === "Research Associate";
 
   const rowActions = (t) => (
     <>

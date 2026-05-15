@@ -33,8 +33,10 @@ export default function AuthCallback() {
         toast.success(`Welcome, ${data.user.name}`);
         // Clear the hash and route to role-based dashboard
         window.history.replaceState(null, "", window.location.pathname);
-        const dest = data.user.type === "Admin" ? "/admin"
-          : data.user.type === "Research Associate" ? "/ra" : "/dq";
+        const r = data.user.role;
+        const dest = r === "Admin" ? "/admin"
+          : r === "Manager" ? "/manager"
+          : r === "Research Associate" ? "/ra" : "/dq";
         navigate(dest, { replace: true });
       } catch (e) {
         const msg = formatApiError(e?.response?.data?.detail) || "Google sign-in failed.";

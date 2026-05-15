@@ -7,20 +7,29 @@ import AuthCallback from "./pages/AuthCallback";
 import AdminDashboard from "./pages/AdminDashboard";
 import RADashboard from "./pages/RADashboard";
 import DQDashboard from "./pages/DQDashboard";
+import ManagerDashboard from "./pages/ManagerDashboard";
 import TicketListPage from "./pages/TicketListPage";
 import TicketDetailPage from "./pages/TicketDetailPage";
 import CreateTicketPage from "./pages/CreateTicketPage";
 import ContactListPage from "./pages/ContactListPage";
+import TeamsPage from "./pages/TeamsPage";
+import PermissionsPage from "./pages/PermissionsPage";
 import { Loader2 } from "lucide-react";
+
+const roleHome = (role) => {
+  if (role === "Admin") return "/admin";
+  if (role === "Manager") return "/manager";
+  if (role === "Research Associate") return "/ra";
+  return "/dq";
+};
 
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();
   if (loading || user === null)
     return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#ec9324]" size={32}/></div>;
   if (!user) return <Navigate to="/login" replace />;
-  if (roles && !roles.includes(user.type)) {
-    const fallback = user.type === "Admin" ? "/admin" : user.type === "Research Associate" ? "/ra" : "/dq";
-    return <Navigate to={fallback} replace />;
+  if (roles && !roles.includes(user.role)) {
+    return <Navigate to={roleHome(user.role)} replace />;
   }
   return children;
 }
@@ -29,8 +38,7 @@ function HomeRedirect() {
   const { user, loading } = useAuth();
   if (loading || user === null) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#ec9324]" size={32}/></div>;
   if (!user) return <Navigate to="/login" replace />;
-  const dest = user.type === "Admin" ? "/admin" : user.type === "Research Associate" ? "/ra" : "/dq";
-  return <Navigate to={dest} replace />;
+  return <Navigate to={roleHome(user.role)} replace />;
 }
 
 function App() {
@@ -52,9 +60,21 @@ function App() {
               <TicketListPage scope="unassigned" title="Unassigned Requests" basePath="/admin/tickets" />
             </ProtectedRoute>} />
             <Route path="/admin/contacts" element={<ProtectedRoute roles={["Admin"]}><ContactListPage /></ProtectedRoute>} />
+            <Route path="/admin/teams" element={<ProtectedRoute roles={["Admin"]}><TeamsPage /></ProtectedRoute>} />
+            <Route path="/admin/permissions" element={<ProtectedRoute roles={["Admin"]}><PermissionsPage /></ProtectedRoute>} />
             <Route path="/admin/create" element={<ProtectedRoute roles={["Admin"]}><CreateTicketPage /></ProtectedRoute>} />
             <Route path="/admin/tickets/:id" element={<ProtectedRoute roles={["Admin"]}><TicketDetailPage /></ProtectedRoute>} />
 
+            {/* Manager */}
+            <Route path="/manager" element={<ProtectedRoute roles={["Manager"]}><ManagerDashboard /></ProtectedRoute>} />
+            <Route path="/manager/open-tickets" element={<ProtectedRoute roles={["Manager"]}>
+              <TicketListPage scope="all" title="All Requests" basePath="/manager/tickets" />
+            </ProtectedRoute>} />
+            <Route path="/manager/unassigned" element={<ProtectedRoute roles={["Manager"]}>
+              <TicketListPage scope="unassigned" title="Unassigned Requests" basePath="/manager/tickets" />
+            </ProtectedRoute>} />
+            <Route path="/manager/create" element={<ProtectedRoute roles={["Manager"]}><CreateTicketPage /></ProtectedRoute>} />
+            <Route path="/manager/tickets/:id" element={<ProtectedRoute roles={["Manager"]}><TicketDetailPage /></ProtectedRoute>} />
             {/* Research Associate */}
             <Route path="/ra" element={<ProtectedRoute roles={["Research Associate"]}><RADashboard /></ProtectedRoute>} />
             <Route path="/ra/tickets" element={<ProtectedRoute roles={["Research Associate"]}>

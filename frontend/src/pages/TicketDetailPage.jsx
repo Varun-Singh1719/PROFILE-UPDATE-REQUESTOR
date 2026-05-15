@@ -31,13 +31,13 @@ export default function TicketDetailPage() {
   };
   useEffect(() => { load(); }, [id]);
   useEffect(() => {
-    if (user?.type === "Admin") api.get("/contacts", { params: { type: "DQ Team" }}).then(r => setMembers(r.data));
+    if (user?.role === "Admin" || user?.role === "Manager") api.get("/contacts", { params: { role: "DQ Team" }}).then(r => setMembers(r.data));
   }, [user]);
 
   if (!ticket) return <Layout><div className="text-gray-400">Loading...</div></Layout>;
 
-  const isAdmin = user.type === "Admin";
-  const isDQ = user.type === "DQ Team";
+  const isAdmin = user.role === "Admin" || user.role === "Manager";
+  const isDQ = user.role === "DQ Team";
   const canUpdateStatus = isAdmin || (isDQ && ticket.assigned_to_id === user.id);
 
   const update = async (body) => {

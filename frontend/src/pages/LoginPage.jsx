@@ -22,7 +22,10 @@ export default function LoginPage() {
     try {
       const u = await login(email, password);
       toast.success(`Welcome, ${u.name}`);
-      const dest = u.type === "Admin" ? "/admin" : u.type === "Research Associate" ? "/ra" : "/dq";
+      const r = u.role;
+      const dest = r === "Admin" ? "/admin"
+        : r === "Manager" ? "/manager"
+        : r === "Research Associate" ? "/ra" : "/dq";
       navigate(dest);
     } catch (e) {
       const msg = formatApiError(e?.response?.data?.detail) || e.message;
@@ -116,6 +119,7 @@ export default function LoginPage() {
           <div className="mt-8 p-4 rounded-lg border border-gray-200 bg-gray-50 text-xs text-gray-600">
             <div className="font-semibold text-gray-700 mb-1">Demo accounts</div>
             <div>Admin: admin@ticketing.com / Admin@123</div>
+            <div>Manager: manager@ticketing.com / Test@123</div>
             <div>RA: ra@ticketing.com / Test@123</div>
             <div>DQ: dq1@ticketing.com / Test@123</div>
           </div>

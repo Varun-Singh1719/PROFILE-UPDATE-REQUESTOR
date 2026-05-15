@@ -3,7 +3,7 @@ import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   LayoutDashboard, Ticket, Users, Inbox, FilePlus, LogOut, ListChecks, Mail,
-  ChevronDown, ChevronRight, Briefcase
+  ChevronDown, ChevronRight, Briefcase, Settings, Shield, UsersRound
 } from "lucide-react";
 
 const linksByRole = {
@@ -18,7 +18,28 @@ const linksByRole = {
         { to: "/admin/unassigned", label: "Unassigned", icon: Inbox },
       ],
     },
-    { to: "/admin/contacts", label: "Employee List", icon: Users },
+    {
+      label: "Manage",
+      icon: Settings,
+      group: true,
+      children: [
+        { to: "/admin/teams", label: "Teams", icon: UsersRound },
+        { to: "/admin/permissions", label: "Permissions", icon: Shield },
+        { to: "/admin/contacts", label: "Employee List", icon: Users },
+      ],
+    },
+  ],
+  Manager: [
+    { to: "/manager", label: "Dashboard", icon: LayoutDashboard, end: true },
+    {
+      label: "ProfiX",
+      icon: Briefcase,
+      group: true,
+      children: [
+        { to: "/manager/open-tickets", label: "Open Requests", icon: Ticket },
+        { to: "/manager/unassigned", label: "Unassigned", icon: Inbox },
+      ],
+    },
   ],
   "Research Associate": [
     { to: "/ra", label: "Dashboard", icon: LayoutDashboard, end: true },
@@ -92,7 +113,7 @@ export default function Sidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const links = linksByRole[user?.type] || [];
+  const links = linksByRole[user?.role] || [];
 
   const handleLogout = async () => {
     await logout();
@@ -110,11 +131,11 @@ export default function Sidebar() {
           />
           <div>
             <div className="font-bold text-gray-900 text-lg leading-none">Infollion</div>
-            <div className="text-xs text-gray-500 mt-0.5">{user?.type}</div>
+            <div className="text-xs text-gray-500 mt-0.5">{user?.role}</div>
           </div>
         </div>
       </div>
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {links.map((item) => {
           if (item.group) {
             return (
