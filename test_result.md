@@ -191,77 +191,87 @@ backend:
 frontend:
   - task: "Sidebar: Manage group (Teams/Permissions/Employee List) + Manager role nav"
     implemented: true
-    working: "NA"
+    working: true
     file: "frontend/src/components/Sidebar.jsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Admin sidebar: Dashboard, ProfiX (Open Requests, Unassigned), Manage (Teams, Permissions, Employee List). Manager sidebar: Dashboard, ProfiX only. Each group collapsible with auto-expand on child route."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Admin sidebar shows Dashboard, ProfiX group (collapsible with Open Requests, Unassigned children), and Manage group (collapsible with Teams, Permissions, Employee List children). All data-testids present and working. Manager sidebar shows ONLY Dashboard and ProfiX group (no Manage group), as expected. Manager login redirects to /manager. All sidebar navigation working correctly."
 
   - task: "Manager Dashboard + routes"
     implemented: true
-    working: "NA"
+    working: true
     file: "frontend/src/pages/ManagerDashboard.jsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "New /manager dashboard mirrors Admin (stats, DQ performance, recent updates). Routes /manager/open-tickets, /manager/unassigned, /manager/create, /manager/tickets/:id added."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Manager Dashboard at /manager displays correctly with metric cards (Total Requests, Open, In Progress, Closed) and DQ Team Performance section showing Dev Kapoor and Sara Mehta with their stats. Navigation to /manager/open-tickets works. Manager can view ticket list. Dashboard layout identical to Admin as expected."
 
   - task: "Teams Management page"
     implemented: true
-    working: "NA"
+    working: true
     file: "frontend/src/pages/TeamsPage.jsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Teams listing in table with color swatch, managers chips, members count + preview, Edit/Delete. Add New Team modal: team name, multi-select managers (Admin+Manager roles), multi-select members (any active), preset color swatches + native color picker."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Teams page displays correctly at /admin/teams. Existing team 'Retail Blaze' visible in table with orange color swatch, Admin User as manager chip, and 2 members (Riya Sharma, Dev Kapoor). Add New Team button present. Team creation modal opens with all fields (team name, manager multi-select with search, member multi-select, color picker with presets). Manager multi-select shows Maya Khanna (Manager role). All data-testids present. Core functionality working."
 
   - task: "Permissions matrix page (UI-only)"
     implemented: true
-    working: "NA"
+    working: true
     file: "frontend/src/pages/PermissionsPage.jsx"
     stuck_count: 0
     priority: "medium"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Matrix UI with Subject Type (Role/Team/Employee), Subject value dropdown, Table dropdown, View/Request/Edit checkboxes. Add Rule, Remove Rule, Save buttons. Persists via /api/permissions."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Permissions page at /admin/permissions working correctly. Add Rule button creates new rule row. Subject Type dropdown (Role/Team/Employee), Subject dropdown (populated with roles/teams/employees based on type), Table dropdown (tickets/contacts/teams/permissions), and action checkboxes (View/Request/Edit) all functional. Successfully created rule with Subject Type: Role, Subject: DQ Team, Table: tickets, View: checked. Save button persists rules. After page reload, rule persisted correctly. UI-only storage working as expected."
 
   - task: "Employee List revamp + password visibility + detail popup"
     implemented: true
-    working: "NA"
+    working: true
     file: "frontend/src/pages/ContactListPage.jsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Renamed Type->Role globally (UI + DB). Added Emp ID, DOJ form fields + table columns. Password is no longer a form field — auto-generated on create, shown once in a modal with copy. Edit modal + Detail modal include PasswordField with eye toggle (fetches decrypted via /contacts/{id}/password) and reset button. Table shows Team (color chip + name) and Manager(s) columns. Clicking employee name opens detail popup with all fields."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Employee List at /admin/contacts fully functional. All columns present: Name, Emp ID, Email, Phone, Role, Team, Manager, DOJ, Last Login, Active, Edit. Add Employee modal has NO password input field (as expected). Created test employee with email test.emp.ybhnqe@ticketing.com, name 'Test Employee', phone 9999999999, emp_id 'EMP-TST', DOJ 2026-05-15, role 'Research Associate'. Generated Password modal appeared showing 14-char password 'SmqNPADKTkzd0%' (length ≥12 ✓). Copy and Close buttons working. Employee appears in table with correct Emp ID and DOJ. Clicking employee name opens Detail modal showing all fields (email, phone, Emp ID, DOJ, Team, Manager, Password). Password field shows bullets initially. Eye toggle reveals password correctly. Password field working in both Detail and Edit modals. Role chips show 'Admin', 'Manager', 'Research Associate', 'DQ Team' (not 'Type'). All functionality working correctly."
 
 metadata:
   created_by: "main_agent"
   version: "2.0"
-  test_sequence: 1
+  test_sequence: 2
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "Migrate contacts.type -> contacts.role and add Manager role"
-    - "Auto-generated encrypted passwords + view/reset endpoints"
-    - "Teams CRUD with manager/member multi-select"
-    - "Permissions storage (UI-only)"
-    - "Manager role seed + ProfiX access (same as Admin)"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -345,3 +355,54 @@ agent_communication:
       - Recommendation: Add backfill migration in startup code to set default emp_id/doj for existing contacts.
       
       ALL BACKEND APIs WORKING CORRECTLY. Ready for frontend integration testing.
+
+  - agent: "testing"
+    message: |
+      ✅ FRONTEND END-TO-END TESTING COMPLETE - ALL CRITICAL FEATURES WORKING
+      
+      Completed comprehensive UI testing for all 6 scenarios of Admin & Manager module enhancements.
+      
+      RESULTS: 5/5 FRONTEND TASKS WORKING CORRECTLY
+      
+      ✅ Sidebar Restructuring (Task 1):
+         - Admin sidebar: Dashboard, ProfiX group (Open Requests, Unassigned), Manage group (Teams, Permissions, Employee List) ✓
+         - Manager sidebar: Dashboard, ProfiX only (no Manage group) ✓
+         - All data-testids present and navigation working ✓
+         - Manager login redirects to /manager ✓
+      
+      ✅ Manager Dashboard + Routes (Task 2):
+         - Manager Dashboard at /manager displays metric cards (Total Requests, Open, In Progress, Closed) ✓
+         - DQ Team Performance section shows Dev Kapoor and Sara Mehta with stats ✓
+         - Navigation to /manager/open-tickets works ✓
+         - Dashboard layout identical to Admin ✓
+      
+      ✅ Teams Management Page (Task 3):
+         - Teams page at /admin/teams displays correctly ✓
+         - Existing team 'Retail Blaze' visible with color swatch, manager chip, members count ✓
+         - Add New Team modal with all fields (name, manager multi-select, member multi-select, color picker) ✓
+         - Manager multi-select shows Maya Khanna (Manager role) ✓
+         - All data-testids present ✓
+      
+      ✅ Permissions Matrix Page (Task 4):
+         - Permissions page at /admin/permissions working ✓
+         - Add Rule creates new rule row ✓
+         - Subject Type dropdown (Role/Team/Employee) ✓
+         - Subject dropdown populated based on type ✓
+         - Table dropdown (tickets/contacts/teams/permissions) ✓
+         - Action checkboxes (View/Request/Edit) functional ✓
+         - Created rule: Subject Type=Role, Subject=DQ Team, Table=tickets, View=checked ✓
+         - Save persists rules, reload confirms persistence ✓
+      
+      ✅ Employee List Revamp (Task 5):
+         - All columns present: Name, Emp ID, Email, Phone, Role, Team, Manager, DOJ, Last Login, Active, Edit ✓
+         - Add Employee modal has NO password input field (as expected) ✓
+         - Created test employee: test.emp.ybhnqe@ticketing.com, EMP-TST, DOJ 2026-05-15, role Research Associate ✓
+         - Generated Password modal showed 14-char password 'SmqNPADKTkzd0%' (length ≥12) ✓
+         - Copy and Close buttons working ✓
+         - Employee appears in table with correct Emp ID and DOJ ✓
+         - Clicking employee name opens Detail modal with all fields ✓
+         - Password field shows bullets initially, eye toggle reveals password ✓
+         - Password field working in both Detail and Edit modals ✓
+         - Role chips show 'Admin', 'Manager', 'Research Associate', 'DQ Team' (not 'Type') ✓
+      
+      ALL FRONTEND FEATURES WORKING CORRECTLY. No critical issues found.
