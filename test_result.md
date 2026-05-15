@@ -279,31 +279,43 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: |
-      Built Admin/Manager module enhancements. Please test backend only:
-      1. Auth: login as admin@ticketing.com/Admin@123 and manager@ticketing.com/Test@123. Verify /api/auth/me returns `role` (not `type`).
-      2. Contacts:
-         - GET /api/contacts as admin returns enriched fields (team_name may be null if no teams yet).
-         - POST /api/contacts with body {email, name, phone, role, emp_id, doj} returns generated_password.
-         - GET /api/contacts/{id}/password returns decrypted password (Admin only — Manager should get 403).
-         - POST /api/contacts/{id}/reset-password generates a new password.
-         - PATCH /api/contacts/{id} updates fields including role/emp_id/doj.
-      3. Teams:
-         - POST /api/teams creates a team with manager_ids/member_ids/color.
-         - Validation: duplicate name → 400; member appearing in another team → 400.
-         - GET /api/teams returns enriched managers/members.
-         - PATCH and DELETE work.
-         - After assigning a member to a team, GET /api/contacts shows team_name/team_color/manager_names for that contact.
-      4. Permissions:
-         - GET /api/permissions returns {rules: []} by default.
-         - PUT /api/permissions {rules: [{subject_type, subject_value, table, actions}]} persists.
-         - Manager hits 403 on both.
-      5. Manager ProfiX access:
-         - As Manager, GET /api/tickets returns all tickets (no role-based filter).
-         - PATCH /api/tickets/{id} with assigned_to works for Manager.
-         - POST /api/tickets/bulk-assign and bulk-status work for Manager.
-         - POST /api/contacts as Manager → 403.
-         - POST /api/teams as Manager → 403.
-      Credentials are in /app/memory/test_credentials.md.
+      Built enterprise Permissions v2 system. Test the NEW backend endpoints (the v1 /api/permissions still exists for compat — don't focus there). Focus areas:
+
+      1. **Schema endpoint**: GET /api/permissions/schema (any authed user) returns {modules:[...], actions:[...]}. Modules should include "profix" and "desk_booking" with groups & features.
+
+      2. **Permissions v2 rules**:
+         - GET /api/permissions/v2 (Admin) returns [] initially or saved rules
+         - PUT /api/permissions/v2/bulk with body {rules: [{module, feature, subject_type, subject_id, actions:{view, create, edit, assign, approve, delete}}, ...]}
+           - Replaces all rules; trims actions to those valid for the feature (e.g. ticket_status doesn't have "assign" or "delete")
+           - Returns {count}
+         - Validation: an invalid feature like {module:"profix", feature:"unknown"} → 400
+         - Manager → 403 on PUT and DELETE; on GET → 403
+
+      3. **Effective access**:
+         - GET /api/permissions/me/effective for any logged-in user returns {employee:{id,name,email,role,team_id,team_name}, effective:{module:{feature:{action:bool}}}, sources:{...}, counts:{role_rules, team_rules, employee_overrides}}
+         - GET /api/permissions/effective/{employee_id} (Admin/Manager OR self)
+         - After creating role rules for "DQ Team", the effective access for a DQ Team user should include those actions under profix
+
+      4. **Presets**:
+         - GET /api/permissions/presets returns default seeded presets including "Research User", "DQ Staff", "DQ Manager", "Admin (Full)" (profix module) and "Staff (self only)", "Manager (team)", "HR (allocate + approve)" (desk_booking module). All marked system:true.
+         - POST /api/permissions/presets {name, description, module, rules} creates new (system:false).
+         - POST /api/permissions/presets/{preset_id}/apply {subject_type, subject_id} replaces rules for that subject within the preset's module. Returns {count}.
+         - Manager → 403 on all preset endpoints.
+
+      5. **Stats**: GET /api/permissions/stats returns {total_roles, total_rules, employees_with_overrides, restricted_actions, override_rules}.
+
+      6. **Audit log**:
+         - GET /api/audit-log (Admin) returns recent events, sorted by `at` desc.
+         - After login, GET /api/audit-log should include an "auth.login" event with actor=admin.
+         - After creating a contact, "contact.create" entry appears.
+         - After PUT /api/permissions/v2/bulk, "permissions.bulk_save" entry appears (severity=warning).
+         - Filters: ?resource=permissions, ?q=login, ?severity=warning should work.
+         - Manager → 403.
+
+      7. **Backward compat**:
+         - GET /api/permissions (legacy) still works (returns {rules: []} or saved).
+
+      Existing functionality (auth, contacts, teams) should still work unchanged. Credentials in /app/memory/test_credentials.md.
 
   - agent: "testing"
     message: |

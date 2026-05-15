@@ -14,6 +14,7 @@ import CreateTicketPage from "./pages/CreateTicketPage";
 import ContactListPage from "./pages/ContactListPage";
 import TeamsPage from "./pages/TeamsPage";
 import PermissionsPage from "./pages/PermissionsPage";
+import DeskBookingPage from "./pages/DeskBookingPage";
 import { Loader2 } from "lucide-react";
 
 const roleHome = (role) => {
@@ -92,6 +93,9 @@ function App() {
               <TicketListPage scope="unassigned" title="Unassigned Tickets" basePath="/dq/tickets" />
             </ProtectedRoute>} />
             <Route path="/dq/tickets/:id" element={<ProtectedRoute roles={["DQ Team"]}><TicketDetailPage /></ProtectedRoute>} />
+
+            {/* Desk Booking (all roles) */}
+            <Route path="/desk-booking" element={<ProtectedRoute roles={["Admin", "Manager", "Research Associate", "DQ Team"]}><DeskBookingPage /></ProtectedRoute>} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

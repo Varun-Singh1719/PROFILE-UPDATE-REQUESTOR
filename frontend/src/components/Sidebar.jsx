@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { usePermissions } from "../hooks/usePermissions";
 import {
   LayoutDashboard, Ticket, Users, Inbox, FilePlus, LogOut, ListChecks, Mail,
-  ChevronDown, ChevronRight, Briefcase, Settings, Shield, UsersRound
+  ChevronDown, ChevronRight, Briefcase, Settings, Shield, UsersRound, Armchair
 } from "lucide-react";
 
 const linksByRole = {
@@ -14,10 +15,11 @@ const linksByRole = {
       icon: Briefcase,
       group: true,
       children: [
-        { to: "/admin/open-tickets", label: "Open Requests", icon: Ticket },
-        { to: "/admin/unassigned", label: "Unassigned", icon: Inbox },
+        { to: "/admin/open-tickets", label: "Open Requests", icon: Ticket, perm: { module: "profix", feature: "ticket", action: "view" } },
+        { to: "/admin/unassigned", label: "Unassigned", icon: Inbox, perm: { module: "profix", feature: "ticket", action: "assign" } },
       ],
     },
+    { to: "/desk-booking", label: "Desk Booking", icon: Armchair, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
     {
       label: "Manage",
       icon: Settings,
@@ -36,31 +38,38 @@ const linksByRole = {
       icon: Briefcase,
       group: true,
       children: [
-        { to: "/manager/open-tickets", label: "Open Requests", icon: Ticket },
-        { to: "/manager/unassigned", label: "Unassigned", icon: Inbox },
+        { to: "/manager/open-tickets", label: "Open Requests", icon: Ticket, perm: { module: "profix", feature: "ticket", action: "view" } },
+        { to: "/manager/unassigned", label: "Unassigned", icon: Inbox, perm: { module: "profix", feature: "ticket", action: "assign" } },
       ],
     },
+    { to: "/desk-booking", label: "Desk Booking", icon: Armchair, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
   ],
   "Research Associate": [
     { to: "/ra", label: "Dashboard", icon: LayoutDashboard, end: true },
-    { to: "/ra/tickets", label: "My Requests", icon: ListChecks },
-    { to: "/ra/create", label: "New Request", icon: FilePlus },
+    { to: "/ra/tickets", label: "My Requests", icon: ListChecks, perm: { module: "profix", feature: "ticket", action: "view" } },
+    { to: "/ra/create", label: "New Request", icon: FilePlus, perm: { module: "profix", feature: "ticket", action: "create" } },
+    { to: "/desk-booking", label: "Desk Booking", icon: Armchair, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
   ],
   "DQ Team": [
     { to: "/dq", label: "Dashboard", icon: LayoutDashboard, end: true },
-    { to: "/dq/tickets", label: "My Requests", icon: ListChecks },
-    { to: "/dq/unassigned", label: "Unassigned", icon: Inbox },
+    { to: "/dq/tickets", label: "My Requests", icon: ListChecks, perm: { module: "profix", feature: "ticket", action: "view" } },
+    { to: "/dq/unassigned", label: "Unassigned", icon: Inbox, perm: { module: "profix", feature: "ticket", action: "assign" } },
+    { to: "/desk-booking", label: "Desk Booking", icon: Armchair, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
   ],
 };
 
-function CollapsibleGroup({ item, currentPath }) {
-  const childPaths = (item.children || []).map((c) => c.to);
+function CollapsibleGroup({ item, currentPath, can }) {
+  // Filter children by permission
+  const allowedChildren = (item.children || []).filter((c) => !c.perm || can(c.perm.module, c.perm.feature, c.perm.action));
+  const childPaths = allowedChildren.map((c) => c.to);
   const isChildActive = childPaths.some((p) => currentPath.startsWith(p));
   const [open, setOpen] = useState(isChildActive);
 
   useEffect(() => {
     if (isChildActive) setOpen(true);
   }, [isChildActive]);
+
+  if (allowedChildren.length === 0) return null;
 
   const GroupIcon = item.icon;
   const groupKey = item.label.toLowerCase().replace(/\s/g, "-");
@@ -86,7 +95,7 @@ function CollapsibleGroup({ item, currentPath }) {
       </button>
       {open && (
         <div className="mt-1 ml-3 pl-3 border-l border-gray-200 space-y-1">
-          {item.children.map(({ to, label, icon: Icon }) => (
+          {allowedChildren.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
@@ -111,6 +120,7 @@ function CollapsibleGroup({ item, currentPath }) {
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
+  const { can } = usePermissions();
   const navigate = useNavigate();
   const location = useLocation();
   const links = linksByRole[user?.role] || [];
@@ -143,9 +153,12 @@ export default function Sidebar() {
                 key={item.label}
                 item={item}
                 currentPath={location.pathname}
+                can={can}
               />
             );
           }
+          // Top-level link, check permission if set
+          if (item.perm && !can(item.perm.module, item.perm.feature, item.perm.action)) return null;
           const { to, label, icon: Icon, end } = item;
           return (
             <NavLink

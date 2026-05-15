@@ -122,6 +122,195 @@ def create_access_token(user_id: str, email: str, role: str) -> str:
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
+# ---------- Permission Module Schema ----------
+PERMISSION_MODULES = [
+    {
+        "key": "profix",
+        "label": "ProfiX",
+        "description": "Expert Profile Update Tool",
+        "icon": "Briefcase",
+        "color": "#ec9324",
+        "groups": [
+            {
+                "key": "tickets",
+                "label": "Tickets & Requests",
+                "features": [
+                    {"key": "ticket", "label": "Ticket", "actions": ["view", "create", "edit", "assign", "approve", "delete"]},
+                    {"key": "ticket_status", "label": "Ticket Status", "actions": ["view", "edit", "approve"]},
+                    {"key": "comments", "label": "Comments", "actions": ["view", "create", "edit", "delete"]},
+                    {"key": "attachments", "label": "Attachments", "actions": ["view", "create", "delete"]},
+                ],
+            },
+            {
+                "key": "analytics",
+                "label": "Analytics & Reports",
+                "features": [
+                    {"key": "dq_dashboard", "label": "DQ Performance Dashboard", "actions": ["view"]},
+                    {"key": "ticket_reports", "label": "Ticket Reports", "actions": ["view", "create"]},
+                ],
+            },
+        ],
+    },
+    {
+        "key": "desk_booking",
+        "label": "Desk Booking",
+        "description": "Seat Allocation System",
+        "icon": "Armchair",
+        "color": "#3b82f6",
+        "groups": [
+            {
+                "key": "seats",
+                "label": "Seat Management",
+                "features": [
+                    {"key": "seat_request", "label": "Seat Request", "actions": ["view", "create", "edit", "approve", "delete"]},
+                    {"key": "team_seat_request", "label": "Team Seat Request", "actions": ["view", "create", "approve"]},
+                    {"key": "seat_allocation", "label": "Seat Allocation", "actions": ["view", "assign", "edit"]},
+                ],
+            },
+            {
+                "key": "floor",
+                "label": "Floor Plan",
+                "features": [
+                    {"key": "floor_plan", "label": "Floor Plan", "actions": ["view", "edit"]},
+                    {"key": "zones", "label": "Zones", "actions": ["view", "create", "edit", "delete"]},
+                ],
+            },
+        ],
+    },
+]
+
+ALL_ACTIONS = ["view", "create", "edit", "assign", "approve", "delete"]
+
+def feature_actions(module_key: str, feature_key: str) -> List[str]:
+    for m in PERMISSION_MODULES:
+        if m["key"] != module_key:
+            continue
+        for g in m["groups"]:
+            for f in g["features"]:
+                if f["key"] == feature_key:
+                    return f["actions"]
+    return []
+
+DEFAULT_PRESETS = [
+    {
+        "id": "preset-research-user",
+        "name": "Research User",
+        "description": "Create & view own ProfiX requests; comment on them.",
+        "module": "profix",
+        "rules": [
+            {"feature": "ticket", "actions": {"view": True, "create": True, "edit": False, "assign": False, "approve": False, "delete": False}},
+            {"feature": "comments", "actions": {"view": True, "create": True, "edit": False, "delete": False}},
+            {"feature": "attachments", "actions": {"view": True, "create": True, "delete": False}},
+            {"feature": "ticket_reports", "actions": {"view": False, "create": False}},
+        ],
+        "system": True,
+    },
+    {
+        "id": "preset-dq-staff",
+        "name": "DQ Staff",
+        "description": "Self-assign tickets and update own tickets.",
+        "module": "profix",
+        "rules": [
+            {"feature": "ticket", "actions": {"view": True, "create": False, "edit": True, "assign": True, "approve": False, "delete": False}},
+            {"feature": "ticket_status", "actions": {"view": True, "edit": True, "approve": False}},
+            {"feature": "comments", "actions": {"view": True, "create": True, "edit": True, "delete": False}},
+            {"feature": "attachments", "actions": {"view": True, "create": True, "delete": False}},
+        ],
+        "system": True,
+    },
+    {
+        "id": "preset-dq-manager",
+        "name": "DQ Manager",
+        "description": "Assign any ticket and update any ticket status.",
+        "module": "profix",
+        "rules": [
+            {"feature": "ticket", "actions": {"view": True, "create": True, "edit": True, "assign": True, "approve": True, "delete": False}},
+            {"feature": "ticket_status", "actions": {"view": True, "edit": True, "approve": True}},
+            {"feature": "comments", "actions": {"view": True, "create": True, "edit": True, "delete": True}},
+            {"feature": "attachments", "actions": {"view": True, "create": True, "delete": True}},
+            {"feature": "dq_dashboard", "actions": {"view": True}},
+            {"feature": "ticket_reports", "actions": {"view": True, "create": True}},
+        ],
+        "system": True,
+    },
+    {
+        "id": "preset-admin-full-profix",
+        "name": "Admin (Full)",
+        "description": "Unrestricted access on ProfiX.",
+        "module": "profix",
+        "rules": [
+            {"feature": "ticket", "actions": {"view": True, "create": True, "edit": True, "assign": True, "approve": True, "delete": True}},
+            {"feature": "ticket_status", "actions": {"view": True, "edit": True, "approve": True}},
+            {"feature": "comments", "actions": {"view": True, "create": True, "edit": True, "delete": True}},
+            {"feature": "attachments", "actions": {"view": True, "create": True, "delete": True}},
+            {"feature": "dq_dashboard", "actions": {"view": True}},
+            {"feature": "ticket_reports", "actions": {"view": True, "create": True}},
+        ],
+        "system": True,
+    },
+    {
+        "id": "preset-desk-staff",
+        "name": "Staff (self only)",
+        "description": "Request a desk for yourself only.",
+        "module": "desk_booking",
+        "rules": [
+            {"feature": "seat_request", "actions": {"view": True, "create": True, "edit": True, "approve": False, "delete": True}},
+            {"feature": "team_seat_request", "actions": {"view": False, "create": False, "approve": False}},
+            {"feature": "seat_allocation", "actions": {"view": True, "assign": False, "edit": False}},
+            {"feature": "floor_plan", "actions": {"view": True, "edit": False}},
+        ],
+        "system": True,
+    },
+    {
+        "id": "preset-desk-manager",
+        "name": "Manager (team)",
+        "description": "Request seats for your team members.",
+        "module": "desk_booking",
+        "rules": [
+            {"feature": "seat_request", "actions": {"view": True, "create": True, "edit": True, "approve": False, "delete": True}},
+            {"feature": "team_seat_request", "actions": {"view": True, "create": True, "approve": False}},
+            {"feature": "seat_allocation", "actions": {"view": True, "assign": False, "edit": False}},
+            {"feature": "floor_plan", "actions": {"view": True, "edit": False}},
+        ],
+        "system": True,
+    },
+    {
+        "id": "preset-desk-hr",
+        "name": "HR (allocate + approve)",
+        "description": "Allocate seats and approve requests.",
+        "module": "desk_booking",
+        "rules": [
+            {"feature": "seat_request", "actions": {"view": True, "create": True, "edit": True, "approve": True, "delete": True}},
+            {"feature": "team_seat_request", "actions": {"view": True, "create": True, "approve": True}},
+            {"feature": "seat_allocation", "actions": {"view": True, "assign": True, "edit": True}},
+            {"feature": "floor_plan", "actions": {"view": True, "edit": True}},
+            {"feature": "zones", "actions": {"view": True, "create": True, "edit": True, "delete": True}},
+        ],
+        "system": True,
+    },
+]
+
+# ---------- Audit helper ----------
+async def log_audit(*, actor: dict, action: str, resource: str, resource_id: Optional[str] = None,
+                   detail: str = "", metadata: Optional[dict] = None, severity: str = "info"):
+    try:
+        await db.audit_log.insert_one({
+            "id": str(uuid.uuid4()),
+            "at": now_iso(),
+            "actor_id": (actor or {}).get("id"),
+            "actor_name": (actor or {}).get("name"),
+            "actor_email": (actor or {}).get("email"),
+            "actor_role": (actor or {}).get("role"),
+            "action": action,
+            "resource": resource,
+            "resource_id": resource_id,
+            "detail": detail,
+            "metadata": metadata or {},
+            "severity": severity,
+        })
+    except Exception as e:
+        logging.error(f"audit log failed: {e}")
+
 def _public_contact(doc: dict) -> dict:
     """Sanitize contact for output (drop _id, password_hash, password_encrypted)."""
     if not doc:
@@ -245,6 +434,10 @@ async def login(body: LoginIn, response: Response):
     response.set_cookie("access_token", token, httponly=True, secure=False, samesite="lax", max_age=43200, path="/")
     await db.contacts.update_one({"id": user["id"]}, {"$set": {"last_login": now_iso()}})
     _public_contact(user)
+    await log_audit(
+        actor=user, action="auth.login", resource="auth",
+        detail=f"{user.get('name')} logged in", severity="info",
+    )
     return {"user": user, "access_token": token}
 
 # REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
@@ -367,6 +560,11 @@ async def create_contact(body: ContactCreate, user=Depends(require_role("Admin")
     await db.contacts.insert_one(doc)
     out = _public_contact(dict(doc))
     out["generated_password"] = generated_pwd  # one-time return at creation
+    await log_audit(
+        actor=user, action="contact.create", resource="contact", resource_id=doc["id"],
+        detail=f"Created employee {doc['name']} ({doc['email']}) as {doc['role']}",
+        severity="info",
+    )
     return out
 
 @api_router.patch("/contacts/{contact_id}")
@@ -409,6 +607,10 @@ async def reset_contact_password(contact_id: str, user=Depends(require_role("Adm
         "password_hash": hash_password(new_pwd),
         "password_encrypted": encrypt_password(new_pwd),
     }})
+    await log_audit(
+        actor=user, action="contact.reset_password", resource="contact", resource_id=contact_id,
+        detail=f"Reset password for {c.get('name')} ({c.get('email')})", severity="warning",
+    )
     return {"password": new_pwd}
 
 # ---------- Teams Routes ----------
@@ -449,6 +651,11 @@ async def create_team(body: TeamCreate, user=Depends(require_role("Admin"))):
     }
     await db.teams.insert_one(doc)
     doc.pop("_id", None)
+    await log_audit(
+        actor=user, action="team.create", resource="team", resource_id=doc["id"],
+        detail=f"Created team '{doc['name']}' with {len(doc['member_ids'])} members",
+        severity="info",
+    )
     return doc
 
 @api_router.patch("/teams/{team_id}")
@@ -482,7 +689,7 @@ async def delete_team(team_id: str, user=Depends(require_role("Admin"))):
     await db.teams.delete_one({"id": team_id})
     return {"ok": True}
 
-# ---------- Permissions (UI-only config storage) ----------
+# ---------- Permissions (legacy simple matrix - kept for backward compat) ----------
 @api_router.get("/permissions")
 async def get_permissions(user=Depends(require_role("Admin"))):
     doc = await db.permissions.find_one({"id": "default"}, {"_id": 0})
@@ -500,6 +707,286 @@ async def update_permissions(body: PermissionsIn, user=Depends(require_role("Adm
     }
     await db.permissions.update_one({"id": "default"}, {"$set": doc}, upsert=True)
     return doc
+
+# ---------- Permissions v2 (enterprise) ----------
+class PermRuleIn(BaseModel):
+    module: str
+    feature: str
+    subject_type: Literal["role", "team", "employee"]
+    subject_id: str
+    actions: Dict[str, bool]
+    note: Optional[str] = ""
+
+class PermRulesBulkIn(BaseModel):
+    rules: List[PermRuleIn]
+
+@api_router.get("/permissions/schema")
+async def permissions_schema(user=Depends(get_current_user)):
+    return {"modules": PERMISSION_MODULES, "actions": ALL_ACTIONS}
+
+def _serialize_rule(r: dict) -> dict:
+    r.pop("_id", None)
+    return r
+
+@api_router.get("/permissions/v2")
+async def list_permission_rules_v2(
+    user=Depends(require_role("Admin")),
+    module: Optional[str] = None,
+    subject_type: Optional[str] = None,
+    subject_id: Optional[str] = None,
+):
+    q = {}
+    if module: q["module"] = module
+    if subject_type: q["subject_type"] = subject_type
+    if subject_id: q["subject_id"] = subject_id
+    rules = await db.permission_rules.find(q, {"_id": 0}).to_list(5000)
+    return rules
+
+@api_router.put("/permissions/v2/bulk")
+async def bulk_replace_rules(body: PermRulesBulkIn, user=Depends(require_role("Admin"))):
+    # Validate features against schema
+    for r in body.rules:
+        valid = feature_actions(r.module, r.feature)
+        if not valid:
+            raise HTTPException(400, f"Unknown feature {r.module}.{r.feature}")
+        # Trim actions to valid ones
+        r.actions = {a: bool(r.actions.get(a, False)) for a in valid}
+
+    existing_count = await db.permission_rules.count_documents({})
+    await db.permission_rules.delete_many({})
+    now = now_iso()
+    payload = []
+    for r in body.rules:
+        payload.append({
+            "id": str(uuid.uuid4()),
+            "module": r.module,
+            "feature": r.feature,
+            "subject_type": r.subject_type,
+            "subject_id": r.subject_id,
+            "actions": r.actions,
+            "note": r.note or "",
+            "created_on": now,
+            "updated_on": now,
+            "updated_by": user["id"],
+        })
+    if payload:
+        await db.permission_rules.insert_many(payload)
+
+    await log_audit(
+        actor=user, action="permissions.bulk_save", resource="permissions",
+        detail=f"Saved {len(payload)} rules (previously {existing_count}).",
+        metadata={"count_before": existing_count, "count_after": len(payload)},
+        severity="warning",
+    )
+    return {"count": len(payload)}
+
+@api_router.delete("/permissions/v2/rule/{rule_id}")
+async def delete_rule(rule_id: str, user=Depends(require_role("Admin"))):
+    r = await db.permission_rules.find_one({"id": rule_id})
+    if not r:
+        raise HTTPException(404, "Not found")
+    await db.permission_rules.delete_one({"id": rule_id})
+    await log_audit(
+        actor=user, action="permissions.delete_rule", resource="permissions", resource_id=rule_id,
+        detail=f"Deleted rule {r['module']}.{r['feature']} for {r['subject_type']}={r['subject_id']}",
+        severity="warning",
+    )
+    return {"ok": True}
+
+# ---------- Effective access ----------
+def _merge_actions(base: Dict[str, bool], add: Dict[str, bool]) -> Dict[str, bool]:
+    out = dict(base)
+    for k, v in add.items():
+        out[k] = bool(out.get(k, False) or v)
+    return out
+
+async def _compute_effective(employee: dict) -> dict:
+    """Return effective access for a given employee with explanations."""
+    role = employee.get("role")
+    # Find team for this employee
+    team = await db.teams.find_one(
+        {"$or": [{"member_ids": employee["id"]}, {"manager_ids": employee["id"]}]},
+        {"_id": 0}
+    )
+
+    role_rules = await db.permission_rules.find({"subject_type": "role", "subject_id": role}, {"_id": 0}).to_list(2000)
+    team_rules = []
+    if team:
+        team_rules = await db.permission_rules.find({"subject_type": "team", "subject_id": team["id"]}, {"_id": 0}).to_list(2000)
+    employee_rules = await db.permission_rules.find({"subject_type": "employee", "subject_id": employee["id"]}, {"_id": 0}).to_list(2000)
+
+    # Build effective: precedence employee > team > role. We OR actions, but employee can DENY by explicit false.
+    # For simplicity in this v1: merge by OR (allow takes precedence). To support deny, we'd need allow/deny per action.
+    effective: Dict[str, Dict[str, Dict[str, bool]]] = {}  # module -> feature -> action -> bool
+    sources: Dict[str, Dict[str, List[dict]]] = {}  # module -> feature -> [{source, actions}]
+
+    def add(level: str, rules: List[dict]):
+        for r in rules:
+            m = r["module"]; f = r["feature"]
+            effective.setdefault(m, {}).setdefault(f, {})
+            effective[m][f] = _merge_actions(effective[m][f], r["actions"])
+            sources.setdefault(m, {}).setdefault(f, []).append({
+                "level": level, "actions": r["actions"], "subject_type": r["subject_type"],
+                "subject_id": r["subject_id"], "note": r.get("note", ""),
+            })
+
+    add("role", role_rules)
+    add("team", team_rules)
+    add("override", employee_rules)
+
+    # Fallback: if NO rules exist anywhere for a feature, default to "allow view" only.
+    # If a feature has no rules at all, return blank — UI shows "Default (no rules)".
+    return {
+        "employee": {
+            "id": employee["id"], "name": employee["name"], "email": employee["email"],
+            "role": role, "team_id": team["id"] if team else None,
+            "team_name": team["name"] if team else None,
+        },
+        "effective": effective,
+        "sources": sources,
+        "counts": {
+            "role_rules": len(role_rules),
+            "team_rules": len(team_rules),
+            "employee_overrides": len(employee_rules),
+        },
+    }
+
+@api_router.get("/permissions/effective/{employee_id}")
+async def effective_for_employee(employee_id: str, user=Depends(get_current_user)):
+    # Admin can view anyone, employees can view themselves
+    if user["role"] not in ("Admin", "Manager") and user["id"] != employee_id:
+        raise HTTPException(403, "Not authorized")
+    emp = await db.contacts.find_one({"id": employee_id}, {"_id": 0, "password_hash": 0, "password_encrypted": 0})
+    if not emp:
+        raise HTTPException(404, "Employee not found")
+    return await _compute_effective(emp)
+
+@api_router.get("/permissions/me/effective")
+async def effective_for_me(user=Depends(get_current_user)):
+    return await _compute_effective(user)
+
+# ---------- Permission Presets ----------
+class PresetApplyIn(BaseModel):
+    subject_type: Literal["role", "team", "employee"]
+    subject_id: str
+
+@api_router.get("/permissions/presets")
+async def list_presets(user=Depends(require_role("Admin"))):
+    items = await db.permission_presets.find({}, {"_id": 0}).to_list(500)
+    return items
+
+class PresetCreateIn(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    module: str
+    rules: List[Dict[str, Any]]
+
+@api_router.post("/permissions/presets")
+async def create_preset(body: PresetCreateIn, user=Depends(require_role("Admin"))):
+    doc = {
+        "id": str(uuid.uuid4()),
+        "name": body.name,
+        "description": body.description or "",
+        "module": body.module,
+        "rules": body.rules,
+        "system": False,
+        "created_on": now_iso(),
+        "created_by": user["id"],
+    }
+    await db.permission_presets.insert_one(doc)
+    await log_audit(
+        actor=user, action="permissions.preset_create", resource="permission_preset",
+        resource_id=doc["id"], detail=f"Created preset '{body.name}'", severity="info",
+    )
+    doc.pop("_id", None)
+    return doc
+
+@api_router.post("/permissions/presets/{preset_id}/apply")
+async def apply_preset(preset_id: str, body: PresetApplyIn, user=Depends(require_role("Admin"))):
+    preset = await db.permission_presets.find_one({"id": preset_id}, {"_id": 0})
+    if not preset:
+        raise HTTPException(404, "Preset not found")
+    # Apply: create/replace rules for (subject_type, subject_id) within preset module
+    await db.permission_rules.delete_many({
+        "subject_type": body.subject_type,
+        "subject_id": body.subject_id,
+        "module": preset["module"],
+    })
+    payload = []
+    now = now_iso()
+    for r in preset["rules"]:
+        valid = feature_actions(preset["module"], r["feature"])
+        if not valid:
+            continue
+        actions = {a: bool(r.get("actions", {}).get(a, False)) for a in valid}
+        payload.append({
+            "id": str(uuid.uuid4()),
+            "module": preset["module"],
+            "feature": r["feature"],
+            "subject_type": body.subject_type,
+            "subject_id": body.subject_id,
+            "actions": actions,
+            "note": f"Applied from preset '{preset['name']}'",
+            "created_on": now,
+            "updated_on": now,
+            "updated_by": user["id"],
+        })
+    if payload:
+        await db.permission_rules.insert_many(payload)
+    await log_audit(
+        actor=user, action="permissions.preset_apply", resource="permission_preset", resource_id=preset_id,
+        detail=f"Applied preset '{preset['name']}' to {body.subject_type}={body.subject_id} ({len(payload)} rules)",
+        severity="info",
+    )
+    return {"count": len(payload)}
+
+# ---------- Permission Stats ----------
+@api_router.get("/permissions/stats")
+async def permissions_stats(user=Depends(require_role("Admin"))):
+    # Count roles in use among contacts
+    roles_distinct = await db.contacts.distinct("role")
+    total_rules = await db.permission_rules.count_documents({})
+    override_count = await db.permission_rules.count_documents({"subject_type": "employee"})
+    employees_with_overrides = len(await db.permission_rules.distinct("subject_id", {"subject_type": "employee"}))
+    # Restricted = actions explicitly denied (set to false) across all rules
+    restricted = 0
+    async for r in db.permission_rules.find({}, {"actions": 1}):
+        for v in (r.get("actions") or {}).values():
+            if v is False:
+                restricted += 1
+    return {
+        "total_roles": len(roles_distinct),
+        "total_rules": total_rules,
+        "employees_with_overrides": employees_with_overrides,
+        "restricted_actions": restricted,
+        "override_rules": override_count,
+    }
+
+# ---------- Audit Log (org-wide) ----------
+@api_router.get("/audit-log")
+async def list_audit(
+    user=Depends(require_role("Admin")),
+    q: Optional[str] = None,
+    resource: Optional[str] = None,
+    action: Optional[str] = None,
+    severity: Optional[str] = None,
+    actor_id: Optional[str] = None,
+    limit: int = 200,
+):
+    query = {}
+    if resource: query["resource"] = resource
+    if action: query["action"] = {"$regex": action, "$options": "i"}
+    if severity: query["severity"] = severity
+    if actor_id: query["actor_id"] = actor_id
+    if q:
+        query["$or"] = [
+            {"detail": {"$regex": q, "$options": "i"}},
+            {"actor_name": {"$regex": q, "$options": "i"}},
+            {"actor_email": {"$regex": q, "$options": "i"}},
+            {"action": {"$regex": q, "$options": "i"}},
+        ]
+    items = await db.audit_log.find(query, {"_id": 0}).sort("at", -1).to_list(min(limit, 1000))
+    return items
 
 # ---------- Tickets Routes ----------
 def parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date, date_from=None, date_to=None, date_field="created_at"):
@@ -932,7 +1419,22 @@ logger = logging.getLogger(__name__)
 async def startup():
     await db.contacts.create_index("email", unique=True)
     await db.tickets.create_index("ticket_id", unique=True)
+    await db.audit_log.create_index([("at", -1)])
+    await db.permission_rules.create_index([("module", 1), ("feature", 1), ("subject_type", 1), ("subject_id", 1)])
     init_storage()
+
+    # Seed default permission presets (idempotent)
+    for p in DEFAULT_PRESETS:
+        existing = await db.permission_presets.find_one({"id": p["id"]})
+        if not existing:
+            await db.permission_presets.insert_one({**p, "created_on": now_iso()})
+        else:
+            # refresh system presets in case definitions changed
+            if existing.get("system"):
+                await db.permission_presets.update_one(
+                    {"id": p["id"]},
+                    {"$set": {"name": p["name"], "description": p["description"], "module": p["module"], "rules": p["rules"], "system": True}},
+                )
 
     # ---- Migration: rename `type` -> `role` for contacts ----
     legacy = await db.contacts.find({"type": {"$exists": True}}, {"_id": 1, "type": 1, "role": 1}).to_list(5000)
