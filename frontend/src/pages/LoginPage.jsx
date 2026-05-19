@@ -25,7 +25,8 @@ export default function LoginPage() {
       const r = u.role;
       const dest = r === "Admin" ? "/admin"
         : r === "Manager" ? "/manager"
-        : r === "Research Associate" ? "/ra" : "/dq";
+        : r === "Research" ? "/ra"
+        : r === "DQ Team" ? "/dq" : "/employee";
       navigate(dest);
     } catch (e) {
       const msg = formatApiError(e?.response?.data?.detail) || e.message;
@@ -115,6 +116,11 @@ export default function LoginPage() {
               className="w-full h-11 bg-[#ec9324] hover:bg-[#d4811f] text-white">
               {loading ? <><Loader2 className="animate-spin mr-2" size={16}/> Signing in...</> : "Sign in"}
             </Button>
+            <div className="text-center">
+              <a href="/forgot-password" data-testid="forgot-password-link" className="text-xs text-gray-500 hover:text-[#ec9324] hover:underline">
+                Forgot your password?
+              </a>
+            </div>
           </form>
           <div className="mt-8 p-4 rounded-lg border border-gray-200 bg-gray-50 text-xs text-gray-600">
             <div className="font-semibold text-gray-700 mb-1">Demo accounts</div>

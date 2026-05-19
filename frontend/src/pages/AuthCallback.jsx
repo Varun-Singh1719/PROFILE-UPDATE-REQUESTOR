@@ -36,7 +36,8 @@ export default function AuthCallback() {
         const r = data.user.role;
         const dest = r === "Admin" ? "/admin"
           : r === "Manager" ? "/manager"
-          : r === "Research Associate" ? "/ra" : "/dq";
+          : r === "Research" ? "/ra"
+          : r === "DQ Team" ? "/dq" : "/employee";
         navigate(dest, { replace: true });
       } catch (e) {
         const msg = formatApiError(e?.response?.data?.detail) || "Google sign-in failed.";

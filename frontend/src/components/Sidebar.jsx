@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { usePermissions } from "../hooks/usePermissions";
 import {
   LayoutDashboard, Ticket, Users, Inbox, FilePlus, LogOut, ListChecks, Mail,
-  ChevronDown, ChevronRight, Briefcase, Settings, Shield, UsersRound, Armchair
+  ChevronDown, ChevronRight, Briefcase, Settings, Shield, UsersRound, Armchair, Send, MailPlus
 } from "lucide-react";
 
 const linksByRole = {
@@ -27,6 +27,8 @@ const linksByRole = {
       children: [
         { to: "/admin/teams", label: "Teams", icon: UsersRound },
         { to: "/admin/permissions", label: "Permissions", icon: Shield },
+        { to: "/admin/email-templates", label: "Email Templates", icon: MailPlus },
+        { to: "/admin/notifications", label: "Notifications", icon: Send },
         { to: "/admin/contacts", label: "Employee List", icon: Users },
       ],
     },
@@ -42,9 +44,10 @@ const linksByRole = {
         { to: "/manager/unassigned", label: "Unassigned", icon: Inbox, perm: { module: "profix", feature: "ticket", action: "assign" } },
       ],
     },
+    { to: "/manager/email-templates", label: "Email Templates", icon: MailPlus },
     { to: "/desk-booking", label: "Desk Booking", icon: Armchair, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
   ],
-  "Research Associate": [
+  "Research": [
     { to: "/ra", label: "Dashboard", icon: LayoutDashboard, end: true },
     { to: "/ra/tickets", label: "My Requests", icon: ListChecks, perm: { module: "profix", feature: "ticket", action: "view" } },
     { to: "/ra/create", label: "New Request", icon: FilePlus, perm: { module: "profix", feature: "ticket", action: "create" } },
@@ -54,6 +57,14 @@ const linksByRole = {
     { to: "/dq", label: "Dashboard", icon: LayoutDashboard, end: true },
     { to: "/dq/tickets", label: "My Requests", icon: ListChecks, perm: { module: "profix", feature: "ticket", action: "view" } },
     { to: "/dq/unassigned", label: "Unassigned", icon: Inbox, perm: { module: "profix", feature: "ticket", action: "assign" } },
+    { to: "/desk-booking", label: "Desk Booking", icon: Armchair, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
+  ],
+  Delivery: [
+    { to: "/employee", label: "Dashboard", icon: LayoutDashboard, end: true },
+    { to: "/desk-booking", label: "Desk Booking", icon: Armchair, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
+  ],
+  Member: [
+    { to: "/employee", label: "Dashboard", icon: LayoutDashboard, end: true },
     { to: "/desk-booking", label: "Desk Booking", icon: Armchair, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
   ],
 };

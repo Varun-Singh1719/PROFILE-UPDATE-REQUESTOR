@@ -1,21 +1,26 @@
 import React, { useEffect, useState } from "react";
-import api from "../lib/api";
+import api, { API } from "../lib/api";
 import Layout from "../components/Layout";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { Switch } from "../components/ui/switch";
+import { Checkbox } from "../components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from "../components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator
+} from "../components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { Search, UserPlus, Pencil, Eye, EyeOff, Copy, RefreshCw, KeyRound, X, Mail, Phone, Calendar, IdCard, Briefcase, UsersRound } from "lucide-react";
+import { Search, UserPlus, Pencil, Eye, EyeOff, Copy, RefreshCw, KeyRound, X, Mail, Phone, Calendar, IdCard, Briefcase, UsersRound, Download, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 
 function fmt(iso) { if (!iso) return "Never"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
 
-const ROLE_OPTIONS = ["Admin", "Manager", "Research Associate", "DQ Team"];
-const EMPTY_FORM = { email: "", name: "", phone: "", role: "DQ Team", emp_id: "", doj: "" };
+const ROLE_OPTIONS = ["Admin", "Manager", "Research", "Delivery", "Member"];
+const ALL_ROLE_FILTERS = ["Admin", "Manager", "Research", "Delivery", "Member", "DQ Team"];
+const EMPTY_FORM = { email: "", name: "", phone: "", role: "Member", emp_id: "", doj: "" };
 
 function PasswordField({ contactId, testIdPrefix = "contact" }) {
   const [pwd, setPwd] = useState(null); // decrypted password (or null)
@@ -211,23 +216,100 @@ function GeneratedPasswordModal({ password, email, onClose }) {
 
 export default function ContactListPage() {
   const [contacts, setContacts] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [sortBy, setSortBy] = useState("name");
+  const [sortDir, setSortDir] = useState("asc");
   const [q, setQ] = useState("");
   const [role, setRole] = useState("all");
   const [status, setStatus] = useState("all");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editing, setEditing] = useState(null);
+  const [selected, setSelected] = useState([]);
+  const [bulkRoleOpen, setBulkRoleOpen] = useState(false);
+  const [bulkRole, setBulkRole] = useState("DQ Team");
 
   const [detailContact, setDetailContact] = useState(null);
   const [generated, setGenerated] = useState(null); // {password, email}
 
   const load = async () => {
     const r = await api.get("/contacts", {
-      params: { q: q || undefined, role: role === "all" ? undefined : role, status: status === "all" ? undefined : status }
+      params: {
+        q: q || undefined,
+        role: role === "all" ? undefined : role,
+        status: status === "all" ? undefined : status,
+        page, page_size: pageSize, sort_by: sortBy, sort_dir: sortDir,
+      },
     });
-    setContacts(r.data);
+    // Paginated shape: { items, total, page, page_size }
+    if (r.data && Array.isArray(r.data.items)) {
+      setContacts(r.data.items);
+      setTotal(r.data.total);
+    } else {
+      setContacts(r.data);
+      setTotal(r.data.length);
+    }
+    setSelected([]);
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [q, role, status]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [q, role, status, page, pageSize, sortBy, sortDir]);
+  useEffect(() => { setPage(1); /* reset on filter change */ }, [q, role, status, pageSize]);
+
+  const toggleSort = (field) => {
+    if (sortBy === field) setSortDir(sortDir === "asc" ? "desc" : "asc");
+    else { setSortBy(field); setSortDir("asc"); }
+  };
+
+  const toggleAll = (checked) => {
+    setSelected(checked ? contacts.map((c) => c.id) : []);
+  };
+  const toggleOne = (id, checked) => {
+    setSelected((s) => checked ? [...s, id] : s.filter((x) => x !== id));
+  };
+
+  const bulkActivate = async (newStatus) => {
+    if (selected.length === 0) return;
+    try {
+      const r = await api.post("/contacts/bulk-status", { contact_ids: selected, status: newStatus });
+      toast.success(`${r.data?.updated || 0} employee(s) → ${newStatus}`);
+      setSelected([]);
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+  };
+
+  const applyBulkRole = async () => {
+    if (selected.length === 0) return;
+    try {
+      const r = await api.post("/contacts/bulk-role", { contact_ids: selected, role: bulkRole });
+      toast.success(`${r.data?.updated || 0} employee(s) → ${bulkRole}`);
+      setBulkRoleOpen(false);
+      setSelected([]);
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+  };
+
+  const exportCsv = () => {
+    const token = localStorage.getItem("access_token") || "";
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (role !== "all") params.set("role", role);
+    if (status !== "all") params.set("status", status);
+    // Use fetch to set Authorization header, then trigger a download
+    fetch(`${API}/contacts/export.csv?${params.toString()}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: "include",
+    }).then(async (resp) => {
+      if (!resp.ok) { toast.error("Export failed"); return; }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `employees_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  };
 
   const toggleStatus = async (c) => {
     const next = c.status === "Active" ? "Inactive" : "Active";
@@ -293,17 +375,69 @@ export default function ContactListPage() {
     }
   };
 
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const allSelected = contacts.length > 0 && contacts.every((c) => selected.includes(c.id));
+  const anySelected = selected.length > 0;
+
   return (
     <Layout>
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Employee List</h1>
-          <p className="text-gray-500 mt-1">Manage all employees in the system.</p>
+          <p className="text-gray-500 mt-1">
+            {total} employee{total === 1 ? "" : "s"}
+            {anySelected && <span className="ml-2 text-[#ec9324] font-medium">• {selected.length} selected</span>}
+          </p>
         </div>
-        <Button onClick={openCreate} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="add-contact-btn">
-          <UserPlus size={16} className="mr-2"/> Add Employee
-        </Button>
+        <div className="flex items-center gap-2">
+          {anySelected && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" data-testid="bulk-actions-btn" className="border-[#ec9324] text-[#ec9324] hover:bg-[#ec9324]/10">
+                  Bulk actions ({selected.length})
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Apply to {selected.length} selected</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => bulkActivate("Active")} data-testid="bulk-activate">Activate</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => bulkActivate("Inactive")} data-testid="bulk-deactivate">Deactivate</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setBulkRoleOpen(true)} data-testid="bulk-change-role">Change role…</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          <Button variant="outline" onClick={exportCsv} data-testid="export-csv-btn" className="border-gray-300">
+            <Download size={14} className="mr-2"/> Export CSV
+          </Button>
+          <Button onClick={openCreate} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="add-contact-btn">
+            <UserPlus size={16} className="mr-2"/> Add Employee
+          </Button>
+        </div>
       </div>
+
+      <Dialog open={bulkRoleOpen} onOpenChange={setBulkRoleOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Change role for {selected.length} employee(s)</DialogTitle>
+            <DialogDescription>This will overwrite the role on every selected employee.</DialogDescription>
+          </DialogHeader>
+          <div className="mt-2">
+            <Label>New role</Label>
+            <Select value={bulkRole} onValueChange={setBulkRole}>
+              <SelectTrigger data-testid="bulk-role-select"><SelectValue/></SelectTrigger>
+              <SelectContent>
+                {ROLE_OPTIONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkRoleOpen(false)}>Cancel</Button>
+            <Button onClick={applyBulkRole} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="bulk-role-apply">
+              Apply
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditing(null); setForm(EMPTY_FORM); } }}>
         <DialogContent className="max-w-lg">
@@ -331,12 +465,12 @@ export default function ContactListPage() {
                 <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} data-testid="contact-phone"/>
               </div>
               <div>
-                <Label>Emp ID</Label>
-                <Input value={form.emp_id} onChange={(e) => setForm({ ...form, emp_id: e.target.value })} placeholder="EMP-0001" data-testid="contact-emp-id"/>
+                <Label>Emp ID *</Label>
+                <Input required={!editing} value={form.emp_id} onChange={(e) => setForm({ ...form, emp_id: e.target.value })} placeholder="EMP-0001" data-testid="contact-emp-id"/>
               </div>
               <div>
-                <Label>DOJ (Date of Joining)</Label>
-                <Input type="date" value={form.doj || ""} onChange={(e) => setForm({ ...form, doj: e.target.value })} data-testid="contact-doj"/>
+                <Label>DOJ (Date of Joining) *</Label>
+                <Input required={!editing} type="date" value={form.doj || ""} onChange={(e) => setForm({ ...form, doj: e.target.value })} data-testid="contact-doj"/>
               </div>
               <div>
                 <Label>Role *</Label>
@@ -376,7 +510,7 @@ export default function ContactListPage() {
           <SelectTrigger className="w-48"><SelectValue placeholder="Role"/></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Roles</SelectItem>
-            {ROLE_OPTIONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+            {ALL_ROLE_FILTERS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={status} onValueChange={setStatus}>
@@ -390,26 +524,44 @@ export default function ContactListPage() {
       </div>
 
       <div className="mt-6 bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
           <table className="w-full text-sm">
-            <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200">
+            <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200 sticky top-0 z-10">
               <tr>
-                <th className="px-4 py-3 text-left">Name</th>
-                <th className="px-4 py-3 text-left">Emp ID</th>
-                <th className="px-4 py-3 text-left">Email</th>
-                <th className="px-4 py-3 text-left">Phone</th>
-                <th className="px-4 py-3 text-left">Role</th>
+                <th className="px-3 py-3 text-left w-10">
+                  <Checkbox checked={allSelected} onCheckedChange={(v) => toggleAll(!!v)} data-testid="select-all-employees" aria-label="Select all"/>
+                </th>
+                <th className="px-4 py-3 text-left cursor-pointer hover:text-[#ec9324]" onClick={() => toggleSort("name")} data-testid="sort-name">
+                  Name {sortBy === "name" && (sortDir === "asc" ? "▲" : "▼")}
+                </th>
+                <th className="px-4 py-3 text-left cursor-pointer hover:text-[#ec9324]" onClick={() => toggleSort("emp_id")} data-testid="sort-emp-id">
+                  Emp ID {sortBy === "emp_id" && (sortDir === "asc" ? "▲" : "▼")}
+                </th>
+                <th className="px-4 py-3 text-left cursor-pointer hover:text-[#ec9324]" onClick={() => toggleSort("email")} data-testid="sort-email">
+                  Email {sortBy === "email" && (sortDir === "asc" ? "▲" : "▼")}
+                </th>
                 <th className="px-4 py-3 text-left">Team</th>
-                <th className="px-4 py-3 text-left">Manager</th>
-                <th className="px-4 py-3 text-left">DOJ</th>
-                <th className="px-4 py-3 text-left">Last Login</th>
+                <th className="px-4 py-3 text-left cursor-pointer hover:text-[#ec9324]" onClick={() => toggleSort("doj")} data-testid="sort-doj">
+                  DOJ {sortBy === "doj" && (sortDir === "asc" ? "▲" : "▼")}
+                </th>
+                <th className="px-4 py-3 text-left cursor-pointer hover:text-[#ec9324]" onClick={() => toggleSort("role")} data-testid="sort-role">
+                  Role {sortBy === "role" && (sortDir === "asc" ? "▲" : "▼")}
+                </th>
                 <th className="px-4 py-3 text-left">Active</th>
                 <th className="px-4 py-3 text-right">Edit</th>
               </tr>
             </thead>
             <tbody>
               {contacts.map((c) => (
-                <tr key={c.id} className="border-b border-gray-100 hover:bg-gray-50/80" data-testid={`contact-row-${c.email}`}>
+                <tr key={c.id} className={`border-b border-gray-100 hover:bg-gray-50/80 ${selected.includes(c.id) ? "bg-[#ec9324]/5" : ""}`} data-testid={`contact-row-${c.email}`}>
+                  <td className="px-3 py-3">
+                    <Checkbox
+                      checked={selected.includes(c.id)}
+                      onCheckedChange={(v) => toggleOne(c.id, !!v)}
+                      data-testid={`select-${c.email}`}
+                      aria-label="Select row"
+                    />
+                  </td>
                   <td className="px-4 py-3 font-medium text-gray-900">
                     <button
                       type="button"
@@ -422,10 +574,6 @@ export default function ContactListPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-600 font-mono text-xs">{c.emp_id || "-"}</td>
                   <td className="px-4 py-3 text-gray-600">{c.email}</td>
-                  <td className="px-4 py-3 text-gray-600">{c.phone || "-"}</td>
-                  <td className="px-4 py-3">
-                    <span className="inline-flex text-xs font-semibold rounded-full px-2 py-1 bg-[#ec9324]/10 text-[#ec9324]">{c.role}</span>
-                  </td>
                   <td className="px-4 py-3 text-gray-600">
                     {c.team_name ? (
                       <span className="inline-flex items-center gap-1.5 text-xs">
@@ -434,11 +582,10 @@ export default function ContactListPage() {
                       </span>
                     ) : <span className="text-gray-400 text-xs">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-gray-600 text-xs">
-                    {(c.manager_names && c.manager_names.length) ? c.manager_names.join(", ") : <span className="text-gray-400">—</span>}
-                  </td>
                   <td className="px-4 py-3 text-gray-500 text-xs">{c.doj || "-"}</td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">{fmt(c.last_login)}</td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex text-xs font-semibold rounded-full px-2 py-1 bg-[#ec9324]/10 text-[#ec9324]">{c.role}</span>
+                  </td>
                   <td className="px-4 py-3">
                     <Switch
                       checked={c.status === "Active"}
@@ -458,9 +605,35 @@ export default function ContactListPage() {
                   </td>
                 </tr>
               ))}
-              {contacts.length === 0 && <tr><td colSpan={11} className="text-center py-10 text-gray-400">No employees</td></tr>}
+              {contacts.length === 0 && <tr><td colSpan={9} className="text-center py-10 text-gray-400">No employees</td></tr>}
             </tbody>
           </table>
+        </div>
+        {/* Pagination footer */}
+        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50/50">
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span>Rows per page</span>
+            <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
+              <SelectTrigger className="w-20 h-8" data-testid="page-size-select"><SelectValue/></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="25">25</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="ml-2" data-testid="pagination-info">
+              {total === 0 ? "0–0 of 0" : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total}`}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} data-testid="prev-page-btn" className="h-8 w-8 p-0">
+              <ChevronLeft size={14}/>
+            </Button>
+            <span className="text-xs text-gray-600 px-2" data-testid="page-indicator">{page} / {totalPages}</span>
+            <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} data-testid="next-page-btn" className="h-8 w-8 p-0">
+              <ChevronRight size={14}/>
+            </Button>
+          </div>
         </div>
       </div>
 

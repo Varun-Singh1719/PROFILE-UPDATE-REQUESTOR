@@ -100,13 +100,20 @@ export default function MultiSelect({ options = [], value = [], onChange, placeh
             )}
             {filtered.map((o) => {
               const sel = value.includes(o.value);
+              const isDisabled = !!o.disabled;
               return (
                 <button
                   key={o.value}
                   type="button"
-                  onClick={() => toggle(o.value)}
+                  onClick={() => !isDisabled && toggle(o.value)}
                   data-testid={`${testId}-option-${o.value}`}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 ${sel ? "bg-[#ec9324]/5" : ""}`}
+                  title={isDisabled ? (o.disabledReason || "Not selectable") : undefined}
+                  disabled={isDisabled}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm ${
+                    isDisabled
+                      ? "opacity-50 cursor-not-allowed bg-gray-50"
+                      : `hover:bg-gray-50 ${sel ? "bg-[#ec9324]/5" : ""}`
+                  }`}
                 >
                   <span
                     className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
@@ -118,6 +125,9 @@ export default function MultiSelect({ options = [], value = [], onChange, placeh
                   <div className="flex-1 text-left">
                     <div className="font-medium text-gray-900">{o.label}</div>
                     {o.sublabel && <div className="text-xs text-gray-500">{o.sublabel}</div>}
+                    {isDisabled && o.disabledReason && (
+                      <div className="text-[10px] text-amber-600 mt-0.5">{o.disabledReason}</div>
+                    )}
                   </div>
                 </button>
               );

@@ -352,7 +352,7 @@ export default function PermissionsPage() {
 
   // Subject options based on type
   const subjectOptions = useMemo(() => {
-    if (subjectType === "role") return ["Admin", "Manager", "Research Associate", "DQ Team"].map((r) => ({ value: r, label: r }));
+    if (subjectType === "role") return ["Admin", "Manager", "Research", "DQ Team"].map((r) => ({ value: r, label: r }));
     if (subjectType === "team") return teams.map((t) => ({ value: t.id, label: t.name, sublabel: t.color }));
     if (subjectType === "employee") {
       const q = employeeQuery.toLowerCase();
@@ -393,8 +393,30 @@ export default function PermissionsPage() {
     const key = ruleKey(subjectType, subjectId, moduleKey, feature.key);
     const existing = currentViewRulesByFeature[feature.key];
     const baseActions = {};
-    feature.actions.forEach((a) => { baseActions[a] = !!existing?.actions?.[a]; });
+    feature.actions.forEach((a) => { baseActions[a] = existing?.actions?.[a] ?? false; });
     baseActions[action] = !baseActions[action];
+    const draft = {
+      id: existing?.id || `draft-${key}`,
+      module: moduleKey,
+      feature: feature.key,
+      subject_type: subjectType,
+      subject_id: subjectId,
+      actions: baseActions,
+      note: existing?.note || "",
+      _dirty: true,
+    };
+    setDraftRules((dm) => ({ ...dm, [key]: draft }));
+    setDirty(true);
+  };
+
+  const setActionScope = (feature, action, scope) => {
+    if (!subjectId) { toast.error("Pick a subject first"); return; }
+    const key = ruleKey(subjectType, subjectId, moduleKey, feature.key);
+    const existing = currentViewRulesByFeature[feature.key];
+    const baseActions = {};
+    feature.actions.forEach((a) => { baseActions[a] = existing?.actions?.[a] ?? false; });
+    // scope: "none" | "respective" | "all"
+    baseActions[action] = scope === "none" ? false : scope;
     const draft = {
       id: existing?.id || `draft-${key}`,
       module: moduleKey,
@@ -719,8 +741,28 @@ export default function PermissionsPage() {
                               </td>
                               {(schema.actions || []).map((a) => {
                                 const applicable = f.actions.includes(a);
-                                const checked = !!rule?.actions?.[a];
                                 if (!applicable) return <td key={a} className="px-2 py-3 text-center text-gray-200">—</td>;
+                                const value = rule?.actions?.[a];
+                                const isScoped = (schema.scoped_actions || []).includes(a);
+                                if (isScoped) {
+                                  // Convert any "truthy" legacy value to "all"
+                                  const sel = value === "all" || value === "respective" ? value : (value ? "all" : "none");
+                                  return (
+                                    <td key={a} className="px-2 py-3 text-center">
+                                      <Select value={sel} onValueChange={(v) => setActionScope(f, a, v)}>
+                                        <SelectTrigger className="h-8 w-[110px] text-xs mx-auto" data-testid={`scope-${f.key}-${a}`}>
+                                          <SelectValue/>
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="none">None</SelectItem>
+                                          <SelectItem value="respective">Respective</SelectItem>
+                                          <SelectItem value="all">All</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </td>
+                                  );
+                                }
+                                const checked = !!value;
                                 return (
                                   <td key={a} className="px-2 py-3 text-center">
                                     <Switch

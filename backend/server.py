@@ -15,10 +15,20 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Literal, Dict, Any
 from cryptography.fernet import Fernet
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, UploadFile, File, Form, Query, Header
-from fastapi.responses import Response as FastResponse
+from fastapi.responses import Response as FastResponse, StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr
+
+import csv
+import io
+import hashlib
+from notifications import (
+    send_email,
+    render_new_employee_email,
+    render_admin_password_reset_email,
+    render_forgot_password_email,
+)
 
 # ---------- Config ----------
 JWT_ALGORITHM = "HS256"
@@ -180,6 +190,27 @@ PERMISSION_MODULES = [
 ]
 
 ALL_ACTIONS = ["view", "create", "edit", "assign", "approve", "delete"]
+# Actions where "scope" (Respective vs All) matters. Other actions stay boolean.
+SCOPED_ACTIONS = {"view", "edit", "assign"}
+
+def normalize_action_value(v) -> Any:
+    """Normalize a stored action value to one of: False, True, 'respective', 'all'.
+
+    Legacy boolean True is treated as 'all' when the action is scoped.
+    """
+    if v in ("all", "respective"):
+        return v
+    return bool(v)
+
+def action_precedence(v) -> int:
+    """Higher = more permissive. Used when merging across role/team/employee."""
+    if v == "all":
+        return 3
+    if v == "respective":
+        return 2
+    if v is True:
+        return 2  # legacy 'true' acts like 'respective+' but below 'all'
+    return 0
 
 def feature_actions(module_key: str, feature_key: str) -> List[str]:
     for m in PERMISSION_MODULES:
@@ -351,7 +382,10 @@ def require_role(*roles):
     return checker
 
 # ---------- Models ----------
-ContactRole = Literal["Admin", "Manager", "Research Associate", "DQ Team"]
+# 'Research' is the new label; 'Research Associate' and 'DQ Team' are kept in the Literal
+# only for backward-compatibility while existing rows are migrated. New employees can never
+# be assigned 'DQ Team' or 'Research Associate' — the form dropdown hides them.
+ContactRole = Literal["Admin", "Manager", "Research", "Delivery", "Member", "DQ Team", "Research Associate"]
 ContactStatus = Literal["Active", "Inactive"]
 TicketStatus = Literal["Open", "In Progress", "Closed"]
 TicketPriority = Literal["High", "Medium", "Low"]
@@ -368,8 +402,8 @@ class ContactCreate(BaseModel):
     name: str
     phone: Optional[str] = None
     role: ContactRole
-    emp_id: Optional[str] = None
-    doj: Optional[str] = None  # YYYY-MM-DD
+    emp_id: str
+    doj: str  # YYYY-MM-DD — mandatory
 
 class ContactUpdate(BaseModel):
     name: Optional[str] = None
@@ -418,6 +452,37 @@ class BulkStatus(BaseModel):
 
 class CommentCreate(BaseModel):
     content: str
+
+class ForgotPasswordIn(BaseModel):
+    email: EmailStr
+
+class ResetPasswordIn(BaseModel):
+    token: str
+    new_password: str
+
+class BulkContactStatus(BaseModel):
+    contact_ids: List[str]
+    status: ContactStatus
+
+class BulkContactRole(BaseModel):
+    contact_ids: List[str]
+    role: ContactRole
+
+class EmailTemplateIn(BaseModel):
+    name: str
+    kind: str  # new_employee | admin_password_reset | forgot_password | custom-<slug>
+    category: Optional[str] = "transactional"
+    subject: str
+    body: str  # HTML or plaintext
+    status: Literal["Active", "Inactive"] = "Active"
+
+class EmailTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    kind: Optional[str] = None
+    category: Optional[str] = None
+    subject: Optional[str] = None
+    body: Optional[str] = None
+    status: Optional[Literal["Active", "Inactive"]] = None
 
 # ---------- Auth Routes ----------
 @api_router.post("/auth/login")
@@ -483,6 +548,239 @@ async def logout(response: Response, _: dict = Depends(get_current_user)):
 async def me(user: dict = Depends(get_current_user)):
     return user
 
+# ---------- Forgot / Reset Password ----------
+def _hash_reset_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(body: ForgotPasswordIn):
+    """Always returns 200 to prevent email enumeration."""
+    email = body.email.lower().strip()
+    user = await db.contacts.find_one({"email": email})
+    if user and user.get("status") == "Active":
+        token = secrets.token_urlsafe(32)
+        expires = datetime.now(timezone.utc) + timedelta(hours=1)
+        await db.password_reset_tokens.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user["id"],
+            "email": email,
+            "token_hash": _hash_reset_token(token),
+            "expires_at": expires,
+            "used": False,
+            "created_at": now_iso(),
+        })
+        public = os.environ.get("APP_PUBLIC_URL", "").rstrip("/")
+        reset_link = f"{public}/reset-password?token={token}"
+        try:
+            subject, msg = render_forgot_password_email(user["name"], reset_link)
+            await send_email(
+                db, to_email=user["email"], to_name=user["name"],
+                kind="forgot_password", subject=subject, body=msg,
+                related_id=user["id"], metadata={"reset_link": reset_link},
+                variables={"reset_link": reset_link},
+            )
+        except Exception as e:
+            logger.error(f"forgot password email failed: {e}")
+        await log_audit(
+            actor=user, action="auth.forgot_password", resource="auth",
+            detail=f"Password reset requested for {email}", severity="info",
+        )
+    return {"ok": True}
+
+@api_router.post("/auth/reset-password")
+async def reset_password(body: ResetPasswordIn):
+    if not body.new_password or len(body.new_password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters")
+    rec = await db.password_reset_tokens.find_one({"token_hash": _hash_reset_token(body.token)})
+    if not rec or rec.get("used"):
+        raise HTTPException(400, "Invalid or expired reset link")
+    expires = rec.get("expires_at")
+    # MongoDB returns datetimes as naive UTC; normalize.
+    if isinstance(expires, str):
+        try:
+            expires = datetime.fromisoformat(expires)
+        except Exception:
+            expires = None
+    if isinstance(expires, datetime) and expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if not expires or expires < datetime.now(timezone.utc):
+        raise HTTPException(400, "Invalid or expired reset link")
+    user = await db.contacts.find_one({"id": rec["user_id"]})
+    if not user or user.get("status") != "Active":
+        raise HTTPException(400, "Invalid or expired reset link")
+    await db.contacts.update_one({"id": user["id"]}, {"$set": {
+        "password_hash": hash_password(body.new_password),
+        "password_encrypted": encrypt_password(body.new_password),
+    }})
+    await db.password_reset_tokens.update_one({"id": rec["id"]}, {"$set": {"used": True, "used_at": now_iso()}})
+    await log_audit(
+        actor=user, action="auth.reset_password", resource="auth", resource_id=user["id"],
+        detail=f"{user.get('email')} reset their password via link", severity="warning",
+    )
+    return {"ok": True}
+
+# ---------- Notifications Outbox ----------
+@api_router.get("/notifications/outbox")
+async def list_notifications(
+    user=Depends(require_role("Admin")),
+    kind: Optional[str] = None,
+    status: Optional[str] = None,
+    q: Optional[str] = None,
+    limit: int = 200,
+):
+    query = {}
+    if kind: query["kind"] = kind
+    if status: query["status"] = status
+    if q:
+        query["$or"] = [
+            {"to_email": {"$regex": q, "$options": "i"}},
+            {"to_name": {"$regex": q, "$options": "i"}},
+            {"subject": {"$regex": q, "$options": "i"}},
+        ]
+    items = await db.notifications_outbox.find(query, {"_id": 0}).sort("created_at", -1).to_list(min(limit, 1000))
+    return items
+
+@api_router.get("/notifications/outbox/{notif_id}")
+async def get_notification(notif_id: str, user=Depends(require_role("Admin"))):
+    n = await db.notifications_outbox.find_one({"id": notif_id}, {"_id": 0})
+    if not n:
+        raise HTTPException(404, "Not found")
+    return n
+
+@api_router.delete("/notifications/outbox/{notif_id}")
+async def delete_notification(notif_id: str, user=Depends(require_role("Admin"))):
+    await db.notifications_outbox.delete_one({"id": notif_id})
+    return {"ok": True}
+
+# ---------- Email Templates ----------
+DEFAULT_TEMPLATES = [
+    {
+        "kind": "new_employee",
+        "name": "New employee welcome",
+        "category": "onboarding",
+        "subject": "Welcome to Infollion — your account is ready",
+        "body": (
+            "<p>Hi {{name}},</p>"
+            "<p>An account has been created for you on Infollion.</p>"
+            "<ul>"
+            "<li><b>Email:</b> {{email}}</li>"
+            "<li><b>Temporary password:</b> {{password}}</li>"
+            "</ul>"
+            "<p>Sign in at <a href=\"{{login_url}}\">{{login_url}}</a> and change your password from the profile screen.</p>"
+            "<p>— Infollion Admin</p>"
+        ),
+    },
+    {
+        "kind": "admin_password_reset",
+        "name": "Admin password reset notice",
+        "category": "security",
+        "subject": "Your Infollion password has been reset",
+        "body": (
+            "<p>Hi {{name}},</p>"
+            "<p>An administrator has reset your password.</p>"
+            "<ul>"
+            "<li><b>Email:</b> {{email}}</li>"
+            "<li><b>New password:</b> {{password}}</li>"
+            "</ul>"
+            "<p>Sign in at <a href=\"{{login_url}}\">{{login_url}}</a> and change your password from the profile screen.</p>"
+        ),
+    },
+    {
+        "kind": "forgot_password",
+        "name": "Forgot password reset link",
+        "category": "security",
+        "subject": "Reset your Infollion password",
+        "body": (
+            "<p>Hi {{name}},</p>"
+            "<p>We received a request to reset your password. The link below is valid for 60 minutes.</p>"
+            "<p><a href=\"{{reset_link}}\">Reset my password</a></p>"
+            "<p>If you didn't request this, you can ignore this email.</p>"
+        ),
+    },
+]
+
+@api_router.get("/email-templates")
+async def list_email_templates(user=Depends(require_role("Admin", "Manager")), q: Optional[str] = None, category: Optional[str] = None, status: Optional[str] = None):
+    query = {}
+    if category: query["category"] = category
+    if status: query["status"] = status
+    if q:
+        query["$or"] = [
+            {"name": {"$regex": q, "$options": "i"}},
+            {"subject": {"$regex": q, "$options": "i"}},
+            {"kind": {"$regex": q, "$options": "i"}},
+        ]
+    items = await db.email_templates.find(query, {"_id": 0}).sort("updated_at", -1).to_list(500)
+    return items
+
+@api_router.post("/email-templates")
+async def create_email_template(body: EmailTemplateIn, user=Depends(require_role("Admin"))):
+    if not body.name.strip():
+        raise HTTPException(400, "Name is required")
+    if not body.kind.strip():
+        raise HTTPException(400, "Kind is required")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "name": body.name.strip(),
+        "kind": body.kind.strip(),
+        "category": body.category or "transactional",
+        "subject": body.subject,
+        "body": body.body,
+        "status": body.status,
+        "system": False,
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+        "updated_by": user["id"],
+    }
+    await db.email_templates.insert_one(doc)
+    doc.pop("_id", None)
+    await log_audit(actor=user, action="email_template.create", resource="email_template",
+                    resource_id=doc["id"], detail=f"Created template '{doc['name']}'", severity="info")
+    return doc
+
+@api_router.patch("/email-templates/{tpl_id}")
+async def update_email_template(tpl_id: str, body: EmailTemplateUpdate, user=Depends(require_role("Admin", "Manager"))):
+    tpl = await db.email_templates.find_one({"id": tpl_id})
+    if not tpl:
+        raise HTTPException(404, "Template not found")
+    upd = {k: v for k, v in body.model_dump().items() if v is not None}
+    # Manager can only toggle status, not edit content
+    if user["role"] == "Manager":
+        upd = {k: v for k, v in upd.items() if k == "status"}
+        if not upd:
+            raise HTTPException(403, "Managers can only toggle template status")
+    upd["updated_at"] = now_iso()
+    upd["updated_by"] = user["id"]
+    await db.email_templates.update_one({"id": tpl_id}, {"$set": upd})
+    out = await db.email_templates.find_one({"id": tpl_id}, {"_id": 0})
+    await log_audit(actor=user, action="email_template.update", resource="email_template",
+                    resource_id=tpl_id, detail=f"Updated template '{out['name']}'", severity="info")
+    return out
+
+@api_router.post("/email-templates/{tpl_id}/duplicate")
+async def duplicate_email_template(tpl_id: str, user=Depends(require_role("Admin"))):
+    tpl = await db.email_templates.find_one({"id": tpl_id}, {"_id": 0})
+    if not tpl:
+        raise HTTPException(404, "Template not found")
+    doc = {**tpl, "id": str(uuid.uuid4()), "name": f"{tpl['name']} (copy)",
+           "kind": f"custom-{uuid.uuid4().hex[:8]}", "system": False,
+           "created_at": now_iso(), "updated_at": now_iso(), "updated_by": user["id"]}
+    await db.email_templates.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.delete("/email-templates/{tpl_id}")
+async def delete_email_template(tpl_id: str, user=Depends(require_role("Admin"))):
+    tpl = await db.email_templates.find_one({"id": tpl_id})
+    if not tpl:
+        raise HTTPException(404, "Template not found")
+    if tpl.get("system"):
+        raise HTTPException(400, "System templates cannot be deleted — set them to Inactive instead")
+    await db.email_templates.delete_one({"id": tpl_id})
+    await log_audit(actor=user, action="email_template.delete", resource="email_template",
+                    resource_id=tpl_id, detail=f"Deleted template '{tpl['name']}'", severity="warning")
+    return {"ok": True}
+
 # ---------- Contacts helpers ----------
 async def _enrich_contacts_with_team(contacts: List[dict]) -> List[dict]:
     """Attach team_name and manager_names from teams collection (employee belongs to 1 team)."""
@@ -521,7 +819,17 @@ async def _enrich_contacts_with_team(contacts: List[dict]) -> List[dict]:
 
 # ---------- Contacts Routes ----------
 @api_router.get("/contacts")
-async def list_contacts(user=Depends(get_current_user), q: Optional[str] = None, role: Optional[str] = None, type: Optional[str] = None, status: Optional[str] = None):
+async def list_contacts(
+    user=Depends(get_current_user),
+    q: Optional[str] = None,
+    role: Optional[str] = None,
+    type: Optional[str] = None,
+    status: Optional[str] = None,
+    page: Optional[int] = None,
+    page_size: int = 25,
+    sort_by: str = "name",
+    sort_dir: str = "asc",
+):
     # 'type' kept as backward-compat alias for 'role'
     role_filter = role or type
     query = {}
@@ -533,15 +841,97 @@ async def list_contacts(user=Depends(get_current_user), q: Optional[str] = None,
         query["status"] = status
     if q:
         query["$or"] = [{"name": {"$regex": q, "$options": "i"}}, {"email": {"$regex": q, "$options": "i"}}]
+    # Pagination is opt-in: only kicks in when `page` is supplied.
+    if page is not None:
+        page = max(1, page)
+        page_size = max(1, min(page_size, 200))
+        sort_field = sort_by if sort_by in ("name", "email", "role", "doj", "emp_id", "created_on", "last_login", "status") else "name"
+        sort_order = -1 if sort_dir == "desc" else 1
+        total = await db.contacts.count_documents(query)
+        cursor = db.contacts.find(query, {"_id": 0, "password_hash": 0, "password_encrypted": 0}).sort(sort_field, sort_order).skip((page - 1) * page_size).limit(page_size)
+        items = await cursor.to_list(page_size)
+        items = await _enrich_contacts_with_team(items)
+        return {"items": items, "total": total, "page": page, "page_size": page_size}
     items = await db.contacts.find(query, {"_id": 0, "password_hash": 0, "password_encrypted": 0}).to_list(2000)
     items = await _enrich_contacts_with_team(items)
     return items
 
+@api_router.get("/contacts/export.csv")
+async def export_contacts_csv(
+    user=Depends(require_role("Admin")),
+    q: Optional[str] = None,
+    role: Optional[str] = None,
+    status: Optional[str] = None,
+):
+    query = {}
+    if role: query["role"] = role
+    if status: query["status"] = status
+    if q:
+        query["$or"] = [{"name": {"$regex": q, "$options": "i"}}, {"email": {"$regex": q, "$options": "i"}}]
+    items = await db.contacts.find(query, {"_id": 0, "password_hash": 0, "password_encrypted": 0}).to_list(10000)
+    items = await _enrich_contacts_with_team(items)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Name", "Emp ID", "Email", "Phone", "Role", "Team", "Manager(s)", "DOJ", "Status", "Created On", "Last Login"])
+    for c in items:
+        w.writerow([
+            c.get("name", ""), c.get("emp_id", ""), c.get("email", ""), c.get("phone", ""),
+            c.get("role", ""), c.get("team_name") or "",
+            ", ".join(c.get("manager_names") or []),
+            c.get("doj") or "", c.get("status", ""),
+            c.get("created_on", ""), c.get("last_login") or "",
+        ])
+    filename = f"employees_{datetime.now(timezone.utc).date().isoformat()}.csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+@api_router.post("/contacts/bulk-status")
+async def bulk_contact_status(body: BulkContactStatus, user=Depends(require_role("Admin"))):
+    if not body.contact_ids:
+        raise HTTPException(400, "No contacts selected")
+    # Prevent admin from deactivating themselves accidentally
+    targets = [cid for cid in body.contact_ids if cid != user["id"]]
+    if not targets:
+        raise HTTPException(400, "Cannot change your own status")
+    r = await db.contacts.update_many({"id": {"$in": targets}}, {"$set": {"status": body.status}})
+    await log_audit(
+        actor=user, action="contact.bulk_status", resource="contact",
+        detail=f"Bulk set status={body.status} for {r.modified_count} employee(s)",
+        metadata={"count": r.modified_count, "status": body.status},
+        severity="warning",
+    )
+    return {"updated": r.modified_count}
+
+@api_router.post("/contacts/bulk-role")
+async def bulk_contact_role(body: BulkContactRole, user=Depends(require_role("Admin"))):
+    if not body.contact_ids:
+        raise HTTPException(400, "No contacts selected")
+    targets = [cid for cid in body.contact_ids if cid != user["id"]]
+    if not targets:
+        raise HTTPException(400, "Cannot change your own role")
+    r = await db.contacts.update_many({"id": {"$in": targets}}, {"$set": {"role": body.role}})
+    await log_audit(
+        actor=user, action="contact.bulk_role", resource="contact",
+        detail=f"Bulk set role={body.role} for {r.modified_count} employee(s)",
+        metadata={"count": r.modified_count, "role": body.role},
+        severity="warning",
+    )
+    return {"updated": r.modified_count}
+
 @api_router.post("/contacts")
 async def create_contact(body: ContactCreate, user=Depends(require_role("Admin"))):
     email = body.email.lower().strip()
+    if not body.emp_id or not body.emp_id.strip():
+        raise HTTPException(400, "Employee ID is required")
+    if not body.doj or not str(body.doj).strip():
+        raise HTTPException(400, "Date of Joining is required")
     if await db.contacts.find_one({"email": email}):
         raise HTTPException(400, "Email already exists")
+    if await db.contacts.find_one({"emp_id": body.emp_id.strip()}):
+        raise HTTPException(400, "Employee ID already exists")
     generated_pwd = generate_password()
     doc = {
         "id": str(uuid.uuid4()),
@@ -549,8 +939,8 @@ async def create_contact(body: ContactCreate, user=Depends(require_role("Admin")
         "name": body.name,
         "phone": body.phone or "",
         "role": body.role,
-        "emp_id": body.emp_id or "",
-        "doj": body.doj or None,
+        "emp_id": body.emp_id.strip(),
+        "doj": body.doj,
         "status": "Active",
         "created_on": now_iso(),
         "last_login": None,
@@ -560,6 +950,20 @@ async def create_contact(body: ContactCreate, user=Depends(require_role("Admin")
     await db.contacts.insert_one(doc)
     out = _public_contact(dict(doc))
     out["generated_password"] = generated_pwd  # one-time return at creation
+    # Send welcome email with credentials (outbox by default)
+    try:
+        subject, body = render_new_employee_email(
+            name=doc["name"], email=doc["email"], password=generated_pwd,
+            login_url=os.environ.get("APP_PUBLIC_URL", "") + "/login",
+        )
+        await send_email(
+            db, to_email=doc["email"], to_name=doc["name"],
+            kind="new_employee", subject=subject, body=body,
+            related_id=doc["id"], metadata={"created_by": user.get("id")},
+            variables={"password": generated_pwd, "login_url": os.environ.get("APP_PUBLIC_URL", "") + "/login"},
+        )
+    except Exception as e:
+        logger.error(f"new-employee email failed: {e}")
     await log_audit(
         actor=user, action="contact.create", resource="contact", resource_id=doc["id"],
         detail=f"Created employee {doc['name']} ({doc['email']}) as {doc['role']}",
@@ -607,11 +1011,56 @@ async def reset_contact_password(contact_id: str, user=Depends(require_role("Adm
         "password_hash": hash_password(new_pwd),
         "password_encrypted": encrypt_password(new_pwd),
     }})
+    # Notify the employee via email (outbox by default)
+    try:
+        subject, body = render_admin_password_reset_email(
+            name=c["name"], email=c["email"], password=new_pwd,
+            login_url=os.environ.get("APP_PUBLIC_URL", "") + "/login",
+        )
+        await send_email(
+            db, to_email=c["email"], to_name=c["name"],
+            kind="admin_password_reset", subject=subject, body=body,
+            related_id=c["id"], metadata={"reset_by": user.get("id")},
+            variables={"password": new_pwd, "login_url": os.environ.get("APP_PUBLIC_URL", "") + "/login"},
+        )
+    except Exception as e:
+        logger.error(f"admin password reset email failed: {e}")
     await log_audit(
         actor=user, action="contact.reset_password", resource="contact", resource_id=contact_id,
         detail=f"Reset password for {c.get('name')} ({c.get('email')})", severity="warning",
     )
     return {"password": new_pwd}
+
+# 30-color palette for auto-assignment (HSL-spaced, high-contrast)
+TEAM_COLOR_PALETTE = [
+    "#ec9324", "#22c55e", "#3b82f6", "#a855f7", "#ef4444",
+    "#06b6d4", "#eab308", "#f97316", "#14b8a6", "#64748b",
+    "#10b981", "#8b5cf6", "#f43f5e", "#0ea5e9", "#84cc16",
+    "#d946ef", "#f59e0b", "#0891b2", "#6366f1", "#dc2626",
+    "#16a34a", "#7c3aed", "#0284c7", "#ca8a04", "#be123c",
+    "#059669", "#9333ea", "#0369a1", "#a16207", "#9f1239",
+]
+
+async def _next_unused_color(exclude_team_id: Optional[str] = None) -> str:
+    """Pick the first palette color not yet used by another team."""
+    q = {}
+    if exclude_team_id:
+        q["id"] = {"$ne": exclude_team_id}
+    used = await db.teams.distinct("color", q)
+    used_set = {c for c in used if c}
+    for c in TEAM_COLOR_PALETTE:
+        if c not in used_set:
+            return c
+    # All 30 used → cycle deterministically based on team count
+    n = await db.teams.count_documents({})
+    return TEAM_COLOR_PALETTE[n % len(TEAM_COLOR_PALETTE)]
+
+@api_router.get("/teams/colors")
+async def team_colors(user=Depends(get_current_user)):
+    """Return palette + which colors are already taken."""
+    used = await db.teams.distinct("color")
+    suggested = await _next_unused_color()
+    return {"palette": TEAM_COLOR_PALETTE, "used": [c for c in used if c], "suggested": suggested}
 
 # ---------- Teams Routes ----------
 @api_router.get("/teams")
@@ -640,12 +1089,16 @@ async def create_team(body: TeamCreate, user=Depends(require_role("Admin"))):
         conflict = await db.teams.find_one({"member_ids": {"$in": member_ids}})
         if conflict:
             raise HTTPException(400, f"Some members already belong to team '{conflict['name']}'")
+    # Auto-assign next unused color if admin didn't explicitly pick one
+    color = body.color
+    if not color or color == "#ec9324":
+        color = await _next_unused_color()
     doc = {
         "id": str(uuid.uuid4()),
         "name": body.name.strip(),
         "manager_ids": list({*body.manager_ids}),
         "member_ids": member_ids,
-        "color": body.color or "#ec9324",
+        "color": color,
         "created_on": now_iso(),
         "updated_on": now_iso(),
     }
@@ -722,7 +1175,7 @@ class PermRulesBulkIn(BaseModel):
 
 @api_router.get("/permissions/schema")
 async def permissions_schema(user=Depends(get_current_user)):
-    return {"modules": PERMISSION_MODULES, "actions": ALL_ACTIONS}
+    return {"modules": PERMISSION_MODULES, "actions": ALL_ACTIONS, "scoped_actions": sorted(SCOPED_ACTIONS)}
 
 def _serialize_rule(r: dict) -> dict:
     r.pop("_id", None)
@@ -749,8 +1202,15 @@ async def bulk_replace_rules(body: PermRulesBulkIn, user=Depends(require_role("A
         valid = feature_actions(r.module, r.feature)
         if not valid:
             raise HTTPException(400, f"Unknown feature {r.module}.{r.feature}")
-        # Trim actions to valid ones
-        r.actions = {a: bool(r.actions.get(a, False)) for a in valid}
+        # Preserve scope strings for scoped actions; coerce others to bool
+        normalized = {}
+        for a in valid:
+            v = r.actions.get(a, False)
+            if a in SCOPED_ACTIONS and v in ("all", "respective"):
+                normalized[a] = v
+            else:
+                normalized[a] = bool(v)
+        r.actions = normalized
 
     existing_count = await db.permission_rules.count_documents({})
     await db.permission_rules.delete_many({})
@@ -794,10 +1254,12 @@ async def delete_rule(rule_id: str, user=Depends(require_role("Admin"))):
     return {"ok": True}
 
 # ---------- Effective access ----------
-def _merge_actions(base: Dict[str, bool], add: Dict[str, bool]) -> Dict[str, bool]:
+def _merge_actions(base: Dict[str, Any], add: Dict[str, Any]) -> Dict[str, Any]:
+    """Merge two action dicts preferring the higher-precedence value (all > respective > true > false)."""
     out = dict(base)
     for k, v in add.items():
-        out[k] = bool(out.get(k, False) or v)
+        existing = out.get(k, False)
+        out[k] = v if action_precedence(v) >= action_precedence(existing) else existing
     return out
 
 async def _compute_effective(employee: dict) -> dict:
@@ -1034,13 +1496,17 @@ async def list_tickets(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     date_field: Optional[str] = "created_at",
+    page: Optional[int] = None,
+    page_size: int = 25,
+    sort_by: str = "updated_on",
+    sort_dir: str = "desc",
 ):
     query = parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date, date_from, date_to, date_field)
 
     role = user["role"]
     uid = user["id"]
     if scope == "mine":
-        if role == "Research Associate":
+        if role == "Research":
             query["created_by_id"] = uid
         elif role == "DQ Team":
             query["assigned_to_id"] = uid
@@ -1054,15 +1520,73 @@ async def list_tickets(
     elif scope == "open":
         query["status"] = "Open"
     # role-based default restriction
-    if role == "Research Associate" and scope not in ("created", "mine"):
+    if role == "Research" and scope not in ("created", "mine"):
         query["created_by_id"] = uid
 
+    if page is not None:
+        page = max(1, page)
+        page_size = max(1, min(page_size, 200))
+        sort_field = sort_by if sort_by in ("ticket_id", "subject", "status", "priority", "created_on", "updated_on", "due_date", "number_of_profiles") else "updated_on"
+        sort_order = -1 if sort_dir == "desc" else 1
+        total = await db.tickets.count_documents(query)
+        items = await db.tickets.find(query, {"_id": 0}).sort(sort_field, sort_order).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+        return {"items": items, "total": total, "page": page, "page_size": page_size}
     items = await db.tickets.find(query, {"_id": 0}).sort("updated_on", -1).to_list(2000)
     return items
 
+@api_router.get("/tickets/export.csv")
+async def export_tickets_csv(
+    user=Depends(get_current_user),
+    scope: Optional[str] = None,
+    status: Optional[str] = None,
+    priority: Optional[str] = None,
+    created_by: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    q: Optional[str] = None,
+    created_on: Optional[str] = None,
+    updated_on: Optional[str] = None,
+    due_date: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    date_field: Optional[str] = "created_at",
+):
+    query = parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date, date_from, date_to, date_field)
+    role = user["role"]; uid = user["id"]
+    if scope == "mine":
+        if role == "Research":
+            query["created_by_id"] = uid
+        elif role == "DQ Team":
+            query["assigned_to_id"] = uid
+    elif scope == "created":
+        query["created_by_id"] = uid
+    elif scope == "assigned":
+        query["assigned_to_id"] = uid
+    elif scope == "unassigned":
+        query["assigned_to_id"] = {"$in": [None, ""]}
+        query["status"] = "Open"
+    if role == "Research" and scope not in ("created", "mine"):
+        query["created_by_id"] = uid
+    items = await db.tickets.find(query, {"_id": 0}).sort("updated_on", -1).to_list(20000)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Ticket ID", "Subject", "Status", "Priority", "Created By", "Assigned To", "Profiles", "Due Date", "Created On", "Updated On"])
+    for t in items:
+        w.writerow([
+            t.get("ticket_id", ""), t.get("subject", ""), t.get("status", ""), t.get("priority", ""),
+            t.get("created_by_name", ""), t.get("assigned_to_name") or "Unassigned",
+            t.get("number_of_profiles", "") or 0,
+            t.get("due_date") or "", t.get("created_on", ""), t.get("updated_on", ""),
+        ])
+    filename = f"tickets_{datetime.now(timezone.utc).date().isoformat()}.csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
 @api_router.post("/tickets")
 async def create_ticket(body: TicketCreate, user=Depends(get_current_user)):
-    if user["role"] not in ("Research Associate", "Admin", "Manager"):
+    if user["role"] not in ("Research", "Admin", "Manager"):
         raise HTTPException(403, "Only RA/Admin/Manager can create tickets")
     if body.number_of_profiles is None:
         raise HTTPException(400, "No. of Records is Blank")
@@ -1321,7 +1845,7 @@ async def dashboard_stats(
 ):
     role = user["role"]
     base = {}
-    if role == "Research Associate":
+    if role == "Research":
         base["created_by_id"] = user["id"]
     elif role == "DQ Team":
         base["assigned_to_id"] = user["id"]
@@ -1385,7 +1909,7 @@ async def dashboard_recent(
 ):
     role = user["role"]
     base = {}
-    if role == "Research Associate":
+    if role == "Research":
         base["created_by_id"] = user["id"]
     elif role == "DQ Team":
         base["$or"] = [
@@ -1421,7 +1945,20 @@ async def startup():
     await db.tickets.create_index("ticket_id", unique=True)
     await db.audit_log.create_index([("at", -1)])
     await db.permission_rules.create_index([("module", 1), ("feature", 1), ("subject_type", 1), ("subject_id", 1)])
+    await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
+    await db.password_reset_tokens.create_index("token_hash")
+    await db.notifications_outbox.create_index([("created_at", -1)])
+    await db.email_templates.create_index("kind")
     init_storage()
+
+    # Seed default email templates (idempotent — by `kind`)
+    for t in DEFAULT_TEMPLATES:
+        existing = await db.email_templates.find_one({"kind": t["kind"]})
+        if not existing:
+            await db.email_templates.insert_one({
+                **t, "id": str(uuid.uuid4()), "status": "Active", "system": True,
+                "created_at": now_iso(), "updated_at": now_iso(),
+            })
 
     # Seed default permission presets (idempotent)
     for p in DEFAULT_PRESETS:
@@ -1450,6 +1987,11 @@ async def startup():
         migrated += 1
     if migrated:
         logger.info(f"Migrated {migrated} contacts from type -> role")
+
+    # ---- Migration: rename role 'Research Associate' -> 'Research' (one-way) ----
+    res = await db.contacts.update_many({"role": "Research Associate"}, {"$set": {"role": "Research"}})
+    if res.modified_count:
+        logger.info(f"Migrated {res.modified_count} contacts: 'Research Associate' -> 'Research'")
 
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@ticketing.com")
     admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
@@ -1481,7 +2023,7 @@ async def startup():
     # Test users
     test_users = [
         {"email": "manager@ticketing.com", "name": "Maya Khanna", "role": "Manager", "password": "Test@123", "emp_id": "EMP-0010", "doj": "2024-02-01"},
-        {"email": "ra@ticketing.com", "name": "Riya Sharma", "role": "Research Associate", "password": "Test@123", "emp_id": "EMP-0020", "doj": "2024-03-01"},
+        {"email": "ra@ticketing.com", "name": "Riya Sharma", "role": "Research", "password": "Test@123", "emp_id": "EMP-0020", "doj": "2024-03-01"},
         {"email": "dq1@ticketing.com", "name": "Dev Kapoor", "role": "DQ Team", "password": "Test@123", "emp_id": "EMP-0030", "doj": "2024-04-01"},
         {"email": "dq2@ticketing.com", "name": "Sara Mehta", "role": "DQ Team", "password": "Test@123", "emp_id": "EMP-0031", "doj": "2024-04-15"},
     ]

@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import api from "../lib/api";
+import api, { API } from "../lib/api";
 import Layout from "../components/Layout";
 import TicketTable from "../components/TicketTable";
 import { useAuth } from "../context/AuthContext";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { Search, Plus, RefreshCw } from "lucide-react";
+import { Search, Plus, RefreshCw, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { StatusBadge } from "../components/Badges";
 import DateFilter, { dateFilterToParams } from "../components/DateFilter";
@@ -17,6 +17,9 @@ import {
 
 export default function TicketListPage({ scope = "mine", title = "My Tickets", basePath = "/ra/tickets", allowCreate = false }) {
   const [tickets, setTickets] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [search, setSearch] = useState("");
   const [params, setParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -45,20 +48,52 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
           assigned_to: assigneeFilter || urlAssignedTo || undefined,
           created_by: createdBy || undefined,
           q: search || undefined,
+          page, page_size: pageSize,
           ...dateParams,
         }
       });
-      setTickets(r.data);
+      if (r.data && Array.isArray(r.data.items)) {
+        setTickets(r.data.items); setTotal(r.data.total);
+      } else {
+        setTickets(r.data); setTotal(r.data.length);
+      }
     } finally { setLoading(false); }
-  }, [scope, status, priority, urlAssignedTo, assigneeFilter, createdBy, search, dateFilter]);
+  }, [scope, status, priority, urlAssignedTo, assigneeFilter, createdBy, search, dateFilter, page, pageSize]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { setPage(1); }, [scope, status, priority, urlAssignedTo, assigneeFilter, createdBy, search, dateFilter, pageSize]);
+
+  const exportCsv = () => {
+    const token = localStorage.getItem("access_token") || "";
+    const p = new URLSearchParams();
+    p.set("scope", scope);
+    if (status) p.set("status", status);
+    if (priority) p.set("priority", priority);
+    if (assigneeFilter || urlAssignedTo) p.set("assigned_to", assigneeFilter || urlAssignedTo);
+    if (createdBy) p.set("created_by", createdBy);
+    if (search) p.set("q", search);
+    const dateParams = dateFilterToParams(dateFilter);
+    Object.entries(dateParams).forEach(([k, v]) => { if (v) p.set(k, v); });
+    fetch(`${API}/tickets/export.csv?${p.toString()}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: "include",
+    }).then(async (resp) => {
+      if (!resp.ok) { toast.error("Export failed"); return; }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `tickets_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  };
   useEffect(() => {
     // Fetch lists for dropdowns (only Admins see full lists; others get DQ list)
     api.get("/contacts", { params: { role: "DQ Team" }}).then(r => setMembers(r.data)).catch(() => {});
     // Creators = RAs + Admins + Managers (ticket creators)
     api.get("/contacts").then(r => {
-      const list = (r.data || []).filter(c => c.role === "Research Associate" || c.role === "Admin" || c.role === "Manager");
+      const list = (r.data || []).filter(c => c.role === "Research" || c.role === "Admin" || c.role === "Manager");
       setCreators(list);
     }).catch(() => {});
   }, [user]);
@@ -120,7 +155,7 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
 
   const isDQ = user?.role === "DQ Team";
   const isAdmin = user?.role === "Admin" || user?.role === "Manager";
-  const isRA = user?.role === "Research Associate";
+  const isRA = user?.role === "Research";
 
   const rowActions = (t) => (
     <>
@@ -168,7 +203,7 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 tracking-tight">{title}</h1>
-          <p className="text-gray-500 mt-1">{tickets.length} request(s)</p>
+          <p className="text-gray-500 mt-1">{total} request{total === 1 ? "" : "s"}</p>
         </div>
         <div className="flex gap-2">
           {selected.length > 0 && isDQ && (
@@ -217,6 +252,9 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
             </>
           )}
           <Button variant="outline" onClick={load} data-testid="refresh-btn"><RefreshCw size={16}/></Button>
+          <Button variant="outline" onClick={exportCsv} data-testid="export-tickets-csv" className="border-gray-300">
+            <Download size={14} className="mr-2"/> Export CSV
+          </Button>
           {(isRA || isAdmin) && (
             <Button onClick={() => navigate(isAdmin ? "/admin/create" : "/ra/create")} data-testid="create-new-ticket-btn"
               className="bg-[#ec9324] hover:bg-[#d4811f] text-white">
@@ -282,6 +320,34 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
           showView={!isDQ}
           numericIdOnly={isDQ}
         />
+        {/* Pagination footer */}
+        <div className="flex items-center justify-between mt-3 px-4 py-3 bg-white rounded-xl shadow-soft border border-gray-100">
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span>Rows per page</span>
+            <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
+              <SelectTrigger className="w-20 h-8" data-testid="tickets-page-size"><SelectValue/></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="25">25</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="ml-2" data-testid="tickets-pagination-info">
+              {total === 0 ? "0–0 of 0" : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total}`}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} data-testid="tickets-prev-page" className="h-8 w-8 p-0">
+              <ChevronLeft size={14}/>
+            </Button>
+            <span className="text-xs text-gray-600 px-2" data-testid="tickets-page-indicator">
+              {page} / {Math.max(1, Math.ceil(total / pageSize))}
+            </span>
+            <Button size="sm" variant="outline" disabled={page >= Math.max(1, Math.ceil(total / pageSize))} onClick={() => setPage((p) => p + 1)} data-testid="tickets-next-page" className="h-8 w-8 p-0">
+              <ChevronRight size={14}/>
+            </Button>
+          </div>
+        </div>
       </div>
     </Layout>
   );
