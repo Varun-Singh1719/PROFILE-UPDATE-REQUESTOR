@@ -122,7 +122,7 @@ export default function TicketDetailPage() {
             <div className="flex flex-wrap gap-2">
               {(ticket.attachments?.length ? ticket.attachments : [{ path: ticket.attachment_path, filename: ticket.attachment_name }]).map((a, i) => a?.path && (
                 <a
-                  key={i}
+                  key={a.path || `att-${i}`}
                   href={`${api.defaults.baseURL}/files/${a.path}?auth=${localStorage.getItem("access_token") || ""}`}
                   target="_blank" rel="noreferrer"
                   className="inline-flex items-center gap-2 text-[#ec9324] font-medium hover:underline bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs"

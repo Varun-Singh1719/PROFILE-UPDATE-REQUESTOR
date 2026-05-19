@@ -54,7 +54,8 @@ function PasswordField({ contactId, testIdPrefix = "contact" }) {
 
   const copy = async () => {
     if (!pwd) return;
-    try { await navigator.clipboard.writeText(pwd); toast.success("Password copied"); } catch {}
+    try { await navigator.clipboard.writeText(pwd); toast.success("Password copied"); }
+    catch (e) { console.error("clipboard write failed:", e); toast.error("Could not copy to clipboard"); }
   };
 
   const displayValue = pwd ? (show ? pwd : "•".repeat(Math.max(pwd.length, 10))) : "••••••••••";
@@ -186,7 +187,8 @@ function EmployeeDetailModal({ contact, open, onClose }) {
 
 function GeneratedPasswordModal({ password, email, onClose }) {
   const copy = async () => {
-    try { await navigator.clipboard.writeText(password); toast.success("Password copied"); } catch {}
+    try { await navigator.clipboard.writeText(password); toast.success("Password copied"); }
+    catch (e) { console.error("clipboard write failed:", e); toast.error("Could not copy to clipboard"); }
   };
   return (
     <Dialog open={!!password} onOpenChange={(o) => !o && onClose()}>

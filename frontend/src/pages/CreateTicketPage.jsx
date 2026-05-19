@@ -139,7 +139,7 @@ export default function CreateTicketPage() {
             {files.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {files.map((f, i) => (
-                  <div key={i} className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-700" data-testid={`attached-file-${i}`}>
+                  <div key={`${f.name}-${f.size}-${i}`} className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-700" data-testid={`attached-file-${i}`}>
                     <Paperclip size={12} className="text-[#ec9324]"/>
                     <span className="max-w-[200px] truncate">{f.name}</span>
                     <button type="button" onClick={() => removeFile(i)} className="text-gray-400 hover:text-red-500" data-testid={`remove-file-${i}`}>

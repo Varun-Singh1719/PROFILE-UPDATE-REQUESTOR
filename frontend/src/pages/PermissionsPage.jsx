@@ -663,7 +663,7 @@ export default function PermissionsPage() {
         {/* CENTER MATRIX */}
         <main className="col-span-12 lg:col-span-6">
           <div className="bg-white rounded-xl border border-gray-100 shadow-soft overflow-hidden">
-            <div className="px-5 py-3 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex items-center justify-between sticky top-0 z-10">
+            <div className="px-5 py-3 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex items-center justify-between flex-wrap gap-2">
               <div>
                 <div className="text-xs uppercase tracking-wider text-gray-500 font-semibold">Editing</div>
                 <div className="flex items-center gap-2 mt-0.5">
@@ -687,13 +687,39 @@ export default function PermissionsPage() {
               </div>
             </div>
 
+            {/* Inheritance hint — visualises the unified engine */}
+            <div className="px-5 py-2.5 bg-amber-50/60 border-b border-amber-100 flex items-center gap-2 text-[11px] text-amber-800">
+              <Layers size={13} className="flex-shrink-0"/>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-semibold">Precedence:</span>
+                <span className="inline-flex items-center gap-1 bg-white/70 rounded-full px-2 py-0.5 border border-amber-200">
+                  <UserCheck size={11}/> Employee
+                </span>
+                <ArrowRight size={10} className="text-amber-500"/>
+                <span className="inline-flex items-center gap-1 bg-white/70 rounded-full px-2 py-0.5 border border-amber-200">
+                  <Users size={11}/> Team
+                </span>
+                <ArrowRight size={10} className="text-amber-500"/>
+                <span className="inline-flex items-center gap-1 bg-white/70 rounded-full px-2 py-0.5 border border-amber-200">
+                  <UserCog size={11}/> Role
+                </span>
+                <span className="text-amber-700/80">·</span>
+                <span>Scope: <b>All</b> &gt; <b>Respective</b> &gt; off.</span>
+                {subjectType !== "role" && (
+                  <span className="text-amber-700/80">
+                    Edits here {subjectType === "employee" ? "override role & team defaults for this employee." : "override role defaults for this team."}
+                  </span>
+                )}
+              </div>
+            </div>
+
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-[11px] uppercase tracking-wider text-gray-600 sticky top-[57px] z-[5]">
+              <table className="w-full text-sm border-separate border-spacing-0">
+                <thead className="bg-gray-50 text-[11px] uppercase tracking-wider text-gray-600">
                   <tr>
-                    <th className="px-5 py-2.5 text-left font-bold w-1/3">Feature</th>
+                    <th className="px-5 py-2.5 text-left font-bold w-1/3 border-b border-gray-200">Feature</th>
                     {(schema.actions || []).map((a) => (
-                      <th key={a} className="px-2 py-2.5 text-center font-bold w-14">{ACTION_META[a]?.label || a}</th>
+                      <th key={a} className="px-2 py-2.5 text-center font-bold w-14 border-b border-gray-200">{ACTION_META[a]?.label || a}</th>
                     ))}
                   </tr>
                 </thead>

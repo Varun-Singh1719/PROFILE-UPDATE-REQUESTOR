@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import DOMPurify from "dompurify";
 import api from "../lib/api";
 import Layout from "../components/Layout";
 import { Input } from "../components/ui/input";
@@ -22,12 +23,12 @@ const CATEGORIES = ["transactional", "onboarding", "security", "notification", "
 // ---------- Mini RichText editor (contentEditable + toolbar) ----------
 function RichTextEditor({ value, onChange, testId = "rte" }) {
   const ref = React.useRef(null);
-  // Sync initial value
+  // Sync initial value (sanitized) on first mount only.
   useEffect(() => {
-    if (ref.current && ref.current.innerHTML !== (value || "")) {
-      ref.current.innerHTML = value || "";
+    if (ref.current) {
+      ref.current.innerHTML = DOMPurify.sanitize(value || "");
     }
-    // eslint-disable-next-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const exec = (cmd, arg) => {
@@ -335,7 +336,7 @@ export default function EmailTemplatesPage() {
             </div>
             <div className="border border-gray-200 rounded-md">
               <div className="bg-gray-50 border-b border-gray-200 px-3 py-2 text-xs text-gray-500">Body (rendered)</div>
-              <div className="prose prose-sm max-w-none px-3 py-3" data-testid="preview-body" dangerouslySetInnerHTML={{ __html: preview?.body || "" }}/>
+              <div className="prose prose-sm max-w-none px-3 py-3" data-testid="preview-body" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(preview?.body || "") }}/>
             </div>
           </div>
         </DialogContent>
