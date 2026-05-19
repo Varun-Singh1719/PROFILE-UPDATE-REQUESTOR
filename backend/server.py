@@ -1089,9 +1089,9 @@ async def create_team(body: TeamCreate, user=Depends(require_role("Admin"))):
         conflict = await db.teams.find_one({"member_ids": {"$in": member_ids}})
         if conflict:
             raise HTTPException(400, f"Some members already belong to team '{conflict['name']}'")
-    # Auto-assign next unused color if admin didn't explicitly pick one
+    # Auto-assign next unused color only when the admin didn't supply one.
     color = body.color
-    if not color or color == "#ec9324":
+    if not color:
         color = await _next_unused_color()
     doc = {
         "id": str(uuid.uuid4()),
@@ -1167,7 +1167,7 @@ class PermRuleIn(BaseModel):
     feature: str
     subject_type: Literal["role", "team", "employee"]
     subject_id: str
-    actions: Dict[str, bool]
+    actions: Dict[str, Any]  # values: bool | "respective" | "all"
     note: Optional[str] = ""
 
 class PermRulesBulkIn(BaseModel):
