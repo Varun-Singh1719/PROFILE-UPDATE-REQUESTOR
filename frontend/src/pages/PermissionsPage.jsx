@@ -29,12 +29,11 @@ const ACTION_META = {
 };
 
 const MODULE_ICONS = { profix: Briefcase, desk_booking: Armchair };
-const SUBJECT_ICONS = { role: UserCog, team: Users, employee: UserCheck };
 
 function fmt(iso) { if (!iso) return ""; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
 
-function ruleKey(subject_type, subject_id, module, feature) {
-  return `${subject_type}::${subject_id}::${module}::${feature}`;
+function ruleKey(role, team_id, employee_id, module, feature) {
+  return `${role || ""}::${team_id || ""}::${employee_id || ""}::${module}::${feature}`;
 }
 
 // ============== Stat Card ==============
@@ -166,18 +165,14 @@ function EffectiveAccessPanel({ schema, employee, effective, sources, counts, mo
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 text-center text-xs">
+      <div className="grid grid-cols-2 gap-2 text-center text-xs">
         <div className="bg-blue-50 border border-blue-100 rounded-lg p-2">
-          <div className="font-bold text-blue-700 text-base">{counts?.role_rules ?? 0}</div>
-          <div className="text-gray-600">Role rules</div>
+          <div className="font-bold text-blue-700 text-base">{counts?.matching_rules ?? 0}</div>
+          <div className="text-gray-600">Matching rules</div>
         </div>
-        <div className="bg-purple-50 border border-purple-100 rounded-lg p-2">
-          <div className="font-bold text-purple-700 text-base">{counts?.team_rules ?? 0}</div>
-          <div className="text-gray-600">Team rules</div>
-        </div>
-        <div className="bg-amber-50 border border-amber-100 rounded-lg p-2">
-          <div className="font-bold text-amber-700 text-base">{counts?.employee_overrides ?? 0}</div>
-          <div className="text-gray-600">Overrides</div>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-2">
+          <div className="font-bold text-gray-700 text-base">{counts?.total_rules ?? 0}</div>
+          <div className="text-gray-600">Total rules</div>
         </div>
       </div>
 
@@ -216,7 +211,8 @@ function EffectiveAccessPanel({ schema, employee, effective, sources, counts, mo
                       </div>
                       {srcList.length > 0 && (
                         <div className="text-[10px] text-gray-500 mt-1">
-                          From: {srcList.map((s) => s.level === "override" ? `override` : s.level).join(", ")}
+                          From: {srcList.slice(0, 2).map((s) => `${s.level}${s.specificity ? ` (s=${s.specificity})` : ""}`).join(", ")}
+                          {srcList.length > 2 && ` +${srcList.length - 2}`}
                         </div>
                       )}
                     </li>
@@ -306,10 +302,11 @@ export default function PermissionsPage() {
   const [contacts, setContacts] = useState([]);
   const [teams, setTeams] = useState([]);
 
-  // Filters
+  // Filters — the unified 3-layer engine: any combination of role, team, employee
   const [moduleKey, setModuleKey] = useState("profix");
-  const [subjectType, setSubjectType] = useState("role"); // role | team | employee
-  const [subjectId, setSubjectId] = useState("DQ Team");
+  const [roleFilter, setRoleFilter] = useState("Manager");
+  const [teamFilter, setTeamFilter] = useState("");
+  const [employeeFilter, setEmployeeFilter] = useState("");
   const [employeeQuery, setEmployeeQuery] = useState("");
 
   const [expandedGroups, setExpandedGroups] = useState({});
@@ -350,47 +347,51 @@ export default function PermissionsPage() {
     [schema, moduleKey]
   );
 
-  // Subject options based on type
-  const subjectOptions = useMemo(() => {
-    if (subjectType === "role") return ["Admin", "Manager", "Research", "DQ Team"].map((r) => ({ value: r, label: r }));
-    if (subjectType === "team") return teams.map((t) => ({ value: t.id, label: t.name, sublabel: t.color }));
-    if (subjectType === "employee") {
-      const q = employeeQuery.toLowerCase();
-      return contacts
+  // Options for the three independent pickers
+  const roleOptions = useMemo(
+    () => [{ value: "", label: "— any role —" }, ...["Admin", "Manager", "Research", "DQ Team", "Delivery", "Member"].map((r) => ({ value: r, label: r }))],
+    []
+  );
+
+  const teamOptions = useMemo(
+    () => [{ value: "", label: "— any team —" }, ...teams.map((t) => ({ value: t.id, label: t.name, color: t.color }))],
+    [teams]
+  );
+
+  const employeeOptions = useMemo(() => {
+    const q = employeeQuery.toLowerCase();
+    return [
+      { value: "", label: "— any employee —" },
+      ...contacts
         .filter((e) => !q || e.name.toLowerCase().includes(q) || e.email.toLowerCase().includes(q))
-        .map((e) => ({ value: e.id, label: e.name, sublabel: `${e.role} • ${e.email}` }));
-    }
-    return [];
-  }, [subjectType, teams, contacts, employeeQuery]);
+        .map((e) => ({ value: e.id, label: e.name, sublabel: `${e.role} • ${e.email}` })),
+    ];
+  }, [contacts, employeeQuery]);
 
-  // Reset subjectId when subjectType changes
-  useEffect(() => {
-    if (subjectOptions.length === 0) { setSubjectId(""); return; }
-    if (!subjectOptions.find((o) => o.value === subjectId)) {
-      setSubjectId(subjectOptions[0].value);
-    }
-  }, [subjectType, subjectOptions, subjectId]);
+  // Number of filters set — must be >= 1 to save
+  const filtersSet = (roleFilter ? 1 : 0) + (teamFilter ? 1 : 0) + (employeeFilter ? 1 : 0);
+  const hasFilter = filtersSet >= 1;
 
-  // Build "rules for current view" map (subject_type, subject_id, module)
+  // Build "rules for current view" — exact match on (role, team_id, employee_id, module)
   const currentViewRulesByFeature = useMemo(() => {
     const map = {};
+    const matchTriple = (r) =>
+      (r.role || "") === (roleFilter || "") &&
+      (r.team_id || "") === (teamFilter || "") &&
+      (r.employee_id || "") === (employeeFilter || "") &&
+      r.module === moduleKey;
     for (const r of allRules) {
-      if (r.subject_type === subjectType && r.subject_id === subjectId && r.module === moduleKey) {
-        map[r.feature] = r;
-      }
+      if (matchTriple(r)) map[r.feature] = r;
     }
-    // Overlay draft edits scoped to this view
     Object.values(draftRules).forEach((dr) => {
-      if (dr.subject_type === subjectType && dr.subject_id === subjectId && dr.module === moduleKey) {
-        map[dr.feature] = dr;
-      }
+      if (matchTriple(dr)) map[dr.feature] = dr;
     });
     return map;
-  }, [allRules, draftRules, subjectType, subjectId, moduleKey]);
+  }, [allRules, draftRules, roleFilter, teamFilter, employeeFilter, moduleKey]);
 
   const toggleAction = (feature, action) => {
-    if (!subjectId) { toast.error("Pick a subject first"); return; }
-    const key = ruleKey(subjectType, subjectId, moduleKey, feature.key);
+    if (!hasFilter) { toast.error("Pick at least one filter (Role / Team / Employee) first"); return; }
+    const key = ruleKey(roleFilter, teamFilter, employeeFilter, moduleKey, feature.key);
     const existing = currentViewRulesByFeature[feature.key];
     const baseActions = {};
     feature.actions.forEach((a) => { baseActions[a] = existing?.actions?.[a] ?? false; });
@@ -399,8 +400,9 @@ export default function PermissionsPage() {
       id: existing?.id || `draft-${key}`,
       module: moduleKey,
       feature: feature.key,
-      subject_type: subjectType,
-      subject_id: subjectId,
+      role: roleFilter || null,
+      team_id: teamFilter || null,
+      employee_id: employeeFilter || null,
       actions: baseActions,
       note: existing?.note || "",
       _dirty: true,
@@ -410,19 +412,19 @@ export default function PermissionsPage() {
   };
 
   const setActionScope = (feature, action, scope) => {
-    if (!subjectId) { toast.error("Pick a subject first"); return; }
-    const key = ruleKey(subjectType, subjectId, moduleKey, feature.key);
+    if (!hasFilter) { toast.error("Pick at least one filter (Role / Team / Employee) first"); return; }
+    const key = ruleKey(roleFilter, teamFilter, employeeFilter, moduleKey, feature.key);
     const existing = currentViewRulesByFeature[feature.key];
     const baseActions = {};
     feature.actions.forEach((a) => { baseActions[a] = existing?.actions?.[a] ?? false; });
-    // scope: "none" | "respective" | "all"
     baseActions[action] = scope === "none" ? false : scope;
     const draft = {
       id: existing?.id || `draft-${key}`,
       module: moduleKey,
       feature: feature.key,
-      subject_type: subjectType,
-      subject_id: subjectId,
+      role: roleFilter || null,
+      team_id: teamFilter || null,
+      employee_id: employeeFilter || null,
       actions: baseActions,
       note: existing?.note || "",
       _dirty: true,
@@ -432,8 +434,8 @@ export default function PermissionsPage() {
   };
 
   const setAllForFeature = (feature, value) => {
-    if (!subjectId) return;
-    const key = ruleKey(subjectType, subjectId, moduleKey, feature.key);
+    if (!hasFilter) return;
+    const key = ruleKey(roleFilter, teamFilter, employeeFilter, moduleKey, feature.key);
     const acts = {};
     feature.actions.forEach((a) => { acts[a] = value; });
     setDraftRules((dm) => ({
@@ -442,8 +444,9 @@ export default function PermissionsPage() {
         id: currentViewRulesByFeature[feature.key]?.id || `draft-${key}`,
         module: moduleKey,
         feature: feature.key,
-        subject_type: subjectType,
-        subject_id: subjectId,
+        role: roleFilter || null,
+        team_id: teamFilter || null,
+        employee_id: employeeFilter || null,
         actions: acts,
         note: "",
         _dirty: true,
@@ -463,10 +466,9 @@ export default function PermissionsPage() {
     // Merge draft into all rules then PUT bulk
     const map = {};
     for (const r of allRules) {
-      map[ruleKey(r.subject_type, r.subject_id, r.module, r.feature)] = r;
+      map[ruleKey(r.role, r.team_id, r.employee_id, r.module, r.feature)] = r;
     }
     Object.entries(draftRules).forEach(([k, dr]) => {
-      // Drop entries where no action is true (treated as "no rule")
       const anyTrue = Object.values(dr.actions).some(Boolean);
       const anyFalse = Object.values(dr.actions).some((v) => v === false);
       if (!anyTrue && !anyFalse) {
@@ -488,12 +490,14 @@ export default function PermissionsPage() {
   };
 
   const applyPreset = async (presetId) => {
-    if (!presetId || !subjectId) { toast.error("Pick subject + preset"); return; }
+    if (!presetId) { toast.error("Pick a preset"); return; }
+    if (!hasFilter) { toast.error("Pick at least one filter (Role / Team / Employee) first"); return; }
     if (dirty) { toast.error("Save or discard unsaved changes first"); return; }
     try {
       const r = await api.post(`/permissions/presets/${presetId}/apply`, {
-        subject_type: subjectType,
-        subject_id: subjectId,
+        role: roleFilter || null,
+        team_id: teamFilter || null,
+        employee_id: employeeFilter || null,
       });
       toast.success(`Preset applied (${r.data.count} rules)`);
       refreshAll();
@@ -513,15 +517,22 @@ export default function PermissionsPage() {
     }
   };
 
-  // Auto-set preview to default first employee with overrides if subjectType=employee
+  // Auto-set "preview as" when an Employee filter is chosen
   useEffect(() => {
-    if (subjectType === "employee" && subjectId) {
-      previewEmployee(subjectId);
+    if (employeeFilter) {
+      previewEmployee(employeeFilter);
     }
-  }, [subjectType, subjectId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employeeFilter]);
 
   const totalDraftChanges = Object.keys(draftRules).length;
-  const subjectLabel = subjectOptions.find((s) => s.value === subjectId)?.label || subjectId;
+  const subjectLabel = useMemo(() => {
+    const parts = [];
+    if (roleFilter) parts.push(`Role: ${roleFilter}`);
+    if (teamFilter) parts.push(`Team: ${teamOptions.find((t) => t.value === teamFilter)?.label || teamFilter}`);
+    if (employeeFilter) parts.push(`Employee: ${employeeOptions.find((e) => e.value === employeeFilter)?.label || employeeFilter}`);
+    return parts.join(" + ") || "Pick at least one filter →";
+  }, [roleFilter, teamFilter, employeeFilter, teamOptions, employeeOptions]);
 
   return (
     <Layout>
@@ -579,52 +590,78 @@ export default function PermissionsPage() {
               </div>
 
               <div>
-                <Label className="text-xs uppercase tracking-wide text-gray-500">Subject Type</Label>
-                <div className="grid grid-cols-3 gap-1 mt-1.5 bg-gray-100 rounded-lg p-1">
-                  {["role", "team", "employee"].map((st) => {
-                    const Icon = SUBJECT_ICONS[st];
-                    const active = subjectType === st;
-                    return (
-                      <button
-                        key={st}
-                        onClick={() => setSubjectType(st)}
-                        data-testid={`subject-type-${st}`}
-                        className={`flex items-center justify-center gap-1.5 text-xs font-medium py-1.5 rounded-md capitalize transition-colors ${
-                          active ? "bg-white text-[#ec9324] shadow-sm" : "text-gray-600 hover:text-gray-900"
-                        }`}
-                      >
-                        <Icon size={12}/> {st}
-                      </button>
-                    );
-                  })}
-                </div>
+                <Label className="text-xs uppercase tracking-wide text-gray-500 flex items-center gap-1.5">
+                  <UserCog size={12}/> Role
+                </Label>
+                <Select value={roleFilter || "__any__"} onValueChange={(v) => setRoleFilter(v === "__any__" ? "" : v)}>
+                  <SelectTrigger data-testid="filter-role"><SelectValue/></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__any__">— any role —</SelectItem>
+                    {roleOptions.filter((o) => o.value).map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              {subjectType === "employee" && (
-                <div>
-                  <Label className="text-xs uppercase tracking-wide text-gray-500">Employee search</Label>
-                  <div className="relative mt-1.5">
-                    <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-                    <Input className="pl-8 h-9 text-sm" placeholder="Search name or email..." value={employeeQuery} onChange={(e) => setEmployeeQuery(e.target.value)} data-testid="employee-search"/>
-                  </div>
-                </div>
-              )}
+              <div>
+                <Label className="text-xs uppercase tracking-wide text-gray-500 flex items-center gap-1.5">
+                  <Users size={12}/> Team
+                </Label>
+                <Select value={teamFilter || "__any__"} onValueChange={(v) => setTeamFilter(v === "__any__" ? "" : v)}>
+                  <SelectTrigger data-testid="filter-team"><SelectValue/></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__any__">— any team —</SelectItem>
+                    {teamOptions.filter((o) => o.value).map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        <span className="inline-flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: o.color || "#ec9324" }}/>
+                          {o.label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
               <div>
-                <Label className="text-xs uppercase tracking-wide text-gray-500">{subjectType === "role" ? "Role" : subjectType === "team" ? "Team" : "Employee"}</Label>
-                <Select value={subjectId} onValueChange={setSubjectId}>
-                  <SelectTrigger data-testid="filter-subject"><SelectValue placeholder="Select..."/></SelectTrigger>
+                <Label className="text-xs uppercase tracking-wide text-gray-500 flex items-center gap-1.5">
+                  <UserCheck size={12}/> Employee
+                </Label>
+                <div className="relative mt-1 mb-1.5">
+                  <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"/>
+                  <Input className="pl-7 h-8 text-xs" placeholder="Search…" value={employeeQuery} onChange={(e) => setEmployeeQuery(e.target.value)} data-testid="employee-search"/>
+                </div>
+                <Select value={employeeFilter || "__any__"} onValueChange={(v) => setEmployeeFilter(v === "__any__" ? "" : v)}>
+                  <SelectTrigger data-testid="filter-employee"><SelectValue/></SelectTrigger>
                   <SelectContent className="max-h-72">
-                    {subjectOptions.map((o) => (
+                    <SelectItem value="__any__">— any employee —</SelectItem>
+                    {employeeOptions.filter((o) => o.value).map((o) => (
                       <SelectItem key={o.value} value={o.value}>
                         <div>
                           <div>{o.label}</div>
-                          {o.sublabel && subjectType === "employee" && <div className="text-xs text-gray-500">{o.sublabel}</div>}
+                          <div className="text-xs text-gray-500">{o.sublabel}</div>
                         </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Quick-summary of the current rule scope */}
+              <div className="rounded-lg bg-[#ec9324]/5 border border-[#ec9324]/20 px-3 py-2 text-[11px] text-gray-700" data-testid="filter-summary">
+                <div className="font-semibold text-[#ec9324] mb-0.5 flex items-center gap-1">
+                  <Layers size={11}/> Rule scope ({filtersSet})
+                </div>
+                {!hasFilter ? (
+                  <div className="text-gray-500">Pick one or more filters above. A rule with 2+ filters applies <b>only</b> to users matching all of them.</div>
+                ) : (
+                  <div className="text-gray-600">Editing rule that applies to users where <b>{[
+                    roleFilter && `role = ${roleFilter}`,
+                    teamFilter && `team is selected`,
+                    employeeFilter && `employee is the picked one`,
+                  ].filter(Boolean).join(" AND ")}</b>.</div>
+                )}
               </div>
 
               <div className="pt-3 border-t border-gray-100">
@@ -666,16 +703,14 @@ export default function PermissionsPage() {
             <div className="px-5 py-3 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex items-center justify-between flex-wrap gap-2">
               <div>
                 <div className="text-xs uppercase tracking-wider text-gray-500 font-semibold">Editing</div>
-                <div className="flex items-center gap-2 mt-0.5">
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   {currentModule && (() => {
                     const Icon = MODULE_ICONS[currentModule.key] || Briefcase;
                     return <Icon size={16} style={{ color: currentModule.color }}/>;
                   })()}
                   <span className="font-bold text-gray-900">{currentModule?.label}</span>
                   <ChevronRight size={14} className="text-gray-300"/>
-                  <span className="text-sm text-gray-700 capitalize">{subjectType}</span>
-                  <ChevronRight size={14} className="text-gray-300"/>
-                  <span className="text-sm font-semibold text-[#ec9324]">{subjectLabel || "—"}</span>
+                  <span className="text-sm font-semibold text-[#ec9324]" data-testid="active-scope">{subjectLabel}</span>
                 </div>
               </div>
               <div className="flex items-center gap-1 text-[10px] flex-wrap">
@@ -691,25 +726,14 @@ export default function PermissionsPage() {
             <div className="px-5 py-2.5 bg-amber-50/60 border-b border-amber-100 flex items-center gap-2 text-[11px] text-amber-800">
               <Layers size={13} className="flex-shrink-0"/>
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="font-semibold">Precedence:</span>
-                <span className="inline-flex items-center gap-1 bg-white/70 rounded-full px-2 py-0.5 border border-amber-200">
-                  <UserCheck size={11}/> Employee
-                </span>
+                <span className="font-semibold">Specificity wins:</span>
+                <span className="inline-flex items-center gap-1 bg-white/70 rounded-full px-2 py-0.5 border border-amber-200">3 filters</span>
                 <ArrowRight size={10} className="text-amber-500"/>
-                <span className="inline-flex items-center gap-1 bg-white/70 rounded-full px-2 py-0.5 border border-amber-200">
-                  <Users size={11}/> Team
-                </span>
+                <span className="inline-flex items-center gap-1 bg-white/70 rounded-full px-2 py-0.5 border border-amber-200">2 filters</span>
                 <ArrowRight size={10} className="text-amber-500"/>
-                <span className="inline-flex items-center gap-1 bg-white/70 rounded-full px-2 py-0.5 border border-amber-200">
-                  <UserCog size={11}/> Role
-                </span>
+                <span className="inline-flex items-center gap-1 bg-white/70 rounded-full px-2 py-0.5 border border-amber-200">1 filter</span>
                 <span className="text-amber-700/80">·</span>
                 <span>Scope: <b>All</b> &gt; <b>Respective</b> &gt; off.</span>
-                {subjectType !== "role" && (
-                  <span className="text-amber-700/80">
-                    Edits here {subjectType === "employee" ? "override role & team defaults for this employee." : "override role defaults for this team."}
-                  </span>
-                )}
               </div>
             </div>
 

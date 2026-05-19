@@ -1161,17 +1161,64 @@ async def update_permissions(body: PermissionsIn, user=Depends(require_role("Adm
     await db.permissions.update_one({"id": "default"}, {"$set": doc}, upsert=True)
     return doc
 
-# ---------- Permissions v2 (enterprise) ----------
+# ---------- Permissions v2 (enterprise — unified 3-layer engine) ----------
+# A permission rule has up to three optional filters: role, team_id, employee_id.
+# At least ONE filter must be set. A rule matches a user iff ALL set filters match.
+# Specificity weight: role=1, team=2, employee=4 (gives strict total order).
+# Effective access: highest specificity tier with explicit value wins; within tier
+# the most permissive value wins (all > respective > true > false).
+
 class PermRuleIn(BaseModel):
     module: str
     feature: str
-    subject_type: Literal["role", "team", "employee"]
-    subject_id: str
+    role: Optional[str] = None
+    team_id: Optional[str] = None
+    employee_id: Optional[str] = None
+    # Legacy fields — auto-converted to filter fields if present
+    subject_type: Optional[Literal["role", "team", "employee"]] = None
+    subject_id: Optional[str] = None
     actions: Dict[str, Any]  # values: bool | "respective" | "all"
     note: Optional[str] = ""
 
 class PermRulesBulkIn(BaseModel):
     rules: List[PermRuleIn]
+
+
+def _normalize_filters(r: PermRuleIn) -> Dict[str, Optional[str]]:
+    """Convert legacy subject_type/subject_id into role/team_id/employee_id if needed."""
+    role, team_id, employee_id = r.role, r.team_id, r.employee_id
+    if r.subject_type and r.subject_id:
+        if r.subject_type == "role" and not role:
+            role = r.subject_id
+        elif r.subject_type == "team" and not team_id:
+            team_id = r.subject_id
+        elif r.subject_type == "employee" and not employee_id:
+            employee_id = r.subject_id
+    return {"role": role, "team_id": team_id, "employee_id": employee_id}
+
+
+def _rule_specificity(rule: dict) -> int:
+    """Weighted specificity score. Higher = more specific."""
+    s = 0
+    if rule.get("role"): s += 1
+    if rule.get("team_id"): s += 2
+    if rule.get("employee_id"): s += 4
+    return s
+
+
+def _rule_matches_user(rule: dict, user_role: str, user_id: str, team_ids_of_user: set) -> bool:
+    """A rule matches a user iff all set filters match the user."""
+    if rule.get("role") and rule["role"] != user_role:
+        return False
+    if rule.get("team_id") and rule["team_id"] not in team_ids_of_user:
+        return False
+    if rule.get("employee_id") and rule["employee_id"] != user_id:
+        return False
+    # At least one filter must be set — defensive
+    if not any(rule.get(k) for k in ("role", "team_id", "employee_id")):
+        return False
+    return True
+
 
 @api_router.get("/permissions/schema")
 async def permissions_schema(user=Depends(get_current_user)):
@@ -1185,13 +1232,15 @@ def _serialize_rule(r: dict) -> dict:
 async def list_permission_rules_v2(
     user=Depends(require_role("Admin")),
     module: Optional[str] = None,
-    subject_type: Optional[str] = None,
-    subject_id: Optional[str] = None,
+    role: Optional[str] = None,
+    team_id: Optional[str] = None,
+    employee_id: Optional[str] = None,
 ):
     q = {}
     if module: q["module"] = module
-    if subject_type: q["subject_type"] = subject_type
-    if subject_id: q["subject_id"] = subject_id
+    if role: q["role"] = role
+    if team_id: q["team_id"] = team_id
+    if employee_id: q["employee_id"] = employee_id
     rules = await db.permission_rules.find(q, {"_id": 0}).to_list(5000)
     return rules
 
@@ -1202,6 +1251,10 @@ async def bulk_replace_rules(body: PermRulesBulkIn, user=Depends(require_role("A
         valid = feature_actions(r.module, r.feature)
         if not valid:
             raise HTTPException(400, f"Unknown feature {r.module}.{r.feature}")
+        filters = _normalize_filters(r)
+        if not any(filters.values()):
+            raise HTTPException(400, f"Rule for {r.module}.{r.feature} has no Role / Team / Employee filter set")
+        r.role, r.team_id, r.employee_id = filters["role"], filters["team_id"], filters["employee_id"]
         # Preserve scope strings for scoped actions; coerce others to bool
         normalized = {}
         for a in valid:
@@ -1221,8 +1274,9 @@ async def bulk_replace_rules(body: PermRulesBulkIn, user=Depends(require_role("A
             "id": str(uuid.uuid4()),
             "module": r.module,
             "feature": r.feature,
-            "subject_type": r.subject_type,
-            "subject_id": r.subject_id,
+            "role": r.role,
+            "team_id": r.team_id,
+            "employee_id": r.employee_id,
             "actions": r.actions,
             "note": r.note or "",
             "created_on": now,
@@ -1246,9 +1300,10 @@ async def delete_rule(rule_id: str, user=Depends(require_role("Admin"))):
     if not r:
         raise HTTPException(404, "Not found")
     await db.permission_rules.delete_one({"id": rule_id})
+    desc = f"role={r.get('role')} team={r.get('team_id')} emp={r.get('employee_id')}"
     await log_audit(
         actor=user, action="permissions.delete_rule", resource="permissions", resource_id=rule_id,
-        detail=f"Deleted rule {r['module']}.{r['feature']} for {r['subject_type']}={r['subject_id']}",
+        detail=f"Deleted rule {r['module']}.{r['feature']} ({desc})",
         severity="warning",
     )
     return {"ok": True}
@@ -1263,53 +1318,86 @@ def _merge_actions(base: Dict[str, Any], add: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 async def _compute_effective(employee: dict) -> dict:
-    """Return effective access for a given employee with explanations."""
-    role = employee.get("role")
-    # Find team for this employee
-    team = await db.teams.find_one(
-        {"$or": [{"member_ids": employee["id"]}, {"manager_ids": employee["id"]}]},
-        {"_id": 0}
-    )
+    """Return effective access for a given employee with explanations.
 
-    role_rules = await db.permission_rules.find({"subject_type": "role", "subject_id": role}, {"_id": 0}).to_list(2000)
-    team_rules = []
-    if team:
-        team_rules = await db.permission_rules.find({"subject_type": "team", "subject_id": team["id"]}, {"_id": 0}).to_list(2000)
-    employee_rules = await db.permission_rules.find({"subject_type": "employee", "subject_id": employee["id"]}, {"_id": 0}).to_list(2000)
+    For each (module, feature, action) we find all rules matching this employee,
+    take the highest specificity tier that has the action explicitly set, and
+    within that tier pick the most permissive value.
+    """
+    user_role = employee.get("role")
+    user_id = employee["id"]
+    # All teams the user belongs to (member or manager)
+    user_teams = await db.teams.find(
+        {"$or": [{"member_ids": user_id}, {"manager_ids": user_id}]},
+        {"_id": 0, "id": 1, "name": 1}
+    ).to_list(100)
+    team_ids_of_user = {t["id"] for t in user_teams}
+    primary_team = user_teams[0] if user_teams else None
 
-    # Build effective: precedence employee > team > role. We OR actions, but employee can DENY by explicit false.
-    # For simplicity in this v1: merge by OR (allow takes precedence). To support deny, we'd need allow/deny per action.
-    effective: Dict[str, Dict[str, Dict[str, bool]]] = {}  # module -> feature -> action -> bool
-    sources: Dict[str, Dict[str, List[dict]]] = {}  # module -> feature -> [{source, actions}]
+    # Pull every rule and filter in-memory (rule count is bounded; permission_rules collection is small).
+    all_rules = await db.permission_rules.find({}, {"_id": 0}).to_list(5000)
+    matching = [r for r in all_rules if _rule_matches_user(r, user_role, user_id, team_ids_of_user)]
 
-    def add(level: str, rules: List[dict]):
-        for r in rules:
-            m = r["module"]; f = r["feature"]
-            effective.setdefault(m, {}).setdefault(f, {})
-            effective[m][f] = _merge_actions(effective[m][f], r["actions"])
-            sources.setdefault(m, {}).setdefault(f, []).append({
-                "level": level, "actions": r["actions"], "subject_type": r["subject_type"],
-                "subject_id": r["subject_id"], "note": r.get("note", ""),
-            })
+    effective: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    sources: Dict[str, Dict[str, List[dict]]] = {}
 
-    add("role", role_rules)
-    add("team", team_rules)
-    add("override", employee_rules)
+    # Group matching rules by (module, feature)
+    grouped: Dict[tuple, List[dict]] = {}
+    for r in matching:
+        grouped.setdefault((r["module"], r["feature"]), []).append(r)
 
-    # Fallback: if NO rules exist anywhere for a feature, default to "allow view" only.
-    # If a feature has no rules at all, return blank — UI shows "Default (no rules)".
+    for (module, feature), rules in grouped.items():
+        # Sort by specificity desc so the most-specific rule's tier wins
+        rules_sorted = sorted(rules, key=_rule_specificity, reverse=True)
+        valid_actions = feature_actions(module, feature)
+        eff_actions = {}
+        for action in valid_actions:
+            # Find the highest specificity tier among rules that have this action set.
+            top_spec = None
+            best_val = False
+            for r in rules_sorted:
+                if action not in r.get("actions", {}):
+                    continue
+                v = r["actions"][action]
+                spec = _rule_specificity(r)
+                if top_spec is None:
+                    top_spec = spec
+                if spec < top_spec:
+                    break  # lower specificity — ignore
+                # Same top tier — keep most permissive
+                if action_precedence(v) > action_precedence(best_val):
+                    best_val = v
+            if top_spec is not None:
+                eff_actions[action] = best_val
+        if eff_actions:
+            effective.setdefault(module, {})[feature] = eff_actions
+        # Sources list (for explainability in the UI)
+        sources.setdefault(module, {})[feature] = [
+            {
+                "level": ("employee" if r.get("employee_id") else "team" if r.get("team_id") else "role"),
+                "actions": r["actions"],
+                "role": r.get("role"),
+                "team_id": r.get("team_id"),
+                "employee_id": r.get("employee_id"),
+                "specificity": _rule_specificity(r),
+                "note": r.get("note", ""),
+            }
+            for r in rules_sorted
+        ]
+
     return {
         "employee": {
-            "id": employee["id"], "name": employee["name"], "email": employee["email"],
-            "role": role, "team_id": team["id"] if team else None,
-            "team_name": team["name"] if team else None,
+            "id": user_id, "name": employee["name"], "email": employee["email"],
+            "role": user_role,
+            "team_id": primary_team["id"] if primary_team else None,
+            "team_name": primary_team["name"] if primary_team else None,
+            "team_ids": list(team_ids_of_user),
         },
         "effective": effective,
         "sources": sources,
         "counts": {
-            "role_rules": len(role_rules),
-            "team_rules": len(team_rules),
-            "employee_overrides": len(employee_rules),
+            "matching_rules": len(matching),
+            "total_rules": len(all_rules),
         },
     }
 
@@ -1329,8 +1417,10 @@ async def effective_for_me(user=Depends(get_current_user)):
 
 # ---------- Permission Presets ----------
 class PresetApplyIn(BaseModel):
-    subject_type: Literal["role", "team", "employee"]
-    subject_id: str
+    # Same three optional filters as a rule; preset replaces all rules matching these filters within preset module.
+    role: Optional[str] = None
+    team_id: Optional[str] = None
+    employee_id: Optional[str] = None
 
 @api_router.get("/permissions/presets")
 async def list_presets(user=Depends(require_role("Admin"))):
@@ -1368,25 +1458,37 @@ async def apply_preset(preset_id: str, body: PresetApplyIn, user=Depends(require
     preset = await db.permission_presets.find_one({"id": preset_id}, {"_id": 0})
     if not preset:
         raise HTTPException(404, "Preset not found")
-    # Apply: create/replace rules for (subject_type, subject_id) within preset module
-    await db.permission_rules.delete_many({
-        "subject_type": body.subject_type,
-        "subject_id": body.subject_id,
+    if not any([body.role, body.team_id, body.employee_id]):
+        raise HTTPException(400, "Pick a role, team or employee filter to apply the preset to")
+    # Replace any rules that have the EXACT same filter set within preset module
+    filter_q = {
         "module": preset["module"],
-    })
+        "role": body.role,
+        "team_id": body.team_id,
+        "employee_id": body.employee_id,
+    }
+    await db.permission_rules.delete_many(filter_q)
     payload = []
     now = now_iso()
     for r in preset["rules"]:
         valid = feature_actions(preset["module"], r["feature"])
         if not valid:
             continue
-        actions = {a: bool(r.get("actions", {}).get(a, False)) for a in valid}
+        # Preserve scope strings if provided
+        actions = {}
+        for a in valid:
+            v = r.get("actions", {}).get(a, False)
+            if a in SCOPED_ACTIONS and v in ("all", "respective"):
+                actions[a] = v
+            else:
+                actions[a] = bool(v)
         payload.append({
             "id": str(uuid.uuid4()),
             "module": preset["module"],
             "feature": r["feature"],
-            "subject_type": body.subject_type,
-            "subject_id": body.subject_id,
+            "role": body.role,
+            "team_id": body.team_id,
+            "employee_id": body.employee_id,
             "actions": actions,
             "note": f"Applied from preset '{preset['name']}'",
             "created_on": now,
@@ -1395,9 +1497,10 @@ async def apply_preset(preset_id: str, body: PresetApplyIn, user=Depends(require
         })
     if payload:
         await db.permission_rules.insert_many(payload)
+    target_desc = " + ".join(f"{k}={v}" for k, v in [("role", body.role), ("team", body.team_id), ("emp", body.employee_id)] if v)
     await log_audit(
         actor=user, action="permissions.preset_apply", resource="permission_preset", resource_id=preset_id,
-        detail=f"Applied preset '{preset['name']}' to {body.subject_type}={body.subject_id} ({len(payload)} rules)",
+        detail=f"Applied preset '{preset['name']}' to {target_desc} ({len(payload)} rules)",
         severity="info",
     )
     return {"count": len(payload)}
@@ -1405,23 +1508,27 @@ async def apply_preset(preset_id: str, body: PresetApplyIn, user=Depends(require
 # ---------- Permission Stats ----------
 @api_router.get("/permissions/stats")
 async def permissions_stats(user=Depends(require_role("Admin"))):
-    # Count roles in use among contacts
     roles_distinct = await db.contacts.distinct("role")
     total_rules = await db.permission_rules.count_documents({})
-    override_count = await db.permission_rules.count_documents({"subject_type": "employee"})
-    employees_with_overrides = len(await db.permission_rules.distinct("subject_id", {"subject_type": "employee"}))
-    # Restricted = actions explicitly denied (set to false) across all rules
+    # Compound rules = more than one filter set
+    compound_rules = 0
+    employees_with_overrides = set()
     restricted = 0
-    async for r in db.permission_rules.find({}, {"actions": 1}):
+    async for r in db.permission_rules.find({}, {"actions": 1, "role": 1, "team_id": 1, "employee_id": 1}):
+        filters_set = sum(1 for k in ("role", "team_id", "employee_id") if r.get(k))
+        if filters_set > 1:
+            compound_rules += 1
+        if r.get("employee_id"):
+            employees_with_overrides.add(r["employee_id"])
         for v in (r.get("actions") or {}).values():
             if v is False:
                 restricted += 1
     return {
         "total_roles": len(roles_distinct),
         "total_rules": total_rules,
-        "employees_with_overrides": employees_with_overrides,
+        "employees_with_overrides": len(employees_with_overrides),
         "restricted_actions": restricted,
-        "override_rules": override_count,
+        "compound_rules": compound_rules,
     }
 
 # ---------- Audit Log (org-wide) ----------
@@ -1944,7 +2051,7 @@ async def startup():
     await db.contacts.create_index("email", unique=True)
     await db.tickets.create_index("ticket_id", unique=True)
     await db.audit_log.create_index([("at", -1)])
-    await db.permission_rules.create_index([("module", 1), ("feature", 1), ("subject_type", 1), ("subject_id", 1)])
+    await db.permission_rules.create_index([("module", 1), ("feature", 1), ("role", 1), ("team_id", 1), ("employee_id", 1)])
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.password_reset_tokens.create_index("token_hash")
     await db.notifications_outbox.create_index([("created_at", -1)])
@@ -1992,6 +2099,26 @@ async def startup():
     res = await db.contacts.update_many({"role": "Research Associate"}, {"$set": {"role": "Research"}})
     if res.modified_count:
         logger.info(f"Migrated {res.modified_count} contacts: 'Research Associate' -> 'Research'")
+
+    # ---- Migration: permission rules subject_type/subject_id -> role/team_id/employee_id ----
+    legacy_perm = await db.permission_rules.find({"subject_type": {"$exists": True}}).to_list(10000)
+    perm_migrated = 0
+    for r in legacy_perm:
+        upd = {"$unset": {"subject_type": "", "subject_id": ""}, "$set": {}}
+        st = r.get("subject_type")
+        sid = r.get("subject_id")
+        if st == "role" and sid and not r.get("role"):
+            upd["$set"]["role"] = sid
+        elif st == "team" and sid and not r.get("team_id"):
+            upd["$set"]["team_id"] = sid
+        elif st == "employee" and sid and not r.get("employee_id"):
+            upd["$set"]["employee_id"] = sid
+        if not upd["$set"]:
+            upd.pop("$set")
+        await db.permission_rules.update_one({"_id": r["_id"]}, upd)
+        perm_migrated += 1
+    if perm_migrated:
+        logger.info(f"Migrated {perm_migrated} permission_rules: subject_type/id -> role/team_id/employee_id")
 
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@ticketing.com")
     admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
