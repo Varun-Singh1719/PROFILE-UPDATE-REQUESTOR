@@ -347,9 +347,9 @@ export default function PermissionsPage() {
     [schema, moduleKey]
   );
 
-  // Options for the three independent pickers
+  // Options for the three independent pickers — match Employee form roles
   const roleOptions = useMemo(
-    () => [{ value: "", label: "— any role —" }, ...["Admin", "Manager", "Research", "DQ Team", "Delivery", "Member"].map((r) => ({ value: r, label: r }))],
+    () => [{ value: "", label: "— any role —" }, ...["Admin", "Manager", "Research", "Delivery", "Member"].map((r) => ({ value: r, label: r }))],
     []
   );
 
