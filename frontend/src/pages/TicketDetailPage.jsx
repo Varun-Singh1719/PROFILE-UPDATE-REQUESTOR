@@ -8,7 +8,7 @@ import { Textarea } from "../components/ui/textarea";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from "../components/ui/dropdown-menu";
-import { toast } from "sonner";
+import notify from "../lib/notify";
 import { useAuth } from "../context/AuthContext";
 import { ArrowLeft, Paperclip, Calendar, User, Hash, Activity } from "lucide-react";
 
@@ -43,8 +43,8 @@ export default function TicketDetailPage() {
   const canUpdateStatus = isAdmin || (isDQ && ticket.assigned_to_id === user.id);
 
   const update = async (body) => {
-    try { await api.patch(`/tickets/${id}`, body); toast.success("Updated"); load(); }
-    catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    try { await api.patch(`/tickets/${id}`, body); notify.success("Updated"); load(); }
+    catch (e) { notify.error(e?.response?.data?.detail || "Failed"); }
   };
 
   const postComment = async (e) => {

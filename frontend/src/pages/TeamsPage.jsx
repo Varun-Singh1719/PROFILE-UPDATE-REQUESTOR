@@ -7,7 +7,7 @@ import { Label } from "../components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from "../components/ui/dialog";
-import { toast } from "sonner";
+import notify from "../lib/notify";
 import MultiSelect from "../components/MultiSelect";
 import { Plus, Pencil, Users, Trash2, Search, Sparkles } from "lucide-react";
 
@@ -122,17 +122,17 @@ export default function TeamsPage() {
     try {
       if (editing) {
         await api.patch(`/teams/${editing.id}`, form);
-        toast.success("Team updated");
+        notify.success("Team updated");
       } else {
         await api.post("/teams", form);
-        toast.success("Team created");
+        notify.success("Team created");
       }
       setOpen(false);
       setEditing(null);
       setForm(EMPTY_FORM);
       loadAll();
     } catch (err) {
-      toast.error(err?.response?.data?.detail || "Failed");
+      notify.error(err?.response?.data?.detail || "Failed");
     } finally {
       setLoading(false);
     }
@@ -142,10 +142,10 @@ export default function TeamsPage() {
     if (!window.confirm(`Delete team "${t.name}"?`)) return;
     try {
       await api.delete(`/teams/${t.id}`);
-      toast.success("Team deleted");
+      notify.success("Team deleted");
       loadAll();
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Failed");
+      notify.error(e?.response?.data?.detail || "Failed");
     }
   };
 

@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from "../components/ui/dialog";
-import { toast } from "sonner";
+import notify from "../lib/notify";
 import {
   Search, Plus, Eye, Pencil, Copy, Trash2, Mail, FileText, Bold, Italic, List, ListOrdered, Link as LinkIcon, RotateCcw,
 } from "lucide-react";
@@ -124,9 +124,9 @@ export default function EmailTemplatesPage() {
     const next = tpl.status === "Active" ? "Inactive" : "Active";
     try {
       await api.patch(`/email-templates/${tpl.id}`, { status: next });
-      toast.success(`"${tpl.name}" is now ${next}`);
+      notify.success(`"${tpl.name}" is now ${next}`);
       load();
-    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    } catch (e) { notify.error(e?.response?.data?.detail || "Failed"); }
   };
 
   const submit = async (e) => {
@@ -134,31 +134,31 @@ export default function EmailTemplatesPage() {
     try {
       if (editing) {
         await api.patch(`/email-templates/${editing.id}`, form);
-        toast.success("Template updated");
+        notify.success("Template updated");
       } else {
         await api.post("/email-templates", form);
-        toast.success("Template created");
+        notify.success("Template created");
       }
       setOpen(false); setEditing(null); setForm(EMPTY_FORM);
       load();
-    } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
+    } catch (err) { notify.error(err?.response?.data?.detail || "Failed"); }
   };
 
   const duplicate = async (tpl) => {
     try {
       await api.post(`/email-templates/${tpl.id}/duplicate`);
-      toast.success("Duplicated");
+      notify.success("Duplicated");
       load();
-    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    } catch (e) { notify.error(e?.response?.data?.detail || "Failed"); }
   };
 
   const remove = async (tpl) => {
     if (!window.confirm(`Delete template "${tpl.name}"? This cannot be undone.`)) return;
     try {
       await api.delete(`/email-templates/${tpl.id}`);
-      toast.success("Deleted");
+      notify.success("Deleted");
       load();
-    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    } catch (e) { notify.error(e?.response?.data?.detail || "Failed"); }
   };
 
   return (

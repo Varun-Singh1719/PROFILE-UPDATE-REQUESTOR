@@ -8,7 +8,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from "../components/ui/dialog";
 import { Search, Mail, RefreshCw, Trash2, Eye, AlertCircle, Clock, CheckCircle2 } from "lucide-react";
-import { toast } from "sonner";
+import notify from "../lib/notify";
 
 const KIND_LABEL = {
   new_employee: "New employee credentials",
@@ -52,7 +52,7 @@ export default function NotificationsOutboxPage() {
   const remove = async (n) => {
     if (!window.confirm(`Delete this notification log entry?`)) return;
     await api.delete(`/notifications/outbox/${n.id}`);
-    toast.success("Deleted");
+    notify.success("Deleted");
     load();
   };
 

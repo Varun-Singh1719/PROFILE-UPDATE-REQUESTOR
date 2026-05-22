@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import Layout from "../components/Layout";
-import { toast } from "sonner";
+import notify from "../lib/notify";
 import {
   ArrowLeft, Pencil, Save, Loader2, Shield, Briefcase, Armchair,
   ChevronDown, ChevronRight, X,
@@ -181,7 +181,7 @@ export default function PermissionSetDetailPage() {
       setDescription(p.description || "");
       setModules(mergeWithSetData(emptyModulesFromSchema(sch), p.modules || {}));
     } catch (e) {
-      toast.error("Permission Set not found");
+      notify.error("Permission Set not found");
       navigate("/admin/permission-sets");
     } finally {
       setLoading(false);
@@ -191,7 +191,7 @@ export default function PermissionSetDetailPage() {
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
 
   const handleSave = async () => {
-    if (!name.trim()) { toast.error("Name is required"); return; }
+    if (!name.trim()) { notify.error("Name is required"); return; }
     setSaving(true);
     try {
       const r = await api.patch(`/permission-sets/${id}`, {
@@ -200,10 +200,10 @@ export default function PermissionSetDetailPage() {
         modules,
       });
       setPset(r.data);
-      toast.success("Permission Set updated");
+      notify.success("Permission Set updated");
       setEditMode(false);
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Update failed");
+      notify.error(e?.response?.data?.detail || "Update failed");
     } finally {
       setSaving(false);
     }

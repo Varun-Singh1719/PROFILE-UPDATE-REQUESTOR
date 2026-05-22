@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import api from "../lib/api";
 import Layout from "../components/Layout";
-import { toast } from "sonner";
+import notify from "../lib/notify";
 import { useNavigate } from "react-router-dom";
 import {
   Save, Loader2, Shield, ChevronDown, ChevronRight, Briefcase, Armchair, X,
@@ -259,7 +259,7 @@ export default function PermissionsPage() {
       setStats(st.data || { total_sets: 0 });
       setModules(emptyModulesFromSchema(sch));
     } catch (e) {
-      toast.error("Failed to load permissions schema");
+      notify.error("Failed to load permissions schema");
     } finally {
       setLoading(false);
     }
@@ -292,14 +292,14 @@ export default function PermissionsPage() {
     setSaving(true);
     try {
       await api.post("/permission-sets", { name, description, modules });
-      toast.success(`Permission Set "${name}" created`);
+      notify.success(`Permission Set "${name}" created`);
       setSaveOpen(false);
       // Refresh stats and reset modules to a blank slate for the next set
       const st = await api.get("/permission-sets/stats");
       setStats(st.data || { total_sets: 0 });
       setModules(emptyModulesFromSchema(schema));
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Failed to save Permission Set");
+      notify.error(e?.response?.data?.detail || "Failed to save Permission Set");
     } finally {
       setSaving(false);
     }

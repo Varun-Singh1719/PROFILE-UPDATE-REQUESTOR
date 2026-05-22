@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { toast } from "sonner";
+import notify from "../lib/notify";
 import { Loader2 } from "lucide-react";
 
 // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
@@ -30,14 +30,14 @@ export default function AuthCallback() {
         const { data } = await api.post("/auth/google-session", { session_id: sessionId });
         if (data?.access_token) localStorage.setItem("access_token", data.access_token);
         await refresh();
-        toast.success(`Welcome, ${data.user.name}`);
+        notify.success(`Welcome, ${data.user.name}`);
         // Clear the hash and route to unified admin shell (v3 role model)
         window.history.replaceState(null, "", window.location.pathname);
         navigate("/admin", { replace: true });
       } catch (e) {
         const msg = formatApiError(e?.response?.data?.detail) || "Google sign-in failed.";
         setError(msg);
-        toast.error(msg);
+        notify.error(msg);
         setTimeout(() => navigate("/login", { replace: true }), 1500);
       }
     })();

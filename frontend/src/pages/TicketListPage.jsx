@@ -8,7 +8,7 @@ import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Search, Plus, RefreshCw, Download, ChevronLeft, ChevronRight } from "lucide-react";
-import { toast } from "sonner";
+import notify from "../lib/notify";
 import { StatusBadge } from "../components/Badges";
 import DateFilter, { dateFilterToParams } from "../components/DateFilter";
 import {
@@ -78,7 +78,7 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       credentials: "include",
     }).then(async (resp) => {
-      if (!resp.ok) { toast.error("Export failed"); return; }
+      if (!resp.ok) { notify.error("Export failed"); return; }
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -110,47 +110,47 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
   const bulkAssignSelf = async () => {
     try {
       await api.post("/tickets/bulk-assign", { ticket_ids: selected });
-      toast.success(`Assigned ${selected.length} ticket(s) to you`);
+      notify.success(`Assigned ${selected.length} ticket(s) to you`);
       setSelected([]); load();
-    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    } catch (e) { notify.error(e?.response?.data?.detail || "Failed"); }
   };
 
   const bulkAssignTo = async (memberId) => {
     try {
       await api.post("/tickets/bulk-assign", { ticket_ids: selected, assigned_to: memberId });
-      toast.success(`Assigned ${selected.length} ticket(s)`);
+      notify.success(`Assigned ${selected.length} ticket(s)`);
       setSelected([]); load();
-    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    } catch (e) { notify.error(e?.response?.data?.detail || "Failed"); }
   };
 
   const bulkUpdateStatus = async (st) => {
     try {
       const r = await api.post("/tickets/bulk-status", { ticket_ids: selected, status: st });
-      toast.success(`Updated ${r.data?.updated || 0} request(s) to ${st}`);
+      notify.success(`Updated ${r.data?.updated || 0} request(s) to ${st}`);
       setSelected([]); load();
-    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    } catch (e) { notify.error(e?.response?.data?.detail || "Failed"); }
   };
 
   const updateStatus = async (id, st) => {
     try {
       await api.patch(`/tickets/${id}`, { status: st });
-      toast.success(`Status updated to ${st}`);
+      notify.success(`Status updated to ${st}`);
       load();
-    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    } catch (e) { notify.error(e?.response?.data?.detail || "Failed"); }
   };
 
   const assignSelf = async (id) => {
     try {
       await api.patch(`/tickets/${id}`, { assigned_to: user.id });
-      toast.success("Assigned to you"); load();
-    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+      notify.success("Assigned to you"); load();
+    } catch (e) { notify.error(e?.response?.data?.detail || "Failed"); }
   };
 
   const reassign = async (id, memberId) => {
     try {
       await api.patch(`/tickets/${id}`, { assigned_to: memberId });
-      toast.success("Reassigned"); load();
-    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+      notify.success("Reassigned"); load();
+    } catch (e) { notify.error(e?.response?.data?.detail || "Failed"); }
   };
 
   // v3 role model: only Super Admin and Admin exist. DQ/RA branches retained as

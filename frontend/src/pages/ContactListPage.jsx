@@ -14,7 +14,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator
 } from "../components/ui/dropdown-menu";
 import MultiSelect from "../components/MultiSelect";
-import { toast } from "sonner";
+import notify from "../lib/notify";
 import { Search, UserPlus, Pencil, Eye, EyeOff, Copy, RefreshCw, KeyRound, X, Mail, Phone, Calendar, IdCard, Briefcase, UsersRound, Download, ChevronLeft, ChevronRight, MoreHorizontal, ShieldCheck } from "lucide-react";
 
 function fmt(iso) { if (!iso) return "Never"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
@@ -37,7 +37,7 @@ function PasswordField({ contactId, testIdPrefix = "contact" }) {
       setPwd(r.data.password);
       setShow(true);
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Could not retrieve password. Try Reset.");
+      notify.error(e?.response?.data?.detail || "Could not retrieve password. Try Reset.");
     } finally { setLoading(false); }
   };
 
@@ -48,16 +48,16 @@ function PasswordField({ contactId, testIdPrefix = "contact" }) {
       const r = await api.post(`/contacts/${contactId}/reset-password`);
       setPwd(r.data.password);
       setShow(true);
-      toast.success("Password reset");
+      notify.success("Password reset");
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Failed");
+      notify.error(e?.response?.data?.detail || "Failed");
     } finally { setLoading(false); }
   };
 
   const copy = async () => {
     if (!pwd) return;
-    try { await navigator.clipboard.writeText(pwd); toast.success("Password copied"); }
-    catch (e) { console.error("clipboard write failed:", e); toast.error("Could not copy to clipboard"); }
+    try { await navigator.clipboard.writeText(pwd); notify.success("Password copied"); }
+    catch (e) { console.error("clipboard write failed:", e); notify.error("Could not copy to clipboard"); }
   };
 
   const displayValue = pwd ? (show ? pwd : "•".repeat(Math.max(pwd.length, 10))) : "••••••••••";
@@ -211,8 +211,8 @@ function EmployeeDetailModal({ contact, open, onClose }) {
 
 function GeneratedPasswordModal({ password, email, onClose }) {
   const copy = async () => {
-    try { await navigator.clipboard.writeText(password); toast.success("Password copied"); }
-    catch (e) { console.error("clipboard write failed:", e); toast.error("Could not copy to clipboard"); }
+    try { await navigator.clipboard.writeText(password); notify.success("Password copied"); }
+    catch (e) { console.error("clipboard write failed:", e); notify.error("Could not copy to clipboard"); }
   };
   return (
     <Dialog open={!!password} onOpenChange={(o) => !o && onClose()}>
@@ -310,21 +310,21 @@ export default function ContactListPage() {
     if (selected.length === 0) return;
     try {
       const r = await api.post("/contacts/bulk-status", { contact_ids: selected, status: newStatus });
-      toast.success(`${r.data?.updated || 0} employee(s) → ${newStatus}`);
+      notify.success(`${r.data?.updated || 0} employee(s) → ${newStatus}`);
       setSelected([]);
       load();
-    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    } catch (e) { notify.error(e?.response?.data?.detail || "Failed"); }
   };
 
   const applyBulkRole = async () => {
     if (selected.length === 0) return;
     try {
       const r = await api.post("/contacts/bulk-role", { contact_ids: selected, role: bulkRole });
-      toast.success(`${r.data?.updated || 0} employee(s) → ${bulkRole}`);
+      notify.success(`${r.data?.updated || 0} employee(s) → ${bulkRole}`);
       setBulkRoleOpen(false);
       setSelected([]);
       load();
-    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    } catch (e) { notify.error(e?.response?.data?.detail || "Failed"); }
   };
 
   const exportCsv = () => {
@@ -338,7 +338,7 @@ export default function ContactListPage() {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       credentials: "include",
     }).then(async (resp) => {
-      if (!resp.ok) { toast.error("Export failed"); return; }
+      if (!resp.ok) { notify.error("Export failed"); return; }
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -353,9 +353,9 @@ export default function ContactListPage() {
     const next = c.status === "Active" ? "Inactive" : "Active";
     try {
       await api.patch(`/contacts/${c.id}`, { status: next });
-      toast.success(`${c.name} is now ${next}`);
+      notify.success(`${c.name} is now ${next}`);
       load();
-    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    } catch (e) { notify.error(e?.response?.data?.detail || "Failed"); }
   };
 
   const openCreate = () => {
@@ -391,7 +391,7 @@ export default function ContactListPage() {
           permission_set_ids: form.permission_set_ids || [],
         };
         await api.patch(`/contacts/${editing.id}`, payload);
-        toast.success("Employee updated");
+        notify.success("Employee updated");
       } else {
         const r = await api.post("/contacts", {
           email: form.email,
@@ -402,7 +402,7 @@ export default function ContactListPage() {
           doj: form.doj || null,
           permission_set_ids: form.permission_set_ids || [],
         });
-        toast.success("Employee created");
+        notify.success("Employee created");
         if (r.data?.generated_password) {
           setGenerated({ password: r.data.generated_password, email: r.data.email });
         }
@@ -412,7 +412,7 @@ export default function ContactListPage() {
       setForm(EMPTY_FORM);
       load();
     } catch (err) {
-      toast.error(err?.response?.data?.detail || "Failed");
+      notify.error(err?.response?.data?.detail || "Failed");
     }
   };
 

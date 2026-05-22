@@ -2,6 +2,9 @@ import React from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { BusyProvider } from "./context/BusyContext";
+import BusyOverlay from "./components/BusyOverlay";
+import GlobalToaster from "./components/GlobalToaster";
 import LoginPage from "./pages/LoginPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
@@ -50,9 +53,10 @@ const SUPER_ADMIN_ONLY = ["Super Admin"];
 function App() {
   return (
     <div className="App">
-      <AuthProvider>
-        <BrowserRouter>
-          <Routes>
+      <BusyProvider>
+        <AuthProvider>
+          <BrowserRouter>
+            <Routes>
             <Route path="/" element={<HomeRedirect />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -90,8 +94,13 @@ function App() {
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          {/* Global, app-wide busy overlay — sits above all routes incl. login */}
+          <BusyOverlay />
+          {/* Single global Toaster — bottom-left, orange-on-white theme */}
+          <GlobalToaster />
         </BrowserRouter>
       </AuthProvider>
+      </BusyProvider>
     </div>
   );
 }

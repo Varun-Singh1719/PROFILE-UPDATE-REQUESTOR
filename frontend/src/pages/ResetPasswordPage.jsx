@@ -4,7 +4,7 @@ import api, { formatApiError } from "../lib/api";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
-import { toast } from "sonner";
+import notify from "../lib/notify";
 
 export default function ResetPasswordPage() {
   const [params] = useSearchParams();
@@ -26,7 +26,7 @@ export default function ResetPasswordPage() {
     try {
       await api.post("/auth/reset-password", { token, new_password: pwd });
       setDone(true);
-      toast.success("Password updated");
+      notify.success("Password updated");
       setTimeout(() => navigate("/login", { replace: true }), 1800);
     } catch (e) {
       setError(formatApiError(e?.response?.data?.detail) || e.message);

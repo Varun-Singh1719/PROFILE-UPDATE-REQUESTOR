@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import Layout from "../components/Layout";
-import { toast } from "sonner";
+import notify from "../lib/notify";
 import {
   ListChecks, Loader2, Eye, Pencil, Trash2, Plus, Filter, X, Search,
   Briefcase, Armchair,
@@ -103,7 +103,7 @@ export default function PermissionSetsListPage() {
       }
       setCreators(Array.from(seen.values()));
     } catch (e) {
-      toast.error("Failed to load Permission Sets");
+      notify.error("Failed to load Permission Sets");
     } finally {
       setLoading(false);
     }
@@ -124,13 +124,13 @@ export default function PermissionSetsListPage() {
     try {
       const r = await api.delete(`/permission-sets/${deletingItem.id}`);
       const unassigned = r.data?.unassigned_count || 0;
-      toast.success(
+      notify.success(
         `Deleted "${deletingItem.name}"` + (unassigned ? ` · un-assigned from ${unassigned} employee(s)` : "")
       );
       setDeletingItem(null);
       load();
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Delete failed");
+      notify.error(e?.response?.data?.detail || "Delete failed");
     } finally {
       setDeleting(false);
     }

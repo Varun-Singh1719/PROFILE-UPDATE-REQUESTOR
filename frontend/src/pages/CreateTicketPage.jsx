@@ -7,7 +7,7 @@ import { Label } from "../components/ui/label";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { toast } from "sonner";
+import notify from "../lib/notify";
 import { Upload, Loader2, X, Paperclip } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -74,11 +74,11 @@ export default function CreateTicketPage() {
         attachment_name: first.filename || null,
         attachments,
       });
-      toast.success(`Request ${r.data.ticket_id} created`);
+      notify.success(`Request ${r.data.ticket_id} created`);
       // v3 role model — everyone lands on the unified admin shell.
       navigate("/admin/open-tickets");
     } catch (e) {
-      toast.error(formatApiError(e?.response?.data?.detail) || "Failed to create");
+      notify.error(formatApiError(e?.response?.data?.detail) || "Failed to create");
     } finally { setLoading(false); }
   };
 

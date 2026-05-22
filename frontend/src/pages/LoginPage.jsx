@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { toast } from "sonner";
+import notify from "../lib/notify";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
@@ -21,13 +21,13 @@ export default function LoginPage() {
     setLoading(true); setError("");
     try {
       const u = await login(email, password);
-      toast.success(`Welcome, ${u.name}`);
+      notify.success(`Welcome, ${u.name}`);
       // v3 role model — both Super Admin and Admin land on the unified admin shell.
       navigate("/admin");
     } catch (e) {
       const msg = formatApiError(e?.response?.data?.detail) || e.message;
       setError(msg);
-      toast.error(msg);
+      notify.error(msg);
     } finally {
       setLoading(false);
     }
