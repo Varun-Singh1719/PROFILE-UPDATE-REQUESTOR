@@ -1,20 +1,85 @@
-# Ticketing System – PRD
+# Infollion Ticketing — PRD (v3)
 
 ## Original Problem Statement
-Multi-role internal ticketing platform with role-based access. Roles include Admin, Manager, Research (formerly "Research Associate"), Delivery, Member, and legacy DQ Team. Tickets carry Subject, Priority, Due Date, Number of Profiles, Attachment, Status (Open/In Progress/Closed), Assigned To. RA creates tickets, DQ self-assigns and updates status, Admin manages everything. Strict theme: highlight `#ec9324`, shadow `#b2b2b2`, flat white background. Permission-driven access rather than role-driven where possible.
+Internal multi-tenant ticketing platform with strict permission-driven access.
+Tickets carry Subject, Priority, Due Date, Number of Profiles, Attachment,
+Status (Open/In Progress/Closed), Assigned To. Super Admin manages everything;
+all other employees ("Admin") see only what their assigned Permission Sets
+allow. Strict theme: highlight `#ec9324`, shadow `#b2b2b2`, flat white background.
+
+## v3 Role Model (current)
+Only two canonical roles exist after the role-collapse migration:
+
+| Role          | Notes                                                                                  |
+| ------------- | -------------------------------------------------------------------------------------- |
+| **Super Admin** | Singular admin. Bypasses Permission Sets — has full access everywhere. Can create / edit / delete employees, teams, Permission Sets, email templates, audit log, notifications outbox. |
+| **Admin**     | Every other employee. Access is governed **entirely** by the union of their assigned Permission Sets (allow wins / OR-merge). Cannot reach any Super-Admin-only screen. |
+
+Legacy roles (Manager, Research, Research Associate, DQ Team, Delivery, Member)
+are migrated to `Admin` on startup. The previous `Admin` becomes `Super Admin`.
+Migration is **idempotent** — guarded by `system_meta._id="v3_role_collapse"`.
+
+## Permission Sets (v3)
+Permission Sets are reusable, named templates of feature-action grants spanning
+multiple modules (currently **ProfiX** and **Desk Booking**).
+
+- Employees are assigned 1..N sets via `contact.permission_set_ids: List[str]`.
+- Effective access = **OR-union** of every assigned set (allow wins). e.g. if
+  Set A allows `edit=true` and Set B has `edit=false`, the merged result is
+  `edit=true`.
+- Super Admin short-circuits with full access — sets are ignored.
+- A Permission Set has: `id` (uuid), `numeric_id` (auto-increment), `name`
+  (unique, case-insensitive), `description`, `modules`, `created_by`,
+  `created_at`, `updated_by`, `updated_at`.
+- `modules` is shaped as
+  `{ profix: { feature_key: { action: bool, … }, … }, desk_booking: { … } }`.
+
+### Endpoints
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET    | `/api/permission-sets`              | any authed | filters: `q`, `created_by`, `created_from`, `created_to`, `module` |
+| GET    | `/api/permission-sets/stats`        | any authed | totals + counts by module + employees-with-sets |
+| GET    | `/api/permission-sets/{id}`         | any authed | accepts uuid or numeric_id as string |
+| POST   | `/api/permission-sets`              | Super Admin | unique-name validation, audit log |
+| PATCH  | `/api/permission-sets/{id}`         | Super Admin | rename validation |
+| POST   | `/api/permission-sets/{id}/duplicate` | Super Admin | clones; auto-renames to "X (Copy)" / "X (Copy N)" |
+| DELETE | `/api/permission-sets/{id}`         | Super Admin | also `$pull`s id from every contact |
+
+### Contacts integration
+- `contact.permission_set_ids: List[str]` round-trips through `GET / POST / PATCH /api/contacts`.
+- `GET /api/contacts` accepts a `permission_set_id` query param (uuid **or** numeric_id) for filtering "which employees have set X".
+- Listing returns an enriched `permission_sets: [{ id, numeric_id, name }]` array per contact.
+- Audit entry `contact.assign_permission_sets` written on every change to the array.
+
+### Frontend surfaces
+- **`/admin/permissions`** (Super Admin only): single editor, two accordions
+  (ProfiX Features, Desk Booking Features). "Save Changes" opens a modal that
+  asks for a Title + optional description and POSTs a new Permission Set.
+- **`/admin/permission-sets`** (Super Admin only): list view with filters
+  (search, created_on from/to, created_by, module pills), and per-row actions:
+  View, Edit, **Duplicate**, Delete.
+- **`/admin/permission-sets/:id`** (Super Admin only): detail page; read-only
+  by default with an Edit toggle (URL flag `?edit=1`).
+- **`/admin/contacts`** (Super Admin only): multi-select Permission Sets in the
+  add/edit dialog (formatted as `#numeric_id · name`); chips in the detail
+  modal; **Permission Set filter dropdown** in the toolbar.
 
 ## Architecture
 - **Backend**: FastAPI + MongoDB (motor) + JWT auth (cookie + Bearer) + Emergent Object Storage for attachments.
 - **Frontend**: React + Tailwind + shadcn UI + Manrope font + Sonner toasts.
 - **Email**: Pluggable provider abstraction (`outbox` default, optional `resend`).
-- **Collections**: contacts, tickets, comments, activity, files, teams, permission_rules, permission_presets, audit_log, password_reset_tokens, notifications_outbox, email_templates.
+- **Collections**: contacts, tickets, comments, activity, files, teams,
+  `permission_sets` (v3), `permission_rules` (legacy fallback), `permission_presets`,
+  audit_log, password_reset_tokens, notifications_outbox, email_templates,
+  `system_meta` (migration flags).
 
-## User Personas / Roles
-- **Admin** — full visibility, manages contacts, teams, permissions, email templates, notifications outbox.
-- **Manager** — Admin-level access inside ProfiX only; can toggle email-template status; cannot edit template content.
-- **Research** (renamed from "Research Associate") — creates tickets, sees their own.
-- **DQ Team** (legacy) — self-assigns and updates assigned tickets.
-- **Delivery / Member** — default `/employee` dashboard; permission-driven access elsewhere.
+### Routing (v3)
+- Single admin shell at `/admin` for both Super Admin and Admin.
+- Super-Admin-only screens: `/admin/contacts`, `/admin/teams`, `/admin/permissions`,
+  `/admin/permission-sets`, `/admin/permission-sets/:id`, `/admin/notifications`,
+  `/admin/email-templates`.
+- Sidebar nav inside the shell is gated by `usePermissions().can(module, feature, action)`.
+- Legacy paths `/manager/*`, `/ra/*`, `/dq/*`, `/employee/*` redirect to `/admin`.
 
 ## Auth & Security
 - JWT 12h tokens, bcrypt password hashing.
@@ -24,64 +89,56 @@ Multi-role internal ticketing platform with role-based access. Roles include Adm
 - Admin-triggered password reset auto-generates a 12-char complex password.
 
 ## Notifications / Email
-- `EMAIL_PROVIDER=outbox` (default) — every email payload persisted to `notifications_outbox`; Admin reviews at `/admin/notifications`.
+- `EMAIL_PROVIDER=outbox` (default) — every email payload persisted to `notifications_outbox`; Super Admin reviews at `/admin/notifications`.
 - `EMAIL_PROVIDER=resend` + `RESEND_API_KEY` — same persistence plus HTTP POST to Resend.
 - Triggers: new employee credentials, admin-triggered password reset, forgot password.
 - Templates live in `email_templates` collection; setting `status='Inactive'` suppresses that kind entirely.
-- Subject/body support `{{name}} {{email}} {{password}} {{login_url}} {{reset_link}}` placeholders.
-
-## Permissions
-- Subjects: Role / Team / Employee; Employee overrides > Team > Role.
-- Scoped actions (`view`, `edit`, `assign`) accept values `false` / `true` / `"respective"` / `"all"` — precedence: `all` > `respective` > `true` > `false`.
-- Non-scoped actions (`create`, `approve`, `delete`) remain boolean.
-- Presets system (`/api/permissions/presets`) with Apply-to-subject endpoint.
 
 ## What's been implemented (cumulative)
-### Existing (2026-05-12)
+### Pre-v3 baseline
 - Login + role-based redirect, Google sign-in, branding (Infollion logo).
-- Admin/RA/DQ dashboards with metric cards, DQ Performance, Recent Updates.
 - Ticket listing + bulk actions + detail + comments + activity + attachments.
 - Contact CRUD + active/inactive toggle.
-
-### 2026-05-15 — Admin/Manager v1
-- ProfiX collapsible sidebar group, Manage group for Admin.
-- Role rename `type` → `role`; Manager role added with Admin-level ProfiX rights.
+- Teams CRUD with manager/member multi-selects + color palette.
 - Auto-generated passwords (Fernet-encrypted for one-time recall).
-- Teams CRUD with manager/member multi-selects + colour code.
-- Permissions matrix page (Role/Team/Employee × Module × Feature × Action).
-- Employee List revamp with EMP ID, DOJ, password eye toggle in detail/edit.
+- Forgot/reset password, Notifications Outbox, Email Templates module (CRUD + RBAC + Inactive suppression).
+- Server-side pagination + CSV export for tickets/contacts.
+- Bulk employee status/role.
+- EMP ID + DOJ mandatory on employee creation.
 
-### 2026-05-19 — Admin/Manager v2 (this fork)
-- **Forgot/Reset password**: `/api/auth/forgot-password` (anti-enumeration) + `/api/auth/reset-password`, frontend pages, "Forgot your password?" link on login.
-- **Notifications Outbox**: every system email persisted to `notifications_outbox`; admin UI at `/admin/notifications` to filter/preview/delete.
-- **Email Templates module** (`/admin/email-templates`, `/manager/email-templates`): full CRUD (Admin), toggle-only (Manager), preview, duplicate, contentEditable rich-text editor, 3 system templates seeded (new_employee, admin_password_reset, forgot_password). Inactive status suppresses that email kind.
-- **Server-side pagination + CSV export**: `/api/tickets?page&page_size&sort_by&sort_dir`, `/api/contacts?page…`, `/api/tickets/export.csv`, `/api/contacts/export.csv` (Admin only).
-- **Bulk employee ops**: `/api/contacts/bulk-status` + `/api/contacts/bulk-role` (Admin), with select-all checkbox + bulk actions dropdown on Employee List.
-- **Role refactor**: `Research Associate` → `Research` (one-way migration). New selectable roles `Delivery` and `Member`. `DQ Team` hidden from the form dropdown but legacy DQ users still work and route to `/dq`. Delivery/Member route to new `/employee` dashboard.
-- **EMP ID + DOJ mandatory** on employee creation (backend validation + form `required`).
-- **Employee List slim table**: Name, EMP ID, Email, Team, DOJ, Role, Active, Edit. Phone, Manager(s), Last Login, Created moved to detail modal. Sticky header + sortable columns + pagination.
-- **Teams auto-color**: `/api/teams/colors` returns 30-color palette + used + suggested. New teams auto-assign next unused colour; admin can override to any colour (including duplicates). Already-assigned employees appear greyed out with tooltip in the member/manager multi-selects. Search bar above teams table.
-- **Permissions scope dropdown**: `view/edit/assign` actions now have None/Respective/All dropdown; create/delete/approve remain switches. Merge logic respects `all > respective > true > false` precedence with Employee > Team > Role hierarchy.
+### 2026-05-22 — v3 role collapse + Permission Sets
+- Collapsed roles to `Super Admin` and `Admin`; idempotent startup migration.
+- `permission_sets` collection + full CRUD endpoints; auto-incrementing `numeric_id`.
+- `contact.permission_set_ids` round-tripped end-to-end; assignment audit log.
+- `GET /api/permissions/me/effective` rewritten to OR-merge assigned sets;
+  legacy `permission_rules` kept as fallback for users with no assigned sets.
+- Frontend: Permissions editor (accordion + save-as-set modal), Permission Sets
+  list / detail / edit pages, Contacts multi-select + chips, Sidebar + App
+  routing rewritten to v3 model. All Manage screens Super-Admin-only.
+- Backend testing agent: **36/36 v3 tests passed**.
 
-## Backlog
+### 2026-05-22 — polish + router split (this run)
+- `GET /api/contacts?permission_set_id=` filter (accepts uuid or numeric_id).
+- `POST /api/permission-sets/{id}/duplicate` — server-side clone with auto-naming.
+- Permission Sets list page now has a one-click **Duplicate** action that opens the new copy in edit mode.
+- Employee List page now has a **Permission Set filter dropdown** alongside Role/Status.
+- **Backend refactor**: split `server.py` (2480 lines) into a slim entrypoint
+  (`server.py`, ~195 lines: startup + migrations + router registration), a
+  shared infrastructure module (`core.py`, ~590 lines: config / db / app /
+  models / helpers / schema), and 10 domain-focused routers under
+  `routers/` — `auth`, `notifications_email`, `contacts`, `teams`,
+  `permissions` (legacy v1+v2+presets+effective+stats), `permission_sets`
+  (v3 CRUD + duplicate), `audit`, `tickets` (+ comments + activity + csv),
+  `files`, `dashboard`. Added `backend/tests/test_refactor_smoke.py` (26 tests, all green).
+
+## Backlog (P-tiered)
 - **P1** — Schedule/retry sending from outbox when Resend is configured but a send fails.
 - **P1** — Login throttle / lockout (currently only relies on bcrypt cost).
 - **P2** — CSV export with Excel-friendly BOM + UTF-8 negotiation.
 - **P2** — Email template versioning / preview-with-sample-data.
-- **P2** — Move auth to cookie-only (drop localStorage token), split server.py into routers.
+- **P2** — Move auth to cookie-only (drop localStorage token).
 - **P2** — WebSockets for real-time ticket updates.
-- **P2** — Reporting analytics (closure time, SLA adherence per DQ member).
+- **P2** — Reporting analytics (closure time, SLA adherence per team).
 
 ## Demo / Test Accounts
 See `/app/memory/test_credentials.md`.
-
-## Endpoints (recently added)
-- `POST /api/auth/forgot-password`
-- `POST /api/auth/reset-password`
-- `GET /api/notifications/outbox` (Admin)
-- `GET|DELETE /api/notifications/outbox/{id}` (Admin)
-- `GET /api/email-templates`, `POST` (Admin), `PATCH` (Admin/Manager-status-only), `POST .../duplicate` (Admin), `DELETE` (Admin)
-- `GET /api/teams/colors`
-- `GET /api/tickets/export.csv`, `GET /api/contacts/export.csv`
-- `POST /api/contacts/bulk-status`, `POST /api/contacts/bulk-role`
-- Pagination on `/api/tickets`, `/api/contacts` (opt-in via `?page=`).

@@ -250,6 +250,7 @@ export default function ContactListPage() {
   const [q, setQ] = useState("");
   const [role, setRole] = useState("all");
   const [status, setStatus] = useState("all");
+  const [psetFilter, setPsetFilter] = useState("all");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editing, setEditing] = useState(null);
@@ -278,6 +279,7 @@ export default function ContactListPage() {
         q: q || undefined,
         role: role === "all" ? undefined : role,
         status: status === "all" ? undefined : status,
+        permission_set_id: psetFilter === "all" ? undefined : psetFilter,
         page, page_size: pageSize, sort_by: sortBy, sort_dir: sortDir,
       },
     });
@@ -291,8 +293,8 @@ export default function ContactListPage() {
     }
     setSelected([]);
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [q, role, status, page, pageSize, sortBy, sortDir]);
-  useEffect(() => { setPage(1); /* reset on filter change */ }, [q, role, status, pageSize]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [q, role, status, psetFilter, page, pageSize, sortBy, sortDir]);
+  useEffect(() => { setPage(1); /* reset on filter change */ }, [q, role, status, psetFilter, pageSize]);
 
   const toggleSort = (field) => {
     if (sortBy === field) setSortDir(sortDir === "asc" ? "desc" : "asc");
@@ -578,6 +580,19 @@ export default function ContactListPage() {
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="Active">Active</SelectItem>
             <SelectItem value="Inactive">Inactive</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={psetFilter} onValueChange={setPsetFilter}>
+          <SelectTrigger className="w-64" data-testid="contact-pset-filter">
+            <SelectValue placeholder="Permission Set"/>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Permission Sets</SelectItem>
+            {permissionSets.map((p) => (
+              <SelectItem key={p.id} value={p.id} data-testid={`pset-filter-${p.numeric_id}`}>
+                #{p.numeric_id} · {p.name}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>

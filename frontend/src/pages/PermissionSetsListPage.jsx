@@ -5,7 +5,7 @@ import Layout from "../components/Layout";
 import notify from "../lib/notify";
 import {
   ListChecks, Loader2, Eye, Pencil, Trash2, Plus, Filter, X, Search,
-  Briefcase, Armchair,
+  Briefcase, Armchair, Copy,
 } from "lucide-react";
 
 /**
@@ -76,6 +76,7 @@ export default function PermissionSetsListPage() {
   const [moduleFilter, setModuleFilter] = useState({ profix: false, desk_booking: false });
   const [deletingItem, setDeletingItem] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [duplicatingId, setDuplicatingId] = useState(null);
   const [creators, setCreators] = useState([]);
 
   const load = async () => {
@@ -133,6 +134,26 @@ export default function PermissionSetsListPage() {
       notify.error(e?.response?.data?.detail || "Delete failed");
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const doDuplicate = async (item) => {
+    if (!item || duplicatingId) return;
+    setDuplicatingId(item.id);
+    try {
+      const r = await api.post(`/permission-sets/${item.id}/duplicate`);
+      const copy = r.data || {};
+      notify.success(`Duplicated as "${copy.name}" (#${copy.numeric_id})`);
+      // Navigate straight into the new copy in edit mode so the admin can tweak it
+      if (copy.id) {
+        navigate(`/admin/permission-sets/${copy.id}?edit=1`);
+      } else {
+        load();
+      }
+    } catch (e) {
+      notify.error(e?.response?.data?.detail || "Duplicate failed");
+    } finally {
+      setDuplicatingId(null);
     }
   };
 
@@ -328,6 +349,13 @@ export default function PermissionSetsListPage() {
                             title="Edit"
                             className="p-1.5 rounded hover:bg-gray-100 text-gray-600 hover:text-[#ec9324]"
                           ><Pencil size={15} /></button>
+                          <button
+                            onClick={() => doDuplicate(s)}
+                            disabled={duplicatingId === s.id}
+                            data-testid={`pset-duplicate-${s.numeric_id}`}
+                            title="Duplicate"
+                            className="p-1.5 rounded hover:bg-gray-100 text-gray-600 hover:text-[#ec9324] disabled:opacity-50"
+                          >{duplicatingId === s.id ? <Loader2 size={15} className="animate-spin" /> : <Copy size={15} />}</button>
                           <button
                             onClick={() => setDeletingItem(s)}
                             data-testid={`pset-delete-${s.numeric_id}`}
