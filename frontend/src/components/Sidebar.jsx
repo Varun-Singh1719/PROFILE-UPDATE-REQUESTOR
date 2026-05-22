@@ -3,75 +3,48 @@ import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { usePermissions } from "../hooks/usePermissions";
 import {
-  LayoutDashboard, Ticket, Users, Inbox, FilePlus, LogOut, ListChecks, Mail,
+  LayoutDashboard, Ticket, Users, Inbox, LogOut, Mail,
   ChevronDown, ChevronRight, Briefcase, Settings, Shield, UsersRound, Armchair, Send, MailPlus
 } from "lucide-react";
 
-const linksByRole = {
-  Admin: [
-    { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
-    {
-      label: "ProfiX",
-      icon: Briefcase,
-      group: true,
-      children: [
-        { to: "/admin/open-tickets", label: "Open Requests", icon: Ticket, perm: { module: "profix", feature: "ticket", action: "view" } },
-        { to: "/admin/unassigned", label: "Unassigned", icon: Inbox, perm: { module: "profix", feature: "ticket", action: "assign" } },
-      ],
-    },
-    { to: "/desk-booking", label: "Desk Booking", icon: Armchair, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
-    {
-      label: "Manage",
-      icon: Settings,
-      group: true,
-      children: [
-        { to: "/admin/teams", label: "Teams", icon: UsersRound },
-        { to: "/admin/permissions", label: "Permissions", icon: Shield },
-        { to: "/admin/email-templates", label: "Email Templates", icon: MailPlus },
-        { to: "/admin/notifications", label: "Notifications", icon: Send },
-        { to: "/admin/contacts", label: "Employee List", icon: Users },
-      ],
-    },
-  ],
-  Manager: [
-    { to: "/manager", label: "Dashboard", icon: LayoutDashboard, end: true },
-    {
-      label: "ProfiX",
-      icon: Briefcase,
-      group: true,
-      children: [
-        { to: "/manager/open-tickets", label: "Open Requests", icon: Ticket, perm: { module: "profix", feature: "ticket", action: "view" } },
-        { to: "/manager/unassigned", label: "Unassigned", icon: Inbox, perm: { module: "profix", feature: "ticket", action: "assign" } },
-      ],
-    },
-    { to: "/manager/email-templates", label: "Email Templates", icon: MailPlus },
-    { to: "/desk-booking", label: "Desk Booking", icon: Armchair, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
-  ],
-  "Research": [
-    { to: "/ra", label: "Dashboard", icon: LayoutDashboard, end: true },
-    { to: "/ra/tickets", label: "My Requests", icon: ListChecks, perm: { module: "profix", feature: "ticket", action: "view" } },
-    { to: "/ra/create", label: "New Request", icon: FilePlus, perm: { module: "profix", feature: "ticket", action: "create" } },
-    { to: "/desk-booking", label: "Desk Booking", icon: Armchair, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
-  ],
-  "DQ Team": [
-    { to: "/dq", label: "Dashboard", icon: LayoutDashboard, end: true },
-    { to: "/dq/tickets", label: "My Requests", icon: ListChecks, perm: { module: "profix", feature: "ticket", action: "view" } },
-    { to: "/dq/unassigned", label: "Unassigned", icon: Inbox, perm: { module: "profix", feature: "ticket", action: "assign" } },
-    { to: "/desk-booking", label: "Desk Booking", icon: Armchair, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
-  ],
-  Delivery: [
-    { to: "/employee", label: "Dashboard", icon: LayoutDashboard, end: true },
-    { to: "/desk-booking", label: "Desk Booking", icon: Armchair, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
-  ],
-  Member: [
-    { to: "/employee", label: "Dashboard", icon: LayoutDashboard, end: true },
-    { to: "/desk-booking", label: "Desk Booking", icon: Armchair, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
+// v3 role model — two canonical roles: Super Admin, Admin.
+// Common nav (ProfiX + Desk Booking) is shown to everyone; items are further hidden
+// when the user lacks the corresponding permission on their assigned Permission Sets.
+// The "Manage" group (employee/team/permission-set administration) is Super Admin only.
+const COMMON_LINKS = [
+  { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
+  {
+    label: "ProfiX",
+    icon: Briefcase,
+    group: true,
+    children: [
+      { to: "/admin/open-tickets", label: "Open Requests", icon: Ticket, perm: { module: "profix", feature: "ticket", action: "view" } },
+      { to: "/admin/unassigned", label: "Unassigned", icon: Inbox, perm: { module: "profix", feature: "ticket", action: "assign" } },
+    ],
+  },
+  { to: "/desk-booking", label: "Desk Booking", icon: Armchair, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
+];
+
+const SUPER_ADMIN_MANAGE_GROUP = {
+  label: "Manage",
+  icon: Settings,
+  group: true,
+  superAdminOnly: true,
+  children: [
+    { to: "/admin/teams", label: "Teams", icon: UsersRound },
+    { to: "/admin/permissions", label: "Permissions", icon: Shield },
+    { to: "/admin/email-templates", label: "Email Templates", icon: MailPlus },
+    { to: "/admin/notifications", label: "Notifications", icon: Send },
+    { to: "/admin/contacts", label: "Employee List", icon: Users },
   ],
 };
 
 function CollapsibleGroup({ item, currentPath, can }) {
-  // Filter children by permission
-  const allowedChildren = (item.children || []).filter((c) => !c.perm || can(c.perm.module, c.perm.feature, c.perm.action));
+  // Items inside the Manage group are Super-Admin-only and ignore permission gating.
+  const isSuperAdminGroup = !!item.superAdminOnly;
+  const allowedChildren = (item.children || []).filter(
+    (c) => isSuperAdminGroup || !c.perm || can(c.perm.module, c.perm.feature, c.perm.action)
+  );
   const childPaths = allowedChildren.map((c) => c.to);
   const isChildActive = childPaths.some((p) => currentPath.startsWith(p));
   const [open, setOpen] = useState(isChildActive);
@@ -134,7 +107,9 @@ export default function Sidebar() {
   const { can } = usePermissions();
   const navigate = useNavigate();
   const location = useLocation();
-  const links = linksByRole[user?.role] || [];
+
+  const isSuperAdmin = user?.role === "Super Admin";
+  const links = [...COMMON_LINKS, ...(isSuperAdmin ? [SUPER_ADMIN_MANAGE_GROUP] : [])];
 
   const handleLogout = async () => {
     await logout();
@@ -168,8 +143,8 @@ export default function Sidebar() {
               />
             );
           }
-          // Top-level link, check permission if set
-          if (item.perm && !can(item.perm.module, item.perm.feature, item.perm.action)) return null;
+          // Top-level link, check permission if set. Super Admin bypasses gating via usePermissions hook.
+          if (item.perm && !isSuperAdmin && !can(item.perm.module, item.perm.feature, item.perm.action)) return null;
           const { to, label, icon: Icon, end } = item;
           return (
             <NavLink

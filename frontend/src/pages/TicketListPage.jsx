@@ -89,11 +89,11 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
     });
   };
   useEffect(() => {
-    // Fetch lists for dropdowns (only Admins see full lists; others get DQ list)
-    api.get("/contacts", { params: { role: "DQ Team" }}).then(r => setMembers(r.data)).catch(() => {});
-    // Creators = RAs + Admins + Managers (ticket creators)
+    // v3 role model — fetch admin users (assignment candidates) for the picker.
+    api.get("/contacts", { params: { role: "Admin" }}).then(r => setMembers(r.data)).catch(() => {});
+    // Creators = all admin users (both Super Admin and Admin).
     api.get("/contacts").then(r => {
-      const list = (r.data || []).filter(c => c.role === "Research" || c.role === "Admin" || c.role === "Manager");
+      const list = (r.data?.items || r.data || []).filter(c => c.role === "Super Admin" || c.role === "Admin");
       setCreators(list);
     }).catch(() => {});
   }, [user]);
@@ -153,9 +153,11 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
   };
 
-  const isDQ = user?.role === "DQ Team";
-  const isAdmin = user?.role === "Admin" || user?.role === "Manager";
-  const isRA = user?.role === "Research";
+  // v3 role model: only Super Admin and Admin exist. DQ/RA branches retained as
+  // defensive no-ops in case legacy data is encountered.
+  const isDQ = false;
+  const isAdmin = user?.role === "Super Admin" || user?.role === "Admin";
+  const isRA = false;
 
   const rowActions = (t) => (
     <>

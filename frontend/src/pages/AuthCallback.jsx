@@ -31,14 +31,9 @@ export default function AuthCallback() {
         if (data?.access_token) localStorage.setItem("access_token", data.access_token);
         await refresh();
         toast.success(`Welcome, ${data.user.name}`);
-        // Clear the hash and route to role-based dashboard
+        // Clear the hash and route to unified admin shell (v3 role model)
         window.history.replaceState(null, "", window.location.pathname);
-        const r = data.user.role;
-        const dest = r === "Admin" ? "/admin"
-          : r === "Manager" ? "/manager"
-          : r === "Research" ? "/ra"
-          : r === "DQ Team" ? "/dq" : "/employee";
-        navigate(dest, { replace: true });
+        navigate("/admin", { replace: true });
       } catch (e) {
         const msg = formatApiError(e?.response?.data?.detail) || "Google sign-in failed.";
         setError(msg);

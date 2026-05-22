@@ -75,10 +75,8 @@ export default function CreateTicketPage() {
         attachments,
       });
       toast.success(`Request ${r.data.ticket_id} created`);
-      const dest = user?.role === "Admin" ? "/admin/open-tickets"
-        : user?.role === "Manager" ? "/manager/open-tickets"
-        : "/ra/tickets";
-      navigate(dest);
+      // v3 role model — everyone lands on the unified admin shell.
+      navigate("/admin/open-tickets");
     } catch (e) {
       toast.error(formatApiError(e?.response?.data?.detail) || "Failed to create");
     } finally { setLoading(false); }

@@ -73,7 +73,7 @@ export default function TeamsPage() {
   const managerOptions = useMemo(
     () =>
       employees
-        .filter((e) => e.status === "Active" && (e.role === "Manager" || e.role === "Admin"))
+        .filter((e) => e.status === "Active" && (e.role === "Super Admin" || e.role === "Admin"))
         .map((e) => {
           const team = employeeTeamMap[e.id];
           const inOtherTeam = team && team.id !== editing?.id;

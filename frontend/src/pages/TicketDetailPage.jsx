@@ -31,13 +31,15 @@ export default function TicketDetailPage() {
   };
   useEffect(() => { load(); }, [id]);
   useEffect(() => {
-    if (user?.role === "Admin" || user?.role === "Manager") api.get("/contacts", { params: { role: "DQ Team" }}).then(r => setMembers(r.data));
+    // v3 role model — Super Admin/Admin can fetch the assignee list.
+    if (user?.role === "Super Admin" || user?.role === "Admin") api.get("/contacts", { params: { role: "Admin" }}).then(r => setMembers(r.data));
   }, [user]);
 
   if (!ticket) return <Layout><div className="text-gray-400">Loading...</div></Layout>;
 
-  const isAdmin = user.role === "Admin" || user.role === "Manager";
-  const isDQ = user.role === "DQ Team";
+  // v3 role model: Super Admin and Admin both have admin-level ticket access.
+  const isAdmin = user.role === "Super Admin" || user.role === "Admin";
+  const isDQ = false; // Role 'DQ Team' no longer exists post-v3 collapse.
   const canUpdateStatus = isAdmin || (isDQ && ticket.assigned_to_id === user.id);
 
   const update = async (body) => {

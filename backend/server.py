@@ -382,13 +382,24 @@ def require_role(*roles):
     return checker
 
 # ---------- Models ----------
-# 'Research' is the new label; 'Research Associate' and 'DQ Team' are kept in the Literal
-# only for backward-compatibility while existing rows are migrated. New employees can never
-# be assigned 'DQ Team' or 'Research Associate' — the form dropdown hides them.
-ContactRole = Literal["Admin", "Manager", "Research", "Delivery", "Member", "DQ Team", "Research Associate"]
+# Canonical roles after the v3 role collapse: only "Super Admin" and "Admin" remain.
+# Legacy roles (Manager, Research, Delivery, Member, DQ Team, Research Associate) are
+# migrated to "Admin" on startup. The previous "Admin" role becomes "Super Admin".
+ContactRole = Literal["Super Admin", "Admin"]
 ContactStatus = Literal["Active", "Inactive"]
 TicketStatus = Literal["Open", "In Progress", "Closed"]
 TicketPriority = Literal["High", "Medium", "Low"]
+
+# Legacy role aliases — used for input normalization and startup migration.
+LEGACY_ROLE_MAP = {
+    "Admin": "Super Admin",
+    "Manager": "Admin",
+    "Research": "Admin",
+    "Research Associate": "Admin",
+    "Delivery": "Admin",
+    "Member": "Admin",
+    "DQ Team": "Admin",
+}
 
 class LoginIn(BaseModel):
     email: EmailStr
@@ -404,6 +415,7 @@ class ContactCreate(BaseModel):
     role: ContactRole
     emp_id: str
     doj: str  # YYYY-MM-DD — mandatory
+    permission_set_ids: Optional[List[str]] = None
 
 class ContactUpdate(BaseModel):
     name: Optional[str] = None
@@ -412,6 +424,7 @@ class ContactUpdate(BaseModel):
     status: Optional[ContactStatus] = None
     emp_id: Optional[str] = None
     doj: Optional[str] = None
+    permission_set_ids: Optional[List[str]] = None
 
 class TeamCreate(BaseModel):
     name: str
@@ -427,6 +440,22 @@ class TeamUpdate(BaseModel):
 
 class PermissionsIn(BaseModel):
     rules: List[Dict[str, Any]]
+
+# ---------- Permission Set models (v3) ----------
+# A Permission Set is a named, reusable template of feature-action grants spanning
+# multiple modules. Employees are assigned 1..N sets; effective access is the union
+# (OR — allow wins). Super Admin always has full access regardless of sets.
+class PermissionSetCreate(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    # modules: { "profix": { "ticket": {"view": true, "edit": false, ...}, ... },
+    #           "desk_booking": { ... } }
+    modules: Dict[str, Dict[str, Dict[str, Any]]] = {}
+
+class PermissionSetUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    modules: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None
 
 class TicketCreate(BaseModel):
     subject: str
@@ -622,7 +651,7 @@ async def reset_password(body: ResetPasswordIn):
 # ---------- Notifications Outbox ----------
 @api_router.get("/notifications/outbox")
 async def list_notifications(
-    user=Depends(require_role("Admin")),
+    user=Depends(require_role("Super Admin")),
     kind: Optional[str] = None,
     status: Optional[str] = None,
     q: Optional[str] = None,
@@ -641,14 +670,14 @@ async def list_notifications(
     return items
 
 @api_router.get("/notifications/outbox/{notif_id}")
-async def get_notification(notif_id: str, user=Depends(require_role("Admin"))):
+async def get_notification(notif_id: str, user=Depends(require_role("Super Admin"))):
     n = await db.notifications_outbox.find_one({"id": notif_id}, {"_id": 0})
     if not n:
         raise HTTPException(404, "Not found")
     return n
 
 @api_router.delete("/notifications/outbox/{notif_id}")
-async def delete_notification(notif_id: str, user=Depends(require_role("Admin"))):
+async def delete_notification(notif_id: str, user=Depends(require_role("Super Admin"))):
     await db.notifications_outbox.delete_one({"id": notif_id})
     return {"ok": True}
 
@@ -700,7 +729,7 @@ DEFAULT_TEMPLATES = [
 ]
 
 @api_router.get("/email-templates")
-async def list_email_templates(user=Depends(require_role("Admin", "Manager")), q: Optional[str] = None, category: Optional[str] = None, status: Optional[str] = None):
+async def list_email_templates(user=Depends(require_role("Super Admin", "Admin")), q: Optional[str] = None, category: Optional[str] = None, status: Optional[str] = None):
     query = {}
     if category: query["category"] = category
     if status: query["status"] = status
@@ -714,7 +743,7 @@ async def list_email_templates(user=Depends(require_role("Admin", "Manager")), q
     return items
 
 @api_router.post("/email-templates")
-async def create_email_template(body: EmailTemplateIn, user=Depends(require_role("Admin"))):
+async def create_email_template(body: EmailTemplateIn, user=Depends(require_role("Super Admin"))):
     if not body.name.strip():
         raise HTTPException(400, "Name is required")
     if not body.kind.strip():
@@ -739,16 +768,16 @@ async def create_email_template(body: EmailTemplateIn, user=Depends(require_role
     return doc
 
 @api_router.patch("/email-templates/{tpl_id}")
-async def update_email_template(tpl_id: str, body: EmailTemplateUpdate, user=Depends(require_role("Admin", "Manager"))):
+async def update_email_template(tpl_id: str, body: EmailTemplateUpdate, user=Depends(require_role("Super Admin", "Admin"))):
     tpl = await db.email_templates.find_one({"id": tpl_id})
     if not tpl:
         raise HTTPException(404, "Template not found")
     upd = {k: v for k, v in body.model_dump().items() if v is not None}
-    # Manager can only toggle status, not edit content
-    if user["role"] == "Manager":
+    # Admin (non-Super) can only toggle status; Super Admin can edit content
+    if user["role"] != "Super Admin":
         upd = {k: v for k, v in upd.items() if k == "status"}
         if not upd:
-            raise HTTPException(403, "Managers can only toggle template status")
+            raise HTTPException(403, "Only Super Admin can edit template content")
     upd["updated_at"] = now_iso()
     upd["updated_by"] = user["id"]
     await db.email_templates.update_one({"id": tpl_id}, {"$set": upd})
@@ -758,7 +787,7 @@ async def update_email_template(tpl_id: str, body: EmailTemplateUpdate, user=Dep
     return out
 
 @api_router.post("/email-templates/{tpl_id}/duplicate")
-async def duplicate_email_template(tpl_id: str, user=Depends(require_role("Admin"))):
+async def duplicate_email_template(tpl_id: str, user=Depends(require_role("Super Admin"))):
     tpl = await db.email_templates.find_one({"id": tpl_id}, {"_id": 0})
     if not tpl:
         raise HTTPException(404, "Template not found")
@@ -770,7 +799,7 @@ async def duplicate_email_template(tpl_id: str, user=Depends(require_role("Admin
     return doc
 
 @api_router.delete("/email-templates/{tpl_id}")
-async def delete_email_template(tpl_id: str, user=Depends(require_role("Admin"))):
+async def delete_email_template(tpl_id: str, user=Depends(require_role("Super Admin"))):
     tpl = await db.email_templates.find_one({"id": tpl_id})
     if not tpl:
         raise HTTPException(404, "Template not found")
@@ -783,7 +812,7 @@ async def delete_email_template(tpl_id: str, user=Depends(require_role("Admin"))
 
 # ---------- Contacts helpers ----------
 async def _enrich_contacts_with_team(contacts: List[dict]) -> List[dict]:
-    """Attach team_name and manager_names from teams collection (employee belongs to 1 team)."""
+    """Attach team_name, manager_names and permission_sets enrichment to contacts."""
     if not contacts:
         return contacts
     teams = await db.teams.find({}, {"_id": 0}).to_list(2000)
@@ -803,6 +832,19 @@ async def _enrich_contacts_with_team(contacts: List[dict]) -> List[dict]:
         mgr_docs = await db.contacts.find({"id": {"$in": mgr_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(2000)
     mgr_name_map = {m["id"]: m["name"] for m in mgr_docs}
 
+    # Permission Sets: collect all referenced ids and fetch in one batch
+    all_set_ids: set = set()
+    for c in contacts:
+        for sid in (c.get("permission_set_ids") or []):
+            all_set_ids.add(sid)
+    pset_map: Dict[str, dict] = {}
+    if all_set_ids:
+        psets = await db.permission_sets.find(
+            {"id": {"$in": list(all_set_ids)}},
+            {"_id": 0, "id": 1, "numeric_id": 1, "name": 1},
+        ).to_list(2000)
+        pset_map = {p["id"]: p for p in psets}
+
     for c in contacts:
         t = member_team.get(c["id"])
         if t:
@@ -815,6 +857,10 @@ async def _enrich_contacts_with_team(contacts: List[dict]) -> List[dict]:
             c["team_name"] = None
             c["team_color"] = None
             c["manager_names"] = []
+        # Permission Sets enrichment (always present, possibly empty)
+        ids = list(c.get("permission_set_ids") or [])
+        c["permission_set_ids"] = ids
+        c["permission_sets"] = [pset_map[i] for i in ids if i in pset_map]
     return contacts
 
 # ---------- Contacts Routes ----------
@@ -833,8 +879,9 @@ async def list_contacts(
     # 'type' kept as backward-compat alias for 'role'
     role_filter = role or type
     query = {}
-    if user["role"] not in ("Admin", "Manager"):
-        query["role"] = {"$in": ["DQ Team", "Admin", "Manager"]}
+    if user["role"] not in ("Super Admin", "Admin"):
+        # Defensive — after v3 role collapse non-Super-Admin / non-Admin shouldn't exist.
+        query["role"] = {"$in": ["Super Admin", "Admin"]}
     if role_filter:
         query["role"] = role_filter
     if status:
@@ -858,7 +905,7 @@ async def list_contacts(
 
 @api_router.get("/contacts/export.csv")
 async def export_contacts_csv(
-    user=Depends(require_role("Admin")),
+    user=Depends(require_role("Super Admin")),
     q: Optional[str] = None,
     role: Optional[str] = None,
     status: Optional[str] = None,
@@ -889,7 +936,7 @@ async def export_contacts_csv(
     )
 
 @api_router.post("/contacts/bulk-status")
-async def bulk_contact_status(body: BulkContactStatus, user=Depends(require_role("Admin"))):
+async def bulk_contact_status(body: BulkContactStatus, user=Depends(require_role("Super Admin"))):
     if not body.contact_ids:
         raise HTTPException(400, "No contacts selected")
     # Prevent admin from deactivating themselves accidentally
@@ -906,7 +953,7 @@ async def bulk_contact_status(body: BulkContactStatus, user=Depends(require_role
     return {"updated": r.modified_count}
 
 @api_router.post("/contacts/bulk-role")
-async def bulk_contact_role(body: BulkContactRole, user=Depends(require_role("Admin"))):
+async def bulk_contact_role(body: BulkContactRole, user=Depends(require_role("Super Admin"))):
     if not body.contact_ids:
         raise HTTPException(400, "No contacts selected")
     targets = [cid for cid in body.contact_ids if cid != user["id"]]
@@ -922,7 +969,7 @@ async def bulk_contact_role(body: BulkContactRole, user=Depends(require_role("Ad
     return {"updated": r.modified_count}
 
 @api_router.post("/contacts")
-async def create_contact(body: ContactCreate, user=Depends(require_role("Admin"))):
+async def create_contact(body: ContactCreate, user=Depends(require_role("Super Admin"))):
     email = body.email.lower().strip()
     if not body.emp_id or not body.emp_id.strip():
         raise HTTPException(400, "Employee ID is required")
@@ -941,6 +988,7 @@ async def create_contact(body: ContactCreate, user=Depends(require_role("Admin")
         "role": body.role,
         "emp_id": body.emp_id.strip(),
         "doj": body.doj,
+        "permission_set_ids": list(body.permission_set_ids or []),
         "status": "Active",
         "created_on": now_iso(),
         "last_login": None,
@@ -972,19 +1020,33 @@ async def create_contact(body: ContactCreate, user=Depends(require_role("Admin")
     return out
 
 @api_router.patch("/contacts/{contact_id}")
-async def update_contact(contact_id: str, body: ContactUpdate, user=Depends(require_role("Admin"))):
+async def update_contact(contact_id: str, body: ContactUpdate, user=Depends(require_role("Super Admin"))):
     update = {k: v for k, v in body.model_dump().items() if v is not None}
     if not update:
         raise HTTPException(400, "Nothing to update")
+    # Capture before-state for permission_set_ids audit logging
+    before = None
+    if "permission_set_ids" in update:
+        before = await db.contacts.find_one({"id": contact_id}, {"_id": 0, "permission_set_ids": 1, "name": 1, "email": 1})
     await db.contacts.update_one({"id": contact_id}, {"$set": update})
     contact = await db.contacts.find_one({"id": contact_id}, {"_id": 0, "password_hash": 0, "password_encrypted": 0})
     if not contact:
         raise HTTPException(404, "Not found")
+    if before is not None:
+        old_ids = set(before.get("permission_set_ids") or [])
+        new_ids = set(update["permission_set_ids"])
+        if old_ids != new_ids:
+            await log_audit(
+                actor=user, action="contact.assign_permission_sets", resource="contact", resource_id=contact_id,
+                detail=f"Updated permission sets for {before.get('name')} ({before.get('email')}): {len(old_ids)} -> {len(new_ids)}",
+                metadata={"before": list(old_ids), "after": list(new_ids)},
+                severity="info",
+            )
     [c] = await _enrich_contacts_with_team([contact])
     return c
 
 @api_router.get("/contacts/{contact_id}")
-async def get_contact(contact_id: str, user=Depends(require_role("Admin"))):
+async def get_contact(contact_id: str, user=Depends(require_role("Super Admin"))):
     c = await db.contacts.find_one({"id": contact_id}, {"_id": 0, "password_hash": 0, "password_encrypted": 0})
     if not c:
         raise HTTPException(404, "Not found")
@@ -992,7 +1054,7 @@ async def get_contact(contact_id: str, user=Depends(require_role("Admin"))):
     return c
 
 @api_router.get("/contacts/{contact_id}/password")
-async def get_contact_password(contact_id: str, user=Depends(require_role("Admin"))):
+async def get_contact_password(contact_id: str, user=Depends(require_role("Super Admin"))):
     c = await db.contacts.find_one({"id": contact_id})
     if not c:
         raise HTTPException(404, "Not found")
@@ -1002,7 +1064,7 @@ async def get_contact_password(contact_id: str, user=Depends(require_role("Admin
     return {"password": pwd}
 
 @api_router.post("/contacts/{contact_id}/reset-password")
-async def reset_contact_password(contact_id: str, user=Depends(require_role("Admin"))):
+async def reset_contact_password(contact_id: str, user=Depends(require_role("Super Admin"))):
     c = await db.contacts.find_one({"id": contact_id})
     if not c:
         raise HTTPException(404, "Not found")
@@ -1078,7 +1140,7 @@ async def list_teams(user=Depends(get_current_user)):
     return teams
 
 @api_router.post("/teams")
-async def create_team(body: TeamCreate, user=Depends(require_role("Admin"))):
+async def create_team(body: TeamCreate, user=Depends(require_role("Super Admin"))):
     if not body.name.strip():
         raise HTTPException(400, "Team name required")
     if await db.teams.find_one({"name": body.name.strip()}):
@@ -1112,7 +1174,7 @@ async def create_team(body: TeamCreate, user=Depends(require_role("Admin"))):
     return doc
 
 @api_router.patch("/teams/{team_id}")
-async def update_team(team_id: str, body: TeamUpdate, user=Depends(require_role("Admin"))):
+async def update_team(team_id: str, body: TeamUpdate, user=Depends(require_role("Super Admin"))):
     team = await db.teams.find_one({"id": team_id})
     if not team:
         raise HTTPException(404, "Team not found")
@@ -1138,20 +1200,20 @@ async def update_team(team_id: str, body: TeamUpdate, user=Depends(require_role(
     return t
 
 @api_router.delete("/teams/{team_id}")
-async def delete_team(team_id: str, user=Depends(require_role("Admin"))):
+async def delete_team(team_id: str, user=Depends(require_role("Super Admin"))):
     await db.teams.delete_one({"id": team_id})
     return {"ok": True}
 
 # ---------- Permissions (legacy simple matrix - kept for backward compat) ----------
 @api_router.get("/permissions")
-async def get_permissions(user=Depends(require_role("Admin"))):
+async def get_permissions(user=Depends(require_role("Super Admin"))):
     doc = await db.permissions.find_one({"id": "default"}, {"_id": 0})
     if not doc:
         return {"rules": []}
     return doc
 
 @api_router.put("/permissions")
-async def update_permissions(body: PermissionsIn, user=Depends(require_role("Admin"))):
+async def update_permissions(body: PermissionsIn, user=Depends(require_role("Super Admin"))):
     doc = {
         "id": "default",
         "rules": body.rules,
@@ -1230,7 +1292,7 @@ def _serialize_rule(r: dict) -> dict:
 
 @api_router.get("/permissions/v2")
 async def list_permission_rules_v2(
-    user=Depends(require_role("Admin")),
+    user=Depends(require_role("Super Admin")),
     module: Optional[str] = None,
     role: Optional[str] = None,
     team_id: Optional[str] = None,
@@ -1245,7 +1307,7 @@ async def list_permission_rules_v2(
     return rules
 
 @api_router.put("/permissions/v2/bulk")
-async def bulk_replace_rules(body: PermRulesBulkIn, user=Depends(require_role("Admin"))):
+async def bulk_replace_rules(body: PermRulesBulkIn, user=Depends(require_role("Super Admin"))):
     # Validate features against schema
     for r in body.rules:
         valid = feature_actions(r.module, r.feature)
@@ -1295,7 +1357,7 @@ async def bulk_replace_rules(body: PermRulesBulkIn, user=Depends(require_role("A
     return {"count": len(payload)}
 
 @api_router.delete("/permissions/v2/rule/{rule_id}")
-async def delete_rule(rule_id: str, user=Depends(require_role("Admin"))):
+async def delete_rule(rule_id: str, user=Depends(require_role("Super Admin"))):
     r = await db.permission_rules.find_one({"id": rule_id})
     if not r:
         raise HTTPException(404, "Not found")
@@ -1317,16 +1379,30 @@ def _merge_actions(base: Dict[str, Any], add: Dict[str, Any]) -> Dict[str, Any]:
         out[k] = v if action_precedence(v) >= action_precedence(existing) else existing
     return out
 
-async def _compute_effective(employee: dict) -> dict:
-    """Return effective access for a given employee with explanations.
+def _full_access_effective() -> Dict[str, Dict[str, Dict[str, bool]]]:
+    """Return an effective-access map that grants every action on every feature."""
+    eff: Dict[str, Dict[str, Dict[str, bool]]] = {}
+    for m in PERMISSION_MODULES:
+        eff[m["key"]] = {}
+        for g in m["groups"]:
+            for f in g["features"]:
+                eff[m["key"]][f["key"]] = {a: True for a in f["actions"]}
+    return eff
 
-    For each (module, feature, action) we find all rules matching this employee,
-    take the highest specificity tier that has the action explicitly set, and
-    within that tier pick the most permissive value.
+async def _compute_effective(employee: dict) -> dict:
+    """Return effective access for a given employee.
+
+    v3 semantics:
+      * Super Admin → full access on every feature (no sets needed).
+      * Admin → union (OR — allow wins) of all assigned Permission Sets.
+        Features/actions not granted by any set evaluate as False.
+    Legacy permission_rules are still consulted as a fallback when the employee
+    has no Permission Sets assigned, so older deployments keep working.
     """
     user_role = employee.get("role")
     user_id = employee["id"]
-    # All teams the user belongs to (member or manager)
+
+    # Teams (for context surfaced in the response)
     user_teams = await db.teams.find(
         {"$or": [{"member_ids": user_id}, {"manager_ids": user_id}]},
         {"_id": 0, "id": 1, "name": 1}
@@ -1334,77 +1410,90 @@ async def _compute_effective(employee: dict) -> dict:
     team_ids_of_user = {t["id"] for t in user_teams}
     primary_team = user_teams[0] if user_teams else None
 
-    # Pull every rule and filter in-memory (rule count is bounded; permission_rules collection is small).
-    all_rules = await db.permission_rules.find({}, {"_id": 0}).to_list(5000)
-    matching = [r for r in all_rules if _rule_matches_user(r, user_role, user_id, team_ids_of_user)]
+    employee_block = {
+        "id": user_id,
+        "name": employee.get("name"),
+        "email": employee.get("email"),
+        "role": user_role,
+        "team_id": primary_team["id"] if primary_team else None,
+        "team_name": primary_team["name"] if primary_team else None,
+        "team_ids": list(team_ids_of_user),
+        "permission_set_ids": list(employee.get("permission_set_ids") or []),
+    }
+
+    # Super Admin: short-circuit with full access.
+    if user_role == "Super Admin":
+        return {
+            "employee": employee_block,
+            "effective": _full_access_effective(),
+            "sources": {"super_admin": True, "sets": []},
+            "counts": {"sets": 0, "matching_rules": 0, "total_rules": 0, "is_super_admin": True},
+        }
+
+    # Admin path: merge assigned Permission Sets.
+    set_ids = employee_block["permission_set_ids"]
+    sets_assigned: List[dict] = []
+    if set_ids:
+        sets_assigned = await db.permission_sets.find(
+            {"id": {"$in": set_ids}}, {"_id": 0}
+        ).to_list(500)
 
     effective: Dict[str, Dict[str, Dict[str, Any]]] = {}
-    sources: Dict[str, Dict[str, List[dict]]] = {}
+    for s in sets_assigned:
+        for mkey, features in (s.get("modules") or {}).items():
+            mod_eff = effective.setdefault(mkey, {})
+            for fkey, actions in (features or {}).items():
+                f_eff = mod_eff.setdefault(fkey, {})
+                for action, val in (actions or {}).items():
+                    # OR (allow wins). Any True in any set wins.
+                    if action not in f_eff:
+                        f_eff[action] = bool(val)
+                    elif bool(val):
+                        f_eff[action] = True
 
-    # Group matching rules by (module, feature)
-    grouped: Dict[tuple, List[dict]] = {}
-    for r in matching:
-        grouped.setdefault((r["module"], r["feature"]), []).append(r)
-
-    for (module, feature), rules in grouped.items():
-        # Sort by specificity desc so the most-specific rule's tier wins
-        rules_sorted = sorted(rules, key=_rule_specificity, reverse=True)
-        valid_actions = feature_actions(module, feature)
-        eff_actions = {}
-        for action in valid_actions:
-            # Find the highest specificity tier among rules that have this action set.
-            top_spec = None
-            best_val = False
-            for r in rules_sorted:
-                if action not in r.get("actions", {}):
+    # Legacy fallback: if no sets configured but legacy permission_rules exist that
+    # match this user (e.g., by role/team/employee), keep honouring them. This keeps
+    # older tests + seeded rules working until orgs migrate to Permission Sets.
+    if not sets_assigned:
+        all_rules = await db.permission_rules.find({}, {"_id": 0}).to_list(5000)
+        legacy_matches = [r for r in all_rules if _rule_matches_user(r, user_role, user_id, team_ids_of_user)]
+        if legacy_matches:
+            for r in legacy_matches:
+                mkey, fkey = r.get("module"), r.get("feature")
+                if not mkey or not fkey:
                     continue
-                v = r["actions"][action]
-                spec = _rule_specificity(r)
-                if top_spec is None:
-                    top_spec = spec
-                if spec < top_spec:
-                    break  # lower specificity — ignore
-                # Same top tier — keep most permissive
-                if action_precedence(v) > action_precedence(best_val):
-                    best_val = v
-            if top_spec is not None:
-                eff_actions[action] = best_val
-        if eff_actions:
-            effective.setdefault(module, {})[feature] = eff_actions
-        # Sources list (for explainability in the UI)
-        sources.setdefault(module, {})[feature] = [
-            {
-                "level": ("employee" if r.get("employee_id") else "team" if r.get("team_id") else "role"),
-                "actions": r["actions"],
-                "role": r.get("role"),
-                "team_id": r.get("team_id"),
-                "employee_id": r.get("employee_id"),
-                "specificity": _rule_specificity(r),
-                "note": r.get("note", ""),
-            }
-            for r in rules_sorted
-        ]
+                mod_eff = effective.setdefault(mkey, {})
+                f_eff = mod_eff.setdefault(fkey, {})
+                for action, val in (r.get("actions") or {}).items():
+                    # OR (allow wins) — treat truthy/'all'/'respective' as True
+                    truthy = bool(val) or val in ("all", "respective")
+                    if action not in f_eff:
+                        f_eff[action] = truthy
+                    elif truthy:
+                        f_eff[action] = True
 
     return {
-        "employee": {
-            "id": user_id, "name": employee["name"], "email": employee["email"],
-            "role": user_role,
-            "team_id": primary_team["id"] if primary_team else None,
-            "team_name": primary_team["name"] if primary_team else None,
-            "team_ids": list(team_ids_of_user),
-        },
+        "employee": employee_block,
         "effective": effective,
-        "sources": sources,
+        "sources": {
+            "super_admin": False,
+            "sets": [
+                {"id": s["id"], "numeric_id": s.get("numeric_id"), "name": s.get("name")}
+                for s in sets_assigned
+            ],
+        },
         "counts": {
-            "matching_rules": len(matching),
-            "total_rules": len(all_rules),
+            "sets": len(sets_assigned),
+            "matching_rules": 0,
+            "total_rules": await db.permission_rules.count_documents({}),
+            "is_super_admin": False,
         },
     }
 
 @api_router.get("/permissions/effective/{employee_id}")
 async def effective_for_employee(employee_id: str, user=Depends(get_current_user)):
-    # Admin can view anyone, employees can view themselves
-    if user["role"] not in ("Admin", "Manager") and user["id"] != employee_id:
+    # Super Admin / Admin can view anyone; everyone else can view themselves only
+    if user["role"] not in ("Super Admin", "Admin") and user["id"] != employee_id:
         raise HTTPException(403, "Not authorized")
     emp = await db.contacts.find_one({"id": employee_id}, {"_id": 0, "password_hash": 0, "password_encrypted": 0})
     if not emp:
@@ -1423,7 +1512,7 @@ class PresetApplyIn(BaseModel):
     employee_id: Optional[str] = None
 
 @api_router.get("/permissions/presets")
-async def list_presets(user=Depends(require_role("Admin"))):
+async def list_presets(user=Depends(require_role("Super Admin"))):
     items = await db.permission_presets.find({}, {"_id": 0}).to_list(500)
     return items
 
@@ -1434,7 +1523,7 @@ class PresetCreateIn(BaseModel):
     rules: List[Dict[str, Any]]
 
 @api_router.post("/permissions/presets")
-async def create_preset(body: PresetCreateIn, user=Depends(require_role("Admin"))):
+async def create_preset(body: PresetCreateIn, user=Depends(require_role("Super Admin"))):
     doc = {
         "id": str(uuid.uuid4()),
         "name": body.name,
@@ -1454,7 +1543,7 @@ async def create_preset(body: PresetCreateIn, user=Depends(require_role("Admin")
     return doc
 
 @api_router.post("/permissions/presets/{preset_id}/apply")
-async def apply_preset(preset_id: str, body: PresetApplyIn, user=Depends(require_role("Admin"))):
+async def apply_preset(preset_id: str, body: PresetApplyIn, user=Depends(require_role("Super Admin"))):
     preset = await db.permission_presets.find_one({"id": preset_id}, {"_id": 0})
     if not preset:
         raise HTTPException(404, "Preset not found")
@@ -1507,7 +1596,7 @@ async def apply_preset(preset_id: str, body: PresetApplyIn, user=Depends(require
 
 # ---------- Permission Stats ----------
 @api_router.get("/permissions/stats")
-async def permissions_stats(user=Depends(require_role("Admin"))):
+async def permissions_stats(user=Depends(require_role("Super Admin"))):
     roles_distinct = await db.contacts.distinct("role")
     total_rules = await db.permission_rules.count_documents({})
     # Compound rules = more than one filter set
@@ -1531,10 +1620,194 @@ async def permissions_stats(user=Depends(require_role("Admin"))):
         "compound_rules": compound_rules,
     }
 
+# ---------- Permission Sets (v3 — named templates assigned to employees) ----------
+async def _next_permission_set_seq() -> int:
+    """Atomic counter for permission_set numeric IDs."""
+    res = await db.counters.find_one_and_update(
+        {"_id": "permission_set"},
+        {"$inc": {"seq": 1}},
+        upsert=True,
+        return_document=True,
+    )
+    return res["seq"] if res else 1
+
+def _normalize_pset_modules(modules: Dict[str, Dict[str, Dict[str, Any]]]) -> Dict[str, Dict[str, Dict[str, bool]]]:
+    """Validate & normalize a permission set's modules tree against the schema.
+    Drops unknown modules/features/actions; coerces values to bool (True/False).
+    Scoped values 'all' and 'respective' are coerced to True. Permission Sets v3 uses
+    pure booleans for simplicity; complex scoping can be layered on later.
+    """
+    out: Dict[str, Dict[str, Dict[str, bool]]] = {}
+    valid_modules = {m["key"]: m for m in PERMISSION_MODULES}
+    for mkey, features in (modules or {}).items():
+        if mkey not in valid_modules:
+            continue
+        valid_features = {}
+        for g in valid_modules[mkey]["groups"]:
+            for f in g["features"]:
+                valid_features[f["key"]] = f["actions"]
+        mod_out: Dict[str, Dict[str, bool]] = {}
+        for fkey, actions in (features or {}).items():
+            if fkey not in valid_features:
+                continue
+            allowed = valid_features[fkey]
+            f_out = {}
+            for a in allowed:
+                v = (actions or {}).get(a, False)
+                # Coerce scope strings to True (allowed) for now; pure bool in v3.
+                if v in ("all", "respective"):
+                    f_out[a] = True
+                else:
+                    f_out[a] = bool(v)
+            mod_out[fkey] = f_out
+        if mod_out:
+            out[mkey] = mod_out
+    return out
+
+def _serialize_pset(p: dict) -> dict:
+    p.pop("_id", None)
+    return p
+
+@api_router.get("/permission-sets")
+async def list_permission_sets(
+    user=Depends(get_current_user),
+    q: Optional[str] = None,
+    created_by: Optional[str] = None,
+    created_from: Optional[str] = None,
+    created_to: Optional[str] = None,
+    module: Optional[str] = None,
+):
+    """List Permission Sets. Filters: q (name search), created_by (user id),
+    created_from / created_to (YYYY-MM-DD), module (profix|desk_booking — sets having that module key).
+    Open to any authed user so multi-select dropdowns can populate."""
+    query = {}
+    if q:
+        query["name"] = {"$regex": q, "$options": "i"}
+    if created_by:
+        query["created_by.id"] = created_by
+    date_cond = {}
+    if created_from:
+        date_cond["$gte"] = created_from
+    if created_to:
+        # inclusive upper bound — append T23:59:59 if just a date
+        date_cond["$lte"] = created_to if "T" in created_to else f"{created_to}T23:59:59"
+    if date_cond:
+        query["created_at"] = date_cond
+    if module:
+        query[f"modules.{module}"] = {"$exists": True}
+    items = await db.permission_sets.find(query, {"_id": 0}).sort("numeric_id", -1).to_list(2000)
+    return items
+
+@api_router.get("/permission-sets/stats")
+async def permission_sets_stats(user=Depends(get_current_user)):
+    total = await db.permission_sets.count_documents({})
+    profix = await db.permission_sets.count_documents({"modules.profix": {"$exists": True}})
+    desk = await db.permission_sets.count_documents({"modules.desk_booking": {"$exists": True}})
+    # Count employees that have at least one set assigned
+    employees_with_sets = await db.contacts.count_documents({"permission_set_ids": {"$exists": True, "$ne": []}})
+    return {
+        "total_sets": total,
+        "profix_sets": profix,
+        "desk_booking_sets": desk,
+        "employees_with_sets": employees_with_sets,
+    }
+
+@api_router.get("/permission-sets/{pset_id}")
+async def get_permission_set(pset_id: str, user=Depends(get_current_user)):
+    # Accept both uuid id and numeric id (string of digits)
+    q = {"id": pset_id}
+    if pset_id.isdigit():
+        q = {"$or": [{"id": pset_id}, {"numeric_id": int(pset_id)}]}
+    p = await db.permission_sets.find_one(q, {"_id": 0})
+    if not p:
+        raise HTTPException(404, "Permission Set not found")
+    return p
+
+@api_router.post("/permission-sets")
+async def create_permission_set(body: PermissionSetCreate, user=Depends(require_role("Super Admin"))):
+    if not body.name or not body.name.strip():
+        raise HTTPException(400, "Name is required")
+    # Unique name check (case-insensitive)
+    existing = await db.permission_sets.find_one({"name": {"$regex": f"^{body.name.strip()}$", "$options": "i"}})
+    if existing:
+        raise HTTPException(400, "A Permission Set with this name already exists")
+    seq = await _next_permission_set_seq()
+    now = now_iso()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "numeric_id": seq,
+        "name": body.name.strip(),
+        "description": (body.description or "").strip(),
+        "modules": _normalize_pset_modules(body.modules or {}),
+        "created_by": {"id": user["id"], "name": user.get("name"), "email": user.get("email")},
+        "created_at": now,
+        "updated_at": now,
+        "updated_by": {"id": user["id"], "name": user.get("name"), "email": user.get("email")},
+    }
+    await db.permission_sets.insert_one(doc)
+    await log_audit(
+        actor=user, action="permission_set.create", resource="permission_set", resource_id=doc["id"],
+        detail=f"Created Permission Set '{doc['name']}' (#{seq})",
+        metadata={"numeric_id": seq},
+        severity="info",
+    )
+    return _serialize_pset(dict(doc))
+
+@api_router.patch("/permission-sets/{pset_id}")
+async def update_permission_set(pset_id: str, body: PermissionSetUpdate, user=Depends(require_role("Super Admin"))):
+    p = await db.permission_sets.find_one({"id": pset_id})
+    if not p:
+        raise HTTPException(404, "Permission Set not found")
+    update = {}
+    if body.name is not None and body.name.strip():
+        clash = await db.permission_sets.find_one({
+            "name": {"$regex": f"^{body.name.strip()}$", "$options": "i"},
+            "id": {"$ne": pset_id},
+        })
+        if clash:
+            raise HTTPException(400, "A Permission Set with this name already exists")
+        update["name"] = body.name.strip()
+    if body.description is not None:
+        update["description"] = body.description.strip()
+    if body.modules is not None:
+        update["modules"] = _normalize_pset_modules(body.modules)
+    if not update:
+        raise HTTPException(400, "Nothing to update")
+    update["updated_at"] = now_iso()
+    update["updated_by"] = {"id": user["id"], "name": user.get("name"), "email": user.get("email")}
+    await db.permission_sets.update_one({"id": pset_id}, {"$set": update})
+    new_doc = await db.permission_sets.find_one({"id": pset_id}, {"_id": 0})
+    await log_audit(
+        actor=user, action="permission_set.update", resource="permission_set", resource_id=pset_id,
+        detail=f"Updated Permission Set '{new_doc.get('name')}' (#{new_doc.get('numeric_id')})",
+        severity="info",
+    )
+    return new_doc
+
+@api_router.delete("/permission-sets/{pset_id}")
+async def delete_permission_set(pset_id: str, user=Depends(require_role("Super Admin"))):
+    p = await db.permission_sets.find_one({"id": pset_id})
+    if not p:
+        raise HTTPException(404, "Permission Set not found")
+    await db.permission_sets.delete_one({"id": pset_id})
+    # Strip this set id from every contact that had it assigned
+    res = await db.contacts.update_many(
+        {"permission_set_ids": pset_id},
+        {"$pull": {"permission_set_ids": pset_id}},
+    )
+    await log_audit(
+        actor=user, action="permission_set.delete", resource="permission_set", resource_id=pset_id,
+        detail=f"Deleted Permission Set '{p.get('name')}' (#{p.get('numeric_id')}); unassigned from {res.modified_count} employee(s)",
+        metadata={"unassigned_count": res.modified_count},
+        severity="warning",
+    )
+    return {"ok": True, "unassigned_count": res.modified_count}
+
+
 # ---------- Audit Log (org-wide) ----------
 @api_router.get("/audit-log")
 async def list_audit(
-    user=Depends(require_role("Admin")),
+    user=Depends(require_role("Super Admin")),
     q: Optional[str] = None,
     resource: Optional[str] = None,
     action: Optional[str] = None,
@@ -1693,8 +1966,8 @@ async def export_tickets_csv(
 
 @api_router.post("/tickets")
 async def create_ticket(body: TicketCreate, user=Depends(get_current_user)):
-    if user["role"] not in ("Research", "Admin", "Manager"):
-        raise HTTPException(403, "Only RA/Admin/Manager can create tickets")
+    if user["role"] not in ("Super Admin", "Admin"):
+        raise HTTPException(403, "Only Super Admin / Admin can create tickets")
     if body.number_of_profiles is None:
         raise HTTPException(400, "No. of Records is Blank")
     if body.number_of_profiles == 0:
@@ -1759,7 +2032,7 @@ async def update_ticket(ticket_id: str, body: TicketUpdate, user=Depends(get_cur
     activity = []
 
     if body.status is not None:
-        if role in ("Admin", "Manager"):
+        if role in ("Super Admin", "Admin"):
             pass
         elif role == "DQ Team":
             if t.get("assigned_to_id") != user["id"]:
@@ -1771,7 +2044,7 @@ async def update_ticket(ticket_id: str, body: TicketUpdate, user=Depends(get_cur
             activity.append(f"Status changed from {t.get('status')} to {body.status}")
 
     if body.assigned_to is not None:
-        if role in ("Admin", "Manager"):
+        if role in ("Super Admin", "Admin"):
             if body.assigned_to == "":
                 update["assigned_to_id"] = None
                 update["assigned_to_name"] = None
@@ -1808,7 +2081,7 @@ async def update_ticket(ticket_id: str, body: TicketUpdate, user=Depends(get_cur
 @api_router.post("/tickets/bulk-assign")
 async def bulk_assign(body: BulkAssign, user=Depends(get_current_user)):
     role = user["role"]
-    if role not in ("Admin", "Manager", "DQ Team"):
+    if role not in ("Super Admin", "Admin", "DQ Team"):
         raise HTTPException(403, "Forbidden")
     if role == "DQ Team":
         assignee_id = user["id"]
@@ -1842,7 +2115,7 @@ async def bulk_assign(body: BulkAssign, user=Depends(get_current_user)):
 @api_router.post("/tickets/bulk-status")
 async def bulk_status(body: BulkStatus, user=Depends(get_current_user)):
     role = user["role"]
-    if role not in ("Admin", "Manager", "DQ Team"):
+    if role not in ("Super Admin", "Admin", "DQ Team"):
         raise HTTPException(403, "Forbidden")
     success = 0
     for tid in body.ticket_ids:
@@ -1956,7 +2229,7 @@ async def dashboard_stats(
         base["created_by_id"] = user["id"]
     elif role == "DQ Team":
         base["assigned_to_id"] = user["id"]
-    elif role in ("Admin", "Manager") and member_id:
+    elif role in ("Super Admin", "Admin") and member_id:
         base["assigned_to_id"] = member_id
 
     base = {**base, **_date_match(date_from, date_to, date_field)}
@@ -1973,7 +2246,7 @@ async def dashboard_stats(
 
 @api_router.get("/dashboard/dq-performance")
 async def dq_performance(
-    user=Depends(require_role("Admin", "Manager")),
+    user=Depends(require_role("Super Admin", "Admin")),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     date_field: Optional[str] = "created_at",
@@ -2052,6 +2325,10 @@ async def startup():
     await db.tickets.create_index("ticket_id", unique=True)
     await db.audit_log.create_index([("at", -1)])
     await db.permission_rules.create_index([("module", 1), ("feature", 1), ("role", 1), ("team_id", 1), ("employee_id", 1)])
+    await db.permission_sets.create_index("id", unique=True)
+    await db.permission_sets.create_index("numeric_id", unique=True)
+    await db.permission_sets.create_index([("created_at", -1)])
+    await db.permission_sets.create_index([("created_by.id", 1)])
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.password_reset_tokens.create_index("token_hash")
     await db.notifications_outbox.create_index([("created_at", -1)])
@@ -2100,6 +2377,28 @@ async def startup():
     if res.modified_count:
         logger.info(f"Migrated {res.modified_count} contacts: 'Research Associate' -> 'Research'")
 
+    # ---- Migration v3: collapse legacy roles into Super Admin / Admin (ONE-TIME) ----
+    # Gated by a flag in `system_meta` so re-runs don't re-promote freshly-migrated
+    # Admins back to Super Admin (the migration's output overlaps with its input).
+    flag = await db.system_meta.find_one({"_id": "v3_role_collapse"})
+    if not flag:
+        # Order matters: Admin -> Super Admin FIRST, then legacy roles -> Admin.
+        res_super = await db.contacts.update_many({"role": "Admin"}, {"$set": {"role": "Super Admin"}})
+        if res_super.modified_count:
+            logger.info(f"v3 role collapse: {res_super.modified_count} contacts 'Admin' -> 'Super Admin'")
+        res_admin = await db.contacts.update_many(
+            {"role": {"$in": ["Manager", "Research", "Research Associate", "Delivery", "Member", "DQ Team"]}},
+            {"$set": {"role": "Admin"}},
+        )
+        if res_admin.modified_count:
+            logger.info(f"v3 role collapse: {res_admin.modified_count} contacts legacy roles -> 'Admin'")
+        await db.system_meta.insert_one({
+            "_id": "v3_role_collapse",
+            "completed_at": now_iso(),
+            "promoted_to_super_admin": res_super.modified_count,
+            "collapsed_to_admin": res_admin.modified_count,
+        })
+
     # ---- Migration: permission rules subject_type/subject_id -> role/team_id/employee_id ----
     legacy_perm = await db.permission_rules.find({"subject_type": {"$exists": True}}).to_list(10000)
     perm_migrated = 0
@@ -2128,7 +2427,7 @@ async def startup():
         await db.contacts.insert_one({
             "id": str(uuid.uuid4()),
             "email": admin_email, "name": "Admin User", "phone": "",
-            "role": "Admin", "status": "Active",
+            "role": "Super Admin", "status": "Active",
             "emp_id": "EMP-0001", "doj": "2024-01-01",
             "created_on": now_iso(), "last_login": None,
             "password_hash": hash_password(admin_password),
@@ -2136,6 +2435,9 @@ async def startup():
         })
         logger.info(f"Seeded admin: {admin_email}")
     else:
+        # Ensure the seeded admin always has Super Admin role (v3 onwards)
+        if existing.get("role") != "Super Admin":
+            await db.contacts.update_one({"email": admin_email}, {"$set": {"role": "Super Admin"}})
         if not verify_password(admin_password, existing.get("password_hash", "")):
             await db.contacts.update_one({"email": admin_email}, {"$set": {
                 "password_hash": hash_password(admin_password),
@@ -2147,12 +2449,12 @@ async def startup():
                 "password_encrypted": encrypt_password(admin_password)
             }})
 
-    # Test users
+    # Test users — all collapsed to Admin per v3 role model
     test_users = [
-        {"email": "manager@ticketing.com", "name": "Maya Khanna", "role": "Manager", "password": "Test@123", "emp_id": "EMP-0010", "doj": "2024-02-01"},
-        {"email": "ra@ticketing.com", "name": "Riya Sharma", "role": "Research", "password": "Test@123", "emp_id": "EMP-0020", "doj": "2024-03-01"},
-        {"email": "dq1@ticketing.com", "name": "Dev Kapoor", "role": "DQ Team", "password": "Test@123", "emp_id": "EMP-0030", "doj": "2024-04-01"},
-        {"email": "dq2@ticketing.com", "name": "Sara Mehta", "role": "DQ Team", "password": "Test@123", "emp_id": "EMP-0031", "doj": "2024-04-15"},
+        {"email": "manager@ticketing.com", "name": "Maya Khanna", "role": "Admin", "password": "Test@123", "emp_id": "EMP-0010", "doj": "2024-02-01"},
+        {"email": "ra@ticketing.com", "name": "Riya Sharma", "role": "Admin", "password": "Test@123", "emp_id": "EMP-0020", "doj": "2024-03-01"},
+        {"email": "dq1@ticketing.com", "name": "Dev Kapoor", "role": "Admin", "password": "Test@123", "emp_id": "EMP-0030", "doj": "2024-04-01"},
+        {"email": "dq2@ticketing.com", "name": "Sara Mehta", "role": "Admin", "password": "Test@123", "emp_id": "EMP-0031", "doj": "2024-04-15"},
     ]
     for u in test_users:
         if not await db.contacts.find_one({"email": u["email"]}):

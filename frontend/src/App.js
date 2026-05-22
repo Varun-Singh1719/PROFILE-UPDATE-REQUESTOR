@@ -7,28 +7,22 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import AuthCallback from "./pages/AuthCallback";
 import AdminDashboard from "./pages/AdminDashboard";
-import RADashboard from "./pages/RADashboard";
-import DQDashboard from "./pages/DQDashboard";
-import ManagerDashboard from "./pages/ManagerDashboard";
 import TicketListPage from "./pages/TicketListPage";
 import TicketDetailPage from "./pages/TicketDetailPage";
 import CreateTicketPage from "./pages/CreateTicketPage";
 import ContactListPage from "./pages/ContactListPage";
 import TeamsPage from "./pages/TeamsPage";
 import PermissionsPage from "./pages/PermissionsPage";
+import PermissionSetsListPage from "./pages/PermissionSetsListPage";
+import PermissionSetDetailPage from "./pages/PermissionSetDetailPage";
 import NotificationsOutboxPage from "./pages/NotificationsOutboxPage";
 import EmailTemplatesPage from "./pages/EmailTemplatesPage";
-import EmployeeDashboard from "./pages/EmployeeDashboard";
 import DeskBookingPage from "./pages/DeskBookingPage";
 import { Loader2 } from "lucide-react";
 
-const roleHome = (role) => {
-  if (role === "Admin") return "/admin";
-  if (role === "Manager") return "/manager";
-  if (role === "Research") return "/ra";
-  if (role === "DQ Team") return "/dq";
-  return "/employee";
-};
+// v3 role model — every authenticated user (Super Admin or Admin) lands at /admin.
+// Routing inside the admin shell is gated by Permission Sets, not by role.
+const roleHome = () => "/admin";
 
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();
@@ -36,7 +30,7 @@ function ProtectedRoute({ children, roles }) {
     return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#ec9324]" size={32}/></div>;
   if (!user) return <Navigate to="/login" replace />;
   if (roles && !roles.includes(user.role)) {
-    return <Navigate to={roleHome(user.role)} replace />;
+    return <Navigate to={roleHome()} replace />;
   }
   return children;
 }
@@ -45,8 +39,13 @@ function HomeRedirect() {
   const { user, loading } = useAuth();
   if (loading || user === null) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#ec9324]" size={32}/></div>;
   if (!user) return <Navigate to="/login" replace />;
-  return <Navigate to={roleHome(user.role)} replace />;
+  return <Navigate to={roleHome()} replace />;
 }
+
+// Both canonical roles are allowed on the admin shell.
+const ADMIN_ROLES = ["Super Admin", "Admin"];
+// Super-Admin-only screens (employee mgmt, teams, permission sets editing, etc.)
+const SUPER_ADMIN_ONLY = ["Super Admin"];
 
 function App() {
   return (
@@ -60,55 +59,34 @@ function App() {
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
 
-            {/* Admin */}
-            <Route path="/admin" element={<ProtectedRoute roles={["Admin"]}><AdminDashboard /></ProtectedRoute>} />
-            <Route path="/admin/open-tickets" element={<ProtectedRoute roles={["Admin"]}>
+            {/* Unified admin shell — Super Admin + Admin */}
+            <Route path="/admin" element={<ProtectedRoute roles={ADMIN_ROLES}><AdminDashboard /></ProtectedRoute>} />
+            <Route path="/admin/open-tickets" element={<ProtectedRoute roles={ADMIN_ROLES}>
               <TicketListPage scope="all" title="All Requests" basePath="/admin/tickets" />
             </ProtectedRoute>} />
-            <Route path="/admin/unassigned" element={<ProtectedRoute roles={["Admin"]}>
+            <Route path="/admin/unassigned" element={<ProtectedRoute roles={ADMIN_ROLES}>
               <TicketListPage scope="unassigned" title="Unassigned Requests" basePath="/admin/tickets" />
             </ProtectedRoute>} />
-            <Route path="/admin/contacts" element={<ProtectedRoute roles={["Admin"]}><ContactListPage /></ProtectedRoute>} />
-            <Route path="/admin/teams" element={<ProtectedRoute roles={["Admin"]}><TeamsPage /></ProtectedRoute>} />
-            <Route path="/admin/permissions" element={<ProtectedRoute roles={["Admin"]}><PermissionsPage /></ProtectedRoute>} />
-            <Route path="/admin/notifications" element={<ProtectedRoute roles={["Admin"]}><NotificationsOutboxPage /></ProtectedRoute>} />
-            <Route path="/admin/email-templates" element={<ProtectedRoute roles={["Admin"]}><EmailTemplatesPage /></ProtectedRoute>} />
-            <Route path="/admin/create" element={<ProtectedRoute roles={["Admin"]}><CreateTicketPage /></ProtectedRoute>} />
-            <Route path="/admin/tickets/:id" element={<ProtectedRoute roles={["Admin"]}><TicketDetailPage /></ProtectedRoute>} />
+            <Route path="/admin/create" element={<ProtectedRoute roles={ADMIN_ROLES}><CreateTicketPage /></ProtectedRoute>} />
+            <Route path="/admin/tickets/:id" element={<ProtectedRoute roles={ADMIN_ROLES}><TicketDetailPage /></ProtectedRoute>} />
 
-            {/* Manager */}
-            <Route path="/manager" element={<ProtectedRoute roles={["Manager"]}><ManagerDashboard /></ProtectedRoute>} />
-            <Route path="/manager/open-tickets" element={<ProtectedRoute roles={["Manager"]}>
-              <TicketListPage scope="all" title="All Requests" basePath="/manager/tickets" />
-            </ProtectedRoute>} />
-            <Route path="/manager/unassigned" element={<ProtectedRoute roles={["Manager"]}>
-              <TicketListPage scope="unassigned" title="Unassigned Requests" basePath="/manager/tickets" />
-            </ProtectedRoute>} />
-            <Route path="/manager/create" element={<ProtectedRoute roles={["Manager"]}><CreateTicketPage /></ProtectedRoute>} />
-            <Route path="/manager/email-templates" element={<ProtectedRoute roles={["Manager"]}><EmailTemplatesPage /></ProtectedRoute>} />
-            <Route path="/manager/tickets/:id" element={<ProtectedRoute roles={["Manager"]}><TicketDetailPage /></ProtectedRoute>} />
-            {/* Research Associate */}
-            <Route path="/ra" element={<ProtectedRoute roles={["Research"]}><RADashboard /></ProtectedRoute>} />
-            <Route path="/ra/tickets" element={<ProtectedRoute roles={["Research"]}>
-              <TicketListPage scope="mine" title="My Requests" basePath="/ra/tickets" allowCreate />
-            </ProtectedRoute>} />
-            <Route path="/ra/create" element={<ProtectedRoute roles={["Research"]}><CreateTicketPage /></ProtectedRoute>} />
-            <Route path="/ra/tickets/:id" element={<ProtectedRoute roles={["Research"]}><TicketDetailPage /></ProtectedRoute>} />
+            {/* Super-Admin-only management screens */}
+            <Route path="/admin/contacts" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><ContactListPage /></ProtectedRoute>} />
+            <Route path="/admin/teams" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><TeamsPage /></ProtectedRoute>} />
+            <Route path="/admin/permissions" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><PermissionsPage /></ProtectedRoute>} />
+            <Route path="/admin/permission-sets" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><PermissionSetsListPage /></ProtectedRoute>} />
+            <Route path="/admin/permission-sets/:id" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><PermissionSetDetailPage /></ProtectedRoute>} />
+            <Route path="/admin/notifications" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><NotificationsOutboxPage /></ProtectedRoute>} />
+            <Route path="/admin/email-templates" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><EmailTemplatesPage /></ProtectedRoute>} />
 
-            {/* DQ Team */}
-            <Route path="/dq" element={<ProtectedRoute roles={["DQ Team"]}><DQDashboard /></ProtectedRoute>} />
-            <Route path="/dq/tickets" element={<ProtectedRoute roles={["DQ Team"]}>
-              <TicketListPage scope="assigned" title="My Requests" basePath="/dq/tickets" />
-            </ProtectedRoute>} />
-            <Route path="/dq/unassigned" element={<ProtectedRoute roles={["DQ Team"]}>
-              <TicketListPage scope="unassigned" title="Unassigned Tickets" basePath="/dq/tickets" />
-            </ProtectedRoute>} />
-            <Route path="/dq/tickets/:id" element={<ProtectedRoute roles={["DQ Team"]}><TicketDetailPage /></ProtectedRoute>} />
+            {/* Desk Booking — open to any authed user; UI further gated by permission sets */}
+            <Route path="/desk-booking" element={<ProtectedRoute roles={ADMIN_ROLES}><DeskBookingPage /></ProtectedRoute>} />
 
-            {/* Desk Booking (all roles) */}
-            <Route path="/desk-booking" element={<ProtectedRoute roles={["Admin", "Manager", "Research", "DQ Team", "Delivery", "Member"]}><DeskBookingPage /></ProtectedRoute>} />
-            {/* Default employee dashboard for new roles */}
-            <Route path="/employee" element={<ProtectedRoute roles={["Delivery", "Member"]}><EmployeeDashboard /></ProtectedRoute>} />
+            {/* Legacy paths from pre-v3 collapse — keep redirecting to unified admin shell */}
+            <Route path="/manager/*" element={<Navigate to="/admin" replace />} />
+            <Route path="/ra/*" element={<Navigate to="/admin" replace />} />
+            <Route path="/dq/*" element={<Navigate to="/admin" replace />} />
+            <Route path="/employee/*" element={<Navigate to="/admin" replace />} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

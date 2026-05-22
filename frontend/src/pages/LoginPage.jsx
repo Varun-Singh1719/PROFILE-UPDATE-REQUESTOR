@@ -22,12 +22,8 @@ export default function LoginPage() {
     try {
       const u = await login(email, password);
       toast.success(`Welcome, ${u.name}`);
-      const r = u.role;
-      const dest = r === "Admin" ? "/admin"
-        : r === "Manager" ? "/manager"
-        : r === "Research" ? "/ra"
-        : r === "DQ Team" ? "/dq" : "/employee";
-      navigate(dest);
+      // v3 role model — both Super Admin and Admin land on the unified admin shell.
+      navigate("/admin");
     } catch (e) {
       const msg = formatApiError(e?.response?.data?.detail) || e.message;
       setError(msg);

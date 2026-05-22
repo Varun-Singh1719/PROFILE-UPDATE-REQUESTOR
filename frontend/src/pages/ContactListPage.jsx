@@ -13,14 +13,16 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator
 } from "../components/ui/dropdown-menu";
+import MultiSelect from "../components/MultiSelect";
 import { toast } from "sonner";
-import { Search, UserPlus, Pencil, Eye, EyeOff, Copy, RefreshCw, KeyRound, X, Mail, Phone, Calendar, IdCard, Briefcase, UsersRound, Download, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
+import { Search, UserPlus, Pencil, Eye, EyeOff, Copy, RefreshCw, KeyRound, X, Mail, Phone, Calendar, IdCard, Briefcase, UsersRound, Download, ChevronLeft, ChevronRight, MoreHorizontal, ShieldCheck } from "lucide-react";
 
 function fmt(iso) { if (!iso) return "Never"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
 
-const ROLE_OPTIONS = ["Admin", "Manager", "Research", "Delivery", "Member"];
-const ALL_ROLE_FILTERS = ["Admin", "Manager", "Research", "Delivery", "Member", "DQ Team"];
-const EMPTY_FORM = { email: "", name: "", phone: "", role: "Member", emp_id: "", doj: "" };
+// v3 role model — only Super Admin and Admin remain.
+const ROLE_OPTIONS = ["Super Admin", "Admin"];
+const ALL_ROLE_FILTERS = ["Super Admin", "Admin"];
+const EMPTY_FORM = { email: "", name: "", phone: "", role: "Admin", emp_id: "", doj: "", permission_set_ids: [] };
 
 function PasswordField({ contactId, testIdPrefix = "contact" }) {
   const [pwd, setPwd] = useState(null); // decrypted password (or null)
@@ -171,6 +173,28 @@ function EmployeeDetailModal({ contact, open, onClose }) {
             <Briefcase size={14} className="text-gray-400"/>
             <span><span className="text-gray-500">Manager(s):</span> {(contact.manager_names || []).join(", ") || <span className="text-gray-400">—</span>}</span>
           </div>
+          <div className="flex items-start gap-2 text-gray-700">
+            <ShieldCheck size={14} className="text-gray-400 mt-1"/>
+            <div className="flex-1">
+              <div className="text-gray-500 mb-1">Permission Sets:</div>
+              {(contact.permission_sets || []).length === 0 ? (
+                <span className="text-gray-400 text-xs">None assigned</span>
+              ) : (
+                <div className="flex flex-wrap gap-1.5" data-testid="detail-permission-sets">
+                  {(contact.permission_sets || []).map((p) => (
+                    <span
+                      key={p.id}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/20"
+                      data-testid={`detail-pset-chip-${p.numeric_id}`}
+                    >
+                      <span className="font-mono text-[10px] text-[#ec9324]/70">#{p.numeric_id}</span>
+                      {p.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
           <div className="border-t pt-3 mt-3">
             <PasswordField contactId={contact.id} testIdPrefix="detail" />
           </div>
@@ -231,10 +255,22 @@ export default function ContactListPage() {
   const [editing, setEditing] = useState(null);
   const [selected, setSelected] = useState([]);
   const [bulkRoleOpen, setBulkRoleOpen] = useState(false);
-  const [bulkRole, setBulkRole] = useState("DQ Team");
+  const [bulkRole, setBulkRole] = useState("Admin");
 
   const [detailContact, setDetailContact] = useState(null);
   const [generated, setGenerated] = useState(null); // {password, email}
+  const [permissionSets, setPermissionSets] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await api.get("/permission-sets");
+        setPermissionSets(r.data || []);
+      } catch {
+        setPermissionSets([]);
+      }
+    })();
+  }, []);
 
   const load = async () => {
     const r = await api.get("/contacts", {
@@ -337,6 +373,7 @@ export default function ContactListPage() {
       role: c.role,
       emp_id: c.emp_id || "",
       doj: c.doj || "",
+      permission_set_ids: c.permission_set_ids || [],
     });
     setOpen(true);
   };
@@ -351,6 +388,7 @@ export default function ContactListPage() {
           role: form.role,
           emp_id: form.emp_id || "",
           doj: form.doj || null,
+          permission_set_ids: form.permission_set_ids || [],
         };
         await api.patch(`/contacts/${editing.id}`, payload);
         toast.success("Employee updated");
@@ -362,6 +400,7 @@ export default function ContactListPage() {
           role: form.role,
           emp_id: form.emp_id || "",
           doj: form.doj || null,
+          permission_set_ids: form.permission_set_ids || [],
         });
         toast.success("Employee created");
         if (r.data?.generated_password) {
@@ -483,6 +522,24 @@ export default function ContactListPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="col-span-2">
+                <Label className="flex items-center gap-1.5">
+                  <ShieldCheck size={14} className="text-gray-500" /> Permission Sets
+                </Label>
+                <MultiSelect
+                  options={permissionSets.map((p) => ({
+                    value: p.id,
+                    label: `#${p.numeric_id} · ${p.name}`,
+                  }))}
+                  value={form.permission_set_ids || []}
+                  onChange={(ids) => setForm({ ...form, permission_set_ids: ids })}
+                  placeholder="Assign one or more Permission Sets…"
+                  data-testid="contact-permission-sets"
+                />
+                <div className="text-xs text-gray-500 mt-1">
+                  Effective access = OR-union of all assigned sets (allow wins).
+                </div>
+              </div>
             </div>
             {editing && (
               <div className="border-t pt-4">
@@ -549,6 +606,7 @@ export default function ContactListPage() {
                 <th className="px-4 py-3 text-left cursor-pointer hover:text-[#ec9324]" onClick={() => toggleSort("role")} data-testid="sort-role">
                   Role {sortBy === "role" && (sortDir === "asc" ? "▲" : "▼")}
                 </th>
+                <th className="px-4 py-3 text-left">Permission Sets</th>
                 <th className="px-4 py-3 text-left">Active</th>
                 <th className="px-4 py-3 text-right">Edit</th>
               </tr>
@@ -589,6 +647,30 @@ export default function ContactListPage() {
                     <span className="inline-flex text-xs font-semibold rounded-full px-2 py-1 bg-[#ec9324]/10 text-[#ec9324]">{c.role}</span>
                   </td>
                   <td className="px-4 py-3">
+                    {(c.permission_sets || []).length === 0 ? (
+                      <span className="text-gray-300 text-xs">—</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1 max-w-[260px]">
+                        {(c.permission_sets || []).slice(0, 2).map((p) => (
+                          <span
+                            key={p.id}
+                            title={p.name}
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-100 max-w-[120px] truncate"
+                            data-testid={`row-pset-chip-${c.email}-${p.numeric_id}`}
+                          >
+                            <span className="font-mono text-blue-500">#{p.numeric_id}</span>
+                            <span className="truncate">{p.name}</span>
+                          </span>
+                        ))}
+                        {(c.permission_sets || []).length > 2 && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">
+                            +{(c.permission_sets || []).length - 2}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
                     <Switch
                       checked={c.status === "Active"}
                       onCheckedChange={() => toggleStatus(c)}
@@ -607,7 +689,7 @@ export default function ContactListPage() {
                   </td>
                 </tr>
               ))}
-              {contacts.length === 0 && <tr><td colSpan={9} className="text-center py-10 text-gray-400">No employees</td></tr>}
+              {contacts.length === 0 && <tr><td colSpan={10} className="text-center py-10 text-gray-400">No employees</td></tr>}
             </tbody>
           </table>
         </div>
