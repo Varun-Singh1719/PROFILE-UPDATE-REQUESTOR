@@ -5,7 +5,7 @@ import notify from "../lib/notify";
 import { useNavigate } from "react-router-dom";
 import {
   Save, Loader2, Shield, ChevronDown, ChevronRight, Briefcase, Armchair, X,
-  ListChecks, Sparkles,
+  ListChecks, Sparkles, HelpCircle,
 } from "lucide-react";
 
 /**
@@ -19,6 +19,9 @@ import {
  * "Save Changes" opens a modal asking for the Permission Set Title and saves
  * the configuration as a new Permission Set via POST /api/permission-sets.
  *
+ * Scoped actions (ProfiX view/edit/assign/approve) render a Respective/Team/All
+ * dropdown next to the toggle when enabled.
+ *
  * The Permission Sets count chip at the top is clickable and navigates to the
  * dedicated list view at /admin/permission-sets.
  */
@@ -27,6 +30,27 @@ const MODULE_META = {
   profix: { label: "ProfiX Features", icon: Briefcase, color: "#ec9324" },
   desk_booking: { label: "Desk Booking Features", icon: Armchair, color: "#3b82f6" },
 };
+
+const SCOPE_OPTIONS = [
+  { value: "respective", label: "Respective", hint: "Self only — items assigned to you" },
+  { value: "team", label: "Team", hint: "Team-level — items assigned to anyone in your team(s)" },
+  { value: "all", label: "All", hint: "Organisation-wide access" },
+];
+
+// Map of (module → action[]) where the toggle stores a scope string rather than a bool.
+// Falls back to schema-provided scoped_actions if backend supplies them.
+const FALLBACK_SCOPED = {
+  profix: new Set(["view", "edit", "assign", "approve"]),
+};
+
+function isScopedAction(moduleSchema, feature, action) {
+  // Backend schema sends per-feature `scoped_actions: string[]`. Use that when present,
+  // fall back to module-level defaults so the UI degrades gracefully.
+  if (feature && Array.isArray(feature.scoped_actions)) {
+    return feature.scoped_actions.includes(action);
+  }
+  return FALLBACK_SCOPED[moduleSchema?.key]?.has(action) || false;
+}
 
 function emptyModulesFromSchema(schema) {
   const out = {};
@@ -42,6 +66,54 @@ function emptyModulesFromSchema(schema) {
   return out;
 }
 
+// "On" check that works for both boolean and scope-string action values.
+const isOn = (v) => v === true || v === "respective" || v === "team" || v === "all";
+
+/** Inline help tooltip explaining the three scope levels. */
+function ScopeHelpTooltip() {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-flex">
+      <button
+        type="button"
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        data-testid="pset-scope-help"
+        className="p-1 text-gray-400 hover:text-gray-700"
+        aria-label="Scope help"
+      >
+        <HelpCircle size={14} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-7 z-30 w-72 rounded-md bg-gray-900 text-white text-xs leading-5 px-3 py-2 shadow-lg">
+          <div className="font-semibold mb-1">Access scope</div>
+          <div><b>Respective</b> — Self only (items assigned to you).</div>
+          <div><b>Team</b> — Team-level (items assigned to anyone in your team).</div>
+          <div><b>All</b> — Organisation-wide access.</div>
+        </div>
+      )}
+    </span>
+  );
+}
+
+/** Compact dropdown that sits right next to an enabled scoped-action toggle. */
+function ScopeSelect({ value, onChange, testId }) {
+  return (
+    <select
+      value={value || "respective"}
+      onChange={(e) => onChange(e.target.value)}
+      data-testid={testId}
+      onClick={(e) => e.stopPropagation()}
+      className="text-[11px] font-medium border border-[#ec9324]/30 bg-white text-[#ec9324] rounded px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40 cursor-pointer"
+    >
+      {SCOPE_OPTIONS.map((opt) => (
+        <option key={opt.value} value={opt.value}>{opt.label}</option>
+      ))}
+    </select>
+  );
+}
+
 function ModuleAccordion({ moduleSchema, value, onChange, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen);
   const meta = MODULE_META[moduleSchema.key] || { label: moduleSchema.label, icon: Shield, color: "#6b7280" };
@@ -53,29 +125,53 @@ function ModuleAccordion({ moduleSchema, value, onChange, defaultOpen = true }) 
       for (const f of g.features || []) {
         for (const a of f.actions || []) {
           total += 1;
-          if (((value || {})[f.key] || {})[a]) on += 1;
+          if (isOn(((value || {})[f.key] || {})[a])) on += 1;
         }
       }
     }
     return { total, on };
   }, [moduleSchema, value]);
 
-  const toggle = (featureKey, action, val) => {
+  // Toggle an action. For scoped actions we store a scope string when enabling
+  // (default `respective`) and `false` when disabling (which also clears scope).
+  const toggle = (feature, action, enabled) => {
+    let next;
+    if (enabled) {
+      next = isScopedAction(moduleSchema, feature, action) ? "respective" : true;
+    } else {
+      next = false;
+    }
     onChange({
       ...(value || {}),
-      [featureKey]: {
-        ...((value || {})[featureKey] || {}),
-        [action]: val,
+      [feature.key]: {
+        ...((value || {})[feature.key] || {}),
+        [action]: next,
       },
     });
   };
 
-  const selectAllFeature = (featureKey, actions, allOn) => {
-    const next = {};
-    for (const a of actions) next[a] = !allOn;
+  const setScope = (feature, action, scope) => {
     onChange({
       ...(value || {}),
-      [featureKey]: next,
+      [feature.key]: {
+        ...((value || {})[feature.key] || {}),
+        [action]: scope,
+      },
+    });
+  };
+
+  const selectAllFeature = (feature, allOn) => {
+    const next = {};
+    for (const a of (feature.actions || [])) {
+      if (allOn) {
+        next[a] = false;
+      } else {
+        next[a] = isScopedAction(moduleSchema, feature, a) ? "respective" : true;
+      }
+    }
+    onChange({
+      ...(value || {}),
+      [feature.key]: next,
     });
   };
 
@@ -113,7 +209,7 @@ function ModuleAccordion({ moduleSchema, value, onChange, defaultOpen = true }) 
               <div className="space-y-2">
                 {(g.features || []).map((f) => {
                   const featureVal = (value || {})[f.key] || {};
-                  const allOn = (f.actions || []).every((a) => !!featureVal[a]);
+                  const allOn = (f.actions || []).every((a) => isOn(featureVal[a]));
                   return (
                     <div
                       key={f.key}
@@ -125,37 +221,47 @@ function ModuleAccordion({ moduleSchema, value, onChange, defaultOpen = true }) 
                       </div>
                       <div className="flex items-center gap-2 flex-wrap justify-end">
                         {(f.actions || []).map((a) => {
-                          const on = !!featureVal[a];
+                          const raw = featureVal[a];
+                          const on = isOn(raw);
+                          const scoped = isScopedAction(moduleSchema, f, a);
                           return (
-                            <label
-                              key={a}
-                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md cursor-pointer text-xs font-medium border transition-colors ${
-                                on
-                                  ? "bg-[#ec9324]/10 border-[#ec9324]/30 text-[#ec9324]"
-                                  : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                className="sr-only"
-                                checked={on}
-                                onChange={(e) => toggle(f.key, a, e.target.checked)}
-                                data-testid={`pset-cb-${moduleSchema.key}-${f.key}-${a}`}
-                              />
-                              <span
-                                className={`w-3.5 h-3.5 rounded border flex items-center justify-center pointer-events-none ${
-                                  on ? "bg-[#ec9324] border-[#ec9324]" : "border-gray-300"
+                            <span key={a} className="inline-flex items-center gap-1">
+                              <label
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md cursor-pointer text-xs font-medium border transition-colors ${
+                                  on
+                                    ? "bg-[#ec9324]/10 border-[#ec9324]/30 text-[#ec9324]"
+                                    : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
                                 }`}
                               >
-                                {on && <span className="w-1.5 h-1.5 bg-white rounded-sm" />}
-                              </span>
-                              {a.charAt(0).toUpperCase() + a.slice(1)}
-                            </label>
+                                <input
+                                  type="checkbox"
+                                  className="sr-only"
+                                  checked={on}
+                                  onChange={(e) => toggle(f, a, e.target.checked)}
+                                  data-testid={`pset-cb-${moduleSchema.key}-${f.key}-${a}`}
+                                />
+                                <span
+                                  className={`w-3.5 h-3.5 rounded border flex items-center justify-center pointer-events-none ${
+                                    on ? "bg-[#ec9324] border-[#ec9324]" : "border-gray-300"
+                                  }`}
+                                >
+                                  {on && <span className="w-1.5 h-1.5 bg-white rounded-sm" />}
+                                </span>
+                                {a.charAt(0).toUpperCase() + a.slice(1)}
+                              </label>
+                              {scoped && on && (
+                                <ScopeSelect
+                                  testId={`pset-scope-${moduleSchema.key}-${f.key}-${a}`}
+                                  value={typeof raw === "string" ? raw : "all"}
+                                  onChange={(v) => setScope(f, a, v)}
+                                />
+                              )}
+                            </span>
                           );
                         })}
                         <button
                           type="button"
-                          onClick={() => selectAllFeature(f.key, f.actions || [], allOn)}
+                          onClick={() => selectAllFeature(f, allOn)}
                           className="text-[11px] font-medium text-gray-500 hover:text-[#ec9324] ml-1"
                           data-testid={`pset-select-all-${moduleSchema.key}-${f.key}`}
                         >
@@ -275,7 +381,7 @@ export default function PermissionsPage() {
         for (const f of g.features || []) {
           for (const a of f.actions || []) {
             total += 1;
-            if (((modules[m.key] || {})[f.key] || {})[a]) on += 1;
+            if (isOn(((modules[m.key] || {})[f.key] || {})[a])) on += 1;
           }
         }
       }
@@ -344,6 +450,7 @@ export default function PermissionsPage() {
               <div className="flex items-center gap-2 text-sm text-gray-700">
                 <Sparkles size={16} className="text-[#ec9324]" />
                 <span><strong>{overallOn}</strong> permission{overallOn === 1 ? "" : "s"} enabled in this set</span>
+                <ScopeHelpTooltip />
               </div>
               <div className="flex items-center gap-2">
                 <button

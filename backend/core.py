@@ -188,21 +188,42 @@ PERMISSION_MODULES = [
 ]
 
 ALL_ACTIONS = ["view", "create", "edit", "assign", "approve", "delete"]
-SCOPED_ACTIONS = {"view", "edit", "assign"}
+# Actions where scope (Respective / Team / All) applies. In v3 these are scoped
+# only on the ProfiX module. Desk Booking actions stay pure boolean for now.
+SCOPED_ACTIONS = {"view", "edit", "assign", "approve"}
+SCOPED_MODULES = {"profix"}
+SCOPE_VALUES = ("respective", "team", "all")
+
+def is_scoped(module_key: str, action: str) -> bool:
+    """Whether (module, action) is currently scope-aware (string scope value)
+    or remains pure boolean."""
+    return module_key in SCOPED_MODULES and action in SCOPED_ACTIONS
+
+def scope_precedence(v) -> int:
+    """Higher = broader access. Used when merging scopes across Permission Sets.
+
+    `True` is treated as legacy 'all' (so pre-scope sets keep working).
+    """
+    if v is True or v == "all":
+        return 3
+    if v == "team":
+        return 2
+    if v == "respective":
+        return 1
+    return 0  # False / None / unknown
+
+def scope_or_merge(existing, incoming):
+    """OR-merge two scope values picking the broader. Returns the broader of the two."""
+    return incoming if scope_precedence(incoming) > scope_precedence(existing) else existing
 
 def normalize_action_value(v) -> Any:
-    if v in ("all", "respective"):
+    if v in SCOPE_VALUES:
         return v
     return bool(v)
 
 def action_precedence(v) -> int:
-    if v == "all":
-        return 3
-    if v == "respective":
-        return 2
-    if v is True:
-        return 2
-    return 0
+    # Backward-compat name still used by legacy permissions.v2 code paths.
+    return scope_precedence(v)
 
 def feature_actions(module_key: str, feature_key: str) -> List[str]:
     for m in PERMISSION_MODULES:

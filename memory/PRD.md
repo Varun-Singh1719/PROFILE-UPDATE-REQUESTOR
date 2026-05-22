@@ -131,7 +131,39 @@ multiple modules (currently **ProfiX** and **Desk Booking**).
   (v3 CRUD + duplicate), `audit`, `tickets` (+ comments + activity + csv),
   `files`, `dashboard`. Added `backend/tests/test_refactor_smoke.py` (26 tests, all green).
 
+### 2026-05-22 — Granular access scope for Permission Sets (this run)
+- **Data model**: scoped ProfiX actions (`view`, `edit`, `assign`, `approve`) now
+  store one of `false / "respective" / "team" / "all"` instead of bool. Non-scoped
+  actions and Desk Booking actions remain boolean. Legacy `true` migrates to `"all"`.
+- **Effective merge**: OR-union picks the broadest scope per action across all assigned
+  sets — `all > team > respective > false`. Super Admin always resolves to `"all"`.
+- **`GET /api/permissions/schema`**: each feature now advertises `scoped_actions: string[]`;
+  response also includes `scope_values` and `scoped_modules`.
+- **Editor UI** (`PermissionsPage` + `PermissionSetDetailPage`):
+  toggling on a scoped action defaults to `respective` and reveals a
+  Respective / Team / All dropdown next to the chip. Toggling off resets the scope.
+  Header has a HelpCircle tooltip explaining the three values.
+- **`usePermissions` hook**: added `getScope(module, feature, action)` and
+  `teamMemberIds`. `can()` still works for callers that just need a boolean.
+- **Ticket enforcement** (Phase 1 surface):
+  - `GET /api/tickets`, `GET /api/tickets/export.csv`: list is filtered by the
+    user's effective `profix.ticket.view` scope (created_by_id ∪ assigned_to_id
+    must fall in the user's allowed-id set).
+  - `GET /api/tickets/{id}`: returns 404 if outside view scope (URL-bypass blocked).
+  - `PATCH /api/tickets/{id}`: status change requires `edit` scope on the
+    target; assignee change requires `assign` scope, and the assignee themselves
+    must fall within the Admin's assign-scope id whitelist.
+  - `POST /api/tickets/bulk-assign` and `bulk-status`: same scope checks applied
+    per-ticket.
+- **Audit**: scope changes flow through the existing `permission_set.update` /
+  `permission_set.create` entries — full modules tree (with scope strings) is
+  recorded.
+- Tests: `backend/tests/test_scope.py` (12 tests) — storage, OR-merge, view scope,
+  edit scope. `test_refactor_smoke.py` (26 tests) re-verified. **38/38 pass.**
+
 ## Backlog (P-tiered)
+- **P1** — Phase 2 scope enforcement: dashboard widgets (`/api/dashboard/*`),
+  recent feed, notifications outbox filters, global search.
 - **P1** — Schedule/retry sending from outbox when Resend is configured but a send fails.
 - **P1** — Login throttle / lockout (currently only relies on bcrypt cost).
 - **P2** — CSV export with Excel-friendly BOM + UTF-8 negotiation.

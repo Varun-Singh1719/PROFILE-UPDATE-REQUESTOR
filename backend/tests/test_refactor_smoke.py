@@ -154,7 +154,8 @@ class TestPermissionSetsRouter:
         copy = r.json()
         try:
             assert copy["name"].endswith("(Copy)")
-            assert copy["modules"] == {"profix": {"ticket": {"view": True, "create": False, "edit": False, "assign": False, "approve": False, "delete": False}}}
+            # `view` is a scoped action — bare True input migrates to scope "all".
+            assert copy["modules"] == {"profix": {"ticket": {"view": "all", "create": False, "edit": False, "assign": False, "approve": False, "delete": False}}}
         finally:
             requests.delete(f"{API}/permission-sets/{copy['id']}", headers=_h(super_token))
 

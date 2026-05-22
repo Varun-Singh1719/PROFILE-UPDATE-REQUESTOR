@@ -7,7 +7,7 @@ from fastapi import Depends, HTTPException
 
 from core import (
     api_router, db, log_audit, now_iso, require_role, get_current_user,
-    PERMISSION_MODULES,
+    PERMISSION_MODULES, SCOPE_VALUES, is_scoped,
     PermissionSetCreate, PermissionSetUpdate,
 )
 
@@ -23,11 +23,16 @@ async def _next_permission_set_seq() -> int:
     return res["seq"] if res else 1
 
 
-def _normalize_pset_modules(modules: Dict[str, Dict[str, Dict[str, Any]]]) -> Dict[str, Dict[str, Dict[str, bool]]]:
+def _normalize_pset_modules(modules: Dict[str, Dict[str, Dict[str, Any]]]) -> Dict[str, Dict[str, Dict[str, Any]]]:
     """Validate & normalize a permission set's modules tree against the schema.
-    Drops unknown modules/features/actions; coerces values to bool. Scoped values
-    'all'/'respective' are coerced to True (Permission Sets v3 uses pure booleans)."""
-    out: Dict[str, Dict[str, Dict[str, bool]]] = {}
+
+    Drops unknown modules/features/actions.
+
+    For scoped (ProfiX) actions `view/edit/assign/approve`, preserves one of
+    `False | "respective" | "team" | "all"`. Legacy `True` is migrated to `"all"`
+    so pre-scope sets keep their effective grant. Everything else is coerced to bool.
+    """
+    out: Dict[str, Dict[str, Dict[str, Any]]] = {}
     valid_modules = {m["key"]: m for m in PERMISSION_MODULES}
     for mkey, features in (modules or {}).items():
         if mkey not in valid_modules:
@@ -36,16 +41,21 @@ def _normalize_pset_modules(modules: Dict[str, Dict[str, Dict[str, Any]]]) -> Di
         for g in valid_modules[mkey]["groups"]:
             for f in g["features"]:
                 valid_features[f["key"]] = f["actions"]
-        mod_out: Dict[str, Dict[str, bool]] = {}
+        mod_out: Dict[str, Dict[str, Any]] = {}
         for fkey, actions in (features or {}).items():
             if fkey not in valid_features:
                 continue
             allowed = valid_features[fkey]
-            f_out = {}
+            f_out: Dict[str, Any] = {}
             for a in allowed:
                 v = (actions or {}).get(a, False)
-                if v in ("all", "respective"):
-                    f_out[a] = True
+                if is_scoped(mkey, a) and a in allowed:
+                    if v in SCOPE_VALUES:
+                        f_out[a] = v
+                    elif v is True:
+                        f_out[a] = "all"  # legacy migration
+                    else:
+                        f_out[a] = False
                 else:
                     f_out[a] = bool(v)
             mod_out[fkey] = f_out

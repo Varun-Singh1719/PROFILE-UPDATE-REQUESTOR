@@ -6,7 +6,8 @@ from fastapi import Depends, HTTPException
 
 from core import (
     api_router, db, log_audit, now_iso, require_role, get_current_user,
-    PERMISSION_MODULES, ALL_ACTIONS, SCOPED_ACTIONS, feature_actions,
+    PERMISSION_MODULES, ALL_ACTIONS, SCOPED_ACTIONS, SCOPED_MODULES, SCOPE_VALUES,
+    feature_actions, is_scoped, scope_precedence, scope_or_merge,
     action_precedence,
     PermissionsIn, PermRuleIn, PermRulesBulkIn, PresetCreateIn, PresetApplyIn,
 )
@@ -61,7 +62,25 @@ def _rule_matches_user(rule: dict, user_role: str, user_id: str, team_ids_of_use
 
 @api_router.get("/permissions/schema")
 async def permissions_schema(user=Depends(get_current_user)):
-    return {"modules": PERMISSION_MODULES, "actions": ALL_ACTIONS, "scoped_actions": sorted(SCOPED_ACTIONS)}
+    # Augment schema with scoped-action metadata so the UI knows where to render
+    # the Respective/Team/All dropdown.
+    schema = []
+    for m in PERMISSION_MODULES:
+        m_out = {**m, "groups": []}
+        for g in m["groups"]:
+            g_out = {**g, "features": []}
+            for f in g["features"]:
+                scoped = [a for a in f["actions"] if is_scoped(m["key"], a)]
+                g_out["features"].append({**f, "scoped_actions": scoped})
+            m_out["groups"].append(g_out)
+        schema.append(m_out)
+    return {
+        "modules": schema,
+        "actions": ALL_ACTIONS,
+        "scoped_actions": sorted(SCOPED_ACTIONS),
+        "scoped_modules": sorted(SCOPED_MODULES),
+        "scope_values": list(SCOPE_VALUES),
+    }
 
 
 @api_router.get("/permissions/v2")
@@ -146,13 +165,21 @@ async def delete_rule(rule_id: str, user=Depends(require_role("Super Admin"))):
 
 
 # ---------- Effective access ----------
-def _full_access_effective() -> Dict[str, Dict[str, Dict[str, bool]]]:
-    eff: Dict[str, Dict[str, Dict[str, bool]]] = {}
+def _full_access_effective() -> Dict[str, Dict[str, Dict[str, Any]]]:
+    """Return an effective-access map with full grants on every feature.
+
+    Scoped (ProfiX) actions return `"all"` instead of `True` so the UI sees a
+    consistent scope value for the Super Admin too.
+    """
+    eff: Dict[str, Dict[str, Dict[str, Any]]] = {}
     for m in PERMISSION_MODULES:
         eff[m["key"]] = {}
         for g in m["groups"]:
             for f in g["features"]:
-                eff[m["key"]][f["key"]] = {a: True for a in f["actions"]}
+                eff[m["key"]][f["key"]] = {
+                    a: ("all" if is_scoped(m["key"], a) else True)
+                    for a in f["actions"]
+                }
     return eff
 
 
@@ -160,8 +187,9 @@ async def _compute_effective(employee: dict) -> dict:
     """Compute effective access for `employee`.
 
     v3 semantics:
-      * Super Admin → full access on every feature (no sets needed).
-      * Admin → OR-union of all assigned Permission Sets.
+      * Super Admin → full access on every feature (scoped actions resolve to "all").
+      * Admin → OR-union of all assigned Permission Sets, picking the broader scope
+        per (module, feature, action). Precedence: all > team > respective > false.
     Legacy permission_rules are still consulted as a fallback for users with no sets.
     """
     user_role = employee.get("role")
@@ -169,10 +197,18 @@ async def _compute_effective(employee: dict) -> dict:
 
     user_teams = await db.teams.find(
         {"$or": [{"member_ids": user_id}, {"manager_ids": user_id}]},
-        {"_id": 0, "id": 1, "name": 1}
+        {"_id": 0, "id": 1, "name": 1, "member_ids": 1, "manager_ids": 1}
     ).to_list(100)
     team_ids_of_user = {t["id"] for t in user_teams}
     primary_team = user_teams[0] if user_teams else None
+    # Teammates: every member + manager of every team the user is in (broader def).
+    team_member_ids: set = set()
+    for t in user_teams:
+        for mid in (t.get("member_ids") or []):
+            team_member_ids.add(mid)
+        for mid in (t.get("manager_ids") or []):
+            team_member_ids.add(mid)
+    team_member_ids.add(user_id)  # self always included
 
     employee_block = {
         "id": user_id,
@@ -182,6 +218,7 @@ async def _compute_effective(employee: dict) -> dict:
         "team_id": primary_team["id"] if primary_team else None,
         "team_name": primary_team["name"] if primary_team else None,
         "team_ids": list(team_ids_of_user),
+        "team_member_ids": list(team_member_ids),
         "permission_set_ids": list(employee.get("permission_set_ids") or []),
     }
 
@@ -207,11 +244,14 @@ async def _compute_effective(employee: dict) -> dict:
             for fkey, actions in (features or {}).items():
                 f_eff = mod_eff.setdefault(fkey, {})
                 for action, val in (actions or {}).items():
-                    if action not in f_eff:
-                        f_eff[action] = bool(val)
-                    elif bool(val):
-                        f_eff[action] = True
+                    # Scoped action: keep the broader scope. Boolean action: OR.
+                    if is_scoped(mkey, action):
+                        f_eff[action] = scope_or_merge(f_eff.get(action, False), val)
+                    else:
+                        f_eff[action] = bool(f_eff.get(action)) or bool(val)
 
+    # Legacy fallback: if no sets configured but legacy permission_rules exist
+    # that match this user, keep honouring them.
     if not sets_assigned:
         all_rules = await db.permission_rules.find({}, {"_id": 0}).to_list(5000)
         legacy_matches = [r for r in all_rules if _rule_matches_user(r, user_role, user_id, team_ids_of_user)]
@@ -223,11 +263,10 @@ async def _compute_effective(employee: dict) -> dict:
                 mod_eff = effective.setdefault(mkey, {})
                 f_eff = mod_eff.setdefault(fkey, {})
                 for action, val in (r.get("actions") or {}).items():
-                    truthy = bool(val) or val in ("all", "respective")
-                    if action not in f_eff:
-                        f_eff[action] = truthy
-                    elif truthy:
-                        f_eff[action] = True
+                    if is_scoped(mkey, action):
+                        f_eff[action] = scope_or_merge(f_eff.get(action, False), val)
+                    else:
+                        f_eff[action] = bool(f_eff.get(action)) or bool(val) or val in SCOPE_VALUES
 
     return {
         "employee": employee_block,
@@ -261,6 +300,64 @@ async def effective_for_employee(employee_id: str, user=Depends(get_current_user
 @api_router.get("/permissions/me/effective")
 async def effective_for_me(user=Depends(get_current_user)):
     return await _compute_effective(user)
+
+
+# ---------- Scope helpers (used by other routers to enforce ProfiX scopes) ----------
+async def get_effective_scope(user: dict, module: str, feature: str, action: str) -> Any:
+    """Resolve the effective scope value for (module, feature, action) for `user`.
+
+    Returns `False`, `"respective"`, `"team"` or `"all"`. Super Admin always
+    returns `"all"`. Boolean actions return `True`/`False`.
+    """
+    if user.get("role") == "Super Admin":
+        return "all" if is_scoped(module, action) else True
+    eff = await _compute_effective(user)
+    fmap = (eff.get("effective") or {}).get(module, {}).get(feature) or {}
+    v = fmap.get(action, False)
+    if is_scoped(module, action):
+        if v is True:
+            return "all"  # legacy compatibility
+        if v in SCOPE_VALUES:
+            return v
+        return False
+    return bool(v)
+
+
+async def get_user_scope_context(user: dict) -> Dict[str, Any]:
+    """Return `{ user_id, team_member_ids }` ready for query construction.
+
+    `team_member_ids` is the user-id set of every member + manager of every team
+    the user belongs to, plus the user themself.
+    """
+    user_teams = await db.teams.find(
+        {"$or": [{"member_ids": user["id"]}, {"manager_ids": user["id"]}]},
+        {"_id": 0, "member_ids": 1, "manager_ids": 1},
+    ).to_list(100)
+    team_member_ids: set = {user["id"]}
+    for t in user_teams:
+        for mid in (t.get("member_ids") or []):
+            team_member_ids.add(mid)
+        for mid in (t.get("manager_ids") or []):
+            team_member_ids.add(mid)
+    return {"user_id": user["id"], "team_member_ids": list(team_member_ids)}
+
+
+def scope_to_id_filter(scope: Any, ctx: Dict[str, Any]) -> Optional[list]:
+    """Convert a resolved scope into the list of contact ids that "qualify".
+
+    Returns:
+      - `None` for `"all"` (no restriction)
+      - `[ctx['user_id']]` for `"respective"` (or legacy True is upstream-resolved)
+      - `ctx['team_member_ids']` list for `"team"`
+      - `[]` for `False` / unknown (deny — empty whitelist)
+    """
+    if scope == "all" or scope is True:
+        return None
+    if scope == "team":
+        return list(ctx.get("team_member_ids") or [])
+    if scope == "respective":
+        return [ctx["user_id"]]
+    return []
 
 
 # ---------- Permission Presets ----------

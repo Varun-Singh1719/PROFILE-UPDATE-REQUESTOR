@@ -12,6 +12,45 @@ from core import (
     api_router, db, now_iso, get_current_user,
     TicketCreate, TicketUpdate, BulkAssign, BulkStatus, CommentCreate,
 )
+from routers.permissions import get_effective_scope, get_user_scope_context, scope_to_id_filter
+
+
+async def _ticket_view_filter(user: dict) -> dict:
+    """Build a Mongo query filter that limits which tickets the user is allowed
+    to see, based on their effective `profix.ticket.view` scope.
+
+    Returns `{}` for unrestricted access (Super Admin / "all").
+    Returns `{"$or": [{"created_by_id": {"$in": ids}}, {"assigned_to_id": {"$in": ids}}]}`
+    for "respective" or "team".
+    Returns an impossible filter `{"id": "__none__"}` for deny.
+    """
+    scope = await get_effective_scope(user, "profix", "ticket", "view")
+    if scope == "all" or scope is True:
+        return {}
+    ctx = await get_user_scope_context(user)
+    ids = scope_to_id_filter(scope, ctx)
+    if ids is None:
+        return {}
+    if not ids:
+        return {"id": "__no_match__"}
+    return {"$or": [{"created_by_id": {"$in": ids}}, {"assigned_to_id": {"$in": ids}}]}
+
+
+async def _check_ticket_action_scope(user: dict, ticket: dict, action: str) -> bool:
+    """Check whether `user` is allowed to perform `action` (view/edit/assign/approve)
+    on the given ticket, considering scope. Returns True/False.
+    """
+    scope = await get_effective_scope(user, "profix", "ticket", action)
+    if scope == "all" or scope is True:
+        return True
+    if not scope:
+        return False
+    ctx = await get_user_scope_context(user)
+    allowed_ids = set(scope_to_id_filter(scope, ctx) or [])
+    return (
+        ticket.get("created_by_id") in allowed_ids
+        or ticket.get("assigned_to_id") in allowed_ids
+    )
 
 
 def _date_match(date_from, date_to, field="created_at"):
@@ -103,6 +142,15 @@ async def list_tickets(
     if role == "Research" and scope not in ("created", "mine"):
         query["created_by_id"] = uid
 
+    # Scope enforcement: layer on the user's effective view scope on profix.ticket.
+    view_filter = await _ticket_view_filter(user)
+    if view_filter:
+        # Combine with the existing query using $and so both restrictions apply.
+        if "$and" in query:
+            query["$and"].append(view_filter)
+        else:
+            query = {"$and": [query, view_filter]} if query else view_filter
+
     if page is not None:
         page = max(1, page)
         page_size = max(1, min(page_size, 200))
@@ -147,6 +195,10 @@ async def export_tickets_csv(
         query["status"] = "Open"
     if role == "Research" and scope not in ("created", "mine"):
         query["created_by_id"] = uid
+    # Scope enforcement on export as well — never export beyond the user's view scope.
+    view_filter = await _ticket_view_filter(user)
+    if view_filter:
+        query = {"$and": [query, view_filter]} if query else view_filter
     items = await db.tickets.find(query, {"_id": 0}).sort("updated_on", -1).to_list(20000)
     buf = io.StringIO()
     w = csv.writer(buf)
@@ -211,6 +263,9 @@ async def get_ticket(ticket_id: str, user=Depends(get_current_user)):
     t = await db.tickets.find_one({"id": ticket_id}, {"_id": 0})
     if not t:
         raise HTTPException(404, "Not found")
+    # Scope enforcement on direct fetch — prevents URL-manipulation bypass.
+    if not await _check_ticket_action_scope(user, t, "view"):
+        raise HTTPException(404, "Not found")
     if user["role"] == "DQ Team" and t.get("assigned_to_id") == user["id"] and t.get("status") == "Open":
         await db.tickets.update_one(
             {"id": ticket_id},
@@ -237,7 +292,8 @@ async def update_ticket(ticket_id: str, body: TicketUpdate, user=Depends(get_cur
 
     if body.status is not None:
         if role in ("Super Admin", "Admin"):
-            pass
+            if role == "Admin" and not await _check_ticket_action_scope(user, t, "edit"):
+                raise HTTPException(403, "Edit scope does not cover this ticket")
         elif role == "DQ Team":
             if t.get("assigned_to_id") != user["id"]:
                 raise HTTPException(403, "Can only update status of tickets assigned to you")
@@ -249,6 +305,8 @@ async def update_ticket(ticket_id: str, body: TicketUpdate, user=Depends(get_cur
 
     if body.assigned_to is not None:
         if role in ("Super Admin", "Admin"):
+            if role == "Admin" and not await _check_ticket_action_scope(user, t, "assign"):
+                raise HTTPException(403, "Assign scope does not cover this ticket")
             if body.assigned_to == "":
                 update["assigned_to_id"] = None
                 update["assigned_to_name"] = None
@@ -257,6 +315,15 @@ async def update_ticket(ticket_id: str, body: TicketUpdate, user=Depends(get_cur
                 assignee = await db.contacts.find_one({"id": body.assigned_to})
                 if not assignee:
                     raise HTTPException(400, "Assignee not found")
+                # If the Admin's assign scope is "respective" or "team", the assignee
+                # must be in their scoped id whitelist (else they could assign to anyone).
+                if role == "Admin":
+                    a_scope = await get_effective_scope(user, "profix", "ticket", "assign")
+                    if a_scope not in ("all", True):
+                        ctx = await get_user_scope_context(user)
+                        allowed = set(scope_to_id_filter(a_scope, ctx) or [])
+                        if assignee["id"] not in allowed:
+                            raise HTTPException(403, "Assignee is outside your assign scope")
                 update["assigned_to_id"] = assignee["id"]
                 update["assigned_to_name"] = assignee["name"]
                 activity.append(f"Assigned to {assignee['name']}")
@@ -298,6 +365,24 @@ async def bulk_assign(body: BulkAssign, user=Depends(get_current_user)):
         if not a:
             raise HTTPException(400, "Assignee not found")
         assignee_id = a["id"]; assignee_name = a["name"]
+        # Admin: assignee must fall inside the Admin's assign scope.
+        if role == "Admin":
+            a_scope = await get_effective_scope(user, "profix", "ticket", "assign")
+            if not a_scope:
+                raise HTTPException(403, "No assign permission")
+            if a_scope not in ("all", True):
+                ctx = await get_user_scope_context(user)
+                allowed = set(scope_to_id_filter(a_scope, ctx) or [])
+                if assignee_id not in allowed:
+                    raise HTTPException(403, "Assignee is outside your assign scope")
+
+    # Pre-compute scope filter for Admin so we only touch tickets they can assign.
+    admin_assign_allowed: Optional[set] = None
+    if role == "Admin":
+        a_scope = await get_effective_scope(user, "profix", "ticket", "assign")
+        if a_scope not in ("all", True):
+            ctx = await get_user_scope_context(user)
+            admin_assign_allowed = set(scope_to_id_filter(a_scope, ctx) or [])
 
     success = 0
     for tid in body.ticket_ids:
@@ -305,6 +390,11 @@ async def bulk_assign(body: BulkAssign, user=Depends(get_current_user)):
         if not t:
             continue
         if role == "DQ Team" and t.get("assigned_to_id"):
+            continue
+        if admin_assign_allowed is not None and not (
+            t.get("created_by_id") in admin_assign_allowed
+            or t.get("assigned_to_id") in admin_assign_allowed
+        ):
             continue
         await db.tickets.update_one({"id": tid}, {"$set": {
             "assigned_to_id": assignee_id, "assigned_to_name": assignee_name, "updated_on": now_iso()
@@ -323,12 +413,26 @@ async def bulk_status(body: BulkStatus, user=Depends(get_current_user)):
     role = user["role"]
     if role not in ("Super Admin", "Admin", "DQ Team"):
         raise HTTPException(403, "Forbidden")
+    # Admin scope: pre-compute their edit-scoped id whitelist (or unrestricted).
+    admin_edit_allowed: Optional[set] = None
+    if role == "Admin":
+        e_scope = await get_effective_scope(user, "profix", "ticket", "edit")
+        if not e_scope:
+            raise HTTPException(403, "No edit permission")
+        if e_scope not in ("all", True):
+            ctx = await get_user_scope_context(user)
+            admin_edit_allowed = set(scope_to_id_filter(e_scope, ctx) or [])
     success = 0
     for tid in body.ticket_ids:
         t = await db.tickets.find_one({"id": tid})
         if not t:
             continue
         if role == "DQ Team" and t.get("assigned_to_id") != user["id"]:
+            continue
+        if admin_edit_allowed is not None and not (
+            t.get("created_by_id") in admin_edit_allowed
+            or t.get("assigned_to_id") in admin_edit_allowed
+        ):
             continue
         if t.get("status") == body.status:
             continue

@@ -33,6 +33,24 @@ export function usePermissions() {
 
   const isSuperAdmin = !!data?.sources?.super_admin;
 
+  /** Returns the raw scope/bool value for a (module, feature, action). Useful when
+   * a component needs to *display* or *filter by* the scope, not just whether
+   * access exists. Super Admin returns "all" for scoped actions, true otherwise. */
+  const getScope = useCallback(
+    (module, feature, action) => {
+      if (!data) return false;
+      if (data?.sources?.super_admin) {
+        // Scoped ProfiX actions return "all"; everything else returns true.
+        const scoped = module === "profix" && ["view", "edit", "assign", "approve"].includes(action);
+        return scoped ? "all" : true;
+      }
+      const fmap = ((data.effective || {})[module] || {})[feature];
+      if (!fmap) return false;
+      return fmap[action] ?? false;
+    },
+    [data]
+  );
+
   const can = useCallback(
     (module, feature, action) => {
       if (!data) return true; // default-allow while loading
@@ -48,6 +66,7 @@ export function usePermissions() {
         if (setsCount === 0 && totalRules === 0) return true;
         return false;
       }
+      // Any truthy value (including scope strings) grants access.
       return !!fmap[action];
     },
     [data]
@@ -55,9 +74,11 @@ export function usePermissions() {
 
   return {
     can,
+    getScope,
     effective: data?.effective,
     role: data?.employee?.role,
     sets: data?.sources?.sets || [],
+    teamMemberIds: data?.employee?.team_member_ids || [],
     isSuperAdmin,
     refresh,
     loaded,
