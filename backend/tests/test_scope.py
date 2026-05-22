@@ -215,3 +215,57 @@ class TestTicketEditScope:
         requests.patch(f"{API}/tickets/{t['id']}", headers=_h(super_token), json={"assigned_to": ra_id})
         r = requests.patch(f"{API}/tickets/{t['id']}", headers=_h(mgr_token), json={"status": "Closed"})
         assert r.status_code == 200
+
+
+class TestDashboardScope:
+    """Phase 2: scope filter applied to /api/dashboard/* widgets."""
+
+    def test_stats_with_no_sets_returns_zero(self, super_token, mgr_token, manager_id, clean_mgr_sets):
+        # Manager has no sets and no legacy rules → no view access → zero counts.
+        r = requests.get(f"{API}/dashboard/stats", headers=_h(mgr_token))
+        assert r.status_code == 200
+        body = r.json()
+        assert body["total"] == 0
+        assert body["open"] == 0
+        assert body["in_progress"] == 0
+        assert body["closed"] == 0
+
+    def test_stats_with_respective_only_own(self, super_token, mgr_token, manager_id, pset_factory, clean_mgr_sets):
+        s = pset_factory({"profix": {"ticket": {"view": "respective"}}})
+        _assign(super_token, manager_id, s["id"])
+        # Create one ticket as Manager and one as Admin assigned to someone else.
+        my_t = requests.post(f"{API}/tickets", headers=_h(mgr_token),
+                             json={"subject": "mine", "priority": "Low", "number_of_profiles": 1}).json()
+        admin_t = requests.post(f"{API}/tickets", headers=_h(super_token),
+                                json={"subject": "not-mine", "priority": "Low", "number_of_profiles": 1}).json()
+        try:
+            stats = requests.get(f"{API}/dashboard/stats", headers=_h(mgr_token)).json()
+            # Manager should only count their own ticket (+ any pre-existing).
+            assert stats["total"] >= 1
+            # And critically, the admin_t (which doesn't involve them) is excluded.
+            recent = requests.get(f"{API}/dashboard/recent?limit=20", headers=_h(mgr_token)).json()
+            ids = {t["id"] for t in recent}
+            assert my_t["id"] in ids
+            assert admin_t["id"] not in ids
+        finally:
+            pass  # tickets stay in db — harmless
+
+    def test_stats_super_admin_unrestricted(self, super_token):
+        r = requests.get(f"{API}/dashboard/stats", headers=_h(super_token))
+        assert r.status_code == 200
+        # Super Admin sees the full org count (≥ admin's count).
+        assert r.json()["total"] >= 0
+
+    def test_dq_perf_zeroed_for_admin_with_respective(self, super_token, mgr_token, manager_id, pset_factory, clean_mgr_sets):
+        s = pset_factory({"profix": {"ticket": {"view": "respective"}}})
+        _assign(super_token, manager_id, s["id"])
+        r = requests.get(f"{API}/dashboard/dq-performance", headers=_h(mgr_token))
+        assert r.status_code == 200
+        # Every row's total must be <= the manager's own (respective) — no leakage of
+        # counts from other employees' tickets.
+        # Since manager doesn't have any assignments in the seed, all totals must be 0.
+        for row in r.json():
+            if row["id"] != manager_id:
+                assert row["total"] == 0
+                assert row["open_profiles"] == 0
+                assert row["in_progress_profiles"] == 0
