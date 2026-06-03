@@ -4,7 +4,7 @@ import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { 
   Download, Upload, Save, X, ZoomIn, ZoomOut, Maximize2,
   ChevronLeft, ChevronRight, Minus, MoreVertical, 
-  Wand2, Eye, Grid
+  Wand2, Eye, Grid, MapPin
 } from 'lucide-react';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
