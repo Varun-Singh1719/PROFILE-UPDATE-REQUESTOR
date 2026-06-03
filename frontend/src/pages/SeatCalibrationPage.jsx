@@ -1,10 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { TransformWrapper, TransformComponent, useControls } from 'react-zoom-pan-pinch';
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { 
-  Download, Upload, Save, X, Check, RotateCcw, MapPin, 
-  ZoomIn, ZoomOut, Maximize2, Move, ChevronLeft, ChevronRight,
-  AlignHorizontal, AlignVertical, Wand2, Eye, Grid
+  Download, Upload, Save, X, ZoomIn, ZoomOut, Maximize2,
+  ChevronLeft, ChevronRight, Minus, MoreVertical, 
+  Wand2, Eye, Grid
 } from 'lucide-react';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
@@ -372,14 +372,14 @@ export default function SeatCalibrationPage() {
                 onClick={autoAlignHorizontal}
                 className="py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center justify-center gap-1 text-sm"
               >
-                <AlignHorizontal size={16} />
+                <Minus size={16} className="rotate-0" />
                 Align H
               </button>
               <button
                 onClick={autoAlignVertical}
                 className="py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center justify-center gap-1 text-sm"
               >
-                <AlignVertical size={16} />
+                <MoreVertical size={16} />
                 Align V
               </button>
             </div>
