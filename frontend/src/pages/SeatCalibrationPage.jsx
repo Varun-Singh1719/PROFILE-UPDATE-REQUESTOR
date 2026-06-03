@@ -3,87 +3,78 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { 
   Download, Upload, Save, X, ZoomIn, ZoomOut, Maximize2, ChevronLeft, ChevronRight,
-  Minus, MoreVertical, Wand2, Eye, Grid, MapPin, Trash2, RotateCw, RefreshCw,
-  Move, Undo2, Redo2, Maximize, MonitorPlay, Plus, Settings
+  Minus, MoreVertical, Wand2, Eye, Grid, MapPin, Trash2, RotateCw,
+  Undo2, Redo2, Maximize, Plus, Settings, Check
 } from 'lucide-react';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
-// Enhanced Seat Icon with label inside and rotation support
-const SeatIcon = ({ size = 24, color = "#FFFFFF", borderColor = "#FF1493", label, rotation = 0, isSelected = false }) => (
-  <div 
-    style={{ 
-      transform: `rotate(${rotation}deg)`,
-      width: size,
-      height: size,
-      position: 'relative',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center'
-    }}
-  >
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <rect x="4" y="4" width="16" height="8" rx="2" fill={color} stroke={borderColor} strokeWidth="1.5" />
-      <rect x="5" y="12" width="14" height="6" rx="1.5" fill={color} stroke={borderColor} strokeWidth="1.5" />
-      <rect x="3" y="8" width="2" height="8" rx="1" fill={color} stroke={borderColor} strokeWidth="1" />
-      <rect x="19" y="8" width="2" height="8" rx="1" fill={color} stroke={borderColor} strokeWidth="1" />
-      {isSelected && <circle cx="12" cy="12" r="3" fill="#00FF00" opacity="0.5" />}
-    </svg>
-    {label && (
-      <div 
-        style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: `translate(-50%, -50%) rotate(-${rotation}deg)`,
-          fontSize: Math.max(8, size * 0.35) + 'px',
-          fontWeight: 'bold',
-          color: '#333',
-          pointerEvents: 'none',
-          whiteSpace: 'nowrap'
-        }}
+// Improved Seat Icon with clear directional indicator
+const DirectionalSeatIcon = ({ size = 10, color = "#FFFFFF", borderColor = "#FF1493", label, rotation = 0, isSelected = false }) => {
+  const scale = size / 10;
+  
+  return (
+    <div 
+      style={{ 
+        width: size,
+        height: size,
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}
+    >
+      <svg 
+        width={size} 
+        height={size} 
+        viewBox="0 0 10 10" 
+        fill="none"
+        style={{ transform: `rotate(${rotation}deg)` }}
       >
-        {label}
-      </div>
-    )}
-  </div>
-);
-
-const BAYS = {
-  A: ['A1', 'A2', 'A3', 'A4', 'A5', 'A6'],
-  B: ['B1', 'B2', 'B3', 'B4'],
-  C: ['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8'],
-  D: ['D1', 'D2', 'D3', 'D4', 'D5', 'D6'],
-  E: ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8'],
-  F: ['F1', 'F2', 'F3', 'F4'],
-  G: ['G1', 'G2', 'G3', 'G4', 'G5'],
-  H: ['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'H7', 'H8', 'H9', 'H10'],
-  I: ['I1', 'I2', 'I3', 'I4', 'I5', 'I6', 'I7', 'I8', 'I9', 'I10'],
-  J: ['J1', 'J2', 'J3', 'J4', 'J5'],
-  K: ['K1', 'K2', 'K3', 'K4', 'K5', 'K6'],
-  L: ['L1', 'L2', 'L3', 'L4', 'L5'],
-  M: ['M1', 'M2', 'M3', 'M4', 'M5'],
-  N: ['N1', 'N2', 'N3'],
-  O: ['O1', 'O2', 'O3', 'O4'],
-  P: ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8'],
-  Q: ['Q1', 'Q2', 'Q3'],
-  R: ['R1', 'R2', 'R3', 'R4'],
-  S: ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'],
-  T: ['T1', 'T2', 'T3', 'T4', 'T5', 'T6'],
-  U: ['U1', 'U2', 'U3', 'U4', 'U5'],
-  V: ['V1', 'V2', 'V3', 'V4', 'V5'],
-  W: ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8'],
-  X: ['X1', 'X2', 'X3', 'X4', 'X5', 'X6', 'X7', 'X8'],
-  Y: ['Y1', 'Y2', 'Y3', 'Y4', 'Y5', 'Y6', 'Y7', 'Y8'],
+        {/* Backrest - clearly indicates direction */}
+        <rect x="1" y="0.5" width="8" height="1.5" rx="0.5" fill={borderColor} stroke={borderColor} strokeWidth="0.2" />
+        
+        {/* Seat base */}
+        <rect x="1.5" y="2" width="7" height="5" rx="0.3" fill={color} stroke={borderColor} strokeWidth="0.3" />
+        
+        {/* Armrests */}
+        <rect x="0.5" y="2.5" width="1" height="3" rx="0.2" fill={color} stroke={borderColor} strokeWidth="0.2" />
+        <rect x="8.5" y="2.5" width="1" height="3" rx="0.2" fill={color} stroke={borderColor} strokeWidth="0.2" />
+        
+        {/* Direction indicator - small arrow pointing forward */}
+        <path d="M 5 4 L 5 6 M 5 4 L 4 5 M 5 4 L 6 5" stroke={borderColor} strokeWidth="0.3" fill="none" />
+        
+        {isSelected && <circle cx="5" cy="5" r="2" fill="#00FF00" opacity="0.3" />}
+      </svg>
+      
+      {/* Label rotates with seat */}
+      {label && (
+        <div 
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+            fontSize: Math.max(3, size * 0.3) + 'px',
+            fontWeight: 'bold',
+            color: '#333',
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap',
+            textShadow: '0 0 2px white'
+          }}
+        >
+          {label}
+        </div>
+      )}
+    </div>
+  );
 };
 
-const BAY_KEYS = Object.keys(BAYS);
 const ZOOM_LEVELS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 5];
 
 export default function SeatCalibrationPage() {
-  // NEW PDF URL
   const [pdfUrl] = useState("https://customer-assets.emergentagent.com/job_workspace-manager-19/artifacts/m9mpuhb8_Without%20seat%20floor%20map.pdf");
   const [pageWidth, setPageWidth] = useState(1200);
   const [mappedSeats, setMappedSeats] = useState({});
@@ -95,25 +86,31 @@ export default function SeatCalibrationPage() {
   const [mouseCoords, setMouseCoords] = useState({ x: 0, y: 0 });
   const [currentZoom, setCurrentZoom] = useState(1);
   
-  // New state for enhancements
-  const [seatSize, setSeatSize] = useState(28);
-  const [seatRotation, setSeatRotation] = useState(0);
+  // Draft state for pending changes
+  const [pendingSeatSize, setPendingSeatSize] = useState(10);
+  const [pendingSeatRotation, setPendingSeatRotation] = useState(0);
   const [selectedSeats, setSelectedSeats] = useState([]);
-  const [history, setHistory] = useState([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const [toolMode, setToolMode] = useState('place'); // place, delete, move, rotate
-  const [lastSeatTemplate, setLastSeatTemplate] = useState({ size: 28, rotation: 0 });
+  
+  // History for undo/redo
+  const [history, setHistory] = useState([{}]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+  
+  const [toolMode, setToolMode] = useState('place');
+  const [nextSeatNumber, setNextSeatNumber] = useState(1);
   
   const containerRef = useRef(null);
+  const transformRef = useRef(null);
 
-  const currentBaySeats = BAYS[currentBay] || [];
-  const currentBayIndex = BAY_KEYS.indexOf(currentBay);
-  const totalBays = BAY_KEYS.length;
-  const mappedInBay = currentBaySeats.filter(id => mappedSeats[id]).length;
+  // Dynamic bay detection
+  const getSeatsInBay = (bay) => {
+    return Object.keys(mappedSeats).filter(id => id.startsWith(bay)).sort();
+  };
+
+  const currentBaySeats = getSeatsInBay(currentBay);
+  const availableBays = [...new Set(Object.keys(mappedSeats).map(id => id.charAt(0)))].sort();
   const totalMapped = Object.keys(mappedSeats).length;
-  const totalSeats = BAY_KEYS.reduce((sum, key) => sum + BAYS[key].length, 0);
 
-  // Add to history for undo/redo
+  // Add to history
   const addToHistory = (newState) => {
     const newHistory = history.slice(0, historyIndex + 1);
     newHistory.push(JSON.parse(JSON.stringify(newState)));
@@ -138,17 +135,17 @@ export default function SeatCalibrationPage() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
         undo();
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
         e.preventDefault();
         redo();
       }
       if (e.key === 'Delete' && selectedSeats.length > 0) {
         e.preventDefault();
-        deleteSeat(selectedSeats);
+        deleteSelectedSeats();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -173,32 +170,56 @@ export default function SeatCalibrationPage() {
     const yPercent = (y / rect.height) * 100;
 
     if (toolMode === 'place') {
-      const nextSeat = currentBaySeats.find(id => !mappedSeats[id]);
-      if (!nextSeat) return;
-
+      const seatId = `${currentBay}${nextSeatNumber}`;
+      
       const newSeats = {
         ...mappedSeats,
-        [nextSeat]: {
-          id: nextSeat,
-          label: nextSeat,
+        [seatId]: {
+          id: seatId,
+          label: seatId,
           x: parseFloat(xPercent.toFixed(2)),
           y: parseFloat(yPercent.toFixed(2)),
-          size: lastSeatTemplate.size,
-          rotation: lastSeatTemplate.rotation,
+          size: 10, // Default size
+          rotation: 0, // Default rotation
           status: "available"
         }
       };
       setMappedSeats(newSeats);
       addToHistory(newSeats);
+      setNextSeatNumber(nextSeatNumber + 1);
     } else if (toolMode === 'delete') {
-      // Find clicked seat and delete it
+      // Find and delete clicked seat
       const clickedSeat = Object.values(mappedSeats).find(seat => {
         const dx = Math.abs(seat.x - xPercent);
         const dy = Math.abs(seat.y - yPercent);
-        return dx < 2 && dy < 2;
+        return dx < 1 && dy < 1;
       });
       if (clickedSeat) {
-        deleteSeat([clickedSeat.id]);
+        const newSeats = { ...mappedSeats };
+        delete newSeats[clickedSeat.id];
+        setMappedSeats(newSeats);
+        addToHistory(newSeats);
+      }
+    } else if (toolMode === 'select') {
+      // Select seat for editing
+      const clickedSeat = Object.values(mappedSeats).find(seat => {
+        const dx = Math.abs(seat.x - xPercent);
+        const dy = Math.abs(seat.y - yPercent);
+        return dx < 1 && dy < 1;
+      });
+      if (clickedSeat) {
+        if (e.ctrlKey || e.metaKey) {
+          // Multi-select
+          setSelectedSeats(prev => 
+            prev.includes(clickedSeat.id) 
+              ? prev.filter(id => id !== clickedSeat.id)
+              : [...prev, clickedSeat.id]
+          );
+        } else {
+          setSelectedSeats([clickedSeat.id]);
+          setPendingSeatSize(clickedSeat.size || 10);
+          setPendingSeatRotation(clickedSeat.rotation || 0);
+        }
       }
     }
   };
@@ -213,12 +234,39 @@ export default function SeatCalibrationPage() {
     setMouseCoords({ x: xPercent.toFixed(2), y: yPercent.toFixed(2) });
   };
 
+  // Apply pending changes
+  const applyChanges = () => {
+    if (selectedSeats.length === 0) return;
+    
+    const newSeats = { ...mappedSeats };
+    selectedSeats.forEach(id => {
+      if (newSeats[id]) {
+        newSeats[id] = {
+          ...newSeats[id],
+          size: pendingSeatSize,
+          rotation: pendingSeatRotation
+        };
+      }
+    });
+    
+    setMappedSeats(newSeats);
+    addToHistory(newSeats);
+    alert('Changes applied to selected seats');
+  };
+
+  // Cancel pending changes
+  const cancelChanges = () => {
+    if (selectedSeats.length > 0 && mappedSeats[selectedSeats[0]]) {
+      setPendingSeatSize(mappedSeats[selectedSeats[0]].size || 10);
+      setPendingSeatRotation(mappedSeats[selectedSeats[0]].rotation || 0);
+    }
+  };
+
   const autoGenerateBay = () => {
     const baySeats = currentBaySeats;
-    const mappedInCurrentBay = baySeats.filter(id => mappedSeats[id]);
     
-    if (mappedInCurrentBay.length < 2) {
-      alert('Please place at least the first and last seat in the bay');
+    if (baySeats.length < 2) {
+      alert('Please place at least 2 seats in the bay first');
       return;
     }
 
@@ -226,12 +274,12 @@ export default function SeatCalibrationPage() {
     const lastSeat = mappedSeats[baySeats[baySeats.length - 1]];
     
     if (!firstSeat || !lastSeat) {
-      alert('Please place the first and last seat of the bay');
+      alert('Cannot find first and last seat');
       return;
     }
 
-    const newSeats = { ...mappedSeats };
     const count = baySeats.length;
+    const newSeats = { ...mappedSeats };
 
     for (let i = 1; i < count - 1; i++) {
       const ratio = i / (count - 1);
@@ -239,13 +287,9 @@ export default function SeatCalibrationPage() {
       const y = firstSeat.y + (lastSeat.y - firstSeat.y) * ratio;
       
       newSeats[baySeats[i]] = {
-        id: baySeats[i],
-        label: baySeats[i],
+        ...newSeats[baySeats[i]],
         x: parseFloat(x.toFixed(2)),
         y: parseFloat(y.toFixed(2)),
-        size: firstSeat.size || lastSeatTemplate.size,
-        rotation: firstSeat.rotation || lastSeatTemplate.rotation,
-        status: "available"
       };
     }
 
@@ -253,88 +297,54 @@ export default function SeatCalibrationPage() {
     addToHistory(newSeats);
   };
 
-  const autoAlignHorizontal = () => {
-    const baySeats = currentBaySeats.filter(id => mappedSeats[id]);
-    if (baySeats.length < 2) return;
+  const alignSelectedSeats = (type) => {
+    if (selectedSeats.length < 2) {
+      alert('Please select at least 2 seats');
+      return;
+    }
 
-    const avgY = baySeats.reduce((sum, id) => sum + mappedSeats[id].y, 0) / baySeats.length;
     const newSeats = { ...mappedSeats };
     
-    baySeats.forEach(id => {
-      newSeats[id] = { ...newSeats[id], y: parseFloat(avgY.toFixed(2)) };
-    });
-    
+    if (type === 'horizontal') {
+      // Align on average Y, distribute evenly on X
+      const seats = selectedSeats.map(id => newSeats[id]).sort((a, b) => a.x - b.x);
+      const avgY = seats.reduce((sum, seat) => sum + seat.y, 0) / seats.length;
+      const minX = seats[0].x;
+      const maxX = seats[seats.length - 1].x;
+      const spacing = (maxX - minX) / (seats.length - 1);
+      
+      seats.forEach((seat, i) => {
+        newSeats[seat.id].y = parseFloat(avgY.toFixed(2));
+        if (i > 0 && i < seats.length - 1) {
+          newSeats[seat.id].x = parseFloat((minX + spacing * i).toFixed(2));
+        }
+      });
+    } else if (type === 'vertical') {
+      // Align on average X, distribute evenly on Y
+      const seats = selectedSeats.map(id => newSeats[id]).sort((a, b) => a.y - b.y);
+      const avgX = seats.reduce((sum, seat) => sum + seat.x, 0) / seats.length;
+      const minY = seats[0].y;
+      const maxY = seats[seats.length - 1].y;
+      const spacing = (maxY - minY) / (seats.length - 1);
+      
+      seats.forEach((seat, i) => {
+        newSeats[seat.id].x = parseFloat(avgX.toFixed(2));
+        if (i > 0 && i < seats.length - 1) {
+          newSeats[seat.id].y = parseFloat((minY + spacing * i).toFixed(2));
+        }
+      });
+    }
+
     setMappedSeats(newSeats);
     addToHistory(newSeats);
   };
 
-  const autoAlignVertical = () => {
-    const baySeats = currentBaySeats.filter(id => mappedSeats[id]);
-    if (baySeats.length < 2) return;
-
-    const avgX = baySeats.reduce((sum, id) => sum + mappedSeats[id].x, 0) / baySeats.length;
+  const deleteSelectedSeats = () => {
     const newSeats = { ...mappedSeats };
-    
-    baySeats.forEach(id => {
-      newSeats[id] = { ...newSeats[id], x: parseFloat(avgX.toFixed(2)) };
-    });
-    
-    setMappedSeats(newSeats);
-    addToHistory(newSeats);
-  };
-
-  const deleteSeat = (seatIds) => {
-    const newSeats = { ...mappedSeats };
-    seatIds.forEach(id => delete newSeats[id]);
+    selectedSeats.forEach(id => delete newSeats[id]);
     setMappedSeats(newSeats);
     addToHistory(newSeats);
     setSelectedSeats([]);
-  };
-
-  const applySizeToBay = () => {
-    const newSeats = { ...mappedSeats };
-    currentBaySeats.forEach(id => {
-      if (newSeats[id]) {
-        newSeats[id].size = seatSize;
-      }
-    });
-    setMappedSeats(newSeats);
-    addToHistory(newSeats);
-    setLastSeatTemplate({ ...lastSeatTemplate, size: seatSize });
-  };
-
-  const applySizeToAll = () => {
-    const newSeats = { ...mappedSeats };
-    Object.keys(newSeats).forEach(id => {
-      newSeats[id].size = seatSize;
-    });
-    setMappedSeats(newSeats);
-    addToHistory(newSeats);
-    setLastSeatTemplate({ ...lastSeatTemplate, size: seatSize });
-  };
-
-  const applyRotationToBay = () => {
-    const newSeats = { ...mappedSeats };
-    currentBaySeats.forEach(id => {
-      if (newSeats[id]) {
-        newSeats[id].rotation = seatRotation;
-      }
-    });
-    setMappedSeats(newSeats);
-    addToHistory(newSeats);
-    setLastSeatTemplate({ ...lastSeatTemplate, rotation: seatRotation });
-  };
-
-  const nextBay = () => {
-    if (currentBayIndex < totalBays - 1) {
-      setCurrentBay(BAY_KEYS[currentBayIndex + 1]);
-    }
-  };
-
-  const prevBay = () => {
-    if (currentBayIndex > 0) {
-      setCurrentBay(BAY_KEYS[currentBayIndex - 1]);
-    }
   };
 
   const exportConfiguration = () => {
@@ -354,7 +364,7 @@ export default function SeatCalibrationPage() {
     const seatsArray = Object.values(mappedSeats);
     const config = { pdfUrl, name: "Office Floor Plan", seats: seatsArray };
     navigator.clipboard.writeText(JSON.stringify(config, null, 2));
-    alert('Configuration copied to clipboard!');
+    alert('Configuration copied!');
   };
 
   const importConfiguration = (e) => {
@@ -380,210 +390,260 @@ export default function SeatCalibrationPage() {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      {/* Left Panel */}
+      {/* Left Panel - Organized Sections */}
       <div className="w-80 bg-white border-r overflow-y-auto">
-        <div className="p-6">
-          <h1 className="text-2xl font-bold mb-2">Professional Calibration</h1>
-          <p className="text-sm text-gray-600 mb-6">Enhanced workflow with new floor plan</p>
+        <div className="p-4">
+          <h1 className="text-xl font-bold mb-1">Seat Calibration</h1>
+          <p className="text-xs text-gray-600 mb-4">Professional floor mapping tool</p>
 
-          {/* Tool Mode */}
+          {/* Tool Mode Section */}
           <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-            <div className="text-sm font-semibold mb-2">Tool Mode</div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="text-xs font-semibold mb-2 text-gray-700">TOOL MODE</div>
+            <div className="grid grid-cols-3 gap-1">
               <button
                 onClick={() => setToolMode('place')}
-                className={`p-2 rounded text-sm flex items-center justify-center gap-1 ${
+                className={`p-2 rounded text-xs flex flex-col items-center gap-1 ${
                   toolMode === 'place' ? 'bg-blue-500 text-white' : 'bg-white border'
                 }`}
               >
-                <MapPin size={16} />
+                <MapPin size={14} />
                 Place
               </button>
               <button
+                onClick={() => setToolMode('select')}
+                className={`p-2 rounded text-xs flex flex-col items-center gap-1 ${
+                  toolMode === 'select' ? 'bg-green-500 text-white' : 'bg-white border'
+                }`}
+              >
+                <Settings size={14} />
+                Select
+              </button>
+              <button
                 onClick={() => setToolMode('delete')}
-                className={`p-2 rounded text-sm flex items-center justify-center gap-1 ${
+                className={`p-2 rounded text-xs flex flex-col items-center gap-1 ${
                   toolMode === 'delete' ? 'bg-red-500 text-white' : 'bg-white border'
                 }`}
               >
-                <Trash2 size={16} />
+                <Trash2 size={14} />
                 Delete
               </button>
             </div>
           </div>
 
-          {/* Bay Navigation */}
-          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-semibold text-blue-900">Current Bay</span>
-              <span className="text-xs text-blue-600">{currentBayIndex + 1} / {totalBays}</span>
-            </div>
-            
-            <div className="flex items-center gap-2 mb-3">
-              <button onClick={prevBay} disabled={currentBayIndex === 0} className="p-2 bg-white border rounded hover:bg-gray-50 disabled:opacity-50">
-                <ChevronLeft size={20} />
+          {/* Bay Controls Section */}
+          <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="text-xs font-semibold mb-2 text-blue-900">BAY CONTROLS</div>
+            <div className="flex items-center gap-2 mb-2">
+              <button onClick={() => setCurrentBay(String.fromCharCode(Math.max(65, currentBay.charCodeAt(0) - 1)))} className="p-1.5 bg-white border rounded hover:bg-gray-50">
+                <ChevronLeft size={16} />
               </button>
-              
-              <select value={currentBay} onChange={(e) => setCurrentBay(e.target.value)} className="flex-1 px-3 py-2 border rounded font-bold text-lg text-center">
-                {BAY_KEYS.map(key => (
-                  <option key={key} value={key}>Bay {key}</option>
+              <select value={currentBay} onChange={(e) => setCurrentBay(e.target.value)} className="flex-1 px-2 py-1.5 border rounded text-sm font-bold">
+                {Array.from({length: 26}, (_, i) => String.fromCharCode(65 + i)).map(letter => (
+                  <option key={letter} value={letter}>Bay {letter}</option>
                 ))}
               </select>
-              
-              <button onClick={nextBay} disabled={currentBayIndex === totalBays - 1} className="p-2 bg-white border rounded hover:bg-gray-50 disabled:opacity-50">
-                <ChevronRight size={20} />
+              <button onClick={() => setCurrentBay(String.fromCharCode(Math.min(90, currentBay.charCodeAt(0) + 1)))} className="p-1.5 bg-white border rounded hover:bg-gray-50">
+                <ChevronRight size={16} />
               </button>
             </div>
-
-            <div className="text-sm text-blue-800">
-              <div className="flex flex-wrap gap-1">
-                {currentBaySeats.map(id => (
-                  <span key={id} className={`px-2 py-1 rounded text-xs ${mappedSeats[id] ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
-                    {id}
-                  </span>
-                ))}
-              </div>
-              <div className="mt-2 text-xs">Mapped: {mappedInBay} / {currentBaySeats.length}</div>
+            <div className="text-xs text-blue-700">
+              Seats in bay: {currentBaySeats.length}
             </div>
           </div>
 
-          {/* Seat Size Control */}
+          {/* Seat Controls Section */}
           <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-            <div className="text-sm font-semibold mb-2 flex items-center gap-2">
-              <Settings size={16} />
-              Seat Size: {seatSize}px
-            </div>
-            <div className="flex items-center gap-2 mb-2">
-              <button onClick={() => setSeatSize(Math.max(16, seatSize - 4))} className="p-1 bg-white border rounded hover:bg-gray-100">
-                <Minus size={16} />
-              </button>
+            <div className="text-xs font-semibold mb-2 text-gray-700">SEAT CONTROLS</div>
+            
+            {/* Size Control with Draft State */}
+            <div className="mb-3 p-2 bg-white rounded border">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-medium">Size (px)</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="50"
+                  step="0.5"
+                  value={pendingSeatSize}
+                  onChange={(e) => setPendingSeatSize(parseFloat(e.target.value))}
+                  className="w-16 px-1 py-0.5 border rounded text-xs text-right"
+                />
+              </div>
               <input
                 type="range"
-                min="16"
-                max="64"
-                value={seatSize}
-                onChange={(e) => setSeatSize(parseInt(e.target.value))}
-                className="flex-1"
+                min="1"
+                max="50"
+                step="0.5"
+                value={pendingSeatSize}
+                onChange={(e) => setPendingSeatSize(parseFloat(e.target.value))}
+                className="w-full"
               />
-              <button onClick={() => setSeatSize(Math.min(64, seatSize + 4))} className="p-1 bg-white border rounded hover:bg-gray-100">
-                <Plus size={16} />
-              </button>
+              <div className="text-xs text-gray-500 mt-1">
+                {selectedSeats.length > 0 && mappedSeats[selectedSeats[0]] && (
+                  <span>Current: {mappedSeats[selectedSeats[0]].size || 10}px</span>
+                )}
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <button onClick={applySizeToBay} className="p-2 bg-blue-500 text-white rounded hover:bg-blue-600">
-                Apply to Bay
-              </button>
-              <button onClick={applySizeToAll} className="p-2 bg-purple-500 text-white rounded hover:bg-purple-600">
-                Apply to All
-              </button>
-            </div>
-          </div>
 
-          {/* Seat Rotation Control */}
-          <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-            <div className="text-sm font-semibold mb-2 flex items-center gap-2">
-              <RotateCw size={16} />
-              Rotation: {seatRotation}°
-            </div>
-            <div className="flex items-center gap-2 mb-2">
-              <button onClick={() => setSeatRotation((seatRotation - 45 + 360) % 360)} className="p-1 bg-white border rounded hover:bg-gray-100">
-                -45°
-              </button>
+            {/* Rotation Control with Draft State */}
+            <div className="mb-3 p-2 bg-white rounded border">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-medium">Rotation (°)</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="360"
+                  step="45"
+                  value={pendingSeatRotation}
+                  onChange={(e) => setPendingSeatRotation(parseInt(e.target.value))}
+                  className="w-16 px-1 py-0.5 border rounded text-xs text-right"
+                />
+              </div>
               <input
                 type="range"
                 min="0"
                 max="360"
                 step="45"
-                value={seatRotation}
-                onChange={(e) => setSeatRotation(parseInt(e.target.value))}
-                className="flex-1"
+                value={pendingSeatRotation}
+                onChange={(e) => setPendingSeatRotation(parseInt(e.target.value))}
+                className="w-full"
               />
-              <button onClick={() => setSeatRotation((seatRotation + 45) % 360)} className="p-1 bg-white border rounded hover:bg-gray-100">
-                +45°
+              <div className="text-xs text-gray-500 mt-1">
+                {selectedSeats.length > 0 && mappedSeats[selectedSeats[0]] && (
+                  <span>Current: {mappedSeats[selectedSeats[0]].rotation || 0}°</span>
+                )}
+              </div>
+            </div>
+
+            {/* Apply/Cancel Buttons */}
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <button
+                onClick={applyChanges}
+                disabled={selectedSeats.length === 0}
+                className="py-1.5 bg-green-500 text-white rounded hover:bg-green-600 flex items-center justify-center gap-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Check size={14} />
+                Apply
+              </button>
+              <button
+                onClick={cancelChanges}
+                disabled={selectedSeats.length === 0}
+                className="py-1.5 bg-gray-500 text-white rounded hover:bg-gray-600 flex items-center justify-center gap-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <X size={14} />
+                Cancel
               </button>
             </div>
-            <button onClick={applyRotationToBay} className="w-full p-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs">
-              Apply Rotation to Bay
-            </button>
+
+            <div className="text-xs text-gray-600 bg-yellow-50 p-2 rounded border border-yellow-200">
+              Selected: {selectedSeats.length} seat(s)
+            </div>
           </div>
 
-          {/* Calibration Controls */}
-          <div className="space-y-2 mb-6">
-            <button
-              onClick={() => setIsCalibrating(!isCalibrating)}
-              className={`w-full py-3 rounded-lg font-semibold flex items-center justify-center gap-2 ${
-                isCalibrating ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-[#ec9324] text-white hover:bg-[#d88420]'
-              }`}
-            >
-              {isCalibrating ? <X size={20} /> : <MapPin size={20} />}
-              {isCalibrating ? 'Stop Calibration' : 'Start Calibration'}
-            </button>
-
-            <button onClick={autoGenerateBay} className="w-full py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center justify-center gap-2" disabled={!isCalibrating}>
-              <Wand2 size={20} />
-              Auto Generate Bay
-            </button>
-
-            <div className="grid grid-cols-3 gap-2">
-              <button onClick={undo} disabled={historyIndex <= 0} className="py-2 bg-gray-500 text-white rounded hover:bg-gray-600 flex items-center justify-center disabled:opacity-50">
-                <Undo2 size={16} />
-              </button>
-              <button onClick={redo} disabled={historyIndex >= history.length - 1} className="py-2 bg-gray-500 text-white rounded hover:bg-gray-600 flex items-center justify-center disabled:opacity-50">
-                <Redo2 size={16} />
-              </button>
-              <button onClick={() => selectedSeats.length > 0 && deleteSeat(selectedSeats)} disabled={selectedSeats.length === 0} className="py-2 bg-red-500 text-white rounded hover:bg-red-600 flex items-center justify-center disabled:opacity-50">
-                <Trash2 size={16} />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={autoAlignHorizontal} className="py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center justify-center gap-1 text-sm">
-                <Minus size={16} className="rotate-0" />
+          {/* Alignment Controls Section */}
+          <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+            <div className="text-xs font-semibold mb-2 text-gray-700">ALIGNMENT CONTROLS</div>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <button
+                onClick={() => alignSelectedSeats('horizontal')}
+                disabled={selectedSeats.length < 2}
+                className="py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center justify-center gap-1 text-xs disabled:opacity-50"
+              >
+                <Minus size={14} />
                 Align H
               </button>
-              <button onClick={autoAlignVertical} className="py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center justify-center gap-1 text-sm">
-                <MoreVertical size={16} />
+              <button
+                onClick={() => alignSelectedSeats('vertical')}
+                disabled={selectedSeats.length < 2}
+                className="py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center justify-center gap-1 text-xs disabled:opacity-50"
+              >
+                <MoreVertical size={14} />
                 Align V
               </button>
             </div>
+            <button
+              onClick={autoGenerateBay}
+              className="w-full py-2 bg-purple-500 text-white rounded hover:bg-purple-600 flex items-center justify-center gap-1 text-xs"
+            >
+              <Wand2 size={14} />
+              Auto Generate
+            </button>
           </div>
 
-          {/* Modes */}
-          <div className="space-y-2 mb-6">
-            <label className="flex items-center gap-2 text-sm">
+          {/* Actions Section */}
+          <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+            <div className="text-xs font-semibold mb-2 text-gray-700">ACTIONS</div>
+            <div className="grid grid-cols-4 gap-2 mb-2">
+              <button
+                onClick={undo}
+                disabled={historyIndex <= 0}
+                className="py-2 bg-gray-500 text-white rounded hover:bg-gray-600 flex items-center justify-center disabled:opacity-50"
+                title="Undo (Ctrl+Z)"
+              >
+                <Undo2 size={14} />
+              </button>
+              <button
+                onClick={redo}
+                disabled={historyIndex >= history.length - 1}
+                className="py-2 bg-gray-500 text-white rounded hover:bg-gray-600 flex items-center justify-center disabled:opacity-50"
+                title="Redo (Ctrl+Y)"
+              >
+                <Redo2 size={14} />
+              </button>
+              <button
+                onClick={deleteSelectedSeats}
+                disabled={selectedSeats.length === 0}
+                className="py-2 bg-red-500 text-white rounded hover:bg-red-600 flex items-center justify-center disabled:opacity-50"
+                title="Delete (Del)"
+              >
+                <Trash2 size={14} />
+              </button>
+              <button
+                onClick={() => setIsCalibrating(!isCalibrating)}
+                className={`py-2 rounded flex items-center justify-center ${
+                  isCalibrating ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-green-500 text-white hover:bg-green-600'
+                }`}
+              >
+                {isCalibrating ? <X size={14} /> : <MapPin size={14} />}
+              </button>
+            </div>
+          </div>
+
+          {/* View Options */}
+          <div className="mb-4 space-y-2">
+            <label className="flex items-center gap-2 text-xs">
               <input type="checkbox" checked={showAccuracyMode} onChange={(e) => setShowAccuracyMode(e.target.checked)} className="rounded" />
-              <Grid size={16} />
-              Accuracy Mode
+              Show Coordinates
             </label>
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2 text-xs">
               <input type="checkbox" checked={previewMode} onChange={(e) => setPreviewMode(e.target.checked)} className="rounded" />
-              <Eye size={16} />
-              Preview Mode (End User View)
+              Preview Mode
             </label>
           </div>
 
           {/* Progress */}
-          <div className="mb-6">
-            <div className="flex justify-between text-sm mb-2">
-              <span className="font-medium">Total Progress</span>
-              <span>{totalMapped} / {totalSeats}</span>
+          <div className="mb-4">
+            <div className="flex justify-between text-xs mb-1">
+              <span className="font-medium">Total Seats</span>
+              <span>{totalMapped}</span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-[#ec9324] h-2 rounded-full transition-all" style={{ width: `${(totalMapped / totalSeats) * 100}%` }} />
+            <div className="w-full bg-gray-200 rounded-full h-1.5">
+              <div className="bg-[#ec9324] h-1.5 rounded-full transition-all" style={{ width: `${Math.min(100, totalMapped)}%` }} />
             </div>
           </div>
 
           {/* Export Controls */}
           <div className="space-y-2">
-            <button onClick={exportConfiguration} className="w-full py-2 bg-green-500 text-white rounded hover:bg-green-600 flex items-center justify-center gap-2" disabled={totalMapped === 0}>
-              <Download size={18} />
+            <button onClick={exportConfiguration} className="w-full py-2 bg-green-500 text-white rounded hover:bg-green-600 flex items-center justify-center gap-2 text-sm" disabled={totalMapped === 0}>
+              <Download size={16} />
               Export
             </button>
-            <button onClick={copyToClipboard} className="w-full py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center justify-center gap-2" disabled={totalMapped === 0}>
-              <Save size={18} />
+            <button onClick={copyToClipboard} className="w-full py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center justify-center gap-2 text-sm" disabled={totalMapped === 0}>
+              <Save size={16} />
               Copy
             </button>
-            <label className="w-full py-2 bg-purple-500 text-white rounded hover:bg-purple-600 flex items-center justify-center gap-2 cursor-pointer">
-              <Upload size={18} />
+            <label className="w-full py-2 bg-purple-500 text-white rounded hover:bg-purple-600 flex items-center justify-center gap-2 cursor-pointer text-sm">
+              <Upload size={16} />
               Import
               <input type="file" accept=".json" onChange={importConfiguration} className="hidden" />
             </label>
@@ -599,36 +659,56 @@ export default function SeatCalibrationPage() {
           maxScale={5}
           wheel={{ step: 0.1 }}
           pinch={{ step: 5 }}
+          centerOnInit={true}
           onZoom={(ref) => setCurrentZoom(ref.state.scale)}
+          ref={transformRef}
         >
-          {({ zoomIn, zoomOut, resetTransform, setTransform }) => (
+          {({ zoomIn, zoomOut, resetTransform, centerView }) => (
             <>
-              {/* Zoom Controls */}
-              <div className="absolute top-4 right-4 z-20 bg-white rounded-lg shadow-lg p-2 flex flex-col gap-1">
-                <button onClick={() => zoomIn()} className="p-2 hover:bg-gray-100 rounded">
-                  <ZoomIn size={18} />
-                </button>
-                <button onClick={() => zoomOut()} className="p-2 hover:bg-gray-100 rounded">
-                  <ZoomOut size={18} />
-                </button>
-                <div className="border-t border-gray-200 my-1" />
-                <button onClick={() => resetTransform()} className="p-2 hover:bg-gray-100 rounded">
-                  <Maximize2 size={18} />
-                </button>
-                <select className="text-xs p-1 border rounded" value={currentZoom} onChange={(e) => setTransform(0, 0, parseFloat(e.target.value))}>
+              {/* Zoom Controls Section */}
+              <div className="absolute top-4 right-4 z-20 bg-white rounded-lg shadow-lg p-2">
+                <div className="text-xs font-semibold mb-2 text-center text-gray-700">ZOOM</div>
+                <div className="flex flex-col gap-1">
+                  <button onClick={() => zoomIn()} className="p-2 hover:bg-gray-100 rounded" title="Zoom In">
+                    <ZoomIn size={16} />
+                  </button>
+                  <button onClick={() => zoomOut()} className="p-2 hover:bg-gray-100 rounded" title="Zoom Out">
+                    <ZoomOut size={16} />
+                  </button>
+                  <div className="border-t border-gray-200 my-1" />
+                  <button onClick={() => resetTransform()} className="p-2 hover:bg-gray-100 rounded" title="Fit Screen">
+                    <Maximize2 size={16} />
+                  </button>
+                  <button onClick={() => centerView()} className="p-2 hover:bg-gray-100 rounded" title="Center">
+                    <Maximize size={16} />
+                  </button>
+                </div>
+                <select 
+                  className="text-xs p-1 border rounded w-full mt-2" 
+                  value={currentZoom.toFixed(2)}
+                  onChange={(e) => {
+                    const zoom = parseFloat(e.target.value);
+                    resetTransform();
+                    setTimeout(() => {
+                      zoomIn(zoom - 1);
+                    }, 50);
+                  }}
+                >
                   {ZOOM_LEVELS.map(level => (
-                    <option key={level} value={level}>{(level * 100).toFixed(0)}%</option>
+                    <option key={level} value={level.toFixed(2)}>{(level * 100).toFixed(0)}%</option>
                   ))}
                 </select>
+                <div className="text-xs text-center mt-1 text-gray-600">
+                  {(currentZoom * 100).toFixed(0)}%
+                </div>
               </div>
 
-              {/* Accuracy Mode Overlay */}
+              {/* Accuracy Mode Info */}
               {showAccuracyMode && isCalibrating && (
-                <div className="absolute top-4 left-4 z-20 bg-white rounded-lg shadow-lg p-3 text-sm">
-                  <div className="font-semibold mb-1">Mouse Position</div>
-                  <div className="text-xs">X: {mouseCoords.x}%</div>
-                  <div className="text-xs">Y: {mouseCoords.y}%</div>
-                  <div className="text-xs mt-2">Zoom: {(currentZoom * 100).toFixed(0)}%</div>
+                <div className="absolute top-4 left-4 z-20 bg-white rounded-lg shadow-lg p-2 text-xs">
+                  <div className="font-semibold">Position</div>
+                  <div>X: {mouseCoords.x}%</div>
+                  <div>Y: {mouseCoords.y}%</div>
                 </div>
               )}
 
@@ -638,19 +718,30 @@ export default function SeatCalibrationPage() {
                   onClick={handlePdfClick}
                   onMouseMove={handleMouseMove}
                   className={`relative inline-block ${
-                    toolMode === 'place' ? 'cursor-crosshair' : toolMode === 'delete' ? 'cursor-pointer' : 'cursor-move'
+                    toolMode === 'place' ? 'cursor-crosshair' : 
+                    toolMode === 'delete' ? 'cursor-pointer' : 
+                    toolMode === 'select' ? 'cursor-pointer' : 'cursor-move'
                   }`}
                 >
                   <Document file={pdfUrl} onLoadSuccess={onDocumentLoadSuccess}>
-                    <Page pageNumber={1} width={pageWidth} renderTextLayer={false} renderAnnotationLayer={false} onLoadSuccess={onPageLoadSuccess} />
+                    <Page 
+                      pageNumber={1} 
+                      width={pageWidth} 
+                      renderTextLayer={false} 
+                      renderAnnotationLayer={false} 
+                      onLoadSuccess={onPageLoadSuccess} 
+                    />
                   </Document>
 
-                  {/* Seat Overlays */}
-                  <div className="absolute inset-0 pointer-events-none">
+                  {/* Seat Overlays - Optimized rendering */}
+                  <div className="absolute inset-0 pointer-events-none" style={{ willChange: 'transform' }}>
                     {Object.values(mappedSeats).map(seat => {
-                      const isInCurrentBay = currentBaySeats.includes(seat.id);
-                      const seatColor = previewMode ? '#FFFFFF' : (isInCurrentBay ? '#00FF00' : '#CCCCCC');
-                      const dynamicSize = (seat.size || 28) * currentZoom;
+                      const isSelected = selectedSeats.includes(seat.id);
+                      const seatColor = previewMode ? '#FFFFFF' : (isSelected ? '#00FF00' : '#FFFFFF');
+                      
+                      // Use pending values for selected seats in preview
+                      const displaySize = (isSelected ? pendingSeatSize : (seat.size || 10));
+                      const displayRotation = (isSelected ? pendingSeatRotation : (seat.rotation || 0));
                       
                       return (
                         <div
@@ -662,12 +753,12 @@ export default function SeatCalibrationPage() {
                             transform: 'translate(-50%, -50%)',
                           }}
                         >
-                          <SeatIcon 
-                            size={dynamicSize} 
+                          <DirectionalSeatIcon 
+                            size={displaySize} 
                             color={seatColor} 
                             label={previewMode ? null : seat.label}
-                            rotation={seat.rotation || 0}
-                            isSelected={selectedSeats.includes(seat.id)} 
+                            rotation={displayRotation}
+                            isSelected={isSelected} 
                           />
                         </div>
                       );
@@ -675,9 +766,10 @@ export default function SeatCalibrationPage() {
                   </div>
 
                   {isCalibrating && !previewMode && (
-                    <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-yellow-500 text-white px-6 py-3 rounded-lg shadow-lg font-semibold">
-                      {toolMode === 'place' ? `Calibrating Bay ${currentBay} - Click to place seats` : 
-                       toolMode === 'delete' ? 'Delete Mode - Click seats to remove' : 'Move Mode'}
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-yellow-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-semibold">
+                      {toolMode === 'place' ? `Place Mode - Bay ${currentBay}` : 
+                       toolMode === 'delete' ? 'Delete Mode - Click to remove' : 
+                       'Select Mode - Click to edit'}
                     </div>
                   )}
                 </div>
