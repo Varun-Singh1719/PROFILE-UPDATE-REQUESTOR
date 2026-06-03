@@ -47,8 +47,6 @@ async def override_cors_headers(request: Request, call_next):
     return response
 
 app.include_router(api_router)
-    allow_headers=["*"],
-)
 
 
 @app.on_event("startup")
