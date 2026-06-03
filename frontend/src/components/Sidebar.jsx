@@ -28,6 +28,7 @@ const COMMON_LINKS = [
     group: true,
     children: [
       { to: "/workspace-manager/floor-layout", label: "Floor Layout", icon: LayoutGrid, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
+      { to: "/workspace-manager/calibration", label: "Seat Calibration", icon: Settings, perm: { module: "desk_booking", feature: "seat_request", action: "edit" } },
     ],
   },
 ];

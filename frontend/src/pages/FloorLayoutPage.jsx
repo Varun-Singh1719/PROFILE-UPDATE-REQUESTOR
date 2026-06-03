@@ -1,11 +1,13 @@
 import React, { useState } from "react";
-import { LayoutGrid, X } from "lucide-react";
+import { LayoutGrid, X, Settings, AlertCircle } from "lucide-react";
+import { Link } from "react-router-dom";
 import FloorMap from "../components/FloorMap";
 import { FLOOR_PLAN_CONFIG } from "../config/seatMaster";
 
 export default function FloorLayoutPage() {
   const [selectedSeats, setSelectedSeats] = useState([]); // Changed to array
   const [occupiedSeats, setOccupiedSeats] = useState(["H7", "B2", "K3", "V1"]); // Demo occupied seats
+  const [showCalibrationAlert, setShowCalibrationAlert] = useState(true);
 
   const handleSeatSelect = (seatId) => {
     setSelectedSeats(prev => {
