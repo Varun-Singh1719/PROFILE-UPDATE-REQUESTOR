@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import Seat from './Seat';
-import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, Bug } from 'lucide-react';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 
@@ -12,12 +12,13 @@ pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/$
 const FloorMap = ({ 
   seats,
   occupiedSeats = [],
-  selectedSeat = null,
+  selectedSeats = [], // Changed from selectedSeat to selectedSeats (array)
   onSeatSelect,
   pdfUrl 
 }) => {
   const [numPages, setNumPages] = useState(null);
   const [pageWidth, setPageWidth] = useState(1200);
+  const [debugMode, setDebugMode] = useState(false);
 
   const onDocumentLoadSuccess = ({ numPages }) => {
     setNumPages(numPages);
@@ -28,7 +29,7 @@ const FloorMap = ({
     ...seat,
     status: occupiedSeats.includes(seat.id) 
       ? 'occupied' 
-      : selectedSeat === seat.id 
+      : selectedSeats.includes(seat.id) // Check if seat is in selectedSeats array
       ? 'selected' 
       : 'available'
   }));
@@ -40,13 +41,8 @@ const FloorMap = ({
       return; // Can't select occupied seats
     }
     
-    if (seat.status === 'selected') {
-      // Deselect if already selected
-      onSeatSelect(null);
-    } else {
-      // Select the seat
-      onSeatSelect(seatId);
-    }
+    // Pass the seatId to parent - parent will handle toggle logic
+    onSeatSelect(seatId);
   };
 
   return (
@@ -85,6 +81,15 @@ const FloorMap = ({
               >
                 <Maximize2 size={20} />
               </button>
+              <button
+                onClick={() => setDebugMode(!debugMode)}
+                className={`p-3 rounded-lg shadow-lg transition-colors ${
+                  debugMode ? 'bg-yellow-400 text-white' : 'bg-white hover:bg-gray-50'
+                }`}
+                title="Toggle Debug Mode"
+              >
+                <Bug size={20} />
+              </button>
             </div>
 
             {/* Legend */}
@@ -104,6 +109,13 @@ const FloorMap = ({
                   <span>Occupied</span>
                 </div>
               </div>
+              {debugMode && (
+                <div className="mt-2 pt-2 border-t border-gray-200">
+                  <div className="text-xs text-yellow-600 font-semibold">
+                    🐛 Debug Mode Active
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* PDF and Seat Overlay */}
@@ -153,6 +165,7 @@ const FloorMap = ({
                         seat={seat}
                         onClick={handleSeatClick}
                         isClickable={seat.status !== 'occupied'}
+                        debugMode={debugMode}
                       />
                     ))}
                   </div>
