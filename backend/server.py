@@ -33,13 +33,20 @@ from routers import dashboard as _dashboard  # noqa: F401
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-app.include_router(api_router)
+# Override CORS headers set by ingress
+@app.middleware("http")
+async def override_cors_headers(request: Request, call_next):
+    response = await call_next(request)
+    origin = request.headers.get("origin", "")
+    if "preview.emergentagent.com" in origin:
+        # Remove wildcard and set specific origin
+        if "access-control-allow-origin" in response.headers:
+            del response.headers["access-control-allow-origin"]
+        response.headers["access-control-allow-origin"] = origin
+        response.headers["access-control-allow-credentials"] = "true"
+    return response
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origin_regex=r"https://.*\.preview\.emergentagent\.com",
-    allow_credentials=True,
-    allow_methods=["*"],
+app.include_router(api_router)
     allow_headers=["*"],
 )
 
