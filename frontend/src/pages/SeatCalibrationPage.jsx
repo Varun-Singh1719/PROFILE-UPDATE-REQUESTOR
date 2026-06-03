@@ -401,7 +401,12 @@ export default function SeatCalibrationPage() {
             <div className="text-xs font-semibold mb-2 text-gray-700">TOOL MODE</div>
             <div className="grid grid-cols-3 gap-1">
               <button
-                onClick={() => setToolMode('place')}
+                onClick={() => {
+                  setToolMode('place');
+                  if (!isCalibrating) {
+                    setIsCalibrating(true);
+                  }
+                }}
                 className={`p-2 rounded text-xs flex flex-col items-center gap-1 ${
                   toolMode === 'place' ? 'bg-blue-500 text-white' : 'bg-white border'
                 }`}
@@ -410,7 +415,12 @@ export default function SeatCalibrationPage() {
                 Place
               </button>
               <button
-                onClick={() => setToolMode('select')}
+                onClick={() => {
+                  setToolMode('select');
+                  if (!isCalibrating) {
+                    setIsCalibrating(true);
+                  }
+                }}
                 className={`p-2 rounded text-xs flex flex-col items-center gap-1 ${
                   toolMode === 'select' ? 'bg-green-500 text-white' : 'bg-white border'
                 }`}
@@ -419,7 +429,12 @@ export default function SeatCalibrationPage() {
                 Select
               </button>
               <button
-                onClick={() => setToolMode('delete')}
+                onClick={() => {
+                  setToolMode('delete');
+                  if (!isCalibrating) {
+                    setIsCalibrating(true);
+                  }
+                }}
                 className={`p-2 rounded text-xs flex flex-col items-center gap-1 ${
                   toolMode === 'delete' ? 'bg-red-500 text-white' : 'bg-white border'
                 }`}
@@ -428,6 +443,11 @@ export default function SeatCalibrationPage() {
                 Delete
               </button>
             </div>
+            {isCalibrating && (
+              <div className="mt-2 text-xs text-green-600 bg-green-50 p-2 rounded">
+                ✓ Calibration Active
+              </div>
+            )}
           </div>
 
           {/* Bay Controls Section */}
@@ -734,7 +754,7 @@ export default function SeatCalibrationPage() {
                   </Document>
 
                   {/* Seat Overlays - Optimized rendering */}
-                  <div className="absolute inset-0 pointer-events-none" style={{ willChange: 'transform' }}>
+                  <div className="absolute inset-0" style={{ willChange: 'transform', pointerEvents: 'none' }}>
                     {Object.values(mappedSeats).map(seat => {
                       const isSelected = selectedSeats.includes(seat.id);
                       const seatColor = previewMode ? '#FFFFFF' : (isSelected ? '#00FF00' : '#FFFFFF');
@@ -751,6 +771,7 @@ export default function SeatCalibrationPage() {
                             left: `${seat.x}%`,
                             top: `${seat.y}%`,
                             transform: 'translate(-50%, -50%)',
+                            pointerEvents: 'auto'
                           }}
                         >
                           <DirectionalSeatIcon 
@@ -766,10 +787,10 @@ export default function SeatCalibrationPage() {
                   </div>
 
                   {isCalibrating && !previewMode && (
-                    <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-yellow-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-semibold">
-                      {toolMode === 'place' ? `Place Mode - Bay ${currentBay}` : 
-                       toolMode === 'delete' ? 'Delete Mode - Click to remove' : 
-                       'Select Mode - Click to edit'}
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-yellow-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-semibold z-50">
+                      {toolMode === 'place' ? `✓ Place Mode Active - Bay ${currentBay} - Click to add ${currentBay}${nextSeatNumber}` : 
+                       toolMode === 'delete' ? '✓ Delete Mode Active - Click seats to remove' : 
+                       '✓ Select Mode Active - Click seats to edit'}
                     </div>
                   )}
                 </div>
