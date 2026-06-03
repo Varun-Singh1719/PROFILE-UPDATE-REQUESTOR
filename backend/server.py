@@ -35,37 +35,13 @@ logger = logging.getLogger(__name__)
 
 app.include_router(api_router)
 
-# Handle OPTIONS preflight requests
-@app.options("/{path:path}")
-async def options_handler(request: Request):
-    origin = request.headers.get("origin", "")
-    if "emergentagent.com" in origin:
-        return Response(
-            status_code=200,
-            headers={
-                "Access-Control-Allow-Origin": origin,
-                "Access-Control-Allow-Credentials": "true",
-                "Access-Control-Allow-Methods": "*",
-                "Access-Control-Allow-Headers": "*",
-                "Access-Control-Max-Age": "3600",
-            }
-        )
-    return Response(status_code=403)
-
-# Custom CORS handler
-@app.middleware("http")
-async def cors_middleware(request, call_next):
-    origin = request.headers.get("origin", "")
-    
-    response = await call_next(request)
-    
-    if "emergentagent.com" in origin:
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Allow-Methods"] = "*"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-    
-    return response
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"https://.*\.preview\.emergentagent\.com",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.on_event("startup")
