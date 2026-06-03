@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { usePermissions } from "../hooks/usePermissions";
 import {
   LayoutDashboard, Ticket, Users, Inbox, LogOut, Mail,
-  ChevronDown, ChevronRight, Briefcase, Settings, Shield, UsersRound, Armchair, Send, MailPlus
+  ChevronDown, ChevronRight, Briefcase, Settings, Shield, UsersRound, Armchair, Send, MailPlus, LayoutGrid
 } from "lucide-react";
 
 // v3 role model — two canonical roles: Super Admin, Admin.
@@ -22,7 +22,14 @@ const COMMON_LINKS = [
       { to: "/admin/unassigned", label: "Unassigned", icon: Inbox, perm: { module: "profix", feature: "ticket", action: "assign" } },
     ],
   },
-  { to: "/desk-booking", label: "Desk Booking", icon: Armchair, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
+  {
+    label: "Workspace Manager",
+    icon: Armchair,
+    group: true,
+    children: [
+      { to: "/workspace-manager/floor-layout", label: "Floor Layout", icon: LayoutGrid, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
+    ],
+  },
 ];
 
 const SUPER_ADMIN_MANAGE_GROUP = {

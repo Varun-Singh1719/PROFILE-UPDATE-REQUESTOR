@@ -21,6 +21,7 @@ import PermissionSetDetailPage from "./pages/PermissionSetDetailPage";
 import NotificationsOutboxPage from "./pages/NotificationsOutboxPage";
 import EmailTemplatesPage from "./pages/EmailTemplatesPage";
 import DeskBookingPage from "./pages/DeskBookingPage";
+import FloorLayoutPage from "./pages/FloorLayoutPage";
 import { Loader2 } from "lucide-react";
 
 // v3 role model — every authenticated user (Super Admin or Admin) lands at /admin.
@@ -83,8 +84,11 @@ function App() {
             <Route path="/admin/notifications" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><NotificationsOutboxPage /></ProtectedRoute>} />
             <Route path="/admin/email-templates" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><EmailTemplatesPage /></ProtectedRoute>} />
 
-            {/* Desk Booking — open to any authed user; UI further gated by permission sets */}
-            <Route path="/desk-booking" element={<ProtectedRoute roles={ADMIN_ROLES}><DeskBookingPage /></ProtectedRoute>} />
+            {/* Workspace Manager — open to any authed user; UI further gated by permission sets */}
+            <Route path="/workspace-manager/floor-layout" element={<ProtectedRoute roles={ADMIN_ROLES}><FloorLayoutPage /></ProtectedRoute>} />
+            
+            {/* Legacy Desk Booking path redirect to Workspace Manager */}
+            <Route path="/desk-booking" element={<Navigate to="/workspace-manager/floor-layout" replace />} />
 
             {/* Legacy paths from pre-v3 collapse — keep redirecting to unified admin shell */}
             <Route path="/manager/*" element={<Navigate to="/admin" replace />} />
