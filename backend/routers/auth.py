@@ -30,7 +30,7 @@ async def login(body: LoginIn, response: Response):
     if not verify_password(body.password, user.get("password_hash", "")):
         raise HTTPException(401, "Invalid credentials")
     token = create_access_token(user["id"], user["email"], user["role"])
-    response.set_cookie("access_token", token, httponly=True, secure=False, samesite="lax", max_age=43200, path="/")
+    response.set_cookie("access_token", token, httponly=True, secure=False, samesite="none", max_age=43200, path="/")
     await db.contacts.update_one({"id": user["id"]}, {"$set": {"last_login": now_iso()}})
     _public_contact(user)
     await log_audit(
@@ -69,7 +69,7 @@ async def google_session(body: GoogleSessionIn, response: Response):
         raise HTTPException(403, "User does not exist.")
 
     token = create_access_token(user["id"], user["email"], user["role"])
-    response.set_cookie("access_token", token, httponly=True, secure=False, samesite="lax", max_age=43200, path="/")
+    response.set_cookie("access_token", token, httponly=True, secure=False, samesite="none", max_age=43200, path="/")
     await db.contacts.update_one({"id": user["id"]}, {"$set": {"last_login": now_iso()}})
     _public_contact(user)
     return {"user": user, "access_token": token}
