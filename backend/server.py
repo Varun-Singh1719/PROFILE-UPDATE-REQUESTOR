@@ -35,7 +35,7 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=["https://workspace-manager-19.preview.emergentagent.com", "https://dc380e93-6c60-492b-9d8a-6dd95731cd58.preview.emergentagent.com"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
