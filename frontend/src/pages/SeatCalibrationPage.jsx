@@ -103,6 +103,7 @@ export default function SeatCalibrationPage() {
   
   const containerRef = useRef(null);
   const transformRef = useRef(null);
+  const mouseDownPosRef = useRef(null);
 
   // Dynamic bay detection
   const getSeatsInBay = (bay) => {
@@ -163,8 +164,20 @@ export default function SeatCalibrationPage() {
     setPdfDimensions({ width: page.width, height: page.height });
   };
 
-  const handlePdfClick = (e) => {
+  const handlePdfMouseDown = (e) => {
     if (!isCalibrating) return;
+    mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const handlePdfMouseUp = (e) => {
+    if (!isCalibrating) return;
+    const start = mouseDownPosRef.current;
+    mouseDownPosRef.current = null;
+    if (!start) return;
+    const dx = Math.abs(e.clientX - start.x);
+    const dy = Math.abs(e.clientY - start.y);
+    // Treat as drag if moved more than 4px - don't place a seat
+    if (dx > 4 || dy > 4) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -174,7 +187,6 @@ export default function SeatCalibrationPage() {
 
     if (toolMode === 'place') {
       const seatId = `${currentBay}${nextSeatNumber}`;
-      
       const newSeats = {
         ...mappedSeats,
         [seatId]: {
@@ -182,8 +194,8 @@ export default function SeatCalibrationPage() {
           label: seatId,
           x: parseFloat(xPercent.toFixed(2)),
           y: parseFloat(yPercent.toFixed(2)),
-          size: 10, // Default size
-          rotation: 0, // Default rotation
+          size: 10,
+          rotation: 0,
           status: "available"
         }
       };
@@ -191,11 +203,10 @@ export default function SeatCalibrationPage() {
       addToHistory(newSeats);
       setNextSeatNumber(nextSeatNumber + 1);
     } else if (toolMode === 'delete') {
-      // Find and delete clicked seat
       const clickedSeat = Object.values(mappedSeats).find(seat => {
-        const dx = Math.abs(seat.x - xPercent);
-        const dy = Math.abs(seat.y - yPercent);
-        return dx < 1 && dy < 1;
+        const ddx = Math.abs(seat.x - xPercent);
+        const ddy = Math.abs(seat.y - yPercent);
+        return ddx < 1 && ddy < 1;
       });
       if (clickedSeat) {
         const newSeats = { ...mappedSeats };
@@ -204,17 +215,15 @@ export default function SeatCalibrationPage() {
         addToHistory(newSeats);
       }
     } else if (toolMode === 'select') {
-      // Select seat for editing
       const clickedSeat = Object.values(mappedSeats).find(seat => {
-        const dx = Math.abs(seat.x - xPercent);
-        const dy = Math.abs(seat.y - yPercent);
-        return dx < 1 && dy < 1;
+        const ddx = Math.abs(seat.x - xPercent);
+        const ddy = Math.abs(seat.y - yPercent);
+        return ddx < 1 && ddy < 1;
       });
       if (clickedSeat) {
         if (e.ctrlKey || e.metaKey) {
-          // Multi-select
-          setSelectedSeats(prev => 
-            prev.includes(clickedSeat.id) 
+          setSelectedSeats(prev =>
+            prev.includes(clickedSeat.id)
               ? prev.filter(id => id !== clickedSeat.id)
               : [...prev, clickedSeat.id]
           );
@@ -682,6 +691,8 @@ export default function SeatCalibrationPage() {
           maxScale={5}
           wheel={{ step: 0.1 }}
           pinch={{ step: 5 }}
+          doubleClick={{ disabled: true }}
+          panning={{ velocityDisabled: true }}
           centerOnInit={true}
           onZoom={(ref) => setCurrentZoom(ref.state.scale)}
           ref={transformRef}
@@ -738,7 +749,8 @@ export default function SeatCalibrationPage() {
               <TransformComponent wrapperStyle={{ width: '100%', height: '100%' }}>
                 <div
                   ref={containerRef}
-                  onClick={handlePdfClick}
+                  onMouseDown={handlePdfMouseDown}
+                  onMouseUp={handlePdfMouseUp}
                   onMouseMove={handleMouseMove}
                   className={`relative inline-block ${
                     toolMode === 'place' ? 'cursor-crosshair' : 
