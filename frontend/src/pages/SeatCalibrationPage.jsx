@@ -99,7 +99,6 @@ export default function SeatCalibrationPage() {
   const [historyIndex, setHistoryIndex] = useState(0);
   
   const [toolMode, setToolMode] = useState('place');
-  const [nextSeatNumber, setNextSeatNumber] = useState(1);
   
   const containerRef = useRef(null);
   const transformRef = useRef(null);
@@ -107,12 +106,28 @@ export default function SeatCalibrationPage() {
 
   // Dynamic bay detection
   const getSeatsInBay = (bay) => {
-    return Object.keys(mappedSeats).filter(id => id.startsWith(bay)).sort();
+    return Object.keys(mappedSeats)
+      .filter(id => id.startsWith(bay))
+      .sort((a, b) => {
+        const na = parseInt(a.slice(bay.length), 10);
+        const nb = parseInt(b.slice(bay.length), 10);
+        return (isNaN(na) ? 0 : na) - (isNaN(nb) ? 0 : nb);
+      });
+  };
+
+  // Derive next seat number for the current bay (handles imports, deletions, bay switches)
+  const getNextSeatNumberForBay = (bay) => {
+    const nums = Object.keys(mappedSeats)
+      .filter(id => id.startsWith(bay))
+      .map(id => parseInt(id.slice(bay.length), 10))
+      .filter(n => !isNaN(n));
+    return nums.length ? Math.max(...nums) + 1 : 1;
   };
 
   const currentBaySeats = getSeatsInBay(currentBay);
   const availableBays = [...new Set(Object.keys(mappedSeats).map(id => id.charAt(0)))].sort();
   const totalMapped = Object.keys(mappedSeats).length;
+  const nextSeatNumber = getNextSeatNumberForBay(currentBay);
 
   // Add to history
   const addToHistory = (newState) => {
@@ -186,7 +201,7 @@ export default function SeatCalibrationPage() {
     const yPercent = (y / rect.height) * 100;
 
     if (toolMode === 'place') {
-      const seatId = `${currentBay}${nextSeatNumber}`;
+      const seatId = `${currentBay}${getNextSeatNumberForBay(currentBay)}`;
       const newSeats = {
         ...mappedSeats,
         [seatId]: {
@@ -201,7 +216,6 @@ export default function SeatCalibrationPage() {
       };
       setMappedSeats(newSeats);
       addToHistory(newSeats);
-      setNextSeatNumber(nextSeatNumber + 1);
     } else if (toolMode === 'delete') {
       const clickedSeat = Object.values(mappedSeats).find(seat => {
         const ddx = Math.abs(seat.x - xPercent);
