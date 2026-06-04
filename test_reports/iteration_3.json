@@ -1,0 +1,55 @@
+{
+  "summary": "Frontend-only testing of /workspace-manager/calibration Interactive Seat Calibration Tool. Verified 14/17 test scenarios PASS including the recently fixed P0 drag-vs-click pan fix. Found 1 CRITICAL functional bug (bay seat numbering not reset on bay switch — banner shows 'B4' instead of 'B1' after switching from Bay A) and several code-quality issues. PDF loads cleanly, no console errors, all advanced features (Apply/Cancel, multi-select, Align H/V, Auto Generate, Delete tool, Undo/Redo, Preview Mode, Show Coordinates, Export) function correctly.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "SeatCalibrationPage / Place mode bay switching",
+        "issue": "BUG (HIGH): nextSeatNumber is a single global counter that does NOT reset when currentBay changes. Reproduced: placed A1,A2,A3 in Bay A → switched dropdown to Bay B → yellow banner reads '✓ Place Mode Active - Bay B - Click to add B4' (expected B1). New seats in Bay B will be numbered B4, B5, ... violating the per-bay numbering contract documented in the test spec ('New seat IDs should be B1, B2, B3 (NOT continuing from A)').",
+        "selector": "select (Bay dropdown) + .bg-yellow-500 banner + handlePdfMouseUp seatId generation at SeatCalibrationPage.jsx line 189",
+        "priority": "HIGH"
+      },
+      {
+        "component": "applyChanges / alert()",
+        "issue": "applyChanges() uses window.alert('Changes applied to selected seats') (line ~266). Blocking native alert is jarring UX; should be a toast.",
+        "selector": "SeatCalibrationPage.jsx line 266",
+        "priority": "LOW"
+      },
+      {
+        "component": "getSeatsInBay sort",
+        "issue": "getSeatsInBay returns Object.keys(...).sort() (lexicographic) — A10 sorts before A2. autoGenerateBay picks first/last by this order, so for any bay with ≥10 seats the 'first' and 'last' anchors will be wrong (e.g., picks A1 and A9 instead of A1 and A10).",
+        "selector": "SeatCalibrationPage.jsx line 110",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Calibration page", "issues": ["The PDF (1200px wide) extends beyond the 1920px viewport on initial load because the sidebar is 320px and the PDF is rendered at full width without auto-fit. Users have to use 'Fit Screen' to see whole PDF. Consider auto-fit on initial load by calling resetTransform() or centerView() once the PDF page renders."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "FIX (HIGH): When currentBay changes, recompute nextSeatNumber from existing seats in that bay. Suggested: derive on-demand inside handlePdfMouseUp -> `const existingNums = Object.keys(mappedSeats).filter(id => id.startsWith(currentBay)).map(id => parseInt(id.slice(currentBay.length))).filter(n => !isNaN(n)); const nextN = (existingNums.length ? Math.max(...existingNums) : 0) + 1; const seatId = `${currentBay}${nextN}`;` — and remove nextSeatNumber state OR reset it in a useEffect on currentBay change.",
+    "FIX (MEDIUM): getSeatsInBay should sort numerically: `.sort((a,b) => parseInt(a.slice(bay.length)) - parseInt(b.slice(bay.length)))` to avoid lexicographic A10<A2 issue for bays >=10 seats.",
+    "Optional (LOW): Replace alert() in applyChanges with a non-blocking toast (e.g., sonner / react-hot-toast).",
+    "Optional (LOW): Auto-fit PDF to canvas viewport on first load (call resetTransform/centerView in onPageLoadSuccess).",
+    "Code quality (LOW): autoGenerateBay and alignSelectedSeats mutate inner seat objects (newSeats[seat.id].y = ...) — newSeats is only a shallow copy. Works because setMappedSeats triggers re-render, but anti-pattern. Clone the inner object: `newSeats[seat.id] = { ...newSeats[seat.id], y: ... }`."
+  ],
+  "critical_code_review_comments": [
+    "nextSeatNumber state is the root cause of the per-bay numbering bug — should be derived from mappedSeats rather than stored.",
+    "getSeatsInBay lexicographic sort is unsafe for any bay with >=10 seats and feeds directly into autoGenerateBay anchor selection.",
+    "applyChanges/cancelChanges/autoGenerateBay/alignSelectedSeats use native alert() in multiple places — replace with toast/snackbar.",
+    "Direct mutation of inner state objects in alignSelectedSeats and autoGenerateBay (newSeats[seat.id].y = ...) violates immutability; refactor to spread inner objects.",
+    "TransformWrapper has no initial auto-fit; on a 1920×1080 viewport the PDF extends past the visible area until the user manually clicks 'Fit Screen'.",
+    "handlePdfMouseDown/Up store screen coordinates and ignore the TransformComponent scale; getBoundingClientRect already accounts for transforms so percentage math is correct, but the 4px drag threshold is in screen pixels — when zoomed in to 5x, 4 screen px = ~0.8 PDF px which can still be a useful click; behavior verified at 100% zoom only.",
+    "Apply/Cancel reset only restores size+rotation of selectedSeats[0]; if multiple seats are selected with different stored sizes/rotations, Cancel only reverts to the first seat's values."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "skipped", "frontend": "~88% (15/17 scenarios pass; 1 critical fail on bay numbering reset, 1 partial — autoGenerate sorting limitation hidden by <10 seats)"},
+  "test_credentials": "admin@ticketing.com / Admin@123 (super admin) — verified working.",
+  "seed_data_creation": "None. Calibration page state is purely client-side (no backend persistence).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Page lives at /workspace-manager/calibration after login. PDF loads via react-pdf; wait ~5s for canvas. data-testids are absent on this page; use button text (Place/Select/Delete/Apply/Cancel/Align H/Align V/Auto Generate/Export). Seat overlays in DOM have style 'translate(-50%, -50%)' and inner div with text matching /^[A-Z]\\d+$/. Use page.evaluate to read seat screen positions rather than clicking by recorded coordinates because the TransformComponent can pan/shift after any drag (including failed/expected drags). After verifying the bay-numbering fix, retest: switch to Bay B, banner must say 'Click to add B1', place 3 seats, IDs must be B1/B2/B3, switch back to A, banner must say 'Click to add A4'.",
+  "rca_of_the_issue": "PER-BAY NUMBERING BUG. RCA: SeatCalibrationPage.jsx declares `const [nextSeatNumber, setNextSeatNumber] = useState(1);` at line 102 as a single global counter. In handlePdfMouseUp (line 189) the new seat id is `${currentBay}${nextSeatNumber}` and only `setNextSeatNumber(nextSeatNumber + 1)` runs after placement. There is no effect / reset hook tied to currentBay. Reproduction: 1) Open /workspace-manager/calibration, 2) Click Place, 3) Click 3 times on PDF (A1,A2,A3 placed, banner now shows 'Click to add A4'), 4) Change Bay dropdown to B — banner still reads 'Click to add B4' (should be B1). Fix: either reset nextSeatNumber=1 inside the bay dropdown onChange handler, or remove the state entirely and compute it from existing seats in the current bay at click time (preferred — handles imports and deletions correctly too). Verified other listed features (P0 drag-vs-click pan fix, Apply/Cancel, multi-select with Ctrl, Align V, Delete tool, Preview Mode, Show Coordinates, Export JSON schema, Undo/Redo button enable/disable) all behave as specified."
+}
