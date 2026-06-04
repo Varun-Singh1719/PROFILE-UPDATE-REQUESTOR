@@ -1,11 +1,30 @@
-"""Floor Plans: store calibrated seat configurations for the office floor map.
+"""Floor Plans — multi-plan model with Draft/Live workflow, versioning, audit.
 
-A single "active" floor plan acts as the source of truth for the Floor Layout
-view in the Workspace Manager. Admins (Super Admin / Admin) can save / update
-it from the Seat Calibration page; everyone authenticated can read it.
+Data model
+==========
+
+  floor_plans:           one document per named floor plan
+    { id, name, pdfUrl, default: bool,
+      live_version_id, draft (embedded seats/pdfUrl), draft_updated_at,
+      created_at, created_by, updated_at, updated_by }
+
+  floor_plan_versions:   immutable snapshots, created on every publish/rollback
+    { id, plan_id, version_number, state: "published",
+      seats[], pdfUrl, name, comments, diff_summary,
+      created_at, created_by }
+
+  audit_log (existing):  resource="floor_plan", action="save_draft|publish|rollback|clone|delete|create"
+
+Backward compatibility
+======================
+
+  GET /api/floor-plans/active still returns the *default* plan's published version
+  in the legacy shape, so the existing Floor Layout page keeps working unchanged.
 """
-from typing import List, Optional
-from datetime import datetime, timezone
+from __future__ import annotations
+
+import uuid
+from typing import List, Optional, Dict, Any
 
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -13,8 +32,9 @@ from pydantic import BaseModel, Field
 from core import api_router, db, get_current_user, require_role, now_iso, log_audit
 
 
-ACTIVE_PLAN_ID = "active"  # Single-tenant: one active plan
-
+# --------------------------------------------------------------------------- #
+# Models                                                                      #
+# --------------------------------------------------------------------------- #
 
 class Seat(BaseModel):
     id: str
@@ -24,49 +44,537 @@ class Seat(BaseModel):
     size: float = 10
     rotation: float = 0
     status: str = "available"
+    locked: bool = False
 
 
-class FloorPlanIn(BaseModel):
-    name: str = Field(default="Office Floor Plan")
+class PlanCreate(BaseModel):
+    name: str
+    pdfUrl: str
+
+
+class DraftIn(BaseModel):
+    name: Optional[str] = None
     pdfUrl: str
     seats: List[Seat] = Field(default_factory=list)
 
 
-class FloorPlanOut(FloorPlanIn):
-    id: str
-    updated_at: str
-    updated_by: Optional[dict] = None
+class PublishIn(BaseModel):
+    comments: str = ""
 
 
-@api_router.get("/floor-plans/active", response_model=Optional[FloorPlanOut])
-async def get_active_floor_plan(user=Depends(get_current_user)):
-    """Return the active floor plan, or null if none has been saved yet."""
-    doc = await db.floor_plans.find_one({"id": ACTIVE_PLAN_ID}, {"_id": 0})
+class CloneIn(BaseModel):
+    name: str
+
+
+class RollbackIn(BaseModel):
+    comments: str = ""
+
+
+# --------------------------------------------------------------------------- #
+# Helpers                                                                     #
+# --------------------------------------------------------------------------- #
+
+def _actor(user: dict) -> dict:
+    return {"id": user.get("id"), "email": user.get("email"), "name": user.get("name")}
+
+
+def _strip_id(doc):
+    if doc and "_id" in doc:
+        doc.pop("_id", None)
     return doc
 
 
-@api_router.put("/floor-plans/active", response_model=FloorPlanOut)
-async def upsert_active_floor_plan(
-    payload: FloorPlanIn,
+async def _get_plan_or_404(plan_id: str) -> dict:
+    doc = await db.floor_plans.find_one({"id": plan_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, f"Floor plan '{plan_id}' not found")
+    return doc
+
+
+async def _get_version(version_id: str) -> Optional[dict]:
+    return await db.floor_plan_versions.find_one({"id": version_id}, {"_id": 0})
+
+
+async def _live_seats(plan: dict) -> List[dict]:
+    """Return the seats from the plan's published live version (or [])."""
+    vid = plan.get("live_version_id")
+    if not vid:
+        return []
+    v = await _get_version(vid)
+    return (v or {}).get("seats", [])
+
+
+def _seat_dict(seats: List[dict]) -> Dict[str, dict]:
+    return {s["id"]: s for s in seats}
+
+
+def _round(n: float) -> float:
+    return round(float(n), 2)
+
+
+def compute_diff(prev: List[dict], curr: List[dict]) -> Dict[str, Any]:
+    """Compute a per-action diff between two seat lists keyed by seat id."""
+    a, b = _seat_dict(prev), _seat_dict(curr)
+    added = sorted(set(b) - set(a))
+    removed = sorted(set(a) - set(b))
+    moved, rotated, resized = [], [], []
+    for sid in sorted(set(a) & set(b)):
+        sa, sb = a[sid], b[sid]
+        if _round(sa.get("x", 0)) != _round(sb.get("x", 0)) or _round(sa.get("y", 0)) != _round(sb.get("y", 0)):
+            moved.append(sid)
+        if _round(sa.get("rotation", 0)) != _round(sb.get("rotation", 0)):
+            rotated.append(sid)
+        if _round(sa.get("size", 10)) != _round(sb.get("size", 10)):
+            resized.append(sid)
+    return {
+        "added": added, "removed": removed,
+        "moved": moved, "rotated": rotated, "resized": resized,
+        "counts": {
+            "added": len(added), "removed": len(removed),
+            "moved": len(moved), "rotated": len(rotated), "resized": len(resized),
+        },
+    }
+
+
+async def _next_version_number(plan_id: str) -> int:
+    cursor = db.floor_plan_versions.find({"plan_id": plan_id}, {"version_number": 1, "_id": 0}).sort("version_number", -1).limit(1)
+    docs = await cursor.to_list(1)
+    return (docs[0]["version_number"] + 1) if docs else 1
+
+
+# --------------------------------------------------------------------------- #
+# One-time migration: legacy "active" doc -> first multi-plan entry           #
+# --------------------------------------------------------------------------- #
+
+async def ensure_migrated():
+    """Migrate the legacy single-doc 'active' plan to the multi-plan schema.
+
+    Safe to call repeatedly — exits early once migrated.
+    """
+    # Already migrated?
+    if await db.floor_plans.count_documents({"id": {"$ne": "active"}}) > 0:
+        # But we still want to remove the legacy 'active' doc if it lingers.
+        await db.floor_plans.delete_one({"id": "active"})
+        return
+
+    legacy = await db.floor_plans.find_one({"id": "active"}, {"_id": 0})
+    if not legacy:
+        return  # nothing to migrate
+
+    plan_id = str(uuid.uuid4())
+    version_id = str(uuid.uuid4())
+    actor = legacy.get("updated_by") or {"id": None, "name": "system", "email": None}
+    now = now_iso()
+
+    await db.floor_plan_versions.insert_one({
+        "id": version_id,
+        "plan_id": plan_id,
+        "version_number": 1,
+        "state": "published",
+        "seats": legacy.get("seats", []),
+        "pdfUrl": legacy.get("pdfUrl"),
+        "name": legacy.get("name") or "Floor Plan 1",
+        "comments": "Auto-migrated from legacy single-plan model",
+        "diff_summary": {"counts": {"added": len(legacy.get("seats", [])), "removed": 0, "moved": 0, "rotated": 0, "resized": 0}},
+        "created_at": legacy.get("updated_at") or now,
+        "created_by": actor,
+    })
+
+    await db.floor_plans.insert_one({
+        "id": plan_id,
+        "name": legacy.get("name") or "Floor Plan 1",
+        "pdfUrl": legacy.get("pdfUrl"),
+        "default": True,
+        "live_version_id": version_id,
+        "draft": None,
+        "draft_updated_at": None,
+        "created_at": legacy.get("updated_at") or now,
+        "created_by": actor,
+        "updated_at": legacy.get("updated_at") or now,
+        "updated_by": actor,
+    })
+
+    await db.floor_plans.delete_one({"id": "active"})
+
+
+# --------------------------------------------------------------------------- #
+# List + Create                                                               #
+# --------------------------------------------------------------------------- #
+
+@api_router.get("/floor-plans")
+async def list_floor_plans(user=Depends(get_current_user)):
+    await ensure_migrated()
+    docs = await db.floor_plans.find({}, {"_id": 0}).sort("created_at", 1).to_list(500)
+    # enrich with version_count and seat_count
+    for d in docs:
+        d["version_count"] = await db.floor_plan_versions.count_documents({"plan_id": d["id"]})
+        live = None
+        if d.get("live_version_id"):
+            live = await _get_version(d["live_version_id"])
+        d["live_seat_count"] = len((live or {}).get("seats", []))
+        d["last_published_at"] = (live or {}).get("created_at")
+        d["has_draft"] = d.get("draft") is not None
+    return docs
+
+
+@api_router.post("/floor-plans")
+async def create_floor_plan(
+    payload: PlanCreate,
     user=Depends(require_role("Super Admin", "Admin")),
 ):
-    """Create or replace the active floor plan. Admin-only."""
+    await ensure_migrated()
+    plan_id = str(uuid.uuid4())
     now = now_iso()
-    actor = {"id": user.get("id"), "email": user.get("email"), "name": user.get("name")}
+    actor = _actor(user)
+    is_default = (await db.floor_plans.count_documents({}) == 0)
     doc = {
-        "id": ACTIVE_PLAN_ID,
+        "id": plan_id,
         "name": payload.name,
         "pdfUrl": payload.pdfUrl,
+        "default": is_default,
+        "live_version_id": None,
+        "draft": None,
+        "draft_updated_at": None,
+        "created_at": now, "created_by": actor,
+        "updated_at": now, "updated_by": actor,
+    }
+    await db.floor_plans.insert_one(doc)
+    await log_audit(actor=actor, action="floor_plan.create",
+                    resource="floor_plan", resource_id=plan_id,
+                    metadata={"name": payload.name})
+    return _strip_id(doc)
+
+
+# --------------------------------------------------------------------------- #
+# Backward-compat endpoint for FloorLayoutPage                                #
+# IMPORTANT: must be declared BEFORE GET /floor-plans/{plan_id} so the        #
+# literal "/active" path isn't matched as a plan id.                          #
+# --------------------------------------------------------------------------- #
+
+@api_router.get("/floor-plans/active")
+async def get_active_floor_plan(user=Depends(get_current_user)):
+    """Return the default plan's published live version (legacy shape).
+
+    Resolution order:
+      1. Plan marked default with a live version
+      2. First plan (by created_at) with a live version
+    """
+    await ensure_migrated()
+    plan = await db.floor_plans.find_one({"default": True, "live_version_id": {"$ne": None}}, {"_id": 0})
+    if not plan:
+        plan = await db.floor_plans.find_one({"live_version_id": {"$ne": None}}, {"_id": 0}, sort=[("created_at", 1)])
+    if not plan:
+        return None
+    v = await _get_version(plan["live_version_id"])
+    if not v:
+        return None
+    return {
+        "id": "active",
+        "plan_id": plan["id"],
+        "name": v.get("name") or plan.get("name"),
+        "pdfUrl": v.get("pdfUrl") or plan.get("pdfUrl"),
+        "seats": v.get("seats", []),
+        "updated_at": v.get("created_at"),
+        "updated_by": v.get("created_by"),
+        "version_number": v.get("version_number"),
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Plan detail / delete / set-default / clone                                  #
+# --------------------------------------------------------------------------- #
+
+@api_router.get("/floor-plans/{plan_id}")
+async def get_floor_plan(plan_id: str, user=Depends(get_current_user)):
+    await ensure_migrated()
+    plan = await _get_plan_or_404(plan_id)
+    plan["live_seats"] = await _live_seats(plan)
+    plan["version_count"] = await db.floor_plan_versions.count_documents({"plan_id": plan_id})
+    return plan
+
+
+@api_router.delete("/floor-plans/{plan_id}")
+async def delete_floor_plan(plan_id: str, user=Depends(require_role("Super Admin", "Admin"))):
+    plan = await _get_plan_or_404(plan_id)
+    if plan.get("default"):
+        # promote another plan to default before deleting
+        other = await db.floor_plans.find_one({"id": {"$ne": plan_id}}, {"_id": 0})
+        if other:
+            await db.floor_plans.update_one({"id": other["id"]}, {"$set": {"default": True}})
+    await db.floor_plan_versions.delete_many({"plan_id": plan_id})
+    await db.floor_plans.delete_one({"id": plan_id})
+    await log_audit(actor=_actor(user), action="floor_plan.delete",
+                    resource="floor_plan", resource_id=plan_id,
+                    metadata={"name": plan.get("name")})
+    return {"ok": True}
+
+
+@api_router.post("/floor-plans/{plan_id}/set-default")
+async def set_default(plan_id: str, user=Depends(require_role("Super Admin", "Admin"))):
+    await _get_plan_or_404(plan_id)
+    await db.floor_plans.update_many({}, {"$set": {"default": False}})
+    await db.floor_plans.update_one({"id": plan_id}, {"$set": {"default": True}})
+    await log_audit(actor=_actor(user), action="floor_plan.set_default",
+                    resource="floor_plan", resource_id=plan_id)
+    return {"ok": True}
+
+
+@api_router.post("/floor-plans/{plan_id}/clone")
+async def clone_floor_plan(
+    plan_id: str,
+    payload: CloneIn,
+    user=Depends(require_role("Super Admin", "Admin")),
+):
+    src = await _get_plan_or_404(plan_id)
+    new_id = str(uuid.uuid4())
+    actor = _actor(user)
+    now = now_iso()
+
+    # Determine source seats: prefer live; fall back to draft
+    src_seats = await _live_seats(src)
+    src_pdf = src.get("pdfUrl")
+    if not src_seats and src.get("draft"):
+        src_seats = src["draft"].get("seats", [])
+        src_pdf = src["draft"].get("pdfUrl") or src_pdf
+
+    # Create an initial published version 1 so the clone is immediately usable
+    new_version_id = None
+    if src_seats:
+        new_version_id = str(uuid.uuid4())
+        await db.floor_plan_versions.insert_one({
+            "id": new_version_id,
+            "plan_id": new_id,
+            "version_number": 1,
+            "state": "published",
+            "seats": src_seats,
+            "pdfUrl": src_pdf,
+            "name": payload.name,
+            "comments": f"Cloned from '{src.get('name')}'",
+            "diff_summary": {"counts": {"added": len(src_seats), "removed": 0, "moved": 0, "rotated": 0, "resized": 0}},
+            "created_at": now,
+            "created_by": actor,
+        })
+
+    new_plan = {
+        "id": new_id,
+        "name": payload.name,
+        "pdfUrl": src_pdf,
+        "default": False,
+        "live_version_id": new_version_id,
+        "draft": None,
+        "draft_updated_at": None,
+        "created_at": now, "created_by": actor,
+        "updated_at": now, "updated_by": actor,
+    }
+    await db.floor_plans.insert_one(new_plan)
+    await log_audit(actor=actor, action="floor_plan.clone",
+                    resource="floor_plan", resource_id=new_id,
+                    metadata={"source_plan_id": plan_id, "source_name": src.get("name"), "new_name": payload.name, "seat_count": len(src_seats)})
+    return _strip_id(new_plan)
+
+
+# --------------------------------------------------------------------------- #
+# Draft (auto-save target)                                                    #
+# --------------------------------------------------------------------------- #
+
+@api_router.put("/floor-plans/{plan_id}/draft")
+async def save_draft(
+    plan_id: str,
+    payload: DraftIn,
+    user=Depends(require_role("Super Admin", "Admin")),
+):
+    await _get_plan_or_404(plan_id)
+    now = now_iso()
+    actor = _actor(user)
+    draft = {
         "seats": [s.model_dump() for s in payload.seats],
+        "pdfUrl": payload.pdfUrl,
         "updated_at": now,
         "updated_by": actor,
     }
-    await db.floor_plans.update_one({"id": ACTIVE_PLAN_ID}, {"$set": doc}, upsert=True)
-    await log_audit(
-        actor=actor,
-        action="floor_plan.save",
-        resource="floor_plan",
-        resource_id=ACTIVE_PLAN_ID,
-        metadata={"seat_count": len(payload.seats), "pdfUrl": payload.pdfUrl},
+    update = {
+        "draft": draft,
+        "draft_updated_at": now,
+        "updated_at": now,
+        "updated_by": actor,
+        "pdfUrl": payload.pdfUrl,
+    }
+    if payload.name:
+        update["name"] = payload.name
+    await db.floor_plans.update_one({"id": plan_id}, {"$set": update})
+    # No audit entry for auto-save (would be spammy). Audit fires on publish.
+    return {"ok": True, "draft_updated_at": now}
+
+
+@api_router.delete("/floor-plans/{plan_id}/draft")
+async def discard_draft(plan_id: str, user=Depends(require_role("Super Admin", "Admin"))):
+    await _get_plan_or_404(plan_id)
+    await db.floor_plans.update_one({"id": plan_id}, {"$set": {"draft": None, "draft_updated_at": None}})
+    return {"ok": True}
+
+
+# --------------------------------------------------------------------------- #
+# Publish — promotes current draft to a new published version                 #
+# --------------------------------------------------------------------------- #
+
+@api_router.post("/floor-plans/{plan_id}/publish")
+async def publish_draft(
+    plan_id: str,
+    payload: PublishIn,
+    user=Depends(require_role("Super Admin", "Admin")),
+):
+    plan = await _get_plan_or_404(plan_id)
+    if not plan.get("draft"):
+        raise HTTPException(400, "No draft to publish")
+
+    draft_seats = plan["draft"].get("seats", [])
+    pdf_url = plan["draft"].get("pdfUrl") or plan.get("pdfUrl")
+
+    # Validation: duplicate seat IDs would prevent publish
+    seat_ids = [s["id"] for s in draft_seats]
+    dupes = [sid for sid in set(seat_ids) if seat_ids.count(sid) > 1]
+    if dupes:
+        raise HTTPException(400, f"Duplicate seat IDs detected: {', '.join(sorted(dupes))}")
+
+    prev_seats = await _live_seats(plan)
+    diff = compute_diff(prev_seats, draft_seats)
+
+    version_id = str(uuid.uuid4())
+    actor = _actor(user)
+    now = now_iso()
+    version_number = await _next_version_number(plan_id)
+
+    await db.floor_plan_versions.insert_one({
+        "id": version_id,
+        "plan_id": plan_id,
+        "version_number": version_number,
+        "state": "published",
+        "seats": draft_seats,
+        "pdfUrl": pdf_url,
+        "name": plan.get("name"),
+        "comments": payload.comments,
+        "diff_summary": diff,
+        "created_at": now,
+        "created_by": actor,
+    })
+    await db.floor_plans.update_one(
+        {"id": plan_id},
+        {"$set": {
+            "live_version_id": version_id,
+            "draft": None,
+            "draft_updated_at": None,
+            "pdfUrl": pdf_url,
+            "updated_at": now,
+            "updated_by": actor,
+        }},
     )
-    return doc
+    await log_audit(actor=actor, action="floor_plan.publish",
+                    resource="floor_plan", resource_id=plan_id,
+                    metadata={"version_number": version_number, "version_id": version_id,
+                              "comments": payload.comments, "diff": diff["counts"]})
+    return {"ok": True, "version_id": version_id, "version_number": version_number, "diff": diff}
+
+
+# --------------------------------------------------------------------------- #
+# Versions: list / detail / rollback / compare                                #
+# --------------------------------------------------------------------------- #
+
+@api_router.get("/floor-plans/{plan_id}/versions")
+async def list_versions(plan_id: str, user=Depends(get_current_user)):
+    await _get_plan_or_404(plan_id)
+    docs = await db.floor_plan_versions.find(
+        {"plan_id": plan_id},
+        {"_id": 0, "seats": 0},  # omit big seats array from list
+    ).sort("version_number", -1).to_list(500)
+    # expose actual current seat counts by counting on demand for accuracy
+    for d in docs:
+        v = await db.floor_plan_versions.find_one({"id": d["id"]}, {"seats": 1, "_id": 0})
+        d["seat_count"] = len((v or {}).get("seats", []))
+    return docs
+
+
+@api_router.get("/floor-plans/{plan_id}/versions/compare")
+async def compare_versions(plan_id: str, a: str, b: str, user=Depends(get_current_user)):
+    va = await _get_version(a)
+    vb = await _get_version(b)
+    if not va or not vb or va["plan_id"] != plan_id or vb["plan_id"] != plan_id:
+        raise HTTPException(404, "Version not found")
+    diff = compute_diff(va.get("seats", []), vb.get("seats", []))
+    return {
+        "a": {"id": va["id"], "version_number": va["version_number"], "created_at": va["created_at"], "seat_count": len(va.get("seats", []))},
+        "b": {"id": vb["id"], "version_number": vb["version_number"], "created_at": vb["created_at"], "seat_count": len(vb.get("seats", []))},
+        "diff": diff,
+    }
+
+
+@api_router.get("/floor-plans/{plan_id}/versions/{version_id}")
+async def get_version(plan_id: str, version_id: str, user=Depends(get_current_user)):
+    v = await _get_version(version_id)
+    if not v or v["plan_id"] != plan_id:
+        raise HTTPException(404, "Version not found")
+    return v
+
+
+@api_router.post("/floor-plans/{plan_id}/versions/{version_id}/rollback")
+async def rollback_to_version(
+    plan_id: str,
+    version_id: str,
+    payload: RollbackIn,
+    user=Depends(require_role("Super Admin", "Admin")),
+):
+    plan = await _get_plan_or_404(plan_id)
+    target = await _get_version(version_id)
+    if not target or target["plan_id"] != plan_id:
+        raise HTTPException(404, "Version not found")
+
+    prev_seats = await _live_seats(plan)
+    diff = compute_diff(prev_seats, target.get("seats", []))
+
+    new_version_id = str(uuid.uuid4())
+    actor = _actor(user)
+    now = now_iso()
+    version_number = await _next_version_number(plan_id)
+
+    await db.floor_plan_versions.insert_one({
+        "id": new_version_id,
+        "plan_id": plan_id,
+        "version_number": version_number,
+        "state": "published",
+        "seats": target.get("seats", []),
+        "pdfUrl": target.get("pdfUrl") or plan.get("pdfUrl"),
+        "name": plan.get("name"),
+        "comments": payload.comments or f"Rollback to version {target.get('version_number')}",
+        "diff_summary": diff,
+        "rolled_back_from": target["id"],
+        "created_at": now,
+        "created_by": actor,
+    })
+    await db.floor_plans.update_one(
+        {"id": plan_id},
+        {"$set": {
+            "live_version_id": new_version_id,
+            "pdfUrl": target.get("pdfUrl") or plan.get("pdfUrl"),
+            "updated_at": now,
+            "updated_by": actor,
+        }},
+    )
+    await log_audit(actor=actor, action="floor_plan.rollback",
+                    resource="floor_plan", resource_id=plan_id,
+                    metadata={"from_version": target.get("version_number"),
+                              "new_version": version_number, "diff": diff["counts"]})
+    return {"ok": True, "version_id": new_version_id, "version_number": version_number, "diff": diff}
+
+
+# --------------------------------------------------------------------------- #
+# Audit log scoped to floor plans                                             #
+# --------------------------------------------------------------------------- #
+
+@api_router.get("/floor-plans/{plan_id}/audit")
+async def plan_audit(plan_id: str, limit: int = 200, user=Depends(get_current_user)):
+    await _get_plan_or_404(plan_id)
+    docs = await db.audit_log.find(
+        {"resource": "floor_plan", "resource_id": plan_id},
+        {"_id": 0},
+    ).sort("at", -1).limit(limit).to_list(limit)
+    return docs
+

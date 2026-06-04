@@ -1,0 +1,84 @@
+/**
+ * Diff modal shown before publishing a draft.
+ * Receives a diff object: { added[], removed[], moved[], rotated[], resized[], counts }
+ */
+import React, { useState } from 'react';
+import { X, AlertTriangle, Plus, Minus, Move, RotateCw, Maximize2 } from 'lucide-react';
+
+const ROWS = [
+  { key: 'added',   Icon: Plus,      color: 'text-emerald-700 bg-emerald-50',  label: 'Seats added' },
+  { key: 'removed', Icon: Minus,     color: 'text-red-700 bg-red-50',          label: 'Seats removed' },
+  { key: 'moved',   Icon: Move,      color: 'text-blue-700 bg-blue-50',        label: 'Seats moved' },
+  { key: 'rotated', Icon: RotateCw,  color: 'text-purple-700 bg-purple-50',    label: 'Seats rotated' },
+  { key: 'resized', Icon: Maximize2, color: 'text-amber-700 bg-amber-50',      label: 'Seats resized' },
+];
+
+export default function PublishDialog({ diff, onCancel, onConfirm, busy }) {
+  const [comments, setComments] = useState('');
+  const total = (diff?.counts && Object.values(diff.counts).reduce((a, b) => a + b, 0)) || 0;
+  const noChanges = total === 0;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" data-testid="publish-dialog">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-3 border-b">
+          <h2 className="font-bold text-gray-900 flex items-center gap-2">
+            <AlertTriangle size={18} className="text-amber-500" />
+            Publish to Live?
+          </h2>
+          <button onClick={onCancel} className="text-gray-400 hover:text-gray-700"><X size={18}/></button>
+        </div>
+
+        <div className="p-5">
+          <p className="text-sm text-gray-600 mb-4">
+            Publishing will replace the current live floor plan and create a new version. End users will see these changes immediately.
+          </p>
+
+          {noChanges ? (
+            <div className="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded p-3 mb-4">
+              No changes detected since the last published version. You can still publish to create a checkpoint.
+            </div>
+          ) : (
+            <div className="space-y-2 mb-4">
+              {ROWS.map(({ key, Icon, color, label }) => {
+                const ids = diff[key] || [];
+                if (ids.length === 0) return null;
+                return (
+                  <div key={key} className={`flex items-start gap-3 p-2.5 rounded-lg ${color}`} data-testid={`diff-row-${key}`}>
+                    <Icon size={16} className="mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold">{label}: {ids.length}</div>
+                      <div className="text-xs mt-0.5 truncate">{ids.slice(0, 30).join(', ')}{ids.length > 30 ? ` … +${ids.length - 30}` : ''}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <label className="block text-xs font-semibold text-gray-700 mb-1">Version notes (optional)</label>
+          <textarea
+            data-testid="publish-comments"
+            value={comments}
+            onChange={(e) => setComments(e.target.value)}
+            rows={2}
+            placeholder="e.g. Added new desks in Bay C, rotated Bay D"
+            className="w-full px-2 py-1.5 border rounded text-sm mb-4"
+          />
+
+          <div className="flex items-center justify-end gap-2">
+            <button onClick={onCancel} className="px-3 py-1.5 text-sm rounded border">Cancel</button>
+            <button
+              data-testid="confirm-publish-btn"
+              onClick={() => onConfirm(comments)}
+              disabled={busy}
+              className="px-4 py-1.5 text-sm rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold disabled:opacity-50"
+            >
+              {busy ? 'Publishing…' : 'Publish Live'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
