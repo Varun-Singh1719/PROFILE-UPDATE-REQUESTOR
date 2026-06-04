@@ -4,10 +4,11 @@ import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { 
   Download, Upload, Save, X, ZoomIn, ZoomOut, Maximize2, ChevronLeft, ChevronRight,
   Minus, MoreVertical, Wand2, Eye, Grid, MapPin, Trash2, RotateCw,
-  Undo2, Redo2, Maximize, Plus, Settings, Check
+  Undo2, Redo2, Maximize, Plus, Settings, Check, Cloud
 } from 'lucide-react';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
+import api from '../lib/api';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
@@ -99,10 +100,31 @@ export default function SeatCalibrationPage() {
   const [historyIndex, setHistoryIndex] = useState(0);
   
   const [toolMode, setToolMode] = useState('place');
+  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState(''); // '', 'saved', 'error'
   
   const containerRef = useRef(null);
   const transformRef = useRef(null);
   const mouseDownPosRef = useRef(null);
+
+  // Load existing floor plan from backend on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get('/floor-plans/active');
+        if (cancelled || !res.data || !res.data.seats) return;
+        const seatsObj = {};
+        res.data.seats.forEach(s => { seatsObj[s.id] = s; });
+        setMappedSeats(seatsObj);
+        setHistory([seatsObj]);
+        setHistoryIndex(0);
+      } catch (err) {
+        // No saved plan yet; silently start with empty state.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Dynamic bay detection
   const getSeatsInBay = (bay) => {
@@ -384,6 +406,27 @@ export default function SeatCalibrationPage() {
     link.download = 'seat-configuration.json';
     link.click();
     URL.revokeObjectURL(url);
+  };
+
+  const saveToServer = async () => {
+    setSaving(true);
+    setSaveStatus('');
+    try {
+      const seatsArray = Object.values(mappedSeats);
+      await api.put('/floor-plans/active', {
+        name: "Office Floor Plan",
+        pdfUrl,
+        seats: seatsArray,
+      });
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus(''), 3000);
+    } catch (err) {
+      setSaveStatus('error');
+      const msg = err?.response?.data?.detail || err.message || 'Save failed';
+      alert(`Save failed: ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const copyToClipboard = () => {
@@ -680,6 +723,19 @@ export default function SeatCalibrationPage() {
 
           {/* Export Controls */}
           <div className="space-y-2">
+            <button
+              onClick={saveToServer}
+              disabled={saving || totalMapped === 0}
+              data-testid="save-to-server-btn"
+              className={`w-full py-2 rounded flex items-center justify-center gap-2 text-sm font-semibold text-white transition-colors ${
+                saveStatus === 'saved' ? 'bg-emerald-600 hover:bg-emerald-700' :
+                saveStatus === 'error' ? 'bg-red-600 hover:bg-red-700' :
+                'bg-[#ec9324] hover:bg-[#d6831f]'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              <Cloud size={16} />
+              {saving ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved to Server' : 'Save to Server'}
+            </button>
             <button onClick={exportConfiguration} className="w-full py-2 bg-green-500 text-white rounded hover:bg-green-600 flex items-center justify-center gap-2 text-sm" disabled={totalMapped === 0}>
               <Download size={16} />
               Export
