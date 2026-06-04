@@ -4,6 +4,7 @@ import {
   Plus, Copy, Trash2, Star, History, Loader2, MapPin, FileText, Clock, X,
 } from "lucide-react";
 import api from "../lib/api";
+import Layout from "../components/Layout";
 
 function fmtDate(iso) {
   if (!iso) return "—";

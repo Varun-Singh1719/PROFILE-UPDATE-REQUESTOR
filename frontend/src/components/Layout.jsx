@@ -1,16 +1,61 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Sidebar from "./Sidebar";
+import Breadcrumbs from "./Breadcrumbs";
 
 /**
- * Layout — admin shell. The global Toaster + BusyOverlay live at the App level
- * (see App.js) so they cover both authed and pre-auth screens.
+ * Layout — global app shell.
+ *
+ * Props:
+ *   breadcrumbs?: [{label, to?}]   — shown at top of content area
+ *   fullBleed?: bool                — remove the centered max-w wrapper (for canvas-heavy pages)
+ *   contentClassName?: string       — escape hatch for full-screen pages
+ *
+ * The Sidebar is fixed-position; we add a left margin equal to its current width
+ * so the content never gets covered. We detect sidebar width via a CSS attribute
+ * that the Sidebar component sets (data-collapsed).
  */
-export default function Layout({ children }) {
+export default function Layout({ children, breadcrumbs, fullBleed = false, contentClassName = "" }) {
+  const [sidebarOffset, setSidebarOffset] = useState(0);
+
+  useEffect(() => {
+    const update = () => {
+      // Mobile: sidebar is a drawer overlay (no offset)
+      if (window.innerWidth < 768) { setSidebarOffset(0); return; }
+      const el = document.querySelector('[data-testid="sidebar"]');
+      if (!el) { setSidebarOffset(64); return; }
+      setSidebarOffset(el.getAttribute("data-collapsed") === "true" ? 64 : 256);
+    };
+    update();
+    // Watch for collapse changes via attribute mutations
+    const observer = new MutationObserver(update);
+    const el = document.querySelector('[data-testid="sidebar"]');
+    if (el) observer.observe(el, { attributes: true, attributeFilter: ["data-collapsed"] });
+    window.addEventListener("resize", update);
+    return () => { observer.disconnect(); window.removeEventListener("resize", update); };
+  }, []);
+
   return (
-    <div className="flex min-h-screen bg-white">
+    <div className="min-h-screen bg-white">
       <Sidebar />
-      <main className="flex-1 overflow-x-hidden">
-        <div className="max-w-[1400px] mx-auto px-8 py-8">{children}</div>
+      <main
+        className="flex-1 overflow-x-hidden transition-[margin] duration-200"
+        style={{ marginLeft: sidebarOffset }}
+      >
+        {fullBleed ? (
+          <div className={contentClassName}>
+            {breadcrumbs && (
+              <div className="px-4 py-2 border-b border-gray-100 bg-white">
+                <Breadcrumbs items={breadcrumbs}/>
+              </div>
+            )}
+            {children}
+          </div>
+        ) : (
+          <div className={contentClassName || "max-w-[1400px] mx-auto px-6 py-6"}>
+            {breadcrumbs && <Breadcrumbs items={breadcrumbs} className="mb-4"/>}
+            {children}
+          </div>
+        )}
       </main>
     </div>
   );
