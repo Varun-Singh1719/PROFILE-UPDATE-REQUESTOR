@@ -11,10 +11,8 @@ import 'react-pdf/dist/esm/Page/TextLayer.css';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
-// Improved Seat Icon with clear directional indicator
+// Seat Icon using uploaded image
 const DirectionalSeatIcon = ({ size = 10, color = "#FFFFFF", borderColor = "#FF1493", label, rotation = 0, isSelected = false }) => {
-  const scale = size / 10;
-  
   return (
     <div 
       style={{ 
@@ -23,31 +21,22 @@ const DirectionalSeatIcon = ({ size = 10, color = "#FFFFFF", borderColor = "#FF1
         position: 'relative',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        transform: `rotate(${rotation}deg)`,
       }}
     >
-      <svg 
-        width={size} 
-        height={size} 
-        viewBox="0 0 10 10" 
-        fill="none"
-        style={{ transform: `rotate(${rotation}deg)` }}
-      >
-        {/* Backrest - clearly indicates direction */}
-        <rect x="1" y="0.5" width="8" height="1.5" rx="0.5" fill={borderColor} stroke={borderColor} strokeWidth="0.2" />
-        
-        {/* Seat base */}
-        <rect x="1.5" y="2" width="7" height="5" rx="0.3" fill={color} stroke={borderColor} strokeWidth="0.3" />
-        
-        {/* Armrests */}
-        <rect x="0.5" y="2.5" width="1" height="3" rx="0.2" fill={color} stroke={borderColor} strokeWidth="0.2" />
-        <rect x="8.5" y="2.5" width="1" height="3" rx="0.2" fill={color} stroke={borderColor} strokeWidth="0.2" />
-        
-        {/* Direction indicator - small arrow pointing forward */}
-        <path d="M 5 4 L 5 6 M 5 4 L 4 5 M 5 4 L 6 5" stroke={borderColor} strokeWidth="0.3" fill="none" />
-        
-        {isSelected && <circle cx="5" cy="5" r="2" fill="#00FF00" opacity="0.3" />}
-      </svg>
+      {/* Seat Image */}
+      <img 
+        src="https://customer-assets.emergentagent.com/job_workspace-manager-19/artifacts/96yixbn4_pngegg.png"
+        alt="seat"
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+          filter: isSelected ? 'drop-shadow(0 0 4px #00FF00)' : 'none',
+          opacity: color === '#FFFFFF' ? 1 : 0.7
+        }}
+      />
       
       {/* Label rotates with seat */}
       {label && (
@@ -56,17 +45,31 @@ const DirectionalSeatIcon = ({ size = 10, color = "#FFFFFF", borderColor = "#FF1
             position: 'absolute',
             top: '50%',
             left: '50%',
-            transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
-            fontSize: Math.max(3, size * 0.3) + 'px',
+            transform: 'translate(-50%, -50%)',
+            fontSize: Math.max(3, size * 0.25) + 'px',
             fontWeight: 'bold',
-            color: '#333',
+            color: '#000',
             pointerEvents: 'none',
             whiteSpace: 'nowrap',
-            textShadow: '0 0 2px white'
+            textShadow: '0 0 3px white, 0 0 3px white, 0 0 3px white',
+            zIndex: 10
           }}
         >
           {label}
         </div>
+      )}
+      
+      {/* Selection indicator */}
+      {isSelected && (
+        <div 
+          style={{
+            position: 'absolute',
+            inset: -2,
+            border: '2px solid #00FF00',
+            borderRadius: '4px',
+            pointerEvents: 'none'
+          }}
+        />
       )}
     </div>
   );
