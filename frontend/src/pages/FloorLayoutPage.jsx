@@ -97,7 +97,10 @@ function PlanInteractiveView({ plan, onBack }) {
             <div className="min-w-0">
               <h1 className="text-lg font-bold text-gray-900 truncate" data-testid="floor-layout-title">{plan.name}</h1>
               <p className="text-xs text-gray-600 inline-flex items-center gap-1">
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-semibold border border-emerald-200">
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border"
+                  style={{ color: "#15B867", backgroundColor: "#15B86715", borderColor: "#15B86755" }}
+                >
                   Live · {seats.length} seats
                 </span>
               </p>

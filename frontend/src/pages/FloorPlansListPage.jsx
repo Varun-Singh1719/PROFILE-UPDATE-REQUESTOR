@@ -265,19 +265,22 @@ function Modal({ title, onClose, children }) {
 }
 
 // -------------------- Status badge --------------------------------------- //
+// Brand tokens: Orange #ec9324 · Gray #b2b2b2 · Green #15B867
 const STATUS_STYLE = {
-  live: "bg-emerald-100 text-emerald-700 border-emerald-200",
-  inactive: "bg-gray-100 text-gray-600 border-gray-200",
-  draft: "bg-orange-100 text-orange-700 border-orange-200",
+  live: { color: "#15B867", bg: "#15B86715", border: "#15B86755" },
+  inactive: { color: "#b2b2b2", bg: "#b2b2b220", border: "#b2b2b266" },
+  draft: { color: "#ec9324", bg: "#ec932415", border: "#ec932455" },
 };
 const STATUS_LABEL = { live: "Live", inactive: "Inactive", draft: "Draft" };
 
 function StatusBadge({ status }) {
   const s = (status || "draft").toLowerCase();
+  const style = STATUS_STYLE[s] || STATUS_STYLE.draft;
   return (
     <span
       data-testid={`status-badge-${s}`}
-      className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border ${STATUS_STYLE[s] || STATUS_STYLE.draft}`}
+      className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border"
+      style={{ color: style.color, backgroundColor: style.bg, borderColor: style.border }}
     >
       {STATUS_LABEL[s] || "Draft"}
     </span>

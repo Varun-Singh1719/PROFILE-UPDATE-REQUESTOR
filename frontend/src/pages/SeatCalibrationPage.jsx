@@ -1279,46 +1279,48 @@ function BulkBtn({ label, icon: Icon, onClick, disabled, danger, testId }) {
 }
 
 function LiveToggle({ plan, draftDirty, totalMapped, hasDupes, onPublishRequested, onSetStatus }) {
-  // Derive the current state from the plan + draft state
   const hasLive = !!plan?.live_version_id;
   const isLive = hasLive && plan?.status !== "inactive";
-  // Clicking "On":
-  //  - If there is no live version yet, OR there are draft changes pending → trigger publish flow
-  //  - Otherwise (inactive + clean) → flip status to live
-  const handleOn = () => {
+
+  const handleToggle = () => {
+    if (isLive) {
+      onSetStatus("inactive");
+      return;
+    }
+    // Turning ON
     if (!hasLive || draftDirty) {
       if (totalMapped === 0) { alert("Place at least one seat before going Live."); return; }
       if (hasDupes) { alert("Resolve duplicate seat IDs before publishing."); return; }
       onPublishRequested();
-    } else if (!isLive) {
+    } else {
       onSetStatus("live");
     }
   };
-  const handleOff = () => {
-    if (isLive) onSetStatus("inactive");
-  };
-  const pill = "flex-1 py-1.5 text-[11px] font-semibold transition-colors";
+
   return (
-    <div className="flex items-center bg-white border border-gray-200 rounded overflow-hidden" data-testid="live-toggle">
-      <span className="px-2 text-[10px] font-semibold text-gray-600 border-r border-gray-200">Live</span>
+    <div className="flex items-center justify-between bg-white border border-gray-200 rounded px-3 py-1.5">
+      <span className="text-[11px] font-semibold text-gray-700">Live</span>
       <button
         type="button"
-        onClick={handleOn}
-        data-testid="live-on-btn"
-        className={`${pill} ${isLive ? "bg-[#ec9324] text-white" : "text-gray-500 hover:bg-gray-50"}`}
-        title={!hasLive || draftDirty ? "Publish current state to go Live" : "Mark plan as Live"}
+        onClick={handleToggle}
+        data-testid="live-toggle"
+        aria-pressed={isLive}
+        title={isLive ? "Plan is Live — click to mark Inactive" : "Click to go Live"}
+        className="relative inline-flex items-center w-[52px] h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#ec9324]"
+        style={{ backgroundColor: isLive ? "#ec9324" : "#b2b2b2" }}
       >
-        On
-      </button>
-      <button
-        type="button"
-        onClick={handleOff}
-        disabled={!isLive}
-        data-testid="live-off-btn"
-        className={`${pill} ${!isLive ? "bg-gray-400 text-white" : "text-gray-500 hover:bg-gray-50"} disabled:cursor-not-allowed`}
-        title={isLive ? "Mark plan as Inactive (hidden from Floor Layout)" : ""}
-      >
-        Off
+        {/* Label visible in the coloured area */}
+        <span
+          className="absolute text-[9px] font-bold text-white pointer-events-none select-none"
+          style={isLive ? { left: 7 } : { right: 7 }}
+        >
+          {isLive ? "On" : "Off"}
+        </span>
+        {/* Sliding knob */}
+        <span
+          className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200"
+          style={{ transform: isLive ? "translateX(28px)" : "translateX(2px)" }}
+        />
       </button>
     </div>
   );
