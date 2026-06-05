@@ -152,6 +152,8 @@ const FloorMap = ({
                   <Page
                     pageNumber={1}
                     width={pageWidth}
+                    devicePixelRatio={4}
+                    renderMode="canvas"
                     renderTextLayer={false}
                     renderAnnotationLayer={false}
                   />

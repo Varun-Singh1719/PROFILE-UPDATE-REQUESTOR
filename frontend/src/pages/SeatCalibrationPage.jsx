@@ -48,7 +48,7 @@ const SeatIcon = ({ size = 10, label, rotation = 0, isSelected = false, isLocked
   </div>
 );
 
-const ZOOM_LEVELS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 5];
+const ZOOM_LEVELS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
 const GRID_SIZES = [0, 1, 2, 5, 10, 20];  // 0 = off
 const AUTOSAVE_DEBOUNCE_MS = 30000;       // 30s spec
 const OVERLAP_THRESHOLD_PERCENT = 0.5;    // seats within 0.5% are "overlapping"
@@ -980,12 +980,15 @@ export default function SeatCalibrationPage() {
       {/* ────────────────────────────── PDF Canvas */}
       <div className="flex-1 overflow-hidden bg-gray-100 relative">
         <TransformWrapper
-          initialScale={1} minScale={0.25} maxScale={5}
-          wheel={{ step: 0.1 }} pinch={{ step: 5 }}
+          initialScale={1} minScale={0.25} maxScale={4}
+          wheel={{ step: 0.15, smoothStep: 0.01 }} pinch={{ step: 5 }}
           doubleClick={{ disabled: true }}
           panning={{ disabled: toolMode === 'box' || toolMode === 'lasso', velocityDisabled: true }}
           centerOnInit={true}
+          smooth={true}
+          limitToBounds={false}
           onZoom={(ref) => setCurrentZoom(ref.state.scale)}
+          onTransformed={(ref) => setCurrentZoom(ref.state.scale)}
           ref={transformRef}
         >
           {({ zoomIn, zoomOut, resetTransform, centerView }) => (
@@ -998,7 +1001,24 @@ export default function SeatCalibrationPage() {
                   <button onClick={() => resetTransform()} className="p-1 hover:bg-gray-100 rounded"><Maximize2 size={13}/></button>
                   <button onClick={() => centerView()} className="p-1 hover:bg-gray-100 rounded"><Maximize size={13}/></button>
                 </div>
-                <select className="text-[10px] p-0.5 border rounded w-full mt-1" value={currentZoom.toFixed(2)} onChange={(e) => { const z = parseFloat(e.target.value); resetTransform(); setTimeout(() => zoomIn(z - 1), 50); }}>
+                <select
+                  className="text-[10px] p-0.5 border rounded w-full mt-1"
+                  value={(() => {
+                    // Pick the closest enumerated level so the dropdown reflects the current zoom accurately
+                    const nearest = ZOOM_LEVELS.reduce((p, c) => Math.abs(c - currentZoom) < Math.abs(p - currentZoom) ? c : p, ZOOM_LEVELS[0]);
+                    return nearest.toFixed(2);
+                  })()}
+                  onChange={(e) => {
+                    const z = parseFloat(e.target.value);
+                    const ref = transformRef.current;
+                    if (ref?.centerView) {
+                      ref.centerView(z, 200, "easeOut");
+                    } else if (ref?.setTransform) {
+                      ref.setTransform(0, 0, z, 200, "easeOut");
+                    }
+                  }}
+                  data-testid="zoom-select"
+                >
                   {ZOOM_LEVELS.map(l => <option key={l} value={l.toFixed(2)}>{(l * 100).toFixed(0)}%</option>)}
                 </select>
               </div>
@@ -1026,7 +1046,14 @@ export default function SeatCalibrationPage() {
                   }`}
                 >
                   <Document file={resolvePdfUrl(pdfUrl)}>
-                    <Page pageNumber={1} width={pageWidth} renderTextLayer={false} renderAnnotationLayer={false}/>
+                    <Page
+                      pageNumber={1}
+                      width={pageWidth}
+                      devicePixelRatio={4}
+                      renderMode="canvas"
+                      renderTextLayer={false}
+                      renderAnnotationLayer={false}
+                    />
                   </Document>
 
                   {/* Seats */}
