@@ -121,6 +121,33 @@ export default function SeatCalibrationPage() {
   const transformRef = useRef(null);
   const mouseDownPosRef = useRef(null);
   const dragModeRef = useRef(null); // 'box' | 'lasso' | null
+  const dragSeatRef = useRef(null); // { ids[], startMouseX, startMouseY, rectW, rectH, startPositions, moved }
+
+  // ------------ Helpers: bay prefix + renumbering
+  const bayOf = (id) => id.match(/^[A-Z]+/)?.[0] || id[0];
+  const renumberBay = useCallback((seats, bay) => {
+    const ns = { ...seats };
+    const re = new RegExp(`^${bay}(\\d+)$`);
+    const ids = Object.keys(ns).filter(id => re.test(id)).sort(
+      (a, b) => parseInt(a.match(re)[1]) - parseInt(b.match(re)[1])
+    );
+    const remap = [];
+    ids.forEach((id, i) => {
+      const newId = `${bay}${i + 1}`;
+      if (id !== newId) remap.push([id, newId]);
+    });
+    if (remap.length === 0) return ns;
+    // Two-phase swap to avoid ID collisions
+    remap.forEach(([oldId], i) => {
+      ns[`__tmp_${i}__`] = { ...ns[oldId], id: `__tmp_${i}__` };
+      delete ns[oldId];
+    });
+    remap.forEach(([, newId], i) => {
+      ns[newId] = { ...ns[`__tmp_${i}__`], id: newId, label: newId };
+      delete ns[`__tmp_${i}__`];
+    });
+    return ns;
+  }, []);
 
   // ---------------------------- Load plan
   const loadPlan = useCallback(async () => {
@@ -253,6 +280,30 @@ export default function SeatCalibrationPage() {
     const yPercent = ((e.clientY - rect.top) / rect.height) * 100;
     setMouseCoords({ x: xPercent.toFixed(2), y: yPercent.toFixed(2) });
 
+    // Seat-drag in progress?
+    if (dragSeatRef.current) {
+      const drag = dragSeatRef.current;
+      const dxPx = e.clientX - drag.startMouseX;
+      const dyPx = e.clientY - drag.startMouseY;
+      if (!drag.moved && Math.abs(dxPx) < 3 && Math.abs(dyPx) < 3) return;
+      drag.moved = true;
+      const dxPct = (dxPx / drag.rectW) * 100;
+      const dyPct = (dyPx / drag.rectH) * 100;
+      setMappedSeats(prev => {
+        const ns = { ...prev };
+        drag.ids.forEach(id => {
+          const sp = drag.startPositions[id];
+          if (!sp || !ns[id]) return;
+          let nx = sp.x + dxPct, ny = sp.y + dyPct;
+          if (snapGrid > 0) { nx = snap(nx); ny = snap(ny); }
+          ns[id] = { ...ns[id], x: r2(nx), y: r2(ny) };
+        });
+        return ns;
+      });
+      setDraftDirty(true);
+      return;
+    }
+
     if (dragModeRef.current === 'box' && mouseDownPosRef.current) {
       setSelectionRect({ x1: mouseDownPosRef.current.px, y1: mouseDownPosRef.current.py, x2: xPercent, y2: yPercent });
     } else if (dragModeRef.current === 'lasso' && mouseDownPosRef.current) {
@@ -273,6 +324,33 @@ export default function SeatCalibrationPage() {
   };
 
   const handlePdfMouseUp = (e) => {
+    // Seat-drag completed?
+    if (dragSeatRef.current) {
+      const drag = dragSeatRef.current;
+      dragSeatRef.current = null;
+      if (drag.moved) {
+        // Push the current state to history (positions already applied during move)
+        setHistory(prev => {
+          const trimmed = prev.slice(0, historyIndex + 1);
+          return [...trimmed, mappedSeats];
+        });
+        setHistoryIndex(i => i + 1);
+        return;
+      }
+      // Treat as click-on-seat in select mode → select that seat
+      const seatId = drag.ids[0];
+      if (seatId && mappedSeats[seatId]) {
+        if (e.ctrlKey || e.metaKey || e.shiftKey) {
+          setSelectedSeats(prev => prev.includes(seatId) ? prev.filter(id => id !== seatId) : [...prev, seatId]);
+        } else {
+          setSelectedSeats([seatId]);
+          setPendingSize(mappedSeats[seatId].size || 10);
+          setPendingRotation(mappedSeats[seatId].rotation || 0);
+        }
+      }
+      return;
+    }
+
     const start = mouseDownPosRef.current;
     mouseDownPosRef.current = null;
     const dragMode = dragModeRef.current;
@@ -333,7 +411,7 @@ export default function SeatCalibrationPage() {
         if (clicked.locked) { setValidationError(`Seat ${clicked.id} is locked.`); return; }
         const ns = { ...mappedSeats };
         delete ns[clicked.id];
-        commit(ns);
+        commit(renumberBay(ns, bayOf(clicked.id)));
       }
     } else if (toolMode === 'select') {
       const clicked = seatsArray.find(s => Math.abs(s.x - xPercent) < 1 && Math.abs(s.y - yPercent) < 1);
@@ -349,6 +427,39 @@ export default function SeatCalibrationPage() {
         setSelectedSeats([]);
       }
     }
+  };
+
+  // ---------------------------- Per-seat drag handler
+  const handleSeatMouseDown = (seat, e) => {
+    if (!isCalibrating || previewMode) return;
+    if (toolMode !== 'select') return;
+    if (seat.locked) return;
+    e.stopPropagation();
+    e.preventDefault();
+
+    const dragIds = selectedSeats.includes(seat.id) ? [...selectedSeats] : [seat.id];
+    if (!selectedSeats.includes(seat.id)) {
+      setSelectedSeats([seat.id]);
+      setPendingSize(seat.size || 10);
+      setPendingRotation(seat.rotation || 0);
+    }
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const startPositions = {};
+    dragIds.forEach(id => {
+      const s = mappedSeats[id];
+      if (s && !s.locked) startPositions[id] = { x: s.x, y: s.y };
+    });
+
+    dragSeatRef.current = {
+      ids: Object.keys(startPositions),
+      startMouseX: e.clientX,
+      startMouseY: e.clientY,
+      rectW: rect.width,
+      rectH: rect.height,
+      startPositions,
+      moved: false,
+    };
   };
 
   // ---------------------------- Bulk operations
@@ -377,12 +488,18 @@ export default function SeatCalibrationPage() {
     if (selectedSeats.length === 0) return;
     const ns = { ...mappedSeats };
     let blocked = 0;
+    const affectedBays = new Set();
     selectedSeats.forEach(id => {
       if (ns[id]?.locked) { blocked++; return; }
-      delete ns[id];
+      if (ns[id]) {
+        affectedBays.add(bayOf(id));
+        delete ns[id];
+      }
     });
     if (blocked > 0) setValidationError(`${blocked} locked seat(s) skipped.`);
-    commit(ns);
+    let result = ns;
+    affectedBays.forEach(b => { result = renumberBay(result, b); });
+    commit(result);
     setSelectedSeats([]);
   };
 
@@ -403,29 +520,88 @@ export default function SeatCalibrationPage() {
     setSelectedSeats([]);
   };
 
-  const alignSelected = (type) => {
-    if (selectedSeats.length < 2) return;
-    const ns = { ...mappedSeats };
-    const arr = selectedSeats.map(id => ns[id]).filter(Boolean);
-    if (type === 'horizontal') {
-      const sorted = [...arr].sort((a, b) => a.x - b.x);
-      const avgY = sorted.reduce((s, x) => s + x.y, 0) / sorted.length;
-      const minX = sorted[0].x, maxX = sorted[sorted.length - 1].x;
-      const spacing = (maxX - minX) / (sorted.length - 1);
-      sorted.forEach((s, i) => {
-        if (s.locked) return;
-        ns[s.id] = { ...s, y: r2(avgY), x: i === 0 || i === sorted.length - 1 ? s.x : r2(minX + spacing * i) };
-      });
-    } else {
-      const sorted = [...arr].sort((a, b) => a.y - b.y);
-      const avgX = sorted.reduce((s, x) => s + x.x, 0) / sorted.length;
-      const minY = sorted[0].y, maxY = sorted[sorted.length - 1].y;
-      const spacing = (maxY - minY) / (sorted.length - 1);
-      sorted.forEach((s, i) => {
-        if (s.locked) return;
-        ns[s.id] = { ...s, x: r2(avgX), y: i === 0 || i === sorted.length - 1 ? s.y : r2(minY + spacing * i) };
-      });
+  const renameSeat = (oldId, rawNewId) => {
+    const newId = (rawNewId || '').trim().toUpperCase();
+    if (!/^[A-Z]+\d+$/.test(newId)) {
+      setValidationError('Seat name must be uppercase letters followed by digits (e.g. A12).');
+      return false;
     }
+    if (newId === oldId) return true;
+    if (mappedSeats[newId]) {
+      setValidationError(`Seat "${newId}" already exists.`);
+      return false;
+    }
+    const ns = { ...mappedSeats };
+    ns[newId] = { ...ns[oldId], id: newId, label: newId };
+    delete ns[oldId];
+    commit(ns);
+    setSelectedSeats([newId]);
+    setValidationError('');
+    return true;
+  };
+
+  // Smart, rotation-aware alignment with overlap avoidance.
+  // Detects whether selected seats form a horizontal or vertical row using
+  // the spread along each axis, then equalises spacing along the dominant
+  // axis and snaps the perpendicular axis to the mean coordinate.
+  const smartAlign = () => {
+    if (selectedSeats.length < 2) return;
+    const arr = selectedSeats.map(id => mappedSeats[id]).filter(Boolean);
+    if (arr.length < 2) return;
+
+    // Mean rotation, snapped to 0° or 90° (since rows are 1-D)
+    const meanRot = arr.reduce((s, a) => s + (a.rotation || 0), 0) / arr.length;
+    const snappedRot = (Math.round(meanRot / 90) * 90) % 180;
+    const rad = (snappedRot * Math.PI) / 180;
+    const cos = Math.cos(rad), sin = Math.sin(rad);
+
+    // Project to rotated axes
+    let proj = arr.map(s => ({
+      s,
+      u: s.x * cos + s.y * sin,
+      v: -s.x * sin + s.y * cos,
+    }));
+
+    // Decide axis from greater spread
+    const usSpread = Math.max(...proj.map(p => p.u)) - Math.min(...proj.map(p => p.u));
+    const vsSpread = Math.max(...proj.map(p => p.v)) - Math.min(...proj.map(p => p.v));
+    let useU = usSpread >= vsSpread;
+    // If rotation indicates a non-zero axis, prefer u
+    if (snappedRot !== 0) useU = true;
+
+    if (!useU) {
+      // Swap roles
+      proj = proj.map(p => ({ s: p.s, u: p.v, v: p.u }));
+    }
+
+    proj.sort((a, b) => a.u - b.u);
+    const minU = proj[0].u, maxU = proj[proj.length - 1].u;
+    const meanV = proj.reduce((s, p) => s + p.v, 0) / proj.length;
+
+    // Minimum spacing to prevent overlaps (size is in px @ zoom 1)
+    const w = containerRef.current?.getBoundingClientRect().width || pageWidth;
+    const avgSize = arr.reduce((s, a) => s + (a.size || 10), 0) / arr.length;
+    const minSpacingPct = (avgSize * 1.05) / w * 100;
+    let spacing = (maxU - minU) / (proj.length - 1);
+    if (spacing < minSpacingPct) spacing = minSpacingPct;
+
+    const ns = { ...mappedSeats };
+    proj.forEach((p, i) => {
+      if (p.s.locked) return;
+      const u = minU + spacing * i;
+      const v = meanV;
+      // Inverse rotation back to world coords
+      let wx, wy;
+      if (useU) {
+        wx = u * cos - v * sin;
+        wy = u * sin + v * cos;
+      } else {
+        // We had swapped u/v earlier — swap back before un-rotating
+        wx = v * cos - u * sin;
+        wy = v * sin + u * cos;
+      }
+      ns[p.s.id] = { ...p.s, x: r2(wx), y: r2(wy) };
+    });
     commit(ns);
   };
 
@@ -467,12 +643,47 @@ export default function SeatCalibrationPage() {
     } finally { setSaving(false); }
   }, [plan, planId, pdfUrl, mappedSeats]);
 
+  // ---------------------------- Thumbnail (PDF page 1 + seat dots → small PNG)
+  const generateThumbnail = useCallback(() => {
+    try {
+      const pdfCanvas = containerRef.current?.querySelector('canvas');
+      if (!pdfCanvas) return null;
+      const targetW = 320;
+      const ratio = targetW / pdfCanvas.width;
+      const tcanvas = document.createElement('canvas');
+      tcanvas.width = targetW;
+      tcanvas.height = Math.max(60, Math.round(pdfCanvas.height * ratio));
+      const ctx = tcanvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, tcanvas.width, tcanvas.height);
+      ctx.drawImage(pdfCanvas, 0, 0, tcanvas.width, tcanvas.height);
+      // overlay seat dots
+      ctx.fillStyle = '#ec9324';
+      Object.values(mappedSeats).forEach(s => {
+        const x = (s.x / 100) * tcanvas.width;
+        const y = (s.y / 100) * tcanvas.height;
+        ctx.beginPath();
+        ctx.arc(x, y, 2, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      return tcanvas.toDataURL('image/jpeg', 0.7);
+    } catch (e) {
+      console.warn('Thumbnail generation failed', e);
+      return null;
+    }
+  }, [mappedSeats]);
+
   const handlePublish = async (comments) => {
     setPublishing(true);
     try {
       // Persist current state as draft first
       await api.put(`/floor-plans/${planId}/draft`, { name: plan.name, pdfUrl, seats: Object.values(mappedSeats) });
       await api.post(`/floor-plans/${planId}/publish`, { comments });
+      // Best-effort thumbnail
+      const thumb = generateThumbnail();
+      if (thumb) {
+        try { await api.put(`/floor-plans/${planId}/thumbnail`, { thumbnail: thumb }); } catch (e) { /* non-blocking */ }
+      }
       setShowPublishDialog(false);
       await loadPlan();
     } catch (e) {
@@ -498,11 +709,32 @@ export default function SeatCalibrationPage() {
 
   // ---------------------------- Keyboard shortcuts
   useEffect(() => {
+    const ARROWS = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
     const handler = (e) => {
+      const tag = document.activeElement?.tagName;
+      const inField = ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag);
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
       else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
-      else if (e.key === 'Delete' && selectedSeats.length > 0) { e.preventDefault(); deleteSelected(); }
+      else if (e.key === 'Delete' && selectedSeats.length > 0 && !inField) { e.preventDefault(); deleteSelected(); }
       else if ((e.ctrlKey || e.metaKey) && e.key === 's' && !e.shiftKey) { e.preventDefault(); saveDraft(); }
+      else if (ARROWS[e.key] && selectedSeats.length > 0 && !inField) {
+        e.preventDefault();
+        const stepPx = (e.ctrlKey || e.metaKey) ? 10 : (e.shiftKey ? 5 : 1);
+        const rect = containerRef.current?.getBoundingClientRect();
+        const w = rect?.width || pageWidth;
+        const h = rect?.height || pageWidth;
+        const [dxDir, dyDir] = ARROWS[e.key];
+        const dxPct = (dxDir * stepPx / w) * 100;
+        const dyPct = (dyDir * stepPx / h) * 100;
+        const ns = { ...mappedSeats };
+        let moved = 0;
+        selectedSeats.forEach(id => {
+          if (!ns[id] || ns[id].locked) return;
+          ns[id] = { ...ns[id], x: r2(ns[id].x + dxPct), y: r2(ns[id].y + dyPct) };
+          moved++;
+        });
+        if (moved > 0) commit(ns);
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -692,9 +924,9 @@ export default function SeatCalibrationPage() {
               </div>
 
               <div className="grid grid-cols-3 gap-1 mb-1">
-                <button onClick={() => alignSelected('horizontal')} disabled={selectedSeats.length < 2} className="py-1 bg-blue-500 text-white rounded text-[10px] disabled:opacity-50" data-testid="align-h-btn"><Minus size={10} className="inline"/>H</button>
-                <button onClick={() => alignSelected('vertical')} disabled={selectedSeats.length < 2} className="py-1 bg-blue-500 text-white rounded text-[10px] disabled:opacity-50" data-testid="align-v-btn"><MoreVertical size={10} className="inline"/>V</button>
-                <button onClick={autoGenerateBay} className="py-1 bg-purple-500 text-white rounded text-[10px]" data-testid="auto-gen-btn"><Wand2 size={10} className="inline"/>Auto</button>
+                <button onClick={smartAlign} disabled={selectedSeats.length < 2} className="py-1 bg-blue-500 text-white rounded text-[10px] disabled:opacity-50" data-testid="smart-align-btn" title="Rotation-aware align with overlap avoidance"><Wand2 size={10} className="inline"/> Smart Align</button>
+                <button onClick={autoGenerateBay} className="py-1 bg-purple-500 text-white rounded text-[10px]" data-testid="auto-gen-btn"><Wand2 size={10} className="inline"/>Auto-Gen Bay</button>
+                <button onClick={() => { const sample = selectedSeats[0]; if (sample) { const ns = { ...mappedSeats }; let result = ns; const bays = new Set(selectedSeats.map(bayOf)); bays.forEach(b => { result = renumberBay(result, b); }); commit(result); }}} disabled={selectedSeats.length === 0} className="py-1 bg-teal-500 text-white rounded text-[10px] disabled:opacity-50" data-testid="renumber-btn" title="Re-number affected bay(s)">Renumber</button>
               </div>
               <div className="grid grid-cols-2 gap-1 mb-1">
                 <button onClick={() => lockSelected(true)} className="py-1 bg-slate-600 text-white rounded text-[10px]" data-testid="lock-btn"><Lock size={10} className="inline"/> Lock</button>
@@ -704,6 +936,14 @@ export default function SeatCalibrationPage() {
                 <button onClick={renamePrefix} className="py-1 bg-indigo-500 text-white rounded text-[10px]" data-testid="rename-prefix-btn">Rename Prefix</button>
                 <button onClick={deleteSelected} className="py-1 bg-red-500 text-white rounded text-[10px]" data-testid="delete-selected-btn"><Trash2 size={10} className="inline"/> Delete</button>
               </div>
+
+              {/* Per-seat rename — only when exactly one seat is selected */}
+              {selectedSeats.length === 1 && mappedSeats[selectedSeats[0]] && (
+                <SeatRenameField
+                  seatId={selectedSeats[0]}
+                  onRename={(newId) => renameSeat(selectedSeats[0], newId)}
+                />
+              )}
             </div>
           )}
 
@@ -794,8 +1034,21 @@ export default function SeatCalibrationPage() {
                       const isSelected = selectedSeats.includes(seat.id);
                       const displaySize = isSelected ? pendingSize : (seat.size || 10);
                       const displayRot = isSelected ? pendingRotation : (seat.rotation || 0);
+                      const draggable = toolMode === 'select' && !previewMode && !seat.locked;
                       return (
-                        <div key={seat.id} className="absolute" style={{ left: `${seat.x}%`, top: `${seat.y}%`, transform: 'translate(-50%, -50%)', pointerEvents: 'auto' }}>
+                        <div
+                          key={seat.id}
+                          className="absolute"
+                          style={{
+                            left: `${seat.x}%`,
+                            top: `${seat.y}%`,
+                            transform: 'translate(-50%, -50%)',
+                            pointerEvents: 'auto',
+                            cursor: draggable ? 'move' : (toolMode === 'select' ? 'pointer' : 'inherit'),
+                          }}
+                          onMouseDown={(e) => handleSeatMouseDown(seat, e)}
+                          data-testid={`seat-${seat.id}`}
+                        >
                           <SeatIcon
                             size={displaySize}
                             label={previewMode ? null : seat.label}
@@ -883,6 +1136,34 @@ export default function SeatCalibrationPage() {
           Unsaved draft · auto-saving in 30s
         </div>
       )}
+    </div>
+  );
+}
+
+// --------------------------------------------------------------------- Per-seat rename input
+function SeatRenameField({ seatId, onRename }) {
+  const [val, setVal] = React.useState(seatId);
+  React.useEffect(() => { setVal(seatId); }, [seatId]);
+  const submit = () => { if (val.trim() && val.trim().toUpperCase() !== seatId) onRename(val.trim()); };
+  return (
+    <div className="mt-2 p-1.5 bg-white border rounded">
+      <div className="text-[10px] font-semibold text-gray-600 mb-1">RENAME SEAT</div>
+      <div className="flex gap-1">
+        <input
+          value={val}
+          onChange={(e) => setVal(e.target.value.toUpperCase())}
+          onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+          className="flex-1 px-2 py-1 border rounded text-[11px] font-mono uppercase"
+          placeholder="e.g. A12"
+          data-testid="seat-rename-input"
+          maxLength={8}
+        />
+        <button
+          onClick={submit}
+          className="px-2 py-1 bg-indigo-500 text-white rounded text-[10px] font-semibold"
+          data-testid="seat-rename-submit"
+        >Save</button>
+      </div>
     </div>
   );
 }

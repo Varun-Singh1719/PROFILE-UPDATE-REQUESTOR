@@ -105,23 +105,34 @@ export default function FloorPlansListPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {plans.map(p => (
-              <div key={p.id} data-testid={`plan-card-${p.id}`} className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-md transition-shadow">
+              <div key={p.id} data-testid={`plan-card-${p.id}`} className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow">
+                <div className="relative h-32 bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-100 flex items-center justify-center overflow-hidden">
+                  {p.thumbnail ? (
+                    <img src={p.thumbnail} alt={`${p.name} preview`} className="w-full h-full object-cover"/>
+                  ) : (
+                    <div className="flex flex-col items-center text-gray-400">
+                      <FileText size={26}/>
+                      <span className="text-[10px] mt-1">No preview yet</span>
+                    </div>
+                  )}
+                  <div className="absolute top-2 left-2 flex items-center gap-1">
+                    {p.default && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold border border-amber-200">
+                        <Star size={9} fill="currentColor"/> DEFAULT
+                      </span>
+                    )}
+                    {p.has_draft && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold border border-blue-200">
+                        DRAFT
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="p-5">
                 <div className="flex items-start justify-between mb-3">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-bold text-gray-900 truncate">{p.name}</h3>
-                      {p.default && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 text-xs font-semibold border border-amber-200">
-                          <Star size={10} fill="currentColor" /> Default
-                        </span>
-                      )}
-                      {p.has_draft && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold border border-blue-200">
-                          Draft
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-xs text-gray-500 flex items-center gap-3 flex-wrap">
+                    <h3 className="font-bold text-gray-900 truncate">{p.name}</h3>
+                    <div className="text-xs text-gray-500 flex items-center gap-3 flex-wrap mt-1">
                       <span className="inline-flex items-center gap-1"><MapPin size={11} /> {p.live_seat_count} live seats</span>
                       <span className="inline-flex items-center gap-1"><History size={11} /> {p.version_count} versions</span>
                     </div>
@@ -165,6 +176,7 @@ export default function FloorPlansListPage() {
                   >
                     <Trash2 size={13} /> Delete
                   </button>
+                </div>
                 </div>
               </div>
             ))}

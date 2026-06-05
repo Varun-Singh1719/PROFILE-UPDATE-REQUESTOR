@@ -70,6 +70,10 @@ class RollbackIn(BaseModel):
     comments: str = ""
 
 
+class ThumbnailIn(BaseModel):
+    thumbnail: str  # data URL (image/png base64)
+
+
 # --------------------------------------------------------------------------- #
 # Helpers                                                                     #
 # --------------------------------------------------------------------------- #
@@ -563,6 +567,26 @@ async def rollback_to_version(
                     metadata={"from_version": target.get("version_number"),
                               "new_version": version_number, "diff": diff["counts"]})
     return {"ok": True, "version_id": new_version_id, "version_number": version_number, "diff": diff}
+
+
+# --------------------------------------------------------------------------- #
+# Thumbnail                                                                   #
+# --------------------------------------------------------------------------- #
+
+@api_router.put("/floor-plans/{plan_id}/thumbnail")
+async def set_thumbnail(
+    plan_id: str,
+    payload: ThumbnailIn,
+    user=Depends(require_role("Super Admin", "Admin")),
+):
+    """Store a base64 data-URL thumbnail. ~50KB-200KB strings."""
+    await _get_plan_or_404(plan_id)
+    if not payload.thumbnail.startswith("data:image/"):
+        raise HTTPException(400, "Thumbnail must be a data:image/* URL")
+    if len(payload.thumbnail) > 800_000:  # ~600KB binary cap
+        raise HTTPException(400, "Thumbnail too large")
+    await db.floor_plans.update_one({"id": plan_id}, {"$set": {"thumbnail": payload.thumbnail}})
+    return {"ok": True}
 
 
 # --------------------------------------------------------------------------- #
