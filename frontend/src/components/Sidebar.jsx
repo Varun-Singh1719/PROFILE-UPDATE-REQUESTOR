@@ -381,7 +381,7 @@ function SidebarHeader({ collapsed, user, onToggle, mobile, onSearch }) {
 // --------------------------------------------------------------------------
 function SidebarNav({ collapsed, currentPath, can, isSuperAdmin, onNavigate }) {
   return (
-    <nav className={`flex-1 overflow-y-auto overflow-x-hidden py-3 ${collapsed ? "px-1.5" : "px-3"} space-y-1`}>
+    <nav className={`flex-1 overflow-y-auto py-3 ${collapsed ? "px-1.5 overflow-x-visible" : "px-3 overflow-x-hidden"} space-y-1`}>
       {NAV_CONFIG.map(item => {
         if (item.kind === "link") {
           if (item.perm && !isSuperAdmin && !can(item.perm.module, item.perm.feature, item.perm.action)) return null;
