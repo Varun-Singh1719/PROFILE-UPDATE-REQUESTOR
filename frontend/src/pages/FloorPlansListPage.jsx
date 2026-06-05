@@ -285,24 +285,24 @@ function StatusBadge({ status }) {
 }
 
 // -------------------- Icon-only action button --------------------------- //
+const ICON_BTN_BASE = "relative group inline-flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 transition-colors";
+const TOOLTIP_CLASS = "pointer-events-none absolute top-full mt-1.5 left-1/2 -translate-x-1/2 whitespace-nowrap px-2 py-1 rounded bg-gray-800 text-white text-[11px] font-medium opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-md";
+
 function IconBtn({ icon: Icon, label, onClick, disabled, danger, testId }) {
-  const base = "relative group inline-flex items-center justify-center w-8 h-8 rounded-lg transition-colors";
   const color = danger
-    ? "text-red-600 hover:bg-red-50 disabled:text-gray-300 disabled:hover:bg-transparent"
-    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:text-gray-300 disabled:hover:bg-transparent";
+    ? "text-red-600 hover:bg-red-100"
+    : "text-gray-600 hover:bg-gray-200 hover:text-gray-900";
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
       data-testid={testId}
-      className={`${base} ${color} disabled:cursor-not-allowed`}
+      className={`${ICON_BTN_BASE} ${color} disabled:opacity-40 disabled:cursor-not-allowed`}
       aria-label={label}
     >
       <Icon size={15} />
-      <span className="pointer-events-none absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap px-1.5 py-0.5 rounded bg-gray-900 text-white text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity z-10">
-        {label}
-      </span>
+      <span className={TOOLTIP_CLASS}>{label}</span>
     </button>
   );
 }
@@ -351,33 +351,31 @@ function PlanCard({ plan: p, onClone, onDelete }) {
         </div>
 
         {/* Icon-only action row */}
-        <div className="flex items-center justify-end gap-1 pt-2 border-t border-gray-100">
+        <div className="flex items-center justify-end gap-1.5 pt-3 border-t border-gray-100">
           <Link
             to={`/workspace-manager/floor-layout`}
-            className={`relative group inline-flex items-center justify-center w-8 h-8 rounded-lg transition-colors ${
+            className={`${ICON_BTN_BASE} ${
               p.status === "live"
-                ? "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                : "text-gray-300 cursor-not-allowed pointer-events-none"
+                ? "text-gray-600 hover:bg-gray-200 hover:text-gray-900"
+                : "text-gray-300 cursor-not-allowed pointer-events-none bg-gray-50"
             }`}
             aria-label="View"
             data-testid={`view-plan-${p.id}`}
             onClick={(e) => { if (p.status !== "live") e.preventDefault(); }}
           >
             <Eye size={15} />
-            <span className="pointer-events-none absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap px-1.5 py-0.5 rounded bg-gray-900 text-white text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity z-10">
+            <span className={TOOLTIP_CLASS}>
               {p.status === "live" ? "View" : "No live version"}
             </span>
           </Link>
           <Link
             to={`/workspace-manager/calibration/${p.id}`}
-            className="relative group inline-flex items-center justify-center w-8 h-8 rounded-lg transition-colors text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+            className={`${ICON_BTN_BASE} text-gray-600 hover:bg-gray-200 hover:text-gray-900`}
             aria-label="Edit"
             data-testid={`open-plan-${p.id}`}
           >
             <Pencil size={15} />
-            <span className="pointer-events-none absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap px-1.5 py-0.5 rounded bg-gray-900 text-white text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity z-10">
-              Edit
-            </span>
+            <span className={TOOLTIP_CLASS}>Edit</span>
           </Link>
           <IconBtn icon={Copy} label="Clone" onClick={onClone} testId={`clone-plan-${p.id}`} />
           <IconBtn icon={Trash2} label="Delete" onClick={onDelete} danger testId={`delete-plan-${p.id}`} />
