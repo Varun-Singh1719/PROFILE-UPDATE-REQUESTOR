@@ -380,8 +380,11 @@ function SidebarHeader({ collapsed, user, onToggle, mobile, onSearch }) {
 // Nav list
 // --------------------------------------------------------------------------
 function SidebarNav({ collapsed, currentPath, can, isSuperAdmin, onNavigate }) {
+  // CSS quirk: setting overflow-y on one axis coerces the other to non-visible too.
+  // For the collapsed icon-only view we keep `overflow-visible` so hover tooltips
+  // (which extend to the right of the sidebar) are not clipped.
   return (
-    <nav className={`flex-1 overflow-y-auto py-3 ${collapsed ? "px-1.5 overflow-x-visible" : "px-3 overflow-x-hidden"} space-y-1`}>
+    <nav className={`flex-1 py-3 space-y-1 ${collapsed ? "px-1.5 overflow-visible" : "px-3 overflow-y-auto overflow-x-hidden"}`}>
       {NAV_CONFIG.map(item => {
         if (item.kind === "link") {
           if (item.perm && !isSuperAdmin && !can(item.perm.module, item.perm.feature, item.perm.action)) return null;
