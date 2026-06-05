@@ -441,13 +441,18 @@ export default function SeatCalibrationPage() {
   // ---------------------------- Per-seat drag handler
   const handleSeatMouseDown = (seat, e) => {
     if (!isCalibrating || previewMode) return;
-    if (toolMode !== 'select') return;
+    // Allow drag in select mode (any seat) AND in box/lasso mode (only if seat is already selected)
+    const isPartOfSelection = selectedSeats.includes(seat.id);
+    const canDrag =
+      toolMode === "select" ||
+      ((toolMode === "box" || toolMode === "lasso") && isPartOfSelection);
+    if (!canDrag) return;
     if (seat.locked) return;
     e.stopPropagation();
     e.preventDefault();
 
-    const dragIds = selectedSeats.includes(seat.id) ? [...selectedSeats] : [seat.id];
-    if (!selectedSeats.includes(seat.id)) {
+    const dragIds = isPartOfSelection ? [...selectedSeats] : [seat.id];
+    if (!isPartOfSelection) {
       setSelectedSeats([seat.id]);
       setPendingSize(seat.size || 10);
       setPendingRotation(seat.rotation || 0);
@@ -823,18 +828,27 @@ export default function SeatCalibrationPage() {
             {draftDirty && <span className="ml-2 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded font-semibold">Draft</span>}
           </div>
 
-          {/* Save / Publish */}
-          <div className="grid grid-cols-2 gap-2 mb-3">
+          {/* Save / Live toggle */}
+          <div className="grid grid-cols-2 gap-2 mb-2">
             <button onClick={() => saveDraft()} disabled={saving || !draftDirty} data-testid="save-draft-btn"
-              className="py-2 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed">
+              className="py-2 bg-white border border-gray-200 hover:border-[#ec9324] hover:text-[#ec9324] text-gray-700 rounded text-xs flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
               <Save size={13}/>{saving ? 'Saving…' : 'Save Draft'}
             </button>
-            <button onClick={() => setShowPublishDialog(true)} disabled={totalMapped === 0 || validation.dupes.size > 0}
-              data-testid="publish-btn"
-              title={validation.dupes.size > 0 ? 'Resolve duplicate IDs first' : 'Publish current state to Live'}
-              className="py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed">
-              <Send size={13}/>Publish Live
-            </button>
+            <LiveToggle
+              plan={plan}
+              draftDirty={draftDirty}
+              totalMapped={totalMapped}
+              hasDupes={validation.dupes.size > 0}
+              onPublishRequested={() => setShowPublishDialog(true)}
+              onSetStatus={async (next) => {
+                try {
+                  await api.patch(`/floor-plans/${planId}/status`, { status: next });
+                  await loadPlan();
+                } catch (e) {
+                  alert(`Failed to update status: ${e?.response?.data?.detail || e.message}`);
+                }
+              }}
+            />
           </div>
           <div className="text-[10px] text-gray-500 mb-3">
             {lastSaved ? `Saved ${new Date(lastSaved).toLocaleTimeString()}` : 'Not saved yet'} · auto-save every 30s
@@ -881,34 +895,46 @@ export default function SeatCalibrationPage() {
             <div className="text-[10px] font-semibold mb-1.5 text-gray-700">TOOL MODE</div>
             <div className="grid grid-cols-5 gap-1">
               {[
-                { mode: 'place',  Icon: MapPin, color: 'bg-blue-500' },
-                { mode: 'select', Icon: Settings, color: 'bg-green-500' },
-                { mode: 'box',    Icon: Square, color: 'bg-purple-500' },
-                { mode: 'lasso',  Icon: Lasso, color: 'bg-pink-500' },
-                { mode: 'delete', Icon: Trash2, color: 'bg-red-500' },
-              ].map(({ mode, Icon, color }) => (
-                <button key={mode} onClick={() => { setToolMode(mode); setIsCalibrating(true); }}
-                  data-testid={`tool-${mode}`}
-                  className={`p-1.5 rounded text-[10px] flex flex-col items-center gap-0.5 capitalize ${toolMode === mode ? `${color} text-white` : 'bg-white border'}`}>
-                  <Icon size={12}/>{mode}
-                </button>
-              ))}
+                { mode: 'place',  Icon: MapPin,   label: 'Place' },
+                { mode: 'select', Icon: Settings, label: 'Select' },
+                { mode: 'box',    Icon: Square,   label: 'Multi Select' },
+                { mode: 'lasso',  Icon: Lasso,    label: 'Lasso' },
+                { mode: 'delete', Icon: Trash2,   label: 'Delete' },
+              ].map(({ mode, Icon, label }) => {
+                const active = toolMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    onClick={() => { setToolMode(mode); setIsCalibrating(true); }}
+                    data-testid={`tool-${mode}`}
+                    title={label}
+                    className={`p-1.5 rounded text-[9px] flex flex-col items-center gap-0.5 border transition-colors ${
+                      active
+                        ? 'bg-[#ec9324] text-white border-[#ec9324]'
+                        : 'bg-white text-gray-700 border-gray-200 hover:border-[#ec9324] hover:text-[#ec9324]'
+                    }`}
+                  >
+                    <Icon size={12}/>
+                    <span className="leading-tight text-center">{label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* Bay controls */}
-          <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded">
-            <div className="text-[10px] font-semibold mb-1.5 text-blue-900">BAY · {isBayLocked(currentBay) && <Lock size={10} className="inline"/>}</div>
+          <div className="mb-3 p-2 bg-gray-50 border border-gray-200 rounded">
+            <div className="text-[10px] font-semibold mb-1.5 text-gray-700">BAY {isBayLocked(currentBay) && <Lock size={10} className="inline"/>}</div>
             <div className="flex items-center gap-1 mb-1">
-              <button onClick={() => setCurrentBay(String.fromCharCode(Math.max(65, currentBay.charCodeAt(0) - 1)))} className="p-1 bg-white border rounded"><ChevronLeft size={12}/></button>
-              <select value={currentBay} onChange={(e) => setCurrentBay(e.target.value)} className="flex-1 px-1.5 py-1 border rounded text-xs font-bold" data-testid="bay-select">
+              <button onClick={() => setCurrentBay(String.fromCharCode(Math.max(65, currentBay.charCodeAt(0) - 1)))} className="p-1 bg-white border border-gray-200 rounded hover:border-[#ec9324]"><ChevronLeft size={12}/></button>
+              <select value={currentBay} onChange={(e) => setCurrentBay(e.target.value)} className="flex-1 px-1.5 py-1 border border-gray-200 rounded text-xs font-bold bg-white focus:outline-none focus:border-[#ec9324]" data-testid="bay-select">
                 {Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)).map(l => <option key={l} value={l}>Bay {l}</option>)}
               </select>
-              <button onClick={() => setCurrentBay(String.fromCharCode(Math.min(90, currentBay.charCodeAt(0) + 1)))} className="p-1 bg-white border rounded"><ChevronRight size={12}/></button>
+              <button onClick={() => setCurrentBay(String.fromCharCode(Math.min(90, currentBay.charCodeAt(0) + 1)))} className="p-1 bg-white border border-gray-200 rounded hover:border-[#ec9324]"><ChevronRight size={12}/></button>
             </div>
-            <div className="flex justify-between items-center text-[10px] text-blue-700">
+            <div className="flex justify-between items-center text-[10px] text-gray-600">
               <span>{currentBaySeats.length} seat(s)</span>
-              <button onClick={() => toggleBayLock(currentBay, !isBayLocked(currentBay))} className="flex items-center gap-0.5 hover:underline" data-testid="bay-lock-toggle">
+              <button onClick={() => toggleBayLock(currentBay, !isBayLocked(currentBay))} className="flex items-center gap-0.5 hover:text-[#ec9324]" data-testid="bay-lock-toggle">
                 {isBayLocked(currentBay) ? <><Unlock size={10}/> unlock bay</> : <><Lock size={10}/> lock bay</>}
               </button>
             </div>
@@ -916,65 +942,100 @@ export default function SeatCalibrationPage() {
 
           {/* Snap to grid */}
           <div className="mb-3 p-2 bg-gray-50 rounded">
-            <div className="flex items-center justify-between text-[10px] font-semibold text-gray-700 mb-1.5">
-              <span><Grid size={10} className="inline mr-1"/>SNAP TO GRID</span>
-              <span>{snapGrid ? `${snapGrid}px` : 'Off'}</span>
-            </div>
-            <div className="flex gap-1">
-              {GRID_SIZES.map(g => (
-                <button key={g} onClick={() => setSnapGrid(g)} data-testid={`snap-${g}`}
-                  className={`flex-1 py-1 text-[10px] rounded ${snapGrid === g ? 'bg-[#ec9324] text-white' : 'bg-white border'}`}>
-                  {g === 0 ? 'Off' : g}
-                </button>
-              ))}
-            </div>
+            <label className="flex items-center justify-between text-[10px] font-semibold text-gray-700 gap-2">
+              <span className="inline-flex items-center"><Grid size={10} className="mr-1"/>SNAP TO GRID</span>
+              <select
+                value={String(snapGrid)}
+                onChange={(e) => setSnapGrid(parseInt(e.target.value, 10))}
+                data-testid="snap-select"
+                className="text-[10px] px-2 py-1 border border-gray-200 rounded bg-white focus:outline-none focus:border-[#ec9324] min-w-[64px]"
+              >
+                {GRID_SIZES.map(g => (
+                  <option key={g} value={g}>{g === 0 ? 'Off' : `${g} px`}</option>
+                ))}
+              </select>
+            </label>
           </div>
 
           {/* Selected / Bulk Actions */}
           {selectedSeats.length > 0 && (
-            <div className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded" data-testid="bulk-panel">
-              <div className="text-[10px] font-semibold mb-1.5 text-amber-900">
-                {selectedSeats.length} selected{lockedCount > 0 ? ` · ${lockedCount} locked total` : ''}
+            <div className="mb-3 border border-[#ec9324]/30 bg-orange-50/50 rounded overflow-hidden" data-testid="bulk-panel">
+              <div className="px-2 py-1.5 bg-[#ec9324]/10 flex items-center justify-between border-b border-[#ec9324]/20">
+                <span className="text-[11px] font-bold text-[#ec9324]">{selectedSeats.length} selected</span>
+                <button
+                  onClick={() => setSelectedSeats([])}
+                  className="text-[10px] text-gray-500 hover:text-gray-700"
+                  data-testid="clear-selection-btn"
+                  title="Clear selection"
+                >
+                  Clear
+                </button>
               </div>
 
-              <div className="mb-2 p-1.5 bg-white rounded border space-y-1.5">
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] w-12">Size</span>
-                  <input type="range" min="1" max="50" step="0.5" value={pendingSize} onChange={(e) => setPendingSize(parseFloat(e.target.value))} className="flex-1" data-testid="size-slider"/>
-                  <span className="text-[10px] w-6">{pendingSize}</span>
+              <div className="p-2 space-y-2">
+                {/* Size + Rotate sliders */}
+                <div className="bg-white rounded border border-gray-100 p-2 space-y-1.5">
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-gray-500 w-10">Size</span>
+                    <input type="range" min="1" max="50" step="0.5" value={pendingSize} onChange={(e) => setPendingSize(parseFloat(e.target.value))} className="flex-1 accent-[#ec9324]" data-testid="size-slider"/>
+                    <span className="text-[10px] font-mono w-7 text-right">{pendingSize}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-gray-500 w-10">Rotate</span>
+                    <input type="range" min="0" max="360" step="15" value={pendingRotation} onChange={(e) => setPendingRotation(parseInt(e.target.value))} className="flex-1 accent-[#ec9324]" data-testid="rotation-slider"/>
+                    <span className="text-[10px] font-mono w-9 text-right">{pendingRotation}°</span>
+                  </div>
+                  <div className="flex gap-1 pt-0.5">
+                    <button
+                      onClick={() => { applyDraftChanges(); setSelectedSeats([]); }}
+                      className="flex-1 py-1 bg-[#ec9324] hover:bg-[#d6831f] text-white rounded text-[10px] font-semibold flex items-center justify-center gap-0.5"
+                      data-testid="apply-draft-btn"
+                    ><Check size={10}/> Apply</button>
+                    <button
+                      onClick={cancelDraftChanges}
+                      className="flex-1 py-1 border border-gray-200 hover:bg-gray-50 text-gray-600 rounded text-[10px]"
+                      data-testid="cancel-draft-btn"
+                    >Cancel</button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] w-12">Rotate</span>
-                  <input type="range" min="0" max="360" step="15" value={pendingRotation} onChange={(e) => setPendingRotation(parseInt(e.target.value))} className="flex-1" data-testid="rotation-slider"/>
-                  <span className="text-[10px] w-6">{pendingRotation}°</span>
-                </div>
-                <div className="grid grid-cols-2 gap-1">
-                  <button onClick={applyDraftChanges} className="py-1 bg-green-500 text-white rounded text-[10px] flex items-center justify-center gap-0.5" data-testid="apply-draft-btn"><Check size={10}/>Apply</button>
-                  <button onClick={cancelDraftChanges} className="py-1 bg-gray-400 text-white rounded text-[10px]" data-testid="cancel-draft-btn">Cancel</button>
-                </div>
-              </div>
 
-              <div className="grid grid-cols-3 gap-1 mb-1">
-                <button onClick={smartAlign} disabled={selectedSeats.length < 2} className="py-1 bg-blue-500 text-white rounded text-[10px] disabled:opacity-50" data-testid="smart-align-btn" title="Rotation-aware align with overlap avoidance"><Wand2 size={10} className="inline"/> Smart Align</button>
-                <button onClick={autoGenerateBay} className="py-1 bg-purple-500 text-white rounded text-[10px]" data-testid="auto-gen-btn"><Wand2 size={10} className="inline"/>Auto-Gen Bay</button>
-                <button onClick={() => { const sample = selectedSeats[0]; if (sample) { const ns = { ...mappedSeats }; let result = ns; const bays = new Set(selectedSeats.map(bayOf)); bays.forEach(b => { result = renumberBay(result, b); }); commit(result); }}} disabled={selectedSeats.length === 0} className="py-1 bg-teal-500 text-white rounded text-[10px] disabled:opacity-50" data-testid="renumber-btn" title="Re-number affected bay(s)">Renumber</button>
-              </div>
-              <div className="grid grid-cols-2 gap-1 mb-1">
-                <button onClick={() => lockSelected(true)} className="py-1 bg-slate-600 text-white rounded text-[10px]" data-testid="lock-btn"><Lock size={10} className="inline"/> Lock</button>
-                <button onClick={() => lockSelected(false)} className="py-1 bg-slate-400 text-white rounded text-[10px]" data-testid="unlock-btn"><Unlock size={10} className="inline"/> Unlock</button>
-              </div>
-              <div className="grid grid-cols-2 gap-1">
-                <button onClick={renamePrefix} className="py-1 bg-indigo-500 text-white rounded text-[10px]" data-testid="rename-prefix-btn">Rename Prefix</button>
-                <button onClick={deleteSelected} className="py-1 bg-red-500 text-white rounded text-[10px]" data-testid="delete-selected-btn"><Trash2 size={10} className="inline"/> Delete</button>
-              </div>
+                {/* Layout actions */}
+                <div className="bg-white rounded border border-gray-100 p-2">
+                  <div className="text-[9px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Layout</div>
+                  <div className="grid grid-cols-3 gap-1">
+                    <BulkBtn label="Smart Align" icon={Wand2} onClick={() => { smartAlign(); setSelectedSeats([]); }} disabled={selectedSeats.length < 2} testId="smart-align-btn"/>
+                    <BulkBtn label="Auto-Gen" icon={Wand2} onClick={() => { autoGenerateBay(); setSelectedSeats([]); }} testId="auto-gen-btn"/>
+                    <BulkBtn label="Renumber" onClick={() => {
+                      const ns = { ...mappedSeats }; let result = ns;
+                      const bays = new Set(selectedSeats.map(bayOf));
+                      bays.forEach(b => { result = renumberBay(result, b); });
+                      commit(result);
+                      setSelectedSeats([]);
+                    }} disabled={selectedSeats.length === 0} testId="renumber-btn"/>
+                  </div>
+                </div>
 
-              {/* Per-seat rename — only when exactly one seat is selected */}
-              {selectedSeats.length === 1 && mappedSeats[selectedSeats[0]] && (
-                <SeatRenameField
-                  seatId={selectedSeats[0]}
-                  onRename={(newId) => renameSeat(selectedSeats[0], newId)}
-                />
-              )}
+                {/* Lock / Rename / Delete */}
+                <div className="bg-white rounded border border-gray-100 p-2">
+                  <div className="text-[9px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Manage</div>
+                  <div className="grid grid-cols-2 gap-1 mb-1">
+                    <BulkBtn label="Lock" icon={Lock} onClick={() => { lockSelected(true); setSelectedSeats([]); }} testId="lock-btn"/>
+                    <BulkBtn label="Unlock" icon={Unlock} onClick={() => { lockSelected(false); setSelectedSeats([]); }} testId="unlock-btn"/>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1">
+                    <BulkBtn label="Rename Prefix" onClick={() => { renamePrefix(); /* keep selection so user can verify */ }} testId="rename-prefix-btn"/>
+                    <BulkBtn label="Delete" icon={Trash2} onClick={() => { deleteSelected(); /* deleteSelected already clears selection */ }} danger testId="delete-selected-btn"/>
+                  </div>
+                </div>
+
+                {/* Per-seat rename — only when exactly one seat is selected */}
+                {selectedSeats.length === 1 && mappedSeats[selectedSeats[0]] && (
+                  <SeatRenameField
+                    seatId={selectedSeats[0]}
+                    onRename={(newId) => renameSeat(selectedSeats[0], newId)}
+                  />
+                )}
+              </div>
             </div>
           )}
 
@@ -986,12 +1047,12 @@ export default function SeatCalibrationPage() {
 
           {/* View toggles */}
           <div className="mb-3 space-y-1">
-            <label className="flex items-center gap-2 text-[11px]">
-              <input type="checkbox" checked={showCoordinates} onChange={(e) => setShowCoordinates(e.target.checked)}/>
+            <label className="flex items-center gap-2 text-[11px] cursor-pointer">
+              <input type="checkbox" checked={showCoordinates} onChange={(e) => setShowCoordinates(e.target.checked)} className="accent-[#ec9324]"/>
               Show coordinates
             </label>
-            <label className="flex items-center gap-2 text-[11px]">
-              <input type="checkbox" checked={previewMode} onChange={(e) => setPreviewMode(e.target.checked)}/>
+            <label className="flex items-center gap-2 text-[11px] cursor-pointer">
+              <input type="checkbox" checked={previewMode} onChange={(e) => setPreviewMode(e.target.checked)} className="accent-[#ec9324]"/>
               Preview mode
             </label>
           </div>
@@ -1093,7 +1154,10 @@ export default function SeatCalibrationPage() {
                       const isSelected = selectedSeats.includes(seat.id);
                       const displaySize = isSelected ? pendingSize : (seat.size || 10);
                       const displayRot = isSelected ? pendingRotation : (seat.rotation || 0);
-                      const draggable = toolMode === 'select' && !previewMode && !seat.locked;
+                      const canDrag = !previewMode && !seat.locked && (
+                        toolMode === "select" ||
+                        ((toolMode === "box" || toolMode === "lasso") && isSelected)
+                      );
                       return (
                         <div
                           key={seat.id}
@@ -1103,7 +1167,7 @@ export default function SeatCalibrationPage() {
                             top: `${seat.y}%`,
                             transform: 'translate(-50%, -50%)',
                             pointerEvents: 'auto',
-                            cursor: draggable ? 'move' : (toolMode === 'select' ? 'pointer' : 'inherit'),
+                            cursor: canDrag ? 'move' : (toolMode === 'select' ? 'pointer' : 'inherit'),
                           }}
                           onMouseDown={(e) => handleSeatMouseDown(seat, e)}
                           data-testid={`seat-${seat.id}`}
@@ -1129,8 +1193,8 @@ export default function SeatCalibrationPage() {
                       top: `${Math.min(selectionRect.y1, selectionRect.y2)}%`,
                       width: `${Math.abs(selectionRect.x2 - selectionRect.x1)}%`,
                       height: `${Math.abs(selectionRect.y2 - selectionRect.y1)}%`,
-                      border: '2px dashed #3b82f6',
-                      background: 'rgba(59,130,246,0.08)',
+                      border: '1px dashed #ec9324',
+                      background: 'rgba(236,147,36,0.06)',
                     }}/>
                   )}
 
@@ -1154,7 +1218,7 @@ export default function SeatCalibrationPage() {
                         ? `🔒 Bay ${currentBay} locked`
                         : `✓ Place Mode · Bay ${currentBay} · Click to add ${currentBay}${nextSeatNumber}`)}
                       {toolMode === 'select' && '✓ Select Mode · Click seats to edit'}
-                      {toolMode === 'box'    && '✓ Box Select · Drag to select (Shift add, Ctrl remove)'}
+                      {toolMode === 'box'    && '✓ Multi Select · Drag to select · Hold over selected seat to move'}
                       {toolMode === 'lasso'  && '✓ Lasso Select · Drag freeform shape'}
                       {toolMode === 'delete' && '✓ Delete Mode · Click seats to remove'}
                     </div>
@@ -1197,6 +1261,66 @@ export default function SeatCalibrationPage() {
         </div>
       )}
     </Layout>
+  );
+}
+
+// --------------------------------------------------------------------- Live toggle (On/Off)
+function BulkBtn({ label, icon: Icon, onClick, disabled, danger, testId }) {
+  const base = "py-1 px-1.5 border rounded text-[10px] flex items-center justify-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
+  const tone = danger
+    ? "border-red-200 text-red-600 hover:bg-red-50"
+    : "border-gray-200 text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324]";
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} data-testid={testId} className={`${base} ${tone}`}>
+      {Icon ? <Icon size={10}/> : null}
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function LiveToggle({ plan, draftDirty, totalMapped, hasDupes, onPublishRequested, onSetStatus }) {
+  // Derive the current state from the plan + draft state
+  const hasLive = !!plan?.live_version_id;
+  const isLive = hasLive && plan?.status !== "inactive";
+  // Clicking "On":
+  //  - If there is no live version yet, OR there are draft changes pending → trigger publish flow
+  //  - Otherwise (inactive + clean) → flip status to live
+  const handleOn = () => {
+    if (!hasLive || draftDirty) {
+      if (totalMapped === 0) { alert("Place at least one seat before going Live."); return; }
+      if (hasDupes) { alert("Resolve duplicate seat IDs before publishing."); return; }
+      onPublishRequested();
+    } else if (!isLive) {
+      onSetStatus("live");
+    }
+  };
+  const handleOff = () => {
+    if (isLive) onSetStatus("inactive");
+  };
+  const pill = "flex-1 py-1.5 text-[11px] font-semibold transition-colors";
+  return (
+    <div className="flex items-center bg-white border border-gray-200 rounded overflow-hidden" data-testid="live-toggle">
+      <span className="px-2 text-[10px] font-semibold text-gray-600 border-r border-gray-200">Live</span>
+      <button
+        type="button"
+        onClick={handleOn}
+        data-testid="live-on-btn"
+        className={`${pill} ${isLive ? "bg-[#ec9324] text-white" : "text-gray-500 hover:bg-gray-50"}`}
+        title={!hasLive || draftDirty ? "Publish current state to go Live" : "Mark plan as Live"}
+      >
+        On
+      </button>
+      <button
+        type="button"
+        onClick={handleOff}
+        disabled={!isLive}
+        data-testid="live-off-btn"
+        className={`${pill} ${!isLive ? "bg-gray-400 text-white" : "text-gray-500 hover:bg-gray-50"} disabled:cursor-not-allowed`}
+        title={isLive ? "Mark plan as Inactive (hidden from Floor Layout)" : ""}
+      >
+        Off
+      </button>
+    </div>
   );
 }
 
