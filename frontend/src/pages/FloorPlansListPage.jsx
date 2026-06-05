@@ -40,7 +40,7 @@ export default function FloorPlansListPage() {
 
   const createPlan = async () => {
     const finalPdfUrl = createMode === "upload"
-      ? (uploadedPdfPath ? `/api/files/${uploadedPdfPath.path}` : "")
+      ? (uploadedPdfPath ? uploadedPdfPath.path : "")
       : createPdf.trim();
     if (!createName.trim() || !finalPdfUrl) return;
     setWorking(true);
@@ -60,21 +60,21 @@ export default function FloorPlansListPage() {
       setUploadError("Please pick a PDF file.");
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setUploadError("PDF too large (max 10 MB).");
+    if (file.size > 15 * 1024 * 1024) {
+      setUploadError("PDF too large (max 15 MB).");
       return;
     }
     setUploadError(""); setUploading(true);
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await api.post("/upload", form, { headers: { "Content-Type": "multipart/form-data" } });
+      const res = await api.post("/floor-plans/upload-pdf", form, { headers: { "Content-Type": "multipart/form-data" } });
+      // server returns { path: "/api/floor-plans/pdf/<uuid>.pdf", pdfUrl, filename, size }
       setUploadedPdfPath({ path: res.data.path, filename: res.data.filename || file.name, size: res.data.size });
     } catch (err) {
       setUploadError(err?.response?.data?.detail || err.message || "Upload failed");
     } finally {
       setUploading(false);
-      // Reset the input so the same file can be re-picked
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
@@ -276,7 +276,7 @@ export default function FloorPlansListPage() {
                 <label className="flex flex-col items-center justify-center gap-1.5 px-3 py-6 border-2 border-dashed border-gray-300 hover:border-[#ec9324] rounded cursor-pointer transition-colors text-center" data-testid="upload-dropzone">
                   <Upload size={20} className="text-gray-400"/>
                   <span className="text-xs text-gray-600">
-                    {uploading ? "Uploading…" : "Click to choose a PDF (max 10 MB)"}
+                    {uploading ? "Uploading…" : "Click to choose a PDF (max 15 MB)"}
                   </span>
                   <input
                     ref={fileInputRef}

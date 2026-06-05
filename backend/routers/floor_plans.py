@@ -23,13 +23,41 @@ Backward compatibility
 """
 from __future__ import annotations
 
+import os
+import re
 import uuid
+from pathlib import Path
 from typing import List, Optional, Dict, Any
+from urllib.parse import urlparse
 
-from fastapi import Depends, HTTPException
+import jwt
+import requests
+from fastapi import Depends, HTTPException, UploadFile, File, Query, Request
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from core import api_router, db, get_current_user, require_role, now_iso, log_audit
+from core import api_router, db, get_current_user, require_role, now_iso, log_audit, JWT_SECRET, JWT_ALGORITHM
+
+# Local on-disk storage for uploaded floor-plan PDFs
+PDF_STORAGE_DIR = Path(__file__).resolve().parent.parent / "uploads" / "floor-plans"
+PDF_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+PDF_FILENAME_RE = re.compile(r"^[a-f0-9-]{36}\.pdf$")  # uuid.pdf only
+
+
+def _verify_token_from_request(request: Request, auth_query: Optional[str]) -> None:
+    """Auth check that also accepts ?auth=<jwt> query (for direct <iframe>/<embed> fetches)."""
+    token = request.cookies.get("access_token") or auth_query
+    if not token:
+        bearer = request.headers.get("Authorization", "")
+        if bearer.startswith("Bearer "):
+            token = bearer[7:]
+    if not token:
+        raise HTTPException(401, "Not authenticated")
+    try:
+        jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except Exception:
+        raise HTTPException(401, "Invalid token")
+
 
 
 # --------------------------------------------------------------------------- #
@@ -282,6 +310,85 @@ async def get_active_floor_plan(user=Depends(get_current_user)):
         "updated_by": v.get("created_by"),
         "version_number": v.get("version_number"),
     }
+
+
+# --------------------------------------------------------------------------- #
+# PDF upload (local disk) + serve + external-URL proxy                        #
+# IMPORTANT: declared BEFORE GET /floor-plans/{plan_id} so the literal paths  #
+# "/upload-pdf", "/pdf/{filename}", "/proxy-pdf" aren't matched as plan ids.  #
+# --------------------------------------------------------------------------- #
+
+MAX_PDF_BYTES = 15 * 1024 * 1024  # 15 MB cap
+ALLOWED_PROXY_SCHEMES = {"http", "https"}
+
+
+@api_router.post("/floor-plans/upload-pdf")
+async def upload_pdf(
+    file: UploadFile = File(...),
+    user=Depends(require_role("Super Admin", "Admin")),
+):
+    """Persist a PDF on the backend disk and return a relative URL for use as pdfUrl."""
+    data = await file.read()
+    if len(data) > MAX_PDF_BYTES:
+        raise HTTPException(400, f"PDF too large (max {MAX_PDF_BYTES // (1024 * 1024)} MB)")
+    ctype = (file.content_type or "").lower()
+    fname_lower = (file.filename or "").lower()
+    if not (ctype == "application/pdf" or fname_lower.endswith(".pdf") or data[:5] == b"%PDF-"):
+        raise HTTPException(400, "Only PDF files are accepted")
+    if not data.startswith(b"%PDF"):
+        raise HTTPException(400, "File does not look like a valid PDF")
+    new_name = f"{uuid.uuid4()}.pdf"
+    dest = PDF_STORAGE_DIR / new_name
+    dest.write_bytes(data)
+    rel = f"/api/floor-plans/pdf/{new_name}"
+    return {
+        "filename": file.filename,
+        "size": len(data),
+        "path": rel,
+        "pdfUrl": rel,
+    }
+
+
+@api_router.get("/floor-plans/pdf/{filename}")
+async def serve_pdf(filename: str, request: Request, auth: Optional[str] = Query(None)):
+    """Serve a previously uploaded PDF. Auth via cookie, Bearer header, or `?auth=` query."""
+    _verify_token_from_request(request, auth)
+    if not PDF_FILENAME_RE.match(filename):
+        raise HTTPException(404, "Not found")
+    path = PDF_STORAGE_DIR / filename
+    if not path.is_file():
+        raise HTTPException(404, "Not found")
+    return FileResponse(path, media_type="application/pdf", filename=filename)
+
+
+@api_router.get("/floor-plans/proxy-pdf")
+async def proxy_pdf(url: str, request: Request, auth: Optional[str] = Query(None)):
+    """Stream an external PDF through the backend so it doesn't run into CORS in the browser."""
+    _verify_token_from_request(request, auth)
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        raise HTTPException(400, "Invalid URL")
+    if parsed.scheme.lower() not in ALLOWED_PROXY_SCHEMES or not parsed.netloc:
+        raise HTTPException(400, "URL must be http(s)")
+    try:
+        upstream = requests.get(url, stream=True, timeout=20, allow_redirects=True)
+    except requests.RequestException as e:
+        raise HTTPException(502, f"Upstream fetch failed: {e}")
+    if upstream.status_code >= 400:
+        upstream.close()
+        raise HTTPException(upstream.status_code, f"Upstream returned {upstream.status_code}")
+    ctype = upstream.headers.get("Content-Type", "application/pdf")
+
+    def _iter():
+        try:
+            for chunk in upstream.iter_content(chunk_size=64 * 1024):
+                if chunk:
+                    yield chunk
+        finally:
+            upstream.close()
+
+    return StreamingResponse(_iter(), media_type=ctype)
 
 
 # --------------------------------------------------------------------------- #
