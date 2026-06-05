@@ -312,10 +312,10 @@ function PlanCard({ plan: p, onClone, onDelete }) {
   return (
     <div
       data-testid={`plan-card-${p.id}`}
-      className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow"
+      className="bg-white border border-gray-200 rounded-xl hover:shadow-md transition-shadow"
     >
       {/* Thumbnail */}
-      <div className="relative h-36 bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-100 flex items-center justify-center overflow-hidden">
+      <div className="relative h-36 bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-100 flex items-center justify-center overflow-hidden rounded-t-xl">
         {p.thumbnail ? (
           <img src={p.thumbnail} alt={`${p.name} preview`} className="w-full h-full object-cover" />
         ) : (
