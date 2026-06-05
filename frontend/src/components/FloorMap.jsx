@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import Seat from './Seat';
+import { resolvePdfUrl } from '../lib/pdfUrl';
 import { ZoomIn, ZoomOut, Maximize2, Bug } from 'lucide-react';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
@@ -135,7 +136,7 @@ const FloorMap = ({
               <div className="relative inline-block">
                 {/* PDF Background */}
                 <Document
-                  file={pdfUrl}
+                  file={resolvePdfUrl(pdfUrl)}
                   onLoadSuccess={onDocumentLoadSuccess}
                   loading={
                     <div className="flex items-center justify-center h-screen">

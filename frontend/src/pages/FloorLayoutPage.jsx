@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import FloorMap from "../components/FloorMap";
 import { FLOOR_PLAN_CONFIG } from "../config/seatMaster";
 import api from "../lib/api";
+import Layout from "../components/Layout";
 
 function fmt(iso) {
   if (!iso) return "—";
@@ -73,9 +74,15 @@ function PlanInteractiveView({ plan, onBack }) {
   const handleSeatSelect = (seatId) => setSelectedSeats(prev =>
     prev.includes(seatId) ? prev.filter(id => id !== seatId) : [...prev, seatId]);
 
+  const crumbs = [
+    { label: "Workspace Manager" },
+    { label: "Floor Layout", to: "/workspace-manager/floor-layout" },
+    { label: plan.name },
+  ];
+
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
+    <Layout fullBleed breadcrumbs={crumbs} contentClassName="flex flex-col h-screen">
+      <div className="bg-white border-b border-gray-200 px-6 py-3 flex-shrink-0">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <button
@@ -86,9 +93,9 @@ function PlanInteractiveView({ plan, onBack }) {
             >
               <ArrowLeft size={18}/>
             </button>
-            <LayoutGrid className="text-[#ec9324] flex-shrink-0" size={28}/>
+            <LayoutGrid className="text-[#ec9324] flex-shrink-0" size={24}/>
             <div className="min-w-0">
-              <h1 className="text-xl font-bold text-gray-900 truncate" data-testid="floor-layout-title">{plan.name}</h1>
+              <h1 className="text-lg font-bold text-gray-900 truncate" data-testid="floor-layout-title">{plan.name}</h1>
               <p className="text-xs text-gray-600 inline-flex items-center gap-1">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-semibold border border-emerald-200">
                   Live · {seats.length} seats
@@ -135,7 +142,7 @@ function PlanInteractiveView({ plan, onBack }) {
           />
         )}
       </div>
-    </div>
+    </Layout>
   );
 }
 
@@ -181,43 +188,37 @@ export default function FloorLayoutPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-200 px-6 py-5">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-center gap-3">
-            <LayoutGrid className="text-[#ec9324]" size={28}/>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900" data-testid="floor-layout-title">Floor Layout</h1>
-              <p className="text-sm text-gray-600">Select a floor plan to view its live seating arrangement.</p>
-            </div>
-          </div>
+    <Layout breadcrumbs={[{ label: "Workspace Manager" }, { label: "Floor Layout" }]}>
+      <div className="flex items-center gap-3 mb-5">
+        <LayoutGrid className="text-[#ec9324]" size={28}/>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900" data-testid="floor-layout-title">Floor Layout</h1>
+          <p className="text-sm text-gray-600">Select a floor plan to view its live seating arrangement.</p>
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto p-6">
-        {loading ? (
-          <div className="flex items-center justify-center py-20 text-gray-500">
-            <Loader2 className="animate-spin mr-2"/> Loading floor plans…
+      {loading ? (
+        <div className="flex items-center justify-center py-20 text-gray-500">
+          <Loader2 className="animate-spin mr-2"/> Loading floor plans…
+        </div>
+      ) : sortedPlans.length === 0 ? (
+        <div className="bg-white border border-dashed border-gray-300 rounded-xl p-12 text-center" data-testid="no-plans-empty-state">
+          <FileText className="mx-auto mb-3 text-gray-400" size={32}/>
+          <h2 className="font-semibold text-gray-700">No published floor plans</h2>
+          <p className="text-sm text-gray-500 mt-1">Calibrate and publish at least one floor plan to make it available here.</p>
+          <Link to="/workspace-manager/floor-plans" className="mt-4 inline-block px-4 py-2 bg-[#ec9324] text-white rounded-lg text-sm font-semibold">Open Floor Plans</Link>
+        </div>
+      ) : (
+        <>
+          <div className="mb-4 text-xs text-gray-500">{sortedPlans.length} live plan{sortedPlans.length !== 1 ? "s" : ""}</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5" data-testid="floor-layout-grid">
+            {sortedPlans.map(p => (
+              <FloorPlanCard key={p.id} plan={p} onOpen={setActive}/>
+            ))}
           </div>
-        ) : sortedPlans.length === 0 ? (
-          <div className="bg-white border border-dashed border-gray-300 rounded-xl p-12 text-center" data-testid="no-plans-empty-state">
-            <FileText className="mx-auto mb-3 text-gray-400" size={32}/>
-            <h2 className="font-semibold text-gray-700">No published floor plans</h2>
-            <p className="text-sm text-gray-500 mt-1">Calibrate and publish at least one floor plan to make it available here.</p>
-            <Link to="/workspace-manager/floor-plans" className="mt-4 inline-block px-4 py-2 bg-[#ec9324] text-white rounded-lg text-sm font-semibold">Open Floor Plans</Link>
-          </div>
-        ) : (
-          <>
-            <div className="mb-4 text-xs text-gray-500">{sortedPlans.length} live plan{sortedPlans.length !== 1 ? "s" : ""}</div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5" data-testid="floor-layout-grid">
-              {sortedPlans.map(p => (
-                <FloorPlanCard key={p.id} plan={p} onOpen={setActive}/>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+        </>
+      )}
+    </Layout>
   );
 }
 
@@ -226,13 +227,13 @@ function LegacyFloorMapFallback() {
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [occupiedSeats] = useState(["H7", "B2", "K3", "V1"]);
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
+    <Layout fullBleed breadcrumbs={[{ label: "Workspace Manager" }, { label: "Floor Layout" }]} contentClassName="flex flex-col h-screen">
+      <div className="bg-white border-b border-gray-200 px-6 py-3 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <LayoutGrid className="text-[#ec9324]" size={28}/>
+          <LayoutGrid className="text-[#ec9324]" size={24}/>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900" data-testid="floor-layout-title">Floor Layout</h1>
-            <p className="text-sm text-gray-600">Demo layout — no calibrated plans yet.</p>
+            <h1 className="text-lg font-bold text-gray-900" data-testid="floor-layout-title">Floor Layout</h1>
+            <p className="text-xs text-gray-600">Demo layout — no calibrated plans yet.</p>
           </div>
         </div>
         <div className="mt-3 flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900">
@@ -252,6 +253,6 @@ function LegacyFloorMapFallback() {
           onSeatSelect={(id) => setSelectedSeats(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])}
         />
       </div>
-    </div>
+    </Layout>
   );
 }

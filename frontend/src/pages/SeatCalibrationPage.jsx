@@ -11,6 +11,7 @@ import {
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 import api from '../lib/api';
+import { resolvePdfUrl } from '../lib/pdfUrl';
 import PublishDialog from '../components/calibration/PublishDialog';
 import VersionHistoryPanel from '../components/calibration/VersionHistoryPanel';
 import AuditLogPanel from '../components/calibration/AuditLogPanel';
@@ -1024,7 +1025,7 @@ export default function SeatCalibrationPage() {
                     'cursor-pointer'
                   }`}
                 >
-                  <Document file={pdfUrl}>
+                  <Document file={resolvePdfUrl(pdfUrl)}>
                     <Page pageNumber={1} width={pageWidth} renderTextLayer={false} renderAnnotationLayer={false}/>
                   </Document>
 

@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
-  Plus, Copy, Trash2, Star, History, Loader2, MapPin, FileText, Clock, X,
+  Plus, Copy, Trash2, Star, History, Loader2, MapPin, FileText, Clock, X, Upload, Link2, CheckCircle2,
 } from "lucide-react";
 import api from "../lib/api";
 import Layout from "../components/Layout";
@@ -20,7 +20,12 @@ export default function FloorPlansListPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showClone, setShowClone] = useState(null); // {id, name}
   const [createName, setCreateName] = useState("");
+  const [createMode, setCreateMode] = useState("url"); // 'url' | 'upload'
   const [createPdf, setCreatePdf] = useState("https://customer-assets.emergentagent.com/job_workspace-manager-19/artifacts/m9mpuhb8_Without%20seat%20floor%20map.pdf");
+  const [uploadedPdfPath, setUploadedPdfPath] = useState(null); // {path, filename}
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const fileInputRef = useRef(null);
   const [cloneName, setCloneName] = useState("");
   const [working, setWorking] = useState(false);
 
@@ -34,15 +39,51 @@ export default function FloorPlansListPage() {
   useEffect(() => { load(); }, []);
 
   const createPlan = async () => {
-    if (!createName.trim() || !createPdf.trim()) return;
+    const finalPdfUrl = createMode === "upload"
+      ? (uploadedPdfPath ? `/api/files/${uploadedPdfPath.path}` : "")
+      : createPdf.trim();
+    if (!createName.trim() || !finalPdfUrl) return;
     setWorking(true);
     try {
-      const res = await api.post("/floor-plans", { name: createName.trim(), pdfUrl: createPdf.trim() });
-      setShowCreate(false); setCreateName("");
+      const res = await api.post("/floor-plans", { name: createName.trim(), pdfUrl: finalPdfUrl });
+      setShowCreate(false); setCreateName(""); setUploadedPdfPath(null); setUploadError("");
       navigate(`/workspace-manager/calibration/${res.data.id}`);
     } catch (e) {
       alert(`Create failed: ${e?.response?.data?.detail || e.message}`);
     } finally { setWorking(false); }
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      setUploadError("Please pick a PDF file.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError("PDF too large (max 10 MB).");
+      return;
+    }
+    setUploadError(""); setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await api.post("/upload", form, { headers: { "Content-Type": "multipart/form-data" } });
+      setUploadedPdfPath({ path: res.data.path, filename: res.data.filename || file.name, size: res.data.size });
+    } catch (err) {
+      setUploadError(err?.response?.data?.detail || err.message || "Upload failed");
+    } finally {
+      setUploading(false);
+      // Reset the input so the same file can be re-picked
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const resetCreateModal = () => {
+    setShowCreate(false);
+    setUploadedPdfPath(null);
+    setUploadError("");
+    setCreateMode("url");
   };
 
   const clonePlan = async () => {
@@ -77,9 +118,8 @@ export default function FloorPlansListPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+    <Layout breadcrumbs={[{ label: "Workspace Manager" }, { label: "Floor Plans" }]}>
+      <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900" data-testid="floor-plans-title">Floor Plans</h1>
             <p className="text-sm text-gray-600">Manage all calibrated floor maps. The default plan powers the live Floor Layout view.</p>
@@ -182,18 +222,90 @@ export default function FloorPlansListPage() {
             ))}
           </div>
         )}
-      </div>
 
       {/* Create Modal */}
       {showCreate && (
-        <Modal title="New Floor Plan" onClose={() => setShowCreate(false)}>
+        <Modal title="New Floor Plan" onClose={resetCreateModal}>
           <label className="block text-xs font-semibold text-gray-700 mb-1">Name</label>
           <input data-testid="create-plan-name" autoFocus className="w-full px-3 py-2 border rounded mb-3 text-sm" placeholder="e.g. Mumbai Floor 1" value={createName} onChange={(e) => setCreateName(e.target.value)} />
-          <label className="block text-xs font-semibold text-gray-700 mb-1">PDF URL</label>
-          <input data-testid="create-plan-pdf" className="w-full px-3 py-2 border rounded mb-4 text-sm" value={createPdf} onChange={(e) => setCreatePdf(e.target.value)} />
-          <div className="flex gap-2 justify-end">
-            <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-sm rounded border">Cancel</button>
-            <button data-testid="create-plan-submit" onClick={createPlan} disabled={!createName.trim() || working} className="px-3 py-1.5 text-sm rounded bg-[#ec9324] text-white disabled:opacity-50">{working ? "Creating…" : "Create & Open"}</button>
+
+          <label className="block text-xs font-semibold text-gray-700 mb-1">Floor plan PDF</label>
+          <div className="flex border border-gray-200 rounded mb-3 overflow-hidden text-xs">
+            <button
+              type="button"
+              onClick={() => setCreateMode("url")}
+              data-testid="create-mode-url"
+              className={`flex-1 py-1.5 flex items-center justify-center gap-1.5 transition-colors ${createMode === "url" ? "bg-[#ec9324] text-white font-semibold" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+            >
+              <Link2 size={12}/> PDF URL
+            </button>
+            <button
+              type="button"
+              onClick={() => setCreateMode("upload")}
+              data-testid="create-mode-upload"
+              className={`flex-1 py-1.5 flex items-center justify-center gap-1.5 transition-colors border-l border-gray-200 ${createMode === "upload" ? "bg-[#ec9324] text-white font-semibold" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+            >
+              <Upload size={12}/> Upload PDF
+            </button>
+          </div>
+
+          {createMode === "url" ? (
+            <input
+              data-testid="create-plan-pdf"
+              className="w-full px-3 py-2 border rounded mb-1 text-sm"
+              placeholder="https://example.com/floor.pdf"
+              value={createPdf}
+              onChange={(e) => setCreatePdf(e.target.value)}
+            />
+          ) : (
+            <div className="mb-1">
+              {uploadedPdfPath ? (
+                <div className="flex items-center justify-between gap-2 px-3 py-2 border border-emerald-200 bg-emerald-50 rounded text-xs" data-testid="upload-success">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CheckCircle2 size={14} className="text-emerald-600 flex-shrink-0"/>
+                    <span className="truncate text-emerald-800 font-medium">{uploadedPdfPath.filename}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setUploadedPdfPath(null)}
+                    className="text-emerald-700 hover:text-emerald-900 text-[11px] underline flex-shrink-0"
+                    data-testid="upload-replace-btn"
+                  >Replace</button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center gap-1.5 px-3 py-6 border-2 border-dashed border-gray-300 hover:border-[#ec9324] rounded cursor-pointer transition-colors text-center" data-testid="upload-dropzone">
+                  <Upload size={20} className="text-gray-400"/>
+                  <span className="text-xs text-gray-600">
+                    {uploading ? "Uploading…" : "Click to choose a PDF (max 10 MB)"}
+                  </span>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    disabled={uploading}
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    data-testid="create-plan-upload-input"
+                  />
+                </label>
+              )}
+              {uploadError && (
+                <div className="mt-1.5 text-[11px] text-red-600" data-testid="upload-error">{uploadError}</div>
+              )}
+            </div>
+          )}
+
+          <div className="mt-4 flex gap-2 justify-end">
+            <button onClick={resetCreateModal} className="px-3 py-1.5 text-sm rounded border">Cancel</button>
+            <button
+              data-testid="create-plan-submit"
+              onClick={createPlan}
+              disabled={
+                !createName.trim() || working || uploading ||
+                (createMode === "url" ? !createPdf.trim() : !uploadedPdfPath)
+              }
+              className="px-3 py-1.5 text-sm rounded bg-[#ec9324] text-white disabled:opacity-50"
+            >{working ? "Creating…" : "Create & Open"}</button>
           </div>
         </Modal>
       )}
@@ -210,7 +322,7 @@ export default function FloorPlansListPage() {
           </div>
         </Modal>
       )}
-    </div>
+    </Layout>
   );
 }
 
