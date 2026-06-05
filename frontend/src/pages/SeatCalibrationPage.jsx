@@ -6,12 +6,14 @@ import {
   Download, Upload, X, ZoomIn, ZoomOut, Maximize2, ChevronLeft, ChevronRight,
   Minus, MoreVertical, Wand2, MapPin, Trash2, Square, Lasso,
   Undo2, Redo2, Maximize, Settings, Check, Cloud, Lock, Unlock,
-  History, Activity, ArrowLeft, Save, Send, AlertCircle, Grid
+  History, Activity, ArrowLeft, Save, Send, AlertCircle, Grid,
+  ChevronsLeft, ChevronsRight
 } from 'lucide-react';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 import api from '../lib/api';
 import { resolvePdfUrl } from '../lib/pdfUrl';
+import Layout from '../components/Layout';
 import PublishDialog from '../components/calibration/PublishDialog';
 import VersionHistoryPanel from '../components/calibration/VersionHistoryPanel';
 import AuditLogPanel from '../components/calibration/AuditLogPanel';
@@ -93,6 +95,12 @@ export default function SeatCalibrationPage() {
   const [previewMode, setPreviewMode] = useState(false);
   const [mouseCoords, setMouseCoords] = useState({ x: 0, y: 0 });
   const [currentZoom, setCurrentZoom] = useState(1);
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(
+    () => typeof window !== "undefined" && window.localStorage.getItem("calib_panel_collapsed") === "1"
+  );
+  useEffect(() => {
+    try { window.localStorage.setItem("calib_panel_collapsed", rightPanelCollapsed ? "1" : "0"); } catch {}
+  }, [rightPanelCollapsed]);
   const [snapGrid, setSnapGrid] = useState(0); // 0=off
 
   // ---- selection state
@@ -775,18 +783,40 @@ export default function SeatCalibrationPage() {
 
   // ============================================================ RENDER
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* ────────────────────────────── Left toolbar */}
-      <div className="w-80 bg-white border-r overflow-y-auto" data-testid="calibration-toolbar">
+    <Layout
+      fullBleed
+      contentClassName="h-screen flex flex-col bg-gray-50"
+      breadcrumbs={[
+        { label: "Workspace Manager" },
+        { label: "Floor Plans", to: "/workspace-manager/floor-plans" },
+        { label: plan?.name || "Calibration" },
+      ]}
+    >
+    <div className="flex-1 flex flex-row-reverse overflow-hidden">
+      {/* ────────────────────────────── Right collapsible toolbar */}
+      {rightPanelCollapsed ? (
+        <button
+          onClick={() => setRightPanelCollapsed(false)}
+          data-testid="expand-calibration-panel"
+          title="Expand calibration panel"
+          className="w-10 bg-white border-l flex flex-col items-center pt-3 gap-2 hover:bg-gray-50"
+        >
+          <ChevronsLeft size={18} className="text-gray-600"/>
+          <span className="text-[9px] uppercase tracking-wide text-gray-400 [writing-mode:vertical-rl]">Tools</span>
+        </button>
+      ) : (
+      <div className="w-80 bg-white border-l overflow-y-auto" data-testid="calibration-toolbar">
         <div className="p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <button onClick={() => {
-              if (draftDirty && !window.confirm('Unsaved draft changes will be kept on the server. Leave anyway?')) return;
-              navigate('/workspace-manager/floor-plans');
-            }} className="p-1 hover:bg-gray-100 rounded" data-testid="back-to-plans-btn">
-              <ArrowLeft size={16} />
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <h1 className="text-lg font-bold truncate" title={plan.name}>{plan.name}</h1>
+            <button
+              onClick={() => setRightPanelCollapsed(true)}
+              data-testid="collapse-calibration-panel"
+              title="Collapse panel"
+              className="p-1 hover:bg-gray-100 rounded flex-shrink-0 text-gray-500 hover:text-gray-700"
+            >
+              <ChevronsRight size={16}/>
             </button>
-            <h1 className="text-lg font-bold truncate">{plan.name}</h1>
           </div>
           <div className="text-xs text-gray-500 mb-3">
             v{plan?.live_version_id ? '(live exists)' : 'unpublished'} · {totalMapped} seats
@@ -976,6 +1006,7 @@ export default function SeatCalibrationPage() {
           </div>
         </div>
       </div>
+      )}
 
       {/* ────────────────────────────── PDF Canvas */}
       <div className="flex-1 overflow-hidden bg-gray-100 relative">
@@ -1134,6 +1165,7 @@ export default function SeatCalibrationPage() {
           )}
         </TransformWrapper>
       </div>
+    </div>
 
       {/* Modals & panels */}
       {showPublishDialog && (
@@ -1164,7 +1196,7 @@ export default function SeatCalibrationPage() {
           Unsaved draft · auto-saving in 30s
         </div>
       )}
-    </div>
+    </Layout>
   );
 }
 

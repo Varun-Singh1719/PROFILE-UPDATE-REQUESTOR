@@ -178,6 +178,26 @@ async def _next_version_number(plan_id: str) -> int:
 # One-time migration: legacy "active" doc -> first multi-plan entry           #
 # --------------------------------------------------------------------------- #
 
+def _compute_status(doc: dict) -> str:
+    """Derive the public status for a plan.
+
+    Precedence:
+      1. Explicit override field `status_override` ('inactive' | 'live')
+      2. Live version present → 'live'
+      3. Otherwise → 'draft'
+    """
+    override = (doc.get("status_override") or "").lower()
+    if override in ("inactive", "live"):
+        return override
+    return "live" if doc.get("live_version_id") else "draft"
+
+
+def _strip_legacy(d: dict) -> dict:
+    """Remove deprecated/internal fields from API responses."""
+    d.pop("default", None)
+    return d
+
+
 async def ensure_migrated():
     """Migrate the legacy single-doc 'active' plan to the multi-plan schema.
 
@@ -216,7 +236,7 @@ async def ensure_migrated():
         "id": plan_id,
         "name": legacy.get("name") or "Floor Plan 1",
         "pdfUrl": legacy.get("pdfUrl"),
-        "default": True,
+        "status_override": None,
         "live_version_id": version_id,
         "draft": None,
         "draft_updated_at": None,
@@ -236,6 +256,8 @@ async def ensure_migrated():
 @api_router.get("/floor-plans")
 async def list_floor_plans(user=Depends(get_current_user)):
     await ensure_migrated()
+    # One-time cleanup: drop deprecated `default` field from DB docs
+    await db.floor_plans.update_many({"default": {"$exists": True}}, {"$unset": {"default": ""}})
     docs = await db.floor_plans.find({}, {"_id": 0}).sort("created_at", 1).to_list(500)
     # enrich with version_count and seat_count
     for d in docs:
@@ -246,6 +268,8 @@ async def list_floor_plans(user=Depends(get_current_user)):
         d["live_seat_count"] = len((live or {}).get("seats", []))
         d["last_published_at"] = (live or {}).get("created_at")
         d["has_draft"] = d.get("draft") is not None
+        d["status"] = _compute_status(d)
+        _strip_legacy(d)
     return docs
 
 
@@ -258,12 +282,11 @@ async def create_floor_plan(
     plan_id = str(uuid.uuid4())
     now = now_iso()
     actor = _actor(user)
-    is_default = (await db.floor_plans.count_documents({}) == 0)
     doc = {
         "id": plan_id,
         "name": payload.name,
         "pdfUrl": payload.pdfUrl,
-        "default": is_default,
+        "status_override": None,
         "live_version_id": None,
         "draft": None,
         "draft_updated_at": None,
@@ -274,7 +297,13 @@ async def create_floor_plan(
     await log_audit(actor=actor, action="floor_plan.create",
                     resource="floor_plan", resource_id=plan_id,
                     metadata={"name": payload.name})
-    return _strip_id(doc)
+    out = _strip_id(doc)
+    out["status"] = _compute_status(out)
+    out["has_draft"] = False
+    out["version_count"] = 0
+    out["live_seat_count"] = 0
+    out["last_published_at"] = None
+    return _strip_legacy(out)
 
 
 # --------------------------------------------------------------------------- #
@@ -285,16 +314,15 @@ async def create_floor_plan(
 
 @api_router.get("/floor-plans/active")
 async def get_active_floor_plan(user=Depends(get_current_user)):
-    """Return the default plan's published live version (legacy shape).
+    """Return the first available live plan (legacy endpoint).
 
-    Resolution order:
-      1. Plan marked default with a live version
-      2. First plan (by created_at) with a live version
+    Kept for backward compatibility with any older client embeds.
     """
     await ensure_migrated()
-    plan = await db.floor_plans.find_one({"default": True, "live_version_id": {"$ne": None}}, {"_id": 0})
-    if not plan:
-        plan = await db.floor_plans.find_one({"live_version_id": {"$ne": None}}, {"_id": 0}, sort=[("created_at", 1)])
+    plan = await db.floor_plans.find_one(
+        {"live_version_id": {"$ne": None}, "status_override": {"$ne": "inactive"}},
+        {"_id": 0}, sort=[("created_at", 1)],
+    )
     if not plan:
         return None
     v = await _get_version(plan["live_version_id"])
@@ -401,17 +429,14 @@ async def get_floor_plan(plan_id: str, user=Depends(get_current_user)):
     plan = await _get_plan_or_404(plan_id)
     plan["live_seats"] = await _live_seats(plan)
     plan["version_count"] = await db.floor_plan_versions.count_documents({"plan_id": plan_id})
-    return plan
+    plan["has_draft"] = plan.get("draft") is not None
+    plan["status"] = _compute_status(plan)
+    return _strip_legacy(plan)
 
 
 @api_router.delete("/floor-plans/{plan_id}")
 async def delete_floor_plan(plan_id: str, user=Depends(require_role("Super Admin", "Admin"))):
     plan = await _get_plan_or_404(plan_id)
-    if plan.get("default"):
-        # promote another plan to default before deleting
-        other = await db.floor_plans.find_one({"id": {"$ne": plan_id}}, {"_id": 0})
-        if other:
-            await db.floor_plans.update_one({"id": other["id"]}, {"$set": {"default": True}})
     await db.floor_plan_versions.delete_many({"plan_id": plan_id})
     await db.floor_plans.delete_one({"id": plan_id})
     await log_audit(actor=_actor(user), action="floor_plan.delete",
@@ -420,14 +445,29 @@ async def delete_floor_plan(plan_id: str, user=Depends(require_role("Super Admin
     return {"ok": True}
 
 
-@api_router.post("/floor-plans/{plan_id}/set-default")
-async def set_default(plan_id: str, user=Depends(require_role("Super Admin", "Admin"))):
-    await _get_plan_or_404(plan_id)
-    await db.floor_plans.update_many({}, {"$set": {"default": False}})
-    await db.floor_plans.update_one({"id": plan_id}, {"$set": {"default": True}})
-    await log_audit(actor=_actor(user), action="floor_plan.set_default",
-                    resource="floor_plan", resource_id=plan_id)
-    return {"ok": True}
+class StatusIn(BaseModel):
+    status: str  # 'live' | 'inactive'
+
+
+@api_router.patch("/floor-plans/{plan_id}/status")
+async def set_status(
+    plan_id: str,
+    payload: StatusIn,
+    user=Depends(require_role("Super Admin", "Admin")),
+):
+    """Toggle a plan between Live and Inactive (Draft is derived, not set)."""
+    plan = await _get_plan_or_404(plan_id)
+    new = payload.status.lower()
+    if new not in ("live", "inactive"):
+        raise HTTPException(400, "status must be 'live' or 'inactive'")
+    if new == "live" and not plan.get("live_version_id"):
+        raise HTTPException(400, "Plan has no published version yet — cannot mark Live")
+    override = None if new == "live" else "inactive"
+    await db.floor_plans.update_one({"id": plan_id}, {"$set": {"status_override": override, "updated_at": now_iso(), "updated_by": _actor(user)}})
+    await log_audit(actor=_actor(user), action=f"floor_plan.status.{new}",
+                    resource="floor_plan", resource_id=plan_id,
+                    metadata={"name": plan.get("name")})
+    return {"ok": True, "status": new}
 
 
 @api_router.post("/floor-plans/{plan_id}/clone")
@@ -470,7 +510,7 @@ async def clone_floor_plan(
         "id": new_id,
         "name": payload.name,
         "pdfUrl": src_pdf,
-        "default": False,
+        "status_override": None,
         "live_version_id": new_version_id,
         "draft": None,
         "draft_updated_at": None,

@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
-  Plus, Copy, Trash2, Star, History, Loader2, MapPin, FileText, Clock, X, Upload, Link2, CheckCircle2,
+  Plus, Copy, Trash2, History, Loader2, MapPin, FileText, Clock, X,
+  Upload, Link2, CheckCircle2, Eye, Pencil,
 } from "lucide-react";
 import api from "../lib/api";
 import Layout from "../components/Layout";
@@ -108,21 +109,12 @@ export default function FloorPlansListPage() {
     }
   };
 
-  const setDefault = async (p) => {
-    try {
-      await api.post(`/floor-plans/${p.id}/set-default`);
-      await load();
-    } catch (e) {
-      alert(`Failed: ${e?.response?.data?.detail || e.message}`);
-    }
-  };
-
   return (
     <Layout breadcrumbs={[{ label: "Workspace Manager" }, { label: "Floor Plans" }]}>
       <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900" data-testid="floor-plans-title">Floor Plans</h1>
-            <p className="text-sm text-gray-600">Manage all calibrated floor maps. The default plan powers the live Floor Layout view.</p>
+            <p className="text-sm text-gray-600">Manage all calibrated floor maps. Multiple plans can be Live at the same time.</p>
           </div>
           <button
             onClick={() => { setCreateName(""); setShowCreate(true); }}
@@ -143,82 +135,14 @@ export default function FloorPlansListPage() {
             <button onClick={() => setShowCreate(true)} className="mt-4 px-4 py-2 bg-[#ec9324] text-white rounded-lg">Create floor plan</button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {plans.map(p => (
-              <div key={p.id} data-testid={`plan-card-${p.id}`} className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow">
-                <div className="relative h-32 bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-100 flex items-center justify-center overflow-hidden">
-                  {p.thumbnail ? (
-                    <img src={p.thumbnail} alt={`${p.name} preview`} className="w-full h-full object-cover"/>
-                  ) : (
-                    <div className="flex flex-col items-center text-gray-400">
-                      <FileText size={26}/>
-                      <span className="text-[10px] mt-1">No preview yet</span>
-                    </div>
-                  )}
-                  <div className="absolute top-2 left-2 flex items-center gap-1">
-                    {p.default && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold border border-amber-200">
-                        <Star size={9} fill="currentColor"/> DEFAULT
-                      </span>
-                    )}
-                    {p.has_draft && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold border border-blue-200">
-                        DRAFT
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="p-5">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="min-w-0">
-                    <h3 className="font-bold text-gray-900 truncate">{p.name}</h3>
-                    <div className="text-xs text-gray-500 flex items-center gap-3 flex-wrap mt-1">
-                      <span className="inline-flex items-center gap-1"><MapPin size={11} /> {p.live_seat_count} live seats</span>
-                      <span className="inline-flex items-center gap-1"><History size={11} /> {p.version_count} versions</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="text-xs text-gray-500 space-y-1 mb-4">
-                  <div className="flex items-center gap-1"><Clock size={11}/> Updated {fmtDate(p.updated_at)}</div>
-                  <div>By {p.updated_by?.name || "—"}</div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <Link
-                    to={`/workspace-manager/calibration/${p.id}`}
-                    data-testid={`open-plan-${p.id}`}
-                    className="col-span-2 text-center py-2 bg-[#ec9324] hover:bg-[#d6831f] text-white rounded text-sm font-semibold"
-                  >
-                    Open Calibration
-                  </Link>
-                  <button
-                    onClick={() => { setCloneName(`${p.name} (copy)`); setShowClone({ id: p.id, name: p.name }); }}
-                    data-testid={`clone-plan-${p.id}`}
-                    className="py-1.5 text-sm border border-gray-200 hover:bg-gray-50 rounded flex items-center justify-center gap-1.5 text-gray-700"
-                  >
-                    <Copy size={13} /> Clone
-                  </button>
-                  {!p.default ? (
-                    <button onClick={() => setDefault(p)} className="py-1.5 text-sm border border-gray-200 hover:bg-gray-50 rounded flex items-center justify-center gap-1.5 text-gray-700">
-                      <Star size={13} /> Set Default
-                    </button>
-                  ) : (
-                    <button disabled className="py-1.5 text-sm border border-amber-200 bg-amber-50 rounded flex items-center justify-center gap-1.5 text-amber-700 cursor-default">
-                      <Star size={13} fill="currentColor" /> Default
-                    </button>
-                  )}
-                  <button
-                    onClick={() => deletePlan(p)}
-                    disabled={plans.length === 1}
-                    title={plans.length === 1 ? "Cannot delete the only floor plan" : "Delete"}
-                    className="col-span-2 py-1.5 text-sm border border-red-200 hover:bg-red-50 text-red-700 rounded flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <Trash2 size={13} /> Delete
-                  </button>
-                </div>
-                </div>
-              </div>
+              <PlanCard
+                key={p.id}
+                plan={p}
+                onClone={() => { setCloneName(`${p.name} (copy)`); setShowClone({ id: p.id, name: p.name }); }}
+                onDelete={() => deletePlan(p)}
+              />
             ))}
           </div>
         )}
@@ -335,6 +259,129 @@ function Modal({ title, onClose, children }) {
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
         </div>
         <div className="p-4">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// -------------------- Status badge --------------------------------------- //
+const STATUS_STYLE = {
+  live: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  inactive: "bg-gray-100 text-gray-600 border-gray-200",
+  draft: "bg-orange-100 text-orange-700 border-orange-200",
+};
+const STATUS_LABEL = { live: "Live", inactive: "Inactive", draft: "Draft" };
+
+function StatusBadge({ status }) {
+  const s = (status || "draft").toLowerCase();
+  return (
+    <span
+      data-testid={`status-badge-${s}`}
+      className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border ${STATUS_STYLE[s] || STATUS_STYLE.draft}`}
+    >
+      {STATUS_LABEL[s] || "Draft"}
+    </span>
+  );
+}
+
+// -------------------- Icon-only action button --------------------------- //
+function IconBtn({ icon: Icon, label, onClick, disabled, danger, testId }) {
+  const base = "relative group inline-flex items-center justify-center w-8 h-8 rounded-lg transition-colors";
+  const color = danger
+    ? "text-red-600 hover:bg-red-50 disabled:text-gray-300 disabled:hover:bg-transparent"
+    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:text-gray-300 disabled:hover:bg-transparent";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      data-testid={testId}
+      className={`${base} ${color} disabled:cursor-not-allowed`}
+      aria-label={label}
+    >
+      <Icon size={15} />
+      <span className="pointer-events-none absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap px-1.5 py-0.5 rounded bg-gray-900 text-white text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity z-10">
+        {label}
+      </span>
+    </button>
+  );
+}
+
+// -------------------- Plan card ----------------------------------------- //
+function PlanCard({ plan: p, onClone, onDelete }) {
+  return (
+    <div
+      data-testid={`plan-card-${p.id}`}
+      className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow"
+    >
+      {/* Thumbnail */}
+      <div className="relative h-36 bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-100 flex items-center justify-center overflow-hidden">
+        {p.thumbnail ? (
+          <img src={p.thumbnail} alt={`${p.name} preview`} className="w-full h-full object-cover" />
+        ) : (
+          <div className="flex flex-col items-center text-gray-400">
+            <FileText size={28} />
+            <span className="text-[10px] mt-1">No preview yet</span>
+          </div>
+        )}
+        {p.has_draft && p.status === "live" && (
+          <span
+            className="absolute top-2 left-2 inline-flex items-center px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-semibold border border-blue-200"
+            title="A draft is pending publish"
+            data-testid="draft-pending-sub-badge"
+          >
+            Draft pending
+          </span>
+        )}
+      </div>
+
+      {/* Body */}
+      <div className="p-4">
+        {/* Header row: name + status (right) */}
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <h3 className="font-bold text-gray-900 truncate text-base" title={p.name}>{p.name}</h3>
+          <StatusBadge status={p.status} />
+        </div>
+
+        {/* Meta */}
+        <div className="text-xs text-gray-500 flex items-center flex-wrap gap-x-3 gap-y-1 mb-3">
+          <span className="inline-flex items-center gap-1"><MapPin size={11} /> {p.live_seat_count} seats</span>
+          <span className="inline-flex items-center gap-1"><History size={11} /> {p.version_count} versions</span>
+          <span className="inline-flex items-center gap-1"><Clock size={11} /> {fmtDate(p.updated_at)}</span>
+        </div>
+
+        {/* Icon-only action row */}
+        <div className="flex items-center justify-end gap-1 pt-2 border-t border-gray-100">
+          <Link
+            to={`/workspace-manager/floor-layout`}
+            className={`relative group inline-flex items-center justify-center w-8 h-8 rounded-lg transition-colors ${
+              p.status === "live"
+                ? "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                : "text-gray-300 cursor-not-allowed pointer-events-none"
+            }`}
+            aria-label="View"
+            data-testid={`view-plan-${p.id}`}
+            onClick={(e) => { if (p.status !== "live") e.preventDefault(); }}
+          >
+            <Eye size={15} />
+            <span className="pointer-events-none absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap px-1.5 py-0.5 rounded bg-gray-900 text-white text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity z-10">
+              {p.status === "live" ? "View" : "No live version"}
+            </span>
+          </Link>
+          <Link
+            to={`/workspace-manager/calibration/${p.id}`}
+            className="relative group inline-flex items-center justify-center w-8 h-8 rounded-lg transition-colors text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+            aria-label="Edit"
+            data-testid={`open-plan-${p.id}`}
+          >
+            <Pencil size={15} />
+            <span className="pointer-events-none absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap px-1.5 py-0.5 rounded bg-gray-900 text-white text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity z-10">
+              Edit
+            </span>
+          </Link>
+          <IconBtn icon={Copy} label="Clone" onClick={onClone} testId={`clone-plan-${p.id}`} />
+          <IconBtn icon={Trash2} label="Delete" onClick={onDelete} danger testId={`delete-plan-${p.id}`} />
+        </div>
       </div>
     </div>
   );

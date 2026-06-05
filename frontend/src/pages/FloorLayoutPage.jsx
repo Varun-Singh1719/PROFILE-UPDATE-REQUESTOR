@@ -33,9 +33,9 @@ function FloorPlanCard({ plan, onOpen }) {
             <span className="text-[11px] mt-1">No preview yet</span>
           </div>
         )}
-        {plan.default && (
-          <span className="absolute top-2 left-2 px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-full border border-amber-200">
-            DEFAULT
+        {plan.has_draft && (
+          <span className="absolute top-2 left-2 px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-semibold rounded-full border border-blue-200">
+            Draft pending
           </span>
         )}
       </div>
@@ -160,7 +160,8 @@ export default function FloorLayoutPage() {
         const res = await api.get("/floor-plans");
         if (cancelled) return;
         const all = res.data || [];
-        const live = all.filter(p => p.live_version_id);
+        // Show only plans that are explicitly Live (excludes Draft + Inactive)
+        const live = all.filter(p => (p.status || (p.live_version_id ? "live" : "draft")) === "live");
         setPlans(live);
         // Fallback when no live plan exists
         if (live.length === 0) setLegacyMode(true);
@@ -171,12 +172,11 @@ export default function FloorLayoutPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // Sort: default first, then by last_published_at desc
+  // Sort by most recently published first
   const sortedPlans = useMemo(() => {
-    return [...plans].sort((a, b) => {
-      if (a.default !== b.default) return a.default ? -1 : 1;
-      return (b.last_published_at || "").localeCompare(a.last_published_at || "");
-    });
+    return [...plans].sort((a, b) =>
+      (b.last_published_at || "").localeCompare(a.last_published_at || "")
+    );
   }, [plans]);
 
   if (active) {
