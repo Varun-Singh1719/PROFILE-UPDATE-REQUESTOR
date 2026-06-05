@@ -168,6 +168,8 @@ const FloorMap = ({
                         seat={seat}
                         onClick={handleSeatClick}
                         isClickable={seat.status !== 'occupied'}
+                        isSelected={seat.status === 'selected'}
+                        isOccupied={seat.status === 'occupied'}
                         debugMode={debugMode}
                       />
                     ))}
