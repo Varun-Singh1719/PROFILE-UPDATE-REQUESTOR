@@ -10,7 +10,7 @@ import sys
 from typing import Optional, Dict, Any
 
 # Backend URL from environment
-BASE_URL = "https://workspace-manager-19.preview.emergentagent.com/api"
+BASE_URL = "https://calibration-mgmt-2.preview.emergentagent.com/api"
 
 # Test credentials
 ADMIN_EMAIL = "admin@ticketing.com"
