@@ -42,24 +42,51 @@ export default function MeetingRoomBookingPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState("");
   const [conflict, setConflict] = useState(null);
+  const [filterDate, setFilterDate] = useState(todayIso());
+  const formAnchorRef = useRef(null);
+  const titleInputFocusRef = useRef(null);  // shared with BookingForm to focus its title input
 
   const loadRooms = useCallback(async () => {
     const res = await api.get("/room-bookings/rooms");
     setRooms(res.data || []);
   }, []);
-  const loadMyBookings = useCallback(async () => {
-    const res = await api.get(`/room-bookings?mine=true`);
-    setMyBookings(res.data || []);
+  // Bookings for the date filter (default today). When the filter is set to today,
+  // we additionally fetch tomorrow so the panel can show both day groups.
+  const loadBookingsForDate = useCallback(async (dateIso) => {
+    const isToday = dateIso === todayIso();
+    if (isToday) {
+      // Fetch today AND tomorrow in parallel; flatten
+      const tomorrow = (() => {
+        const d = new Date(); d.setDate(d.getDate() + 1);
+        const p = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+      })();
+      const [a, b] = await Promise.all([
+        api.get(`/room-bookings?date=${dateIso}&include_past=true`),
+        api.get(`/room-bookings?date=${tomorrow}&include_past=true`),
+      ]);
+      const merged = [...(a.data || []), ...(b.data || [])];
+      // de-duplicate by id (a multi-day booking would appear in both)
+      const seen = new Set();
+      setMyBookings(merged.filter(x => { if (seen.has(x.id)) return false; seen.add(x.id); return true; }));
+    } else {
+      const res = await api.get(`/room-bookings?date=${dateIso}&include_past=true`);
+      setMyBookings(res.data || []);
+    }
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try { await Promise.all([loadRooms(), loadMyBookings()]); }
+      try { await Promise.all([loadRooms(), loadBookingsForDate(filterDate)]); }
       finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, [loadRooms, loadMyBookings]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadRooms]);
+
+  // Refetch when date filter changes
+  useEffect(() => { loadBookingsForDate(filterDate); }, [filterDate, loadBookingsForDate]);
 
   const selectedRoom = useMemo(() => rooms.find(r => r.room_id === selectedRoomId), [rooms, selectedRoomId]);
   // Floor plan currently shown on the right panel = plan of the selected room, else first available
@@ -73,11 +100,22 @@ export default function MeetingRoomBookingPage() {
     return rooms.filter(r => r.plan_id === focusPlan.plan_id);
   }, [rooms, focusPlan]);
 
+  // Button click: always open the form, scroll into view, focus title input.
+  // Per spec: do NOT toggle closed via this button — form has its own X close.
+  const openBookingForm = useCallback(() => {
+    setFormOpen(true);
+    setConflict(null);
+    requestAnimationFrame(() => {
+      formAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setTimeout(() => titleInputFocusRef.current?.focus?.(), 200);
+    });
+  }, []);
+
   const handleCancel = async (id) => {
     if (!window.confirm("Cancel this booking?")) return;
     try {
       await api.delete(`/room-bookings/${id}`);
-      await loadMyBookings();
+      await loadBookingsForDate(filterDate);
       toast.success("Booking cancelled");
     } catch (e) {
       toast.error(`Cancel failed: ${e?.response?.data?.detail || e.message}`);
@@ -88,7 +126,7 @@ export default function MeetingRoomBookingPage() {
     setConflict(null);
     try {
       const res = await api.post("/room-bookings", payload);
-      await loadMyBookings();
+      await loadBookingsForDate(filterDate);
       setFormOpen(false);
       const n = res.data?.created || 1;
       toast.success("Meeting Room Booked Successfully", { description: n > 1 ? `${n} recurring occurrences created.` : undefined });
@@ -120,73 +158,51 @@ export default function MeetingRoomBookingPage() {
               </div>
             </div>
             <Button
-              onClick={() => { setFormOpen(o => !o); setConflict(null); }}
+              onClick={openBookingForm}
               data-testid="mrb-book-meeting-room-btn"
               className="bg-[#ec9324] hover:bg-[#d4811f] text-white shadow-sm flex-shrink-0"
             >
-              {formOpen ? <ChevronUp size={16} className="mr-1.5" /> : <Plus size={16} className="mr-1.5" />}
+              <Plus size={16} className="mr-1.5" />
               Book Meeting Room
             </Button>
           </div>
 
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-            {/* Upcoming bookings panel */}
-            <section>
-              <h2 className="text-[11px] font-bold tracking-wide text-gray-500 uppercase mb-2" data-testid="mrb-upcoming-title">Upcoming Bookings</h2>
-              {loading ? (
-                <div className="flex items-center text-gray-500 text-xs"><Loader2 className="animate-spin mr-2" size={14} /> Loading…</div>
-              ) : myBookings.length === 0 ? (
-                <div className="bg-gray-50 border border-dashed border-gray-200 rounded-lg p-5 text-center text-xs text-gray-500" data-testid="mrb-no-upcoming">
-                  No upcoming meetings — click "Book Meeting Room" to create one.
-                </div>
-              ) : (
-                <div className="space-y-2" data-testid="mrb-upcoming-list">
-                  {myBookings.map(b => (
-                    <div
-                      key={b.id}
-                      data-testid={`mrb-upcoming-${b.id}`}
-                      className="bg-white rounded-lg border border-gray-200 p-3 hover:border-[#ec9324]/40 transition-colors"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="font-bold text-sm text-gray-900 truncate" title={b.title}>{b.title}</div>
-                          <div className="text-[11px] text-gray-600 mt-0.5 inline-flex items-center gap-1">
-                            <Building2 size={10}/>{b.room_name}
-                            <span className="text-gray-300">·</span> {b.plan_name}
-                            {b.recurring && (<><span className="text-gray-300">·</span><span className="inline-flex items-center gap-0.5 text-emerald-700 font-semibold"><Repeat size={9}/>recurring</span></>)}
-                          </div>
-                          <div className="text-[11px] text-gray-500 mt-1"><Clock size={9} className="inline mr-0.5" />{fmtDateTime(b.start_at)} – {fmtTime(b.end_at)}</div>
-                          {b.attendees?.length > 0 && (
-                            <div className="text-[10px] text-gray-500 mt-1 inline-flex items-center gap-1">
-                              <Users size={9}/> {b.attendees.length} attendee group{b.attendees.length === 1 ? '' : 's'}
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => handleCancel(b.id)}
-                          title="Cancel booking"
-                          className="p-1.5 text-red-600 hover:bg-red-50 rounded"
-                          data-testid={`mrb-cancel-${b.id}`}
-                        ><Trash2 size={13} /></button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+            {/* Upcoming bookings panel — capped to ~1/3 viewport per spec to give the floor map priority */}
+            <section data-testid="mrb-upcoming-section">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-[11px] font-bold tracking-wide text-gray-500 uppercase" data-testid="mrb-upcoming-title">Upcoming Bookings</h2>
+                <input
+                  type="date"
+                  value={filterDate}
+                  onChange={(e) => setFilterDate(e.target.value)}
+                  className="text-[11px] px-2 py-1 border border-gray-200 rounded focus:outline-none focus:border-[#ec9324]"
+                  data-testid="mrb-upcoming-date-filter"
+                />
+              </div>
+              <UpcomingBookingsList
+                bookings={myBookings}
+                filterDate={filterDate}
+                loading={loading}
+                onCancel={handleCancel}
+              />
             </section>
 
             {/* Booking form (collapsible) */}
-            {formOpen && (
-              <BookingForm
-                rooms={rooms}
-                selectedRoomId={selectedRoomId}
-                setSelectedRoomId={setSelectedRoomId}
-                onSubmit={handleCreate}
-                onCancel={() => { setFormOpen(false); setConflict(null); }}
-                conflict={conflict}
-                clearConflict={() => setConflict(null)}
-              />
-            )}
+            <div ref={formAnchorRef}>
+              {formOpen && (
+                <BookingForm
+                  rooms={rooms}
+                  selectedRoomId={selectedRoomId}
+                  setSelectedRoomId={setSelectedRoomId}
+                  onSubmit={handleCreate}
+                  onCancel={() => { setFormOpen(false); setConflict(null); }}
+                  conflict={conflict}
+                  clearConflict={() => setConflict(null)}
+                  titleInputFocusRef={titleInputFocusRef}
+                />
+              )}
+            </div>
           </div>
         </div>
 
@@ -205,8 +221,16 @@ export default function MeetingRoomBookingPage() {
 }
 
 // ============================================================ Booking Form
-function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCancel, conflict, clearConflict }) {
+function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCancel, conflict, clearConflict, titleInputFocusRef }) {
   const [title, setTitle] = useState("");
+  const localTitleRef = useRef(null);
+  // expose this input's focus to parent so the +Book Meeting Room button can focus it
+  useEffect(() => {
+    if (titleInputFocusRef) {
+      titleInputFocusRef.current = () => localTitleRef.current?.focus();
+    }
+    return () => { if (titleInputFocusRef) titleInputFocusRef.current = null; };
+  }, [titleInputFocusRef]);
   const [bDate, setBDate] = useState(todayIso());
   const [startTime, setStartTime] = useState("10:00");
   const [endTime, setEndTime] = useState("11:00");
@@ -257,7 +281,9 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
       </div>
 
       <Field label="Title" required>
-        <input value={title} onChange={(e) => setTitle(e.target.value)}
+        <input
+          ref={localTitleRef}
+          value={title} onChange={(e) => setTitle(e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-[#ec9324]"
           placeholder="e.g. Sprint Planning"
           data-testid="mrb-form-title" maxLength={120}/>
@@ -422,6 +448,94 @@ function Field({ label, required, children }) {
         {label}{required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       {children}
+    </div>
+  );
+}
+
+// ============================================================ Upcoming bookings list
+// - Capped to ~33% of viewport so the floor map stays the primary focus.
+// - When filter date = today: groups bookings into "Today" + "Tomorrow" (no future meetings shown).
+// - When filter date != today: shows that single date's bookings under a "Selected date" group.
+function UpcomingBookingsList({ bookings, filterDate, loading, onCancel }) {
+  const today = todayIso();
+  const tomorrow = (() => {
+    const d = new Date(); d.setDate(d.getDate() + 1);
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  })();
+  const isFilterToday = filterDate === today;
+
+  // Group bookings by the local date of their start_at.
+  const groups = useMemo(() => {
+    const map = {};
+    for (const b of bookings) {
+      const d = new Date(b.start_at);
+      const p = (n) => String(n).padStart(2, "0");
+      const key = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+      (map[key] = map[key] || []).push(b);
+    }
+    // Sort each day by start time asc
+    Object.values(map).forEach(arr => arr.sort((a, b) => (a.start_at || "").localeCompare(b.start_at || "")));
+    return map;
+  }, [bookings]);
+
+  const dayGroups = isFilterToday
+    ? [
+        { key: today, label: "Today", items: groups[today] || [] },
+        { key: tomorrow, label: "Tomorrow", items: groups[tomorrow] || [] },
+      ]
+    : [{ key: filterDate, label: new Date(filterDate).toLocaleDateString(undefined, { weekday: "long", day: "2-digit", month: "short", year: "numeric" }), items: groups[filterDate] || [] }];
+
+  const totalForView = dayGroups.reduce((s, g) => s + g.items.length, 0);
+
+  if (loading) {
+    return <div className="flex items-center text-gray-500 text-xs"><Loader2 className="animate-spin mr-2" size={14}/> Loading…</div>;
+  }
+  // ~33% smaller: cap the scroll area
+  return (
+    <div className="max-h-[34vh] overflow-y-auto pr-1" data-testid="mrb-upcoming-list-wrapper">
+      {totalForView === 0 ? (
+        <div className="flex items-center justify-center text-center bg-gray-50 border border-dashed border-gray-200 rounded-lg py-8 px-4" data-testid="mrb-no-upcoming">
+          <div>
+            <div className="text-sm font-bold text-gray-500">No Meeting Room Bookings Available</div>
+            <div className="text-[11px] text-gray-400 mt-0.5">Click "Book Meeting Room" to create one.</div>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3" data-testid="mrb-upcoming-list">
+          {dayGroups.map(g => (
+            <div key={g.key}>
+              <div className="text-[10px] font-bold tracking-wide text-gray-400 uppercase mb-1" data-testid={`mrb-day-${g.key}`}>{g.label}</div>
+              {g.items.length === 0 ? (
+                <div className="text-[11px] text-gray-400 italic px-2 py-1">No bookings</div>
+              ) : g.items.map(b => (
+                <div
+                  key={b.id}
+                  data-testid={`mrb-upcoming-${b.id}`}
+                  className="bg-white rounded-md border border-gray-200 px-2.5 py-1.5 mb-1 hover:border-[#ec9324]/40 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-[12px] text-gray-900 truncate" title={b.title}>{b.title}</div>
+                      <div className="text-[10px] text-gray-600">
+                        {fmtTime(b.start_at)} – {fmtTime(b.end_at)}
+                        <span className="text-gray-300 mx-1">·</span>{b.room_name}
+                      </div>
+                      <div className="text-[10px] text-gray-500 truncate">{b.organizer?.name || b.organizer?.email || "—"}</div>
+                    </div>
+                    <button
+                      onClick={() => onCancel(b.id)}
+                      title="Cancel booking"
+                      className="p-1 text-red-600 hover:bg-red-50 rounded flex-shrink-0"
+                      data-testid={`mrb-cancel-${b.id}`}
+                    ><Trash2 size={12}/></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
