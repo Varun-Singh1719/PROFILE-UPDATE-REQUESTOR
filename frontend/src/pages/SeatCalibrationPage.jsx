@@ -183,7 +183,9 @@ export default function SeatCalibrationPage() {
       setLiveSeats(res.data.live_seats || []);
       // rooms: prefer draft.rooms over live_rooms (backward-compatible defaults to [])
       const roomsSrc = res.data.draft?.rooms || res.data.live_rooms || [];
-      setMappedRooms(Object.fromEntries(roomsSrc.map(r => [r.id, r])));
+      // Backfill capacity (older rooms saved before capacity field existed)
+      const roomsNormalized = roomsSrc.map(r => ({ capacity: r.capacity || 1, ...r, capacity: r.capacity || 1 }));
+      setMappedRooms(Object.fromEntries(roomsNormalized.map(r => [r.id, r])));
       setSelectedRooms([]);
       setHistory([seatsObj]);
       setHistoryIndex(0);
@@ -1252,7 +1254,7 @@ export default function SeatCalibrationPage() {
               setSelectedRooms={setSelectedRooms}
               mappedRooms={mappedRooms}
               deleteSelectedRooms={deleteSelectedRooms}
-              onRequestRename={(id) => setRenameRoomDialog({ id, name: mappedRooms[id]?.name || '' })}
+              onRequestRename={(id) => setRenameRoomDialog({ id, name: mappedRooms[id]?.name || '', capacity: mappedRooms[id]?.capacity || 1 })}
             />
           )}
 
@@ -1419,7 +1421,7 @@ export default function SeatCalibrationPage() {
                     dragRoomRef={dragRoomRef}
                     resizeRoomRef={resizeRoomRef}
                     containerRef={containerRef}
-                    onRequestRename={(id) => setRenameRoomDialog({ id, name: mappedRooms[id]?.name || '' })}
+                    onRequestRename={(id) => setRenameRoomDialog({ id, name: mappedRooms[id]?.name || '', capacity: mappedRooms[id]?.capacity || 1 })}
                     onDelete={(id) => {
                       const ns = { ...mappedRooms };
                       delete ns[id];
@@ -1517,12 +1519,13 @@ export default function SeatCalibrationPage() {
         <RoomNameModal
           title="Name this meeting room"
           initial={roomNameDialog.suggested}
+          initialCapacity={1}
           confirmLabel="Create Room"
           onCancel={() => setRoomNameDialog(null)}
-          onConfirm={(name) => {
+          onConfirm={(name, capacity) => {
             const id = ridGen();
             const { x, y, w, h } = roomNameDialog;
-            const room = clampRoom({ id, name: name.trim(), x, y, w, h });
+            const room = clampRoom({ id, name, capacity, x, y, w, h });
             commitRooms({ ...mappedRooms, [id]: room });
             setSelectedRooms([id]);
             setRoomNameDialog(null);
@@ -1534,14 +1537,15 @@ export default function SeatCalibrationPage() {
       {/* Meeting Room - Rename dialog */}
       {renameRoomDialog && (
         <RoomNameModal
-          title="Rename meeting room"
+          title="Edit meeting room"
           initial={renameRoomDialog.name}
+          initialCapacity={renameRoomDialog.capacity || 1}
           confirmLabel="Save"
           onCancel={() => setRenameRoomDialog(null)}
-          onConfirm={(name) => {
+          onConfirm={(name, capacity) => {
             const id = renameRoomDialog.id;
             if (mappedRooms[id]) {
-              commitRooms({ ...mappedRooms, [id]: { ...mappedRooms[id], name: name.trim() } });
+              commitRooms({ ...mappedRooms, [id]: { ...mappedRooms[id], name, capacity } });
             }
             setRenameRoomDialog(null);
           }}
@@ -1694,18 +1698,24 @@ function RoomToolPanel({ roomTool, setRoomTool, roomsArray, selectedRooms, setSe
           </div>
           <div className="p-2 space-y-1.5">
             {selectedRooms.length === 1 && mappedRooms[selectedRooms[0]] && (
-              <div className="bg-white rounded border border-gray-100 p-2">
-                <div className="text-[9px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Name</div>
-                <div className="flex items-center justify-between gap-1">
-                  <span className="text-[11px] font-semibold text-gray-800 truncate" title={mappedRooms[selectedRooms[0]].name}>
+              <div className="bg-white rounded border border-gray-100 p-2 space-y-2">
+                <div>
+                  <div className="text-[9px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Name</div>
+                  <div className="text-[11px] font-semibold text-gray-800 truncate" title={mappedRooms[selectedRooms[0]].name}>
                     {mappedRooms[selectedRooms[0]].name}
-                  </span>
-                  <button
-                    onClick={() => onRequestRename(selectedRooms[0])}
-                    className="text-[10px] px-2 py-1 border border-gray-200 hover:border-emerald-500 hover:text-emerald-600 rounded"
-                    data-testid="room-rename-btn"
-                  >Rename Room</button>
+                  </div>
                 </div>
+                <div>
+                  <div className="text-[9px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Seats</div>
+                  <div className="text-[11px] font-semibold text-gray-800" data-testid="room-capacity-display">
+                    {mappedRooms[selectedRooms[0]].capacity || 1}
+                  </div>
+                </div>
+                <button
+                  onClick={() => onRequestRename(selectedRooms[0])}
+                  className="w-full text-[10px] px-2 py-1.5 border border-gray-200 hover:border-emerald-500 hover:text-emerald-600 rounded"
+                  data-testid="room-rename-btn"
+                >Edit Room</button>
               </div>
             )}
             <button
@@ -1841,7 +1851,7 @@ function MeetingRoomsLayer({
                 whiteSpace: 'nowrap',
               }}
             >
-              {room.name}
+              {room.name}{room.capacity ? ` (${room.capacity})` : ''}
             </div>
 
             {/* Resize handles — only on single selection */}
@@ -1877,36 +1887,78 @@ function MeetingRoomsLayer({
   );
 }
 
-// --------------------------------------------------------------------- Room name modal
-function RoomNameModal({ title, initial, confirmLabel, onCancel, onConfirm }) {
+// --------------------------------------------------------------------- Room form modal (name + capacity)
+function RoomNameModal({ title, initial, initialCapacity, confirmLabel, onCancel, onConfirm }) {
   const [name, setName] = React.useState(initial || '');
+  const [capacity, setCapacity] = React.useState(initialCapacity || 1);
+  const [touched, setTouched] = React.useState(false);
   const inputRef = React.useRef(null);
   React.useEffect(() => {
     setName(initial || '');
+    setCapacity(initialCapacity || 1);
+    setTouched(false);
     setTimeout(() => { inputRef.current?.focus(); inputRef.current?.select(); }, 30);
-  }, [initial]);
+  }, [initial, initialCapacity]);
+
+  const nameError = touched && !name.trim() ? 'Meeting Room Name is required' : '';
+  const capError = touched && (!capacity || capacity < 1 || capacity > 20) ? 'Number of Seats is required' : '';
+  const valid = name.trim() && capacity >= 1 && capacity <= 20;
+
   const submit = () => {
-    const v = name.trim();
-    if (!v) return;
-    onConfirm(v);
+    setTouched(true);
+    if (!valid) return;
+    onConfirm(name.trim(), Number(capacity));
   };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" data-testid="room-name-modal" onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
-      <div className="bg-white rounded-lg shadow-xl w-[360px] p-5">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      data-testid="room-name-modal"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+    >
+      <div className="bg-white rounded-lg shadow-xl w-[400px] p-5">
         <div className="text-sm font-bold text-gray-900 mb-3">{title}</div>
+
+        {/* Name */}
+        <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+          Meeting Room Name <span className="text-red-500">*</span>
+        </label>
         <input
           ref={inputRef}
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') onCancel(); }}
           placeholder="e.g. Board Room, Conference Room A"
-          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-emerald-500"
+          className={`w-full px-3 py-2 border rounded text-sm focus:outline-none ${nameError ? 'border-red-400 focus:border-red-500' : 'border-gray-300 focus:border-emerald-500'}`}
           data-testid="room-name-input"
           maxLength={80}
         />
-        <div className="flex justify-end gap-2 mt-4">
+        {nameError && <div className="text-[11px] text-red-600 mt-1" data-testid="room-name-error">{nameError}</div>}
+
+        {/* Capacity */}
+        <label className="block text-[11px] font-semibold text-gray-700 mt-3 mb-1">
+          Number of Seats <span className="text-red-500">*</span>
+        </label>
+        <select
+          value={capacity}
+          onChange={(e) => setCapacity(parseInt(e.target.value, 10))}
+          className={`w-full px-3 py-2 border rounded text-sm bg-white focus:outline-none ${capError ? 'border-red-400 focus:border-red-500' : 'border-gray-300 focus:border-emerald-500'}`}
+          data-testid="room-capacity-select"
+        >
+          {Array.from({ length: 20 }, (_, i) => i + 1).map(n => (
+            <option key={n} value={n}>{n}</option>
+          ))}
+        </select>
+        {capError && <div className="text-[11px] text-red-600 mt-1" data-testid="room-capacity-error">{capError}</div>}
+
+        <div className="flex justify-end gap-2 mt-5">
           <button onClick={onCancel} className="px-3 py-1.5 text-sm border border-gray-200 rounded hover:bg-gray-50" data-testid="room-name-cancel">Cancel</button>
-          <button onClick={submit} disabled={!name.trim()} className="px-3 py-1.5 text-sm bg-emerald-500 hover:bg-emerald-600 text-white rounded disabled:opacity-40" data-testid="room-name-confirm">{confirmLabel}</button>
+          <button
+            onClick={submit}
+            disabled={touched && !valid}
+            className="px-3 py-1.5 text-sm bg-emerald-500 hover:bg-emerald-600 text-white rounded disabled:opacity-40"
+            data-testid="room-name-confirm"
+          >{confirmLabel}</button>
         </div>
       </div>
     </div>

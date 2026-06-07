@@ -82,6 +82,7 @@ class Room(BaseModel):
     y: float  # top-left y in %
     w: float  # width in %
     h: float  # height in %
+    capacity: int = Field(default=1, ge=1, le=20)  # seating capacity (1-20)
 
 
 class PlanCreate(BaseModel):
