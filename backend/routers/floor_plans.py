@@ -75,6 +75,15 @@ class Seat(BaseModel):
     locked: bool = False
 
 
+class Room(BaseModel):
+    id: str
+    name: str
+    x: float  # top-left x in %
+    y: float  # top-left y in %
+    w: float  # width in %
+    h: float  # height in %
+
+
 class PlanCreate(BaseModel):
     name: str
     pdfUrl: str
@@ -84,6 +93,7 @@ class DraftIn(BaseModel):
     name: Optional[str] = None
     pdfUrl: str
     seats: List[Seat] = Field(default_factory=list)
+    rooms: List[Room] = Field(default_factory=list)
 
 
 class PublishIn(BaseModel):
@@ -134,6 +144,15 @@ async def _live_seats(plan: dict) -> List[dict]:
         return []
     v = await _get_version(vid)
     return (v or {}).get("seats", [])
+
+
+async def _live_rooms(plan: dict) -> List[dict]:
+    """Return the meeting rooms from the plan's published live version (or [])."""
+    vid = plan.get("live_version_id")
+    if not vid:
+        return []
+    v = await _get_version(vid)
+    return (v or {}).get("rooms", []) or []
 
 
 def _seat_dict(seats: List[dict]) -> Dict[str, dict]:
@@ -428,6 +447,7 @@ async def get_floor_plan(plan_id: str, user=Depends(get_current_user)):
     await ensure_migrated()
     plan = await _get_plan_or_404(plan_id)
     plan["live_seats"] = await _live_seats(plan)
+    plan["live_rooms"] = await _live_rooms(plan)
     plan["version_count"] = await db.floor_plan_versions.count_documents({"plan_id": plan_id})
     plan["has_draft"] = plan.get("draft") is not None
     plan["status"] = _compute_status(plan)
@@ -539,6 +559,7 @@ async def save_draft(
     actor = _actor(user)
     draft = {
         "seats": [s.model_dump() for s in payload.seats],
+        "rooms": [r.model_dump() for r in payload.rooms],
         "pdfUrl": payload.pdfUrl,
         "updated_at": now,
         "updated_by": actor,
@@ -579,6 +600,7 @@ async def publish_draft(
         raise HTTPException(400, "No draft to publish")
 
     draft_seats = plan["draft"].get("seats", [])
+    draft_rooms = plan["draft"].get("rooms", []) or []
     pdf_url = plan["draft"].get("pdfUrl") or plan.get("pdfUrl")
 
     # Validation: duplicate seat IDs would prevent publish
@@ -601,6 +623,7 @@ async def publish_draft(
         "version_number": version_number,
         "state": "published",
         "seats": draft_seats,
+        "rooms": draft_rooms,
         "pdfUrl": pdf_url,
         "name": plan.get("name"),
         "comments": payload.comments,

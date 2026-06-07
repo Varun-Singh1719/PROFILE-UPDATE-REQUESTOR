@@ -95,6 +95,18 @@ export default function SeatCalibrationPage() {
   const [previewMode, setPreviewMode] = useState(false);
   const [mouseCoords, setMouseCoords] = useState({ x: 0, y: 0 });
   const [currentZoom, setCurrentZoom] = useState(1);
+
+  // ---- Floor Calibration mode (workstation seats vs meeting rooms)
+  const [calibMode, setCalibMode] = useState('workstation'); // 'workstation' | 'room'
+  const [roomTool, setRoomTool] = useState('select');        // 'draw' | 'select' | 'delete'
+  const [mappedRooms, setMappedRooms] = useState({});        // { [id]: {id,name,x,y,w,h} }
+  const [selectedRooms, setSelectedRooms] = useState([]);    // [id]
+  const [drawingRoom, setDrawingRoom] = useState(null);      // {x0,y0,x1,y1} in % while drawing
+  const [roomNameDialog, setRoomNameDialog] = useState(null);// {x,y,w,h,suggested}
+  const [renameRoomDialog, setRenameRoomDialog] = useState(null); // {id,name}
+  const dragRoomRef = useRef(null);                          // {ids,startMouseX,startMouseY,rectW,rectH,startPositions,moved}
+  const resizeRoomRef = useRef(null);                        // {id,handle,startMouseX,startMouseY,rectW,rectH,startBox}
+  const drawingRoomRef = useRef(null);                       // {x0,y0}
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(
     () => typeof window !== "undefined" && window.localStorage.getItem("calib_panel_collapsed") === "1"
   );
@@ -169,6 +181,10 @@ export default function SeatCalibrationPage() {
       const seatsObj = Object.fromEntries(seatsSrc.map(s => [s.id, s]));
       setMappedSeats(seatsObj);
       setLiveSeats(res.data.live_seats || []);
+      // rooms: prefer draft.rooms over live_rooms (backward-compatible defaults to [])
+      const roomsSrc = res.data.draft?.rooms || res.data.live_rooms || [];
+      setMappedRooms(Object.fromEntries(roomsSrc.map(r => [r.id, r])));
+      setSelectedRooms([]);
       setHistory([seatsObj]);
       setHistoryIndex(0);
       setDraftDirty(false);
@@ -264,14 +280,66 @@ export default function SeatCalibrationPage() {
     return Math.round(val / snapGrid) * snapGrid;
   };
 
+  // ---------------------------- Room helpers
+  const roomsArray = useMemo(() => Object.values(mappedRooms), [mappedRooms]);
+  const nextRoomDefaultName = useCallback(() => {
+    const taken = new Set(Object.values(mappedRooms).map(r => r.name));
+    let i = 1;
+    while (taken.has(`Meeting Room ${i}`)) i++;
+    return `Meeting Room ${i}`;
+  }, [mappedRooms]);
+  const ridGen = () => `room-${Math.random().toString(36).slice(2, 9)}-${Date.now().toString(36)}`;
+
+  const commitRooms = useCallback((next) => {
+    setMappedRooms(next);
+    setDraftDirty(true);
+  }, []);
+
+  const clampRoom = (r) => {
+    // keep within 0..100 and minimum 0.5% size
+    const minSize = 0.5;
+    let { x, y, w, h } = r;
+    if (w < minSize) w = minSize;
+    if (h < minSize) h = minSize;
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+    if (x + w > 100) x = 100 - w;
+    if (y + h > 100) y = 100 - h;
+    return { ...r, x: r2(x), y: r2(y), w: r2(w), h: r2(h) };
+  };
+
+  const deleteSelectedRooms = useCallback(() => {
+    if (selectedRooms.length === 0) return;
+    const ns = { ...mappedRooms };
+    selectedRooms.forEach(id => { delete ns[id]; });
+    commitRooms(ns);
+    setSelectedRooms([]);
+  }, [selectedRooms, mappedRooms, commitRooms]);
+
   // ---------------------------- Drag-vs-click PDF interaction
   const handlePdfMouseDown = (e) => {
     if (!isCalibrating) return;
     const rect = e.currentTarget.getBoundingClientRect();
+    const px = ((e.clientX - rect.left) / rect.width) * 100;
+    const py = ((e.clientY - rect.top) / rect.height) * 100;
+
+    // ---- Meeting Room mode mouse handling
+    if (calibMode === 'room') {
+      if (roomTool === 'draw') {
+        drawingRoomRef.current = { x0: px, y0: py };
+        setDrawingRoom({ x0: px, y0: py, x1: px, y1: py });
+        e.preventDefault();
+      } else if (roomTool === 'select' || roomTool === 'delete') {
+        // click on empty area clears selection
+        if (!(e.shiftKey || e.ctrlKey || e.metaKey)) setSelectedRooms([]);
+      }
+      mouseDownPosRef.current = { sx: e.clientX, sy: e.clientY, px, py };
+      return;
+    }
+
     mouseDownPosRef.current = {
       sx: e.clientX, sy: e.clientY,
-      px: ((e.clientX - rect.left) / rect.width) * 100,
-      py: ((e.clientY - rect.top) / rect.height) * 100,
+      px, py,
     };
     if (toolMode === 'box') {
       dragModeRef.current = 'box';
@@ -288,6 +356,56 @@ export default function SeatCalibrationPage() {
     const xPercent = ((e.clientX - rect.left) / rect.width) * 100;
     const yPercent = ((e.clientY - rect.top) / rect.height) * 100;
     setMouseCoords({ x: xPercent.toFixed(2), y: yPercent.toFixed(2) });
+
+    // ---- Meeting Room mode
+    if (calibMode === 'room') {
+      // Drawing a new room
+      if (drawingRoomRef.current) {
+        const d = drawingRoomRef.current;
+        setDrawingRoom({ x0: d.x0, y0: d.y0, x1: xPercent, y1: yPercent });
+        return;
+      }
+      // Moving selected rooms
+      if (dragRoomRef.current) {
+        const drag = dragRoomRef.current;
+        const dxPx = e.clientX - drag.startMouseX;
+        const dyPx = e.clientY - drag.startMouseY;
+        if (!drag.moved && Math.abs(dxPx) < 3 && Math.abs(dyPx) < 3) return;
+        drag.moved = true;
+        const dxPct = (dxPx / drag.rectW) * 100;
+        const dyPct = (dyPx / drag.rectH) * 100;
+        setMappedRooms(prev => {
+          const ns = { ...prev };
+          drag.ids.forEach(id => {
+            const sp = drag.startPositions[id];
+            if (!sp || !ns[id]) return;
+            ns[id] = clampRoom({ ...ns[id], x: sp.x + dxPct, y: sp.y + dyPct });
+          });
+          return ns;
+        });
+        setDraftDirty(true);
+        return;
+      }
+      // Resizing a single room
+      if (resizeRoomRef.current) {
+        const rz = resizeRoomRef.current;
+        const dxPct = ((e.clientX - rz.startMouseX) / rz.rectW) * 100;
+        const dyPct = ((e.clientY - rz.startMouseY) / rz.rectH) * 100;
+        const { x, y, w, h } = rz.startBox;
+        let nx = x, ny = y, nw = w, nh = h;
+        if (rz.handle.includes('w')) { nx = x + dxPct; nw = w - dxPct; }
+        if (rz.handle.includes('e')) { nw = w + dxPct; }
+        if (rz.handle.includes('n')) { ny = y + dyPct; nh = h - dyPct; }
+        if (rz.handle.includes('s')) { nh = h + dyPct; }
+        // Prevent flipping
+        if (nw < 0.5) { nw = 0.5; if (rz.handle.includes('w')) nx = x + w - 0.5; }
+        if (nh < 0.5) { nh = 0.5; if (rz.handle.includes('n')) ny = y + h - 0.5; }
+        setMappedRooms(prev => ({ ...prev, [rz.id]: clampRoom({ ...prev[rz.id], x: nx, y: ny, w: nw, h: nh }) }));
+        setDraftDirty(true);
+        return;
+      }
+      return;
+    }
 
     // Seat-drag in progress?
     if (dragSeatRef.current) {
@@ -333,6 +451,50 @@ export default function SeatCalibrationPage() {
   };
 
   const handlePdfMouseUp = (e) => {
+    // ---- Meeting Room mode mouse-up
+    if (calibMode === 'room') {
+      // Finish drawing
+      if (drawingRoomRef.current) {
+        const d = drawingRoomRef.current;
+        drawingRoomRef.current = null;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const xP = ((e.clientX - rect.left) / rect.width) * 100;
+        const yP = ((e.clientY - rect.top) / rect.height) * 100;
+        const x = Math.min(d.x0, xP), y = Math.min(d.y0, yP);
+        const w = Math.abs(xP - d.x0), h = Math.abs(yP - d.y0);
+        setDrawingRoom(null);
+        if (w >= 1 && h >= 1) {
+          setRoomNameDialog({ x, y, w, h, suggested: nextRoomDefaultName() });
+        }
+        mouseDownPosRef.current = null;
+        return;
+      }
+      // Finish move
+      if (dragRoomRef.current) {
+        const drag = dragRoomRef.current;
+        dragRoomRef.current = null;
+        if (!drag.moved) {
+          // click-only on a room → toggle/select
+          const id = drag.ids[0];
+          if (e.shiftKey || e.ctrlKey || e.metaKey) {
+            setSelectedRooms(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+          } else {
+            setSelectedRooms([id]);
+          }
+        }
+        mouseDownPosRef.current = null;
+        return;
+      }
+      // Finish resize
+      if (resizeRoomRef.current) {
+        resizeRoomRef.current = null;
+        mouseDownPosRef.current = null;
+        return;
+      }
+      mouseDownPosRef.current = null;
+      return;
+    }
+
     // Seat-drag completed?
     if (dragSeatRef.current) {
       const drag = dragSeatRef.current;
@@ -647,7 +809,9 @@ export default function SeatCalibrationPage() {
     setSaving(true);
     try {
       await api.put(`/floor-plans/${planId}/draft`, {
-        name: plan.name, pdfUrl, seats: Object.values(mappedSeats),
+        name: plan.name, pdfUrl,
+        seats: Object.values(mappedSeats),
+        rooms: Object.values(mappedRooms),
       });
       setLastSaved(new Date().toISOString());
       setDraftDirty(false);
@@ -655,7 +819,7 @@ export default function SeatCalibrationPage() {
     } catch (e) {
       if (!silent) alert(`Save failed: ${e?.response?.data?.detail || e.message}`);
     } finally { setSaving(false); }
-  }, [plan, planId, pdfUrl, mappedSeats]);
+  }, [plan, planId, pdfUrl, mappedSeats, mappedRooms]);
 
   // ---------------------------- Thumbnail (PDF page 1 + seat dots → small PNG)
   const generateThumbnail = useCallback(() => {
@@ -729,31 +893,54 @@ export default function SeatCalibrationPage() {
       const inField = ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag);
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
       else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
-      else if (e.key === 'Delete' && selectedSeats.length > 0 && !inField) { e.preventDefault(); deleteSelected(); }
+      else if (e.key === 'Delete' && !inField) {
+        if (calibMode === 'room' && selectedRooms.length > 0) { e.preventDefault(); deleteSelectedRooms(); return; }
+        if (selectedSeats.length > 0) { e.preventDefault(); deleteSelected(); }
+      }
       else if ((e.ctrlKey || e.metaKey) && e.key === 's' && !e.shiftKey) { e.preventDefault(); saveDraft(); }
-      else if (ARROWS[e.key] && selectedSeats.length > 0 && !inField) {
-        e.preventDefault();
-        const stepPx = (e.ctrlKey || e.metaKey) ? 10 : (e.shiftKey ? 5 : 1);
-        const rect = containerRef.current?.getBoundingClientRect();
-        const w = rect?.width || pageWidth;
-        const h = rect?.height || pageWidth;
-        const [dxDir, dyDir] = ARROWS[e.key];
-        const dxPct = (dxDir * stepPx / w) * 100;
-        const dyPct = (dyDir * stepPx / h) * 100;
-        const ns = { ...mappedSeats };
-        let moved = 0;
-        selectedSeats.forEach(id => {
-          if (!ns[id] || ns[id].locked) return;
-          ns[id] = { ...ns[id], x: r2(ns[id].x + dxPct), y: r2(ns[id].y + dyPct) };
-          moved++;
-        });
-        if (moved > 0) commit(ns);
+      else if (ARROWS[e.key] && !inField) {
+        // Room nudge takes priority when in room mode with selection
+        if (calibMode === 'room' && selectedRooms.length > 0) {
+          e.preventDefault();
+          const stepPx = (e.ctrlKey || e.metaKey) ? 10 : (e.shiftKey ? 5 : 1);
+          const rect = containerRef.current?.getBoundingClientRect();
+          const w = rect?.width || pageWidth;
+          const h = rect?.height || pageWidth;
+          const [dxDir, dyDir] = ARROWS[e.key];
+          const dxPct = (dxDir * stepPx / w) * 100;
+          const dyPct = (dyDir * stepPx / h) * 100;
+          const ns = { ...mappedRooms };
+          selectedRooms.forEach(id => {
+            if (!ns[id]) return;
+            ns[id] = clampRoom({ ...ns[id], x: ns[id].x + dxPct, y: ns[id].y + dyPct });
+          });
+          commitRooms(ns);
+          return;
+        }
+        if (selectedSeats.length > 0) {
+          e.preventDefault();
+          const stepPx = (e.ctrlKey || e.metaKey) ? 10 : (e.shiftKey ? 5 : 1);
+          const rect = containerRef.current?.getBoundingClientRect();
+          const w = rect?.width || pageWidth;
+          const h = rect?.height || pageWidth;
+          const [dxDir, dyDir] = ARROWS[e.key];
+          const dxPct = (dxDir * stepPx / w) * 100;
+          const dyPct = (dyDir * stepPx / h) * 100;
+          const ns = { ...mappedSeats };
+          let moved = 0;
+          selectedSeats.forEach(id => {
+            if (!ns[id] || ns[id].locked) return;
+            ns[id] = { ...ns[id], x: r2(ns[id].x + dxPct), y: r2(ns[id].y + dyPct) };
+            moved++;
+          });
+          if (moved > 0) commit(ns);
+        }
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [undo, redo, selectedSeats, mappedSeats, saveDraft]);
+  }, [undo, redo, selectedSeats, mappedSeats, saveDraft, calibMode, selectedRooms, mappedRooms]);
 
   // ---------------------------- Import/Export
   const exportConfig = () => {
@@ -824,8 +1011,22 @@ export default function SeatCalibrationPage() {
             </button>
           </div>
           <div className="text-xs text-gray-500 mb-3">
-            v{plan?.live_version_id ? '(live exists)' : 'unpublished'} · {totalMapped} seats
+            v{plan?.live_version_id ? '(live exists)' : 'unpublished'} · {totalMapped} seats · {roomsArray.length} rooms
             {draftDirty && <span className="ml-2 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded font-semibold">Draft</span>}
+          </div>
+
+          {/* Floor Calibration mode tabs */}
+          <div className="mb-3 grid grid-cols-2 gap-1 p-1 bg-gray-100 rounded" data-testid="calib-mode-tabs">
+            <button
+              onClick={() => { setCalibMode('workstation'); setSelectedRooms([]); }}
+              data-testid="tab-workstation"
+              className={`py-1.5 text-[11px] font-semibold rounded transition-colors ${calibMode === 'workstation' ? 'bg-white text-[#ec9324] shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+            >Workstation Calibration</button>
+            <button
+              onClick={() => { setCalibMode('room'); setSelectedSeats([]); setRoomTool('select'); }}
+              data-testid="tab-room"
+              className={`py-1.5 text-[11px] font-semibold rounded transition-colors ${calibMode === 'room' ? 'bg-white text-[#ec9324] shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+            >Meeting Room Calibration</button>
           </div>
 
           {/* Save / Live toggle */}
@@ -891,6 +1092,7 @@ export default function SeatCalibrationPage() {
           </div>
 
           {/* Tool mode */}
+          {calibMode === 'workstation' && (<>
           <div className="mb-3 p-2 bg-gray-50 rounded">
             <div className="text-[10px] font-semibold mb-1.5 text-gray-700">TOOL MODE</div>
             <div className="grid grid-cols-5 gap-1">
@@ -1038,6 +1240,21 @@ export default function SeatCalibrationPage() {
               </div>
             </div>
           )}
+          </>)}
+
+          {/* Meeting Room Calibration tools */}
+          {calibMode === 'room' && (
+            <RoomToolPanel
+              roomTool={roomTool}
+              setRoomTool={setRoomTool}
+              roomsArray={roomsArray}
+              selectedRooms={selectedRooms}
+              setSelectedRooms={setSelectedRooms}
+              mappedRooms={mappedRooms}
+              deleteSelectedRooms={deleteSelectedRooms}
+              onRequestRename={(id) => setRenameRoomDialog({ id, name: mappedRooms[id]?.name || '' })}
+            />
+          )}
 
           {/* Undo/Redo */}
           <div className="grid grid-cols-2 gap-2 mb-3">
@@ -1075,7 +1292,7 @@ export default function SeatCalibrationPage() {
           initialScale={1} minScale={0.25} maxScale={4}
           wheel={{ step: 0.15, smoothStep: 0.01 }} pinch={{ step: 5 }}
           doubleClick={{ disabled: true }}
-          panning={{ disabled: toolMode === 'box' || toolMode === 'lasso', velocityDisabled: true }}
+          panning={{ disabled: toolMode === 'box' || toolMode === 'lasso' || (calibMode === 'room' && roomTool === 'draw'), velocityDisabled: true }}
           centerOnInit={true}
           smooth={true}
           limitToBounds={false}
@@ -1131,6 +1348,9 @@ export default function SeatCalibrationPage() {
                   onMouseUp={handlePdfMouseUp}
                   data-testid="pdf-canvas"
                   className={`relative inline-block ${
+                    calibMode === 'room' && roomTool === 'draw' ? 'cursor-crosshair' :
+                    calibMode === 'room' && roomTool === 'delete' ? 'cursor-pointer' :
+                    calibMode === 'room' ? 'cursor-default' :
                     toolMode === 'place' ? 'cursor-crosshair' :
                     toolMode === 'delete' ? 'cursor-pointer' :
                     toolMode === 'box' || toolMode === 'lasso' ? 'cursor-crosshair' :
@@ -1149,12 +1369,12 @@ export default function SeatCalibrationPage() {
                   </Document>
 
                   {/* Seats */}
-                  <div className="absolute inset-0" style={{ pointerEvents: 'none' }}>
+                  <div className="absolute inset-0" style={{ pointerEvents: 'none', opacity: calibMode === 'room' ? 0.35 : 1 }}>
                     {seatsArray.map(seat => {
                       const isSelected = selectedSeats.includes(seat.id);
                       const displaySize = isSelected ? pendingSize : (seat.size || 10);
                       const displayRot = isSelected ? pendingRotation : (seat.rotation || 0);
-                      const canDrag = !previewMode && !seat.locked && (
+                      const canDrag = calibMode === 'workstation' && !previewMode && !seat.locked && (
                         toolMode === "select" ||
                         ((toolMode === "box" || toolMode === "lasso") && isSelected)
                       );
@@ -1166,10 +1386,10 @@ export default function SeatCalibrationPage() {
                             left: `${seat.x}%`,
                             top: `${seat.y}%`,
                             transform: 'translate(-50%, -50%)',
-                            pointerEvents: 'auto',
+                            pointerEvents: calibMode === 'room' ? 'none' : 'auto',
                             cursor: canDrag ? 'move' : (toolMode === 'select' ? 'pointer' : 'inherit'),
                           }}
-                          onMouseDown={(e) => handleSeatMouseDown(seat, e)}
+                          onMouseDown={(e) => calibMode === 'workstation' && handleSeatMouseDown(seat, e)}
                           data-testid={`seat-${seat.id}`}
                         >
                           <SeatIcon
@@ -1185,6 +1405,42 @@ export default function SeatCalibrationPage() {
                       );
                     })}
                   </div>
+
+                  {/* Meeting Rooms layer */}
+                  <MeetingRoomsLayer
+                    rooms={roomsArray}
+                    mappedRooms={mappedRooms}
+                    setMappedRooms={setMappedRooms}
+                    selectedRooms={selectedRooms}
+                    setSelectedRooms={setSelectedRooms}
+                    calibMode={calibMode}
+                    roomTool={roomTool}
+                    previewMode={previewMode}
+                    dragRoomRef={dragRoomRef}
+                    resizeRoomRef={resizeRoomRef}
+                    containerRef={containerRef}
+                    onRequestRename={(id) => setRenameRoomDialog({ id, name: mappedRooms[id]?.name || '' })}
+                    onDelete={(id) => {
+                      const ns = { ...mappedRooms };
+                      delete ns[id];
+                      commitRooms(ns);
+                      setSelectedRooms(prev => prev.filter(x => x !== id));
+                    }}
+                    setDraftDirty={setDraftDirty}
+                  />
+
+                  {/* Drawing room preview */}
+                  {drawingRoom && (
+                    <div className="absolute pointer-events-none" style={{
+                      left: `${Math.min(drawingRoom.x0, drawingRoom.x1)}%`,
+                      top: `${Math.min(drawingRoom.y0, drawingRoom.y1)}%`,
+                      width: `${Math.abs(drawingRoom.x1 - drawingRoom.x0)}%`,
+                      height: `${Math.abs(drawingRoom.y1 - drawingRoom.y0)}%`,
+                      border: '2px dashed #10b981',
+                      background: 'rgba(16,185,129,0.12)',
+                      zIndex: 30,
+                    }}/>
+                  )}
 
                   {/* Box selection rectangle */}
                   {selectionRect && (
@@ -1214,13 +1470,16 @@ export default function SeatCalibrationPage() {
                   {/* Status banner */}
                   {isCalibrating && !previewMode && (
                     <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-yellow-500 text-white px-4 py-2 rounded-lg shadow-lg text-xs font-semibold z-50" data-testid="status-banner">
-                      {toolMode === 'place'  && (isBayLocked(currentBay)
+                      {calibMode === 'workstation' && toolMode === 'place'  && (isBayLocked(currentBay)
                         ? `🔒 Bay ${currentBay} locked`
                         : `✓ Place Mode · Bay ${currentBay} · Click to add ${currentBay}${nextSeatNumber}`)}
-                      {toolMode === 'select' && '✓ Select Mode · Click seats to edit'}
-                      {toolMode === 'box'    && '✓ Multi Select · Drag to select · Hold over selected seat to move'}
-                      {toolMode === 'lasso'  && '✓ Lasso Select · Drag freeform shape'}
-                      {toolMode === 'delete' && '✓ Delete Mode · Click seats to remove'}
+                      {calibMode === 'workstation' && toolMode === 'select' && '✓ Select Mode · Click seats to edit'}
+                      {calibMode === 'workstation' && toolMode === 'box'    && '✓ Multi Select · Drag to select · Hold over selected seat to move'}
+                      {calibMode === 'workstation' && toolMode === 'lasso'  && '✓ Lasso Select · Drag freeform shape'}
+                      {calibMode === 'workstation' && toolMode === 'delete' && '✓ Delete Mode · Click seats to remove'}
+                      {calibMode === 'room' && roomTool === 'draw'   && '✓ Draw Meeting Room · Click and drag to create a room'}
+                      {calibMode === 'room' && roomTool === 'select' && '✓ Select Mode · Click a room to edit · Shift+click for multi-select'}
+                      {calibMode === 'room' && roomTool === 'delete' && '✓ Delete Mode · Click a room to remove'}
                     </div>
                   )}
                 </div>
@@ -1252,6 +1511,42 @@ export default function SeatCalibrationPage() {
         open={showAuditPanel}
         onClose={() => setShowAuditPanel(false)}
       />
+
+      {/* Meeting Room - Name dialog (after drawing) */}
+      {roomNameDialog && (
+        <RoomNameModal
+          title="Name this meeting room"
+          initial={roomNameDialog.suggested}
+          confirmLabel="Create Room"
+          onCancel={() => setRoomNameDialog(null)}
+          onConfirm={(name) => {
+            const id = ridGen();
+            const { x, y, w, h } = roomNameDialog;
+            const room = clampRoom({ id, name: name.trim(), x, y, w, h });
+            commitRooms({ ...mappedRooms, [id]: room });
+            setSelectedRooms([id]);
+            setRoomNameDialog(null);
+            setRoomTool('select');
+          }}
+        />
+      )}
+
+      {/* Meeting Room - Rename dialog */}
+      {renameRoomDialog && (
+        <RoomNameModal
+          title="Rename meeting room"
+          initial={renameRoomDialog.name}
+          confirmLabel="Save"
+          onCancel={() => setRenameRoomDialog(null)}
+          onConfirm={(name) => {
+            const id = renameRoomDialog.id;
+            if (mappedRooms[id]) {
+              commitRooms({ ...mappedRooms, [id]: { ...mappedRooms[id], name: name.trim() } });
+            }
+            setRenameRoomDialog(null);
+          }}
+        />
+      )}
 
       {/* Unsaved indicator */}
       {draftDirty && (
@@ -1349,6 +1644,270 @@ function SeatRenameField({ seatId, onRename }) {
           className="px-2 py-1 bg-indigo-500 text-white rounded text-[10px] font-semibold"
           data-testid="seat-rename-submit"
         >Save</button>
+      </div>
+    </div>
+  );
+}
+
+// --------------------------------------------------------------------- Meeting Room toolbar
+function RoomToolPanel({ roomTool, setRoomTool, roomsArray, selectedRooms, setSelectedRooms, mappedRooms, deleteSelectedRooms, onRequestRename }) {
+  return (
+    <>
+      <div className="mb-3 p-2 bg-gray-50 rounded" data-testid="room-tool-panel">
+        <div className="text-[10px] font-semibold mb-1.5 text-gray-700">TOOL MODE</div>
+        <div className="grid grid-cols-3 gap-1">
+          {[
+            { mode: 'draw',   Icon: Square,   label: 'Draw Meeting Room' },
+            { mode: 'select', Icon: Settings, label: 'Select' },
+            { mode: 'delete', Icon: Trash2,   label: 'Delete' },
+          ].map(({ mode, Icon, label }) => {
+            const active = roomTool === mode;
+            return (
+              <button
+                key={mode}
+                onClick={() => setRoomTool(mode)}
+                data-testid={`room-tool-${mode}`}
+                title={label}
+                className={`p-1.5 rounded text-[9px] flex flex-col items-center gap-0.5 border transition-colors ${
+                  active
+                    ? 'bg-[#10b981] text-white border-[#10b981]'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-[#10b981] hover:text-[#10b981]'
+                }`}
+              >
+                <Icon size={12}/>
+                <span className="leading-tight text-center">{label}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-2 text-[10px] text-gray-500">
+          {roomsArray.length} meeting room{roomsArray.length === 1 ? '' : 's'}
+        </div>
+      </div>
+
+      {/* Selection panel */}
+      {selectedRooms.length > 0 && (
+        <div className="mb-3 border border-emerald-300 bg-emerald-50/60 rounded overflow-hidden" data-testid="room-bulk-panel">
+          <div className="px-2 py-1.5 bg-emerald-100 flex items-center justify-between border-b border-emerald-200">
+            <span className="text-[11px] font-bold text-emerald-700">{selectedRooms.length} room{selectedRooms.length === 1 ? '' : 's'} selected</span>
+            <button onClick={() => setSelectedRooms([])} className="text-[10px] text-gray-600 hover:text-gray-900" data-testid="room-clear-selection">Clear</button>
+          </div>
+          <div className="p-2 space-y-1.5">
+            {selectedRooms.length === 1 && mappedRooms[selectedRooms[0]] && (
+              <div className="bg-white rounded border border-gray-100 p-2">
+                <div className="text-[9px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Name</div>
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[11px] font-semibold text-gray-800 truncate" title={mappedRooms[selectedRooms[0]].name}>
+                    {mappedRooms[selectedRooms[0]].name}
+                  </span>
+                  <button
+                    onClick={() => onRequestRename(selectedRooms[0])}
+                    className="text-[10px] px-2 py-1 border border-gray-200 hover:border-emerald-500 hover:text-emerald-600 rounded"
+                    data-testid="room-rename-btn"
+                  >Rename Room</button>
+                </div>
+              </div>
+            )}
+            <button
+              onClick={deleteSelectedRooms}
+              className="w-full py-1.5 border border-red-200 text-red-600 hover:bg-red-50 rounded text-[10px] font-semibold flex items-center justify-center gap-1"
+              data-testid="room-delete-selected"
+            >
+              <Trash2 size={11}/> Delete {selectedRooms.length > 1 ? 'rooms' : 'room'}
+            </button>
+            <div className="text-[9px] text-gray-500 leading-relaxed pt-1">
+              Move: drag or arrow keys (Shift=5px, Ctrl=10px). Resize: drag handles (single selection).
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// --------------------------------------------------------------------- Meeting Rooms layer (on the PDF canvas)
+function MeetingRoomsLayer({
+  rooms, mappedRooms, setMappedRooms,
+  selectedRooms, setSelectedRooms,
+  calibMode, roomTool, previewMode,
+  dragRoomRef, resizeRoomRef,
+  containerRef, onRequestRename, onDelete,
+  setDraftDirty,
+}) {
+  const interactive = calibMode === 'room' && !previewMode;
+  const handles = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+  const cursorFor = (h) => ({ n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize',
+    ne: 'nesw-resize', sw: 'nesw-resize', nw: 'nwse-resize', se: 'nwse-resize' }[h] || 'default');
+
+  const onRoomMouseDown = (room, e) => {
+    if (!interactive) return;
+    if (roomTool === 'delete') {
+      e.stopPropagation();
+      onDelete(room.id);
+      return;
+    }
+    if (roomTool !== 'select') return;
+    e.stopPropagation();
+    e.preventDefault();
+    // Selection management
+    const already = selectedRooms.includes(room.id);
+    let nextSel;
+    if (e.shiftKey || e.ctrlKey || e.metaKey) {
+      nextSel = already ? selectedRooms.filter(x => x !== room.id) : [...selectedRooms, room.id];
+    } else {
+      nextSel = already ? selectedRooms : [room.id];
+    }
+    setSelectedRooms(nextSel);
+    // Prepare drag
+    const rect = containerRef.current.getBoundingClientRect();
+    const startPositions = {};
+    nextSel.forEach(id => {
+      const r = mappedRooms[id];
+      if (r) startPositions[id] = { x: r.x, y: r.y };
+    });
+    dragRoomRef.current = {
+      ids: nextSel,
+      startMouseX: e.clientX, startMouseY: e.clientY,
+      rectW: rect.width, rectH: rect.height,
+      startPositions,
+      moved: false,
+    };
+  };
+
+  const onHandleMouseDown = (room, handle, e) => {
+    if (!interactive || roomTool !== 'select') return;
+    e.stopPropagation();
+    e.preventDefault();
+    setSelectedRooms([room.id]);
+    const rect = containerRef.current.getBoundingClientRect();
+    resizeRoomRef.current = {
+      id: room.id,
+      handle,
+      startMouseX: e.clientX,
+      startMouseY: e.clientY,
+      rectW: rect.width,
+      rectH: rect.height,
+      startBox: { x: room.x, y: room.y, w: room.w, h: room.h },
+    };
+  };
+
+  return (
+    <div className="absolute inset-0" style={{ pointerEvents: 'none' }} data-testid="rooms-layer">
+      {rooms.map(room => {
+        const isSelected = selectedRooms.includes(room.id);
+        const bg = isSelected ? 'rgba(16,185,129,0.55)' : 'rgba(255,255,255,0.0)';
+        const borderColor = isSelected ? '#10b981' : '#9ca3af';
+        return (
+          <div
+            key={room.id}
+            className="absolute meeting-room"
+            data-testid={`room-${room.id}`}
+            style={{
+              left: `${room.x}%`,
+              top: `${room.y}%`,
+              width: `${room.w}%`,
+              height: `${room.h}%`,
+              background: bg,
+              border: `2px solid ${borderColor}`,
+              boxSizing: 'border-box',
+              pointerEvents: interactive ? 'auto' : 'none',
+              cursor: roomTool === 'select' ? (isSelected ? 'move' : 'pointer') : (roomTool === 'delete' ? 'pointer' : 'inherit'),
+              zIndex: 20,
+              transition: 'background 120ms, border-color 120ms',
+            }}
+            onMouseDown={(e) => onRoomMouseDown(room, e)}
+            onDoubleClick={(e) => { if (interactive) { e.stopPropagation(); onRequestRename(room.id); } }}
+            onContextMenu={(e) => { if (interactive) { e.preventDefault(); onRequestRename(room.id); } }}
+            onMouseEnter={(e) => {
+              if (!interactive || isSelected) return;
+              e.currentTarget.style.background = 'rgba(16,185,129,0.18)';
+              e.currentTarget.style.borderColor = '#10b981';
+            }}
+            onMouseLeave={(e) => {
+              if (!interactive || isSelected) return;
+              e.currentTarget.style.background = 'rgba(255,255,255,0.0)';
+              e.currentTarget.style.borderColor = '#9ca3af';
+            }}
+          >
+            {/* Room label */}
+            <div
+              className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[10px] font-semibold pointer-events-none select-none"
+              style={{
+                background: isSelected ? '#10b981' : 'rgba(255,255,255,0.85)',
+                color: isSelected ? 'white' : '#111827',
+                maxWidth: '90%',
+                textOverflow: 'ellipsis',
+                overflow: 'hidden',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {room.name}
+            </div>
+
+            {/* Resize handles — only on single selection */}
+            {interactive && roomTool === 'select' && isSelected && selectedRooms.length === 1 && handles.map(h => {
+              const pos = {
+                nw: { left: -4, top: -4 }, n: { left: '50%', top: -4, marginLeft: -4 },
+                ne: { right: -4, top: -4 }, e: { right: -4, top: '50%', marginTop: -4 },
+                se: { right: -4, bottom: -4 }, s: { left: '50%', bottom: -4, marginLeft: -4 },
+                sw: { left: -4, bottom: -4 }, w: { left: -4, top: '50%', marginTop: -4 },
+              }[h];
+              return (
+                <div
+                  key={h}
+                  onMouseDown={(e) => onHandleMouseDown(room, h, e)}
+                  data-testid={`room-handle-${h}`}
+                  style={{
+                    position: 'absolute',
+                    width: 8, height: 8,
+                    background: '#fff',
+                    border: '1.5px solid #10b981',
+                    borderRadius: 2,
+                    cursor: cursorFor(h),
+                    zIndex: 21,
+                    ...pos,
+                  }}
+                />
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// --------------------------------------------------------------------- Room name modal
+function RoomNameModal({ title, initial, confirmLabel, onCancel, onConfirm }) {
+  const [name, setName] = React.useState(initial || '');
+  const inputRef = React.useRef(null);
+  React.useEffect(() => {
+    setName(initial || '');
+    setTimeout(() => { inputRef.current?.focus(); inputRef.current?.select(); }, 30);
+  }, [initial]);
+  const submit = () => {
+    const v = name.trim();
+    if (!v) return;
+    onConfirm(v);
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" data-testid="room-name-modal" onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
+      <div className="bg-white rounded-lg shadow-xl w-[360px] p-5">
+        <div className="text-sm font-bold text-gray-900 mb-3">{title}</div>
+        <input
+          ref={inputRef}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') onCancel(); }}
+          placeholder="e.g. Board Room, Conference Room A"
+          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-emerald-500"
+          data-testid="room-name-input"
+          maxLength={80}
+        />
+        <div className="flex justify-end gap-2 mt-4">
+          <button onClick={onCancel} className="px-3 py-1.5 text-sm border border-gray-200 rounded hover:bg-gray-50" data-testid="room-name-cancel">Cancel</button>
+          <button onClick={submit} disabled={!name.trim()} className="px-3 py-1.5 text-sm bg-emerald-500 hover:bg-emerald-600 text-white rounded disabled:opacity-40" data-testid="room-name-confirm">{confirmLabel}</button>
+        </div>
       </div>
     </div>
   );

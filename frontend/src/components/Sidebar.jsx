@@ -25,7 +25,7 @@ const NAV_CONFIG = [
     kind: "group", label: "Workspace Manager", icon: Armchair,
     children: [
       { to: "/workspace-manager/floor-layout", label: "Floor Layout",     icon: LayoutGrid, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
-      { to: "/workspace-manager/floor-plans",  label: "Seat Calibration", icon: Settings,   perm: { module: "desk_booking", feature: "seat_request", action: "edit" } },
+      { to: "/workspace-manager/floor-plans",  label: "Floor Calibration", icon: Settings,   perm: { module: "desk_booking", feature: "seat_request", action: "edit" } },
     ],
   },
   {
