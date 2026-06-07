@@ -144,20 +144,15 @@ export default function SeatCalibrationPage() {
   const dragModeRef = useRef(null); // 'box' | 'lasso' | null
   const dragSeatRef = useRef(null); // { ids[], startMouseX, startMouseY, rectW, rectH, startPositions, moved }
   const viewportInitDoneRef = useRef(false); // whether the canvas has been auto-centered once for this mount
+  const canvasViewportRef = useRef(null);    // <div> that wraps TransformWrapper (used to read viewport size for zoom-around-center)
 
-  // Per-session viewport persistence keyed by planId — survives saves/auto-saves/publishes/mode switches
-  const viewportKey = planId ? `floorplan_viewport_${planId}` : null;
-  const readViewport = useCallback(() => {
-    if (!viewportKey) return null;
-    try {
-      const raw = sessionStorage.getItem(viewportKey);
-      return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
-  }, [viewportKey]);
-  const writeViewport = useCallback((scale, positionX, positionY) => {
-    if (!viewportKey) return;
-    try { sessionStorage.setItem(viewportKey, JSON.stringify({ scale, positionX, positionY })); } catch {}
-  }, [viewportKey]);
+  // Center the floor plan in the visible viewport. Robust to PDF loading async.
+  const centerFloorPlan = useCallback((animate = false) => {
+    const ref = transformRef.current;
+    if (!ref?.centerView) return;
+    // Use a short animation when explicitly requested, otherwise snap immediately.
+    ref.centerView(1, animate ? 250 : 0);
+  }, []);
 
   // ------------ Helpers: bay prefix + renumbering
   const bayOf = (id) => id.match(/^[A-Z]+/)?.[0] || id[0];
@@ -1307,25 +1302,18 @@ export default function SeatCalibrationPage() {
       )}
 
       {/* ────────────────────────────── PDF Canvas */}
-      <div className="flex-1 overflow-hidden bg-gray-100 relative">
-        {(() => { const _vp = readViewport(); return (
+      <div ref={canvasViewportRef} className="flex-1 overflow-hidden bg-gray-100 relative">
         <TransformWrapper
-          initialScale={_vp?.scale ?? 1}
-          initialPositionX={_vp?.positionX}
-          initialPositionY={_vp?.positionY}
+          initialScale={1}
           minScale={0.25} maxScale={4}
           wheel={{ step: 0.15, smoothStep: 0.01 }} pinch={{ step: 5 }}
           doubleClick={{ disabled: true }}
           panning={{ disabled: toolMode === 'box' || toolMode === 'lasso' || (calibMode === 'room' && roomTool === 'draw'), velocityDisabled: true }}
-          centerOnInit={!_vp}
+          centerOnInit={true}
           smooth={true}
           limitToBounds={false}
           onZoom={(ref) => setCurrentZoom(ref.state.scale)}
-          onTransformed={(ref) => {
-            setCurrentZoom(ref.state.scale);
-            // Persist viewport for this plan so subsequent loads/refreshes restore exactly
-            writeViewport(ref.state.scale, ref.state.positionX, ref.state.positionY);
-          }}
+          onTransformed={(ref) => setCurrentZoom(ref.state.scale)}
           ref={transformRef}
         >
           {({ zoomIn, zoomOut, resetTransform, centerView }) => (
@@ -1333,10 +1321,10 @@ export default function SeatCalibrationPage() {
               <div className="absolute top-3 right-3 z-20 bg-white rounded-lg shadow-lg p-1.5">
                 <div className="text-[10px] font-semibold text-center text-gray-700">ZOOM {(currentZoom * 100).toFixed(0)}%</div>
                 <div className="grid grid-cols-2 gap-1 mt-1">
-                  <button onClick={() => zoomIn()} className="p-1 hover:bg-gray-100 rounded"><ZoomIn size={13}/></button>
-                  <button onClick={() => zoomOut()} className="p-1 hover:bg-gray-100 rounded"><ZoomOut size={13}/></button>
-                  <button onClick={() => resetTransform()} className="p-1 hover:bg-gray-100 rounded"><Maximize2 size={13}/></button>
-                  <button onClick={() => centerView()} className="p-1 hover:bg-gray-100 rounded"><Maximize size={13}/></button>
+                  <button onClick={() => zoomIn()} className="p-1 hover:bg-gray-100 rounded" data-testid="zoom-in-btn"><ZoomIn size={13}/></button>
+                  <button onClick={() => zoomOut()} className="p-1 hover:bg-gray-100 rounded" data-testid="zoom-out-btn"><ZoomOut size={13}/></button>
+                  <button onClick={() => { resetTransform(); requestAnimationFrame(() => centerFloorPlan(true)); }} className="p-1 hover:bg-gray-100 rounded" title="Reset zoom" data-testid="zoom-reset-btn"><Maximize2 size={13}/></button>
+                  <button onClick={() => centerFloorPlan(true)} className="p-1 hover:bg-gray-100 rounded" title="Center floor plan" data-testid="zoom-center-btn"><Maximize size={13}/></button>
                 </div>
                 <select
                   className="text-[10px] p-0.5 border rounded w-full mt-1"
@@ -1348,10 +1336,22 @@ export default function SeatCalibrationPage() {
                   onChange={(e) => {
                     const z = parseFloat(e.target.value);
                     const ref = transformRef.current;
-                    if (ref?.centerView) {
+                    if (!ref) return;
+                    // Zoom around the CURRENT screen center (not the PDF center) so the user's focus point doesn't jump.
+                    const vp = canvasViewportRef.current?.getBoundingClientRect();
+                    const state = ref.instance?.transformState || ref.state;
+                    if (vp && state && ref.setTransform) {
+                      const cxScreen = vp.width / 2;
+                      const cyScreen = vp.height / 2;
+                      // Content point under the current screen center
+                      const cxContent = (cxScreen - state.positionX) / state.scale;
+                      const cyContent = (cyScreen - state.positionY) / state.scale;
+                      // New offsets so the same content point stays under the screen center at the new scale
+                      const newX = cxScreen - cxContent * z;
+                      const newY = cyScreen - cyContent * z;
+                      ref.setTransform(newX, newY, z, 200, "easeOut");
+                    } else if (ref.centerView) {
                       ref.centerView(z, 200, "easeOut");
-                    } else if (ref?.setTransform) {
-                      ref.setTransform(0, 0, z, 200, "easeOut");
                     }
                   }}
                   data-testid="zoom-select"
@@ -1394,18 +1394,11 @@ export default function SeatCalibrationPage() {
                       renderTextLayer={false}
                       renderAnnotationLayer={false}
                       onLoadSuccess={() => {
-                        // First time the PDF page renders for this mount: ensure a sensible viewport.
-                        // - If we have a saved per-session viewport, it's already applied via initial* props.
-                        // - Otherwise, center the freshly-rendered canvas now that real dimensions exist.
+                        // The PDF canvas now has real dimensions — center the floor plan in the viewport.
+                        // Only do this once per mount; subsequent silent reloads (after publish/save) must not reposition.
                         if (viewportInitDoneRef.current) return;
                         viewportInitDoneRef.current = true;
-                        const saved = readViewport();
-                        if (saved) return; // restored via initialPosition*/initialScale
-                        // Defer to next frame so layout has measured the rendered PDF canvas
-                        requestAnimationFrame(() => {
-                          const ref = transformRef.current;
-                          if (ref?.centerView) ref.centerView(1, 0);
-                        });
+                        requestAnimationFrame(() => centerFloorPlan(false));
                       }}
                     />
                   </Document>
@@ -1529,7 +1522,6 @@ export default function SeatCalibrationPage() {
             </>
           )}
         </TransformWrapper>
-        ); })()}
       </div>
     </div>
 
