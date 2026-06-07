@@ -1,8 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, LayoutGrid, MapPin, Clock, AlertCircle, Loader2, X, FileText } from "lucide-react";
-import { Link } from "react-router-dom";
+import { ArrowLeft, LayoutGrid, MapPin, Clock, Loader2, X, FileText } from "lucide-react";
 import FloorMap from "../components/FloorMap";
-import { FLOOR_PLAN_CONFIG } from "../config/seatMaster";
 import api from "../lib/api";
 import Layout from "../components/Layout";
 
@@ -154,7 +152,6 @@ export default function FloorLayoutPage() {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState(null); // selected plan to view interactively
-  const [legacyMode, setLegacyMode] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -166,8 +163,6 @@ export default function FloorLayoutPage() {
         // Show only plans that are explicitly Live (excludes Draft + Inactive)
         const live = all.filter(p => (p.status || (p.live_version_id ? "live" : "draft")) === "live");
         setPlans(live);
-        // Fallback when no live plan exists
-        if (live.length === 0) setLegacyMode(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -186,8 +181,33 @@ export default function FloorLayoutPage() {
     return <PlanInteractiveView plan={active} onBack={() => setActive(null)}/>;
   }
 
-  if (legacyMode) {
-    return <LegacyFloorMapFallback/>;
+  // Empty state: no Live floor calibrations published yet → show centered, prominent message
+  if (!loading && sortedPlans.length === 0) {
+    return (
+      <Layout
+        breadcrumbs={[{ label: "Workspace Manager" }, { label: "Floor Layout" }]}
+        contentClassName="flex flex-col"
+      >
+        <div
+          className="flex flex-col items-center justify-center text-center min-h-[70vh] px-6"
+          data-testid="floor-layout-empty-state"
+        >
+          <LayoutGrid className="text-gray-300 mb-5" size={56} aria-hidden="true" />
+          <h1
+            className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-500"
+            data-testid="floor-layout-empty-title"
+          >
+            NO FLOOR LAYOUT AVAILABLE
+          </h1>
+          <p
+            className="mt-3 text-sm sm:text-base text-gray-500 max-w-md"
+            data-testid="floor-layout-empty-subtitle"
+          >
+            No active floor calibration has been published yet.
+          </p>
+        </div>
+      </Layout>
+    );
   }
 
   return (
@@ -204,13 +224,6 @@ export default function FloorLayoutPage() {
         <div className="flex items-center justify-center py-20 text-gray-500">
           <Loader2 className="animate-spin mr-2"/> Loading floor plans…
         </div>
-      ) : sortedPlans.length === 0 ? (
-        <div className="bg-white border border-dashed border-gray-300 rounded-xl p-12 text-center" data-testid="no-plans-empty-state">
-          <FileText className="mx-auto mb-3 text-gray-400" size={32}/>
-          <h2 className="font-semibold text-gray-700">No published floor plans</h2>
-          <p className="text-sm text-gray-500 mt-1">Calibrate and publish at least one floor plan to make it available here.</p>
-          <Link to="/workspace-manager/floor-plans" className="mt-4 inline-block px-4 py-2 bg-[#ec9324] text-white rounded-lg text-sm font-semibold">Open Floor Plans</Link>
-        </div>
       ) : (
         <>
           <div className="mb-4 text-xs text-gray-500">{sortedPlans.length} live plan{sortedPlans.length !== 1 ? "s" : ""}</div>
@@ -225,37 +238,5 @@ export default function FloorLayoutPage() {
   );
 }
 
-// Fallback when the backend has no plans yet — keeps the legacy demo working.
-function LegacyFloorMapFallback() {
-  const [selectedSeats, setSelectedSeats] = useState([]);
-  const [occupiedSeats] = useState(["H7", "B2", "K3", "V1"]);
-  return (
-    <Layout fullBleed breadcrumbs={[{ label: "Workspace Manager" }, { label: "Floor Layout" }]} contentClassName="flex flex-col h-screen">
-      <div className="bg-white border-b border-gray-200 px-6 py-3 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <LayoutGrid className="text-[#ec9324]" size={24}/>
-          <div>
-            <h1 className="text-lg font-bold text-gray-900" data-testid="floor-layout-title">Floor Layout</h1>
-            <p className="text-xs text-gray-600">Demo layout — no calibrated plans yet.</p>
-          </div>
-        </div>
-        <div className="mt-3 flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900">
-          <AlertCircle size={14} className="mt-0.5 flex-shrink-0"/>
-          <div>
-            No calibrated floor plan saved yet. Showing the legacy demo layout.
-            <Link to="/workspace-manager/floor-plans" className="ml-1 underline font-semibold">Open Floor Plans</Link> to create one.
-          </div>
-        </div>
-      </div>
-      <div className="flex-1 relative">
-        <FloorMap
-          seats={FLOOR_PLAN_CONFIG.seats}
-          pdfUrl={FLOOR_PLAN_CONFIG.pdfUrl}
-          occupiedSeats={occupiedSeats}
-          selectedSeats={selectedSeats}
-          onSeatSelect={(id) => setSelectedSeats(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])}
-        />
-      </div>
-    </Layout>
-  );
-}
+// Fallback removed: when no Live floor plan exists, the empty-state message above
+// "NO FLOOR LAYOUT AVAILABLE" is shown instead of the legacy demo layout.
