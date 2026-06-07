@@ -43,30 +43,63 @@ export default function MeetingRoomBookingPage() {
   const [selectedRoomId, setSelectedRoomId] = useState("");
   const [conflict, setConflict] = useState(null);
   const [filterDate, setFilterDate] = useState(todayIso());
+  const [rangeMode, setRangeMode] = useState("today");  // 'today' | 'next7'
   const formAnchorRef = useRef(null);
-  const titleInputFocusRef = useRef(null);  // shared with BookingForm to focus its title input
+  const titleInputFocusRef = useRef(null);
+
+  // Booking form's date+time (lifted) — used by the floor map to dim conflicting rooms
+  const [formDate, setFormDate] = useState(todayIso());
+  const [formStart, setFormStart] = useState("10:00");
+  const [formEnd, setFormEnd] = useState("11:00");
+
+  // Bookings for the form's selected date (used to dim conflicting rooms on the map)
+  const [slotBookings, setSlotBookings] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get(`/room-bookings?date=${formDate}&include_past=true`);
+        if (!cancelled) setSlotBookings(res.data || []);
+      } catch { /* non-fatal */ }
+    })();
+    return () => { cancelled = true; };
+  }, [formDate]);
+
+  // Heartbeat for "occupied right now" so the map auto-refreshes badges
+  const [nowTick, setNowTick] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   const loadRooms = useCallback(async () => {
     const res = await api.get("/room-bookings/rooms");
     setRooms(res.data || []);
   }, []);
-  // Bookings for the date filter (default today). When the filter is set to today,
-  // we additionally fetch tomorrow so the panel can show both day groups.
-  const loadBookingsForDate = useCallback(async (dateIso) => {
+  // Bookings for the visible range. Three modes: 'today' (today + tomorrow), 'next7' (7 days),
+  // or a single date when the user picks something in the date filter.
+  const addDaysIso = (offset) => {
+    const d = new Date(); d.setDate(d.getDate() + offset);
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  };
+  const loadBookingsForDate = useCallback(async (dateIso, mode) => {
+    if (mode === "next7") {
+      const dates = Array.from({ length: 7 }, (_, i) => addDaysIso(i));
+      const results = await Promise.all(dates.map(d => api.get(`/room-bookings?date=${d}&include_past=true`).catch(() => ({ data: [] }))));
+      const merged = results.flatMap(r => r.data || []);
+      const seen = new Set();
+      setMyBookings(merged.filter(x => { if (seen.has(x.id)) return false; seen.add(x.id); return true; }));
+      return;
+    }
     const isToday = dateIso === todayIso();
     if (isToday) {
-      // Fetch today AND tomorrow in parallel; flatten
-      const tomorrow = (() => {
-        const d = new Date(); d.setDate(d.getDate() + 1);
-        const p = (n) => String(n).padStart(2, "0");
-        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-      })();
+      const tomorrow = addDaysIso(1);
       const [a, b] = await Promise.all([
         api.get(`/room-bookings?date=${dateIso}&include_past=true`),
         api.get(`/room-bookings?date=${tomorrow}&include_past=true`),
       ]);
       const merged = [...(a.data || []), ...(b.data || [])];
-      // de-duplicate by id (a multi-day booking would appear in both)
       const seen = new Set();
       setMyBookings(merged.filter(x => { if (seen.has(x.id)) return false; seen.add(x.id); return true; }));
     } else {
@@ -78,15 +111,47 @@ export default function MeetingRoomBookingPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try { await Promise.all([loadRooms(), loadBookingsForDate(filterDate)]); }
+      try { await Promise.all([loadRooms(), loadBookingsForDate(filterDate, rangeMode)]); }
       finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadRooms]);
 
-  // Refetch when date filter changes
-  useEffect(() => { loadBookingsForDate(filterDate); }, [filterDate, loadBookingsForDate]);
+  useEffect(() => { loadBookingsForDate(filterDate, rangeMode); }, [filterDate, rangeMode, loadBookingsForDate]);
+
+  // Compute room status sets for the floor map:
+  //  • occupiedNowRoomIds — rooms currently mid-meeting (any active booking spans `now`)
+  //  • slotConflictRoomIds — rooms whose schedule conflicts with the form-selected date+start+end
+  const occupiedNowRoomIds = useMemo(() => {
+    const now = nowTick;
+    const set = new Set();
+    for (const b of myBookings) {
+      if (b.cancelled) continue;
+      const s = new Date(b.start_at).getTime();
+      const e = new Date(b.end_at).getTime();
+      if (s <= now && now < e) set.add(b.room_id);
+    }
+    return set;
+  }, [myBookings, nowTick]);
+
+  const slotConflictRoomIds = useMemo(() => {
+    const set = new Set();
+    if (!formOpen) return set;
+    const slotStart = combineDateTime(formDate, formStart);
+    const slotEnd = combineDateTime(formDate, formEnd);
+    if (!slotStart || !slotEnd) return set;
+    const sMs = new Date(slotStart).getTime();
+    const eMs = new Date(slotEnd).getTime();
+    if (!(eMs > sMs)) return set;
+    for (const b of slotBookings) {
+      if (b.cancelled) continue;
+      const bs = new Date(b.start_at).getTime();
+      const be = new Date(b.end_at).getTime();
+      if (bs < eMs && be > sMs) set.add(b.room_id);
+    }
+    return set;
+  }, [formOpen, formDate, formStart, formEnd, slotBookings]);
 
   const selectedRoom = useMemo(() => rooms.find(r => r.room_id === selectedRoomId), [rooms, selectedRoomId]);
   // Floor plan currently shown on the right panel = plan of the selected room, else first available
@@ -115,7 +180,11 @@ export default function MeetingRoomBookingPage() {
     if (!window.confirm("Cancel this booking?")) return;
     try {
       await api.delete(`/room-bookings/${id}`);
-      await loadBookingsForDate(filterDate);
+      await Promise.all([
+        loadBookingsForDate(filterDate, rangeMode),
+        // refresh slot bookings so the map's dimming reflects the cancellation
+        api.get(`/room-bookings?date=${formDate}&include_past=true`).then(r => setSlotBookings(r.data || [])).catch(() => {}),
+      ]);
       toast.success("Booking cancelled");
     } catch (e) {
       toast.error(`Cancel failed: ${e?.response?.data?.detail || e.message}`);
@@ -126,7 +195,10 @@ export default function MeetingRoomBookingPage() {
     setConflict(null);
     try {
       const res = await api.post("/room-bookings", payload);
-      await loadBookingsForDate(filterDate);
+      await Promise.all([
+        loadBookingsForDate(filterDate, rangeMode),
+        api.get(`/room-bookings?date=${formDate}&include_past=true`).then(r => setSlotBookings(r.data || [])).catch(() => {}),
+      ]);
       setFormOpen(false);
       const n = res.data?.created || 1;
       toast.success("Meeting Room Booked Successfully", { description: n > 1 ? `${n} recurring occurrences created.` : undefined });
@@ -170,19 +242,36 @@ export default function MeetingRoomBookingPage() {
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
             {/* Upcoming bookings panel — capped to ~1/3 viewport per spec to give the floor map priority */}
             <section data-testid="mrb-upcoming-section">
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-2 gap-2">
                 <h2 className="text-[11px] font-bold tracking-wide text-gray-500 uppercase" data-testid="mrb-upcoming-title">Upcoming Bookings</h2>
-                <input
-                  type="date"
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
-                  className="text-[11px] px-2 py-1 border border-gray-200 rounded focus:outline-none focus:border-[#ec9324]"
-                  data-testid="mrb-upcoming-date-filter"
-                />
+                <div className="flex items-center gap-2">
+                  <div className="inline-flex bg-gray-100 rounded p-0.5" data-testid="mrb-range-toggle">
+                    <button
+                      onClick={() => { setRangeMode("today"); setFilterDate(todayIso()); }}
+                      data-testid="mrb-range-today"
+                      className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors ${rangeMode === "today" ? "bg-white text-[#ec9324] shadow-sm" : "text-gray-500 hover:text-gray-800"}`}
+                    >Today</button>
+                    <button
+                      onClick={() => setRangeMode("next7")}
+                      data-testid="mrb-range-7"
+                      className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors ${rangeMode === "next7" ? "bg-white text-[#ec9324] shadow-sm" : "text-gray-500 hover:text-gray-800"}`}
+                    >Next 7 days</button>
+                  </div>
+                  {rangeMode === "today" && (
+                    <input
+                      type="date"
+                      value={filterDate}
+                      onChange={(e) => { setFilterDate(e.target.value); }}
+                      className="text-[11px] px-2 py-1 border border-gray-200 rounded focus:outline-none focus:border-[#ec9324]"
+                      data-testid="mrb-upcoming-date-filter"
+                    />
+                  )}
+                </div>
               </div>
               <UpcomingBookingsList
                 bookings={myBookings}
                 filterDate={filterDate}
+                rangeMode={rangeMode}
                 loading={loading}
                 onCancel={handleCancel}
               />
@@ -200,6 +289,10 @@ export default function MeetingRoomBookingPage() {
                   conflict={conflict}
                   clearConflict={() => setConflict(null)}
                   titleInputFocusRef={titleInputFocusRef}
+                  bDate={formDate} setBDate={setFormDate}
+                  startTime={formStart} setStartTime={setFormStart}
+                  endTime={formEnd} setEndTime={setFormEnd}
+                  slotConflictRoomIds={slotConflictRoomIds}
                 />
               )}
             </div>
@@ -213,6 +306,8 @@ export default function MeetingRoomBookingPage() {
             rooms={roomsOnFocusPlan}
             selectedRoomId={selectedRoomId}
             onPickRoom={(id) => setSelectedRoomId(id)}
+            occupiedNowRoomIds={occupiedNowRoomIds}
+            blockedRoomIds={slotConflictRoomIds}
           />
         </div>
       </div>
@@ -221,7 +316,8 @@ export default function MeetingRoomBookingPage() {
 }
 
 // ============================================================ Booking Form
-function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCancel, conflict, clearConflict, titleInputFocusRef }) {
+function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCancel, conflict, clearConflict, titleInputFocusRef,
+  bDate, setBDate, startTime, setStartTime, endTime, setEndTime, slotConflictRoomIds }) {
   const [title, setTitle] = useState("");
   const localTitleRef = useRef(null);
   // expose this input's focus to parent so the +Book Meeting Room button can focus it
@@ -231,23 +327,21 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
     }
     return () => { if (titleInputFocusRef) titleInputFocusRef.current = null; };
   }, [titleInputFocusRef]);
-  const [bDate, setBDate] = useState(todayIso());
-  const [startTime, setStartTime] = useState("10:00");
-  const [endTime, setEndTime] = useState("11:00");
-  const [attendees, setAttendees] = useState([]); // [{type,id,name,email?}]
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [recurring, setRecurring] = useState(false);
-  const [freq, setFreq] = useState("daily"); // daily|weekly|monthly
-  const [days, setDays] = useState([]); // ['Mo',...]
-  const [endDate, setEndDate] = useState(todayIso());
-  const [submitting, setSubmitting] = useState(false);
-
   const selectedRoom = useMemo(() => rooms.find(r => r.room_id === selectedRoomId), [rooms, selectedRoomId]);
   const dropdownDisabled = rooms.length === 0;
   const dropdownPlaceholder =
     rooms.length === 0
       ? "No Active Floor Plan / No Meeting Room Available"
       : "Select a Meeting Room…";
+  const isSelectedRoomBlocked = !!(selectedRoomId && slotConflictRoomIds?.has?.(selectedRoomId));
+  // Local-only fields (lifted state owns date/start/end via props)
+  const [attendees, setAttendees] = useState([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [recurring, setRecurring] = useState(false);
+  const [freq, setFreq] = useState("daily");
+  const [days, setDays] = useState([]);
+  const [endDate, setEndDate] = useState(todayIso());
+  const [submitting, setSubmitting] = useState(false);
 
   const submit = async () => {
     clearConflict();
@@ -306,6 +400,11 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
           <div className="mt-1.5 text-[11px] text-gray-600 inline-flex items-center gap-1.5" data-testid="mrb-form-capacity">
             <Users size={11} className="text-emerald-600"/>
             <span className="font-semibold">{selectedRoom.name}</span> · Capacity: <span className="font-bold text-gray-900">{selectedRoom.capacity}</span> Seats
+          </div>
+        )}
+        {isSelectedRoomBlocked && (
+          <div className="mt-1.5 px-2 py-1 bg-amber-50 border border-amber-200 rounded text-[11px] text-amber-800 inline-flex items-center gap-1.5" data-testid="mrb-form-blocked-hint">
+            <AlertCircle size={11}/> This room is already booked at the selected time. Pick another slot or room.
           </div>
         )}
       </Field>
@@ -425,7 +524,7 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
 
       <div className="flex justify-end gap-2 mt-4">
         <Button variant="outline" onClick={onCancel} data-testid="mrb-form-cancel-btn">Cancel</Button>
-        <Button onClick={submit} disabled={submitting || !selectedRoomId} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="mrb-form-submit">
+        <Button onClick={submit} disabled={submitting || !selectedRoomId || isSelectedRoomBlocked} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="mrb-form-submit">
           {submitting ? "Booking…" : "Submit"}
         </Button>
       </div>
@@ -454,18 +553,19 @@ function Field({ label, required, children }) {
 
 // ============================================================ Upcoming bookings list
 // - Capped to ~33% of viewport so the floor map stays the primary focus.
-// - When filter date = today: groups bookings into "Today" + "Tomorrow" (no future meetings shown).
-// - When filter date != today: shows that single date's bookings under a "Selected date" group.
-function UpcomingBookingsList({ bookings, filterDate, loading, onCancel }) {
+// - rangeMode="today" → "Today" + "Tomorrow" groups (or single date when filter ≠ today).
+// - rangeMode="next7" → 7 day groups starting from today.
+// - Per-day pagination: first PAGE_SIZE shown, "+N more" expands the rest.
+const PAGE_SIZE = 4;
+function UpcomingBookingsList({ bookings, filterDate, rangeMode, loading, onCancel }) {
   const today = todayIso();
-  const tomorrow = (() => {
-    const d = new Date(); d.setDate(d.getDate() + 1);
+  const addDaysIso = (offset) => {
+    const d = new Date(); d.setDate(d.getDate() + offset);
     const p = (n) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-  })();
+  };
   const isFilterToday = filterDate === today;
 
-  // Group bookings by the local date of their start_at.
   const groups = useMemo(() => {
     const map = {};
     for (const b of bookings) {
@@ -474,24 +574,37 @@ function UpcomingBookingsList({ bookings, filterDate, loading, onCancel }) {
       const key = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
       (map[key] = map[key] || []).push(b);
     }
-    // Sort each day by start time asc
     Object.values(map).forEach(arr => arr.sort((a, b) => (a.start_at || "").localeCompare(b.start_at || "")));
     return map;
   }, [bookings]);
 
-  const dayGroups = isFilterToday
-    ? [
-        { key: today, label: "Today", items: groups[today] || [] },
-        { key: tomorrow, label: "Tomorrow", items: groups[tomorrow] || [] },
-      ]
-    : [{ key: filterDate, label: new Date(filterDate).toLocaleDateString(undefined, { weekday: "long", day: "2-digit", month: "short", year: "numeric" }), items: groups[filterDate] || [] }];
+  const formatDayLabel = (key, idx) => {
+    if (key === today) return "Today";
+    if (key === addDaysIso(1)) return "Tomorrow";
+    const d = new Date(key);
+    return d.toLocaleDateString(undefined, { weekday: "long", day: "2-digit", month: "short" });
+  };
+
+  let dayGroups;
+  if (rangeMode === "next7") {
+    dayGroups = Array.from({ length: 7 }, (_, i) => {
+      const key = addDaysIso(i);
+      return { key, label: formatDayLabel(key, i), items: groups[key] || [] };
+    });
+  } else if (isFilterToday) {
+    dayGroups = [
+      { key: today, label: "Today", items: groups[today] || [] },
+      { key: addDaysIso(1), label: "Tomorrow", items: groups[addDaysIso(1)] || [] },
+    ];
+  } else {
+    dayGroups = [{ key: filterDate, label: new Date(filterDate).toLocaleDateString(undefined, { weekday: "long", day: "2-digit", month: "short", year: "numeric" }), items: groups[filterDate] || [] }];
+  }
 
   const totalForView = dayGroups.reduce((s, g) => s + g.items.length, 0);
 
   if (loading) {
     return <div className="flex items-center text-gray-500 text-xs"><Loader2 className="animate-spin mr-2" size={14}/> Loading…</div>;
   }
-  // ~33% smaller: cap the scroll area
   return (
     <div className="max-h-[34vh] overflow-y-auto pr-1" data-testid="mrb-upcoming-list-wrapper">
       {totalForView === 0 ? (
@@ -503,38 +616,59 @@ function UpcomingBookingsList({ bookings, filterDate, loading, onCancel }) {
         </div>
       ) : (
         <div className="space-y-3" data-testid="mrb-upcoming-list">
-          {dayGroups.map(g => (
-            <div key={g.key}>
-              <div className="text-[10px] font-bold tracking-wide text-gray-400 uppercase mb-1" data-testid={`mrb-day-${g.key}`}>{g.label}</div>
-              {g.items.length === 0 ? (
-                <div className="text-[11px] text-gray-400 italic px-2 py-1">No bookings</div>
-              ) : g.items.map(b => (
-                <div
-                  key={b.id}
-                  data-testid={`mrb-upcoming-${b.id}`}
-                  className="bg-white rounded-md border border-gray-200 px-2.5 py-1.5 mb-1 hover:border-[#ec9324]/40 transition-colors"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="font-semibold text-[12px] text-gray-900 truncate" title={b.title}>{b.title}</div>
-                      <div className="text-[10px] text-gray-600">
-                        {fmtTime(b.start_at)} – {fmtTime(b.end_at)}
-                        <span className="text-gray-300 mx-1">·</span>{b.room_name}
-                      </div>
-                      <div className="text-[10px] text-gray-500 truncate">{b.organizer?.name || b.organizer?.email || "—"}</div>
-                    </div>
-                    <button
-                      onClick={() => onCancel(b.id)}
-                      title="Cancel booking"
-                      className="p-1 text-red-600 hover:bg-red-50 rounded flex-shrink-0"
-                      data-testid={`mrb-cancel-${b.id}`}
-                    ><Trash2 size={12}/></button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ))}
+          {dayGroups.map(g => <DayGroup key={g.key} group={g} onCancel={onCancel}/>)}
         </div>
+      )}
+    </div>
+  );
+}
+
+function DayGroup({ group, onCancel }) {
+  const [expanded, setExpanded] = useState(false);
+  const list = expanded ? group.items : group.items.slice(0, PAGE_SIZE);
+  const hidden = group.items.length - list.length;
+  return (
+    <div data-testid={`mrb-day-section-${group.key}`}>
+      <div className="text-[10px] font-bold tracking-wide text-gray-400 uppercase mb-1" data-testid={`mrb-day-${group.key}`}>{group.label}</div>
+      {group.items.length === 0 ? (
+        <div className="text-[11px] text-gray-400 italic px-2 py-1">No bookings</div>
+      ) : list.map(b => (
+        <div
+          key={b.id}
+          data-testid={`mrb-upcoming-${b.id}`}
+          className="bg-white rounded-md border border-gray-200 px-2.5 py-1.5 mb-1 hover:border-[#ec9324]/40 transition-colors"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-[12px] text-gray-900 truncate" title={b.title}>{b.title}</div>
+              <div className="text-[10px] text-gray-600">
+                {fmtTime(b.start_at)} – {fmtTime(b.end_at)}
+                <span className="text-gray-300 mx-1">·</span>{b.room_name}
+              </div>
+              <div className="text-[10px] text-gray-500 truncate">{b.organizer?.name || b.organizer?.email || "—"}</div>
+            </div>
+            <button
+              onClick={() => onCancel(b.id)}
+              title="Cancel booking"
+              className="p-1 text-red-600 hover:bg-red-50 rounded flex-shrink-0"
+              data-testid={`mrb-cancel-${b.id}`}
+            ><Trash2 size={12}/></button>
+          </div>
+        </div>
+      ))}
+      {hidden > 0 && (
+        <button
+          onClick={() => setExpanded(true)}
+          className="text-[10px] text-[#ec9324] hover:underline font-semibold px-1 py-0.5"
+          data-testid={`mrb-day-show-more-${group.key}`}
+        >+ Show {hidden} more</button>
+      )}
+      {expanded && group.items.length > PAGE_SIZE && (
+        <button
+          onClick={() => setExpanded(false)}
+          className="text-[10px] text-gray-500 hover:underline px-1 py-0.5"
+          data-testid={`mrb-day-show-less-${group.key}`}
+        >Show less</button>
       )}
     </div>
   );
@@ -666,7 +800,7 @@ function TabBtn({ active, onClick, testId, children }) {
 }
 
 // ============================================================ Floor map (right panel) — rooms-only view
-function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickRoom }) {
+function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickRoom, occupiedNowRoomIds, blockedRoomIds }) {
   const transformRef = useRef(null);
   const initDoneRef = useRef(false);
   const containerRef = useRef(null);
@@ -743,37 +877,61 @@ function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickRoom }) 
               <div className="absolute inset-0">
                 {rooms.map(r => {
                   const selected = r.room_id === selectedRoomId;
+                  const blocked = blockedRoomIds?.has?.(r.room_id);
+                  const occupiedNow = occupiedNowRoomIds?.has?.(r.room_id);
+                  // State priority: Selected (orange) > Blocked-for-slot (grey + disabled) > Available (green)
+                  let bg = 'rgba(16,185,129,0.10)'; // available
+                  let borderColor = '#10b981';
+                  let cursor = 'pointer';
+                  let title = r.name;
+                  if (selected) {
+                    bg = 'rgba(236,147,36,0.55)'; borderColor = '#ec9324';
+                  } else if (blocked) {
+                    bg = 'rgba(156,163,175,0.45)'; borderColor = '#6b7280'; cursor = 'not-allowed';
+                    title = `${r.name} — already booked at the selected time`;
+                  }
                   return (
                     <div
                       key={r.room_id}
                       data-testid={`mrb-map-room-${r.room_id}`}
-                      onClick={() => onPickRoom(r.room_id)}
-                      className="absolute group cursor-pointer"
+                      data-blocked={blocked ? "true" : "false"}
+                      data-occupied-now={occupiedNow ? "true" : "false"}
+                      title={title}
+                      onClick={() => { if (!blocked) onPickRoom(r.room_id); }}
+                      className="absolute group"
                       style={{
                         left: `${r.x}%`, top: `${r.y}%`,
                         width: `${r.w}%`, height: `${r.h}%`,
-                        // Available = green, Selected = orange (app-wide selection color)
-                        background: selected ? 'rgba(236,147,36,0.55)' : 'rgba(16,185,129,0.10)',
-                        border: `2px solid ${selected ? '#ec9324' : '#10b981'}`,
+                        background: bg,
+                        border: `2px solid ${borderColor}`,
                         boxSizing: 'border-box',
-                        transition: 'background 150ms, border-color 150ms',
+                        cursor,
+                        opacity: blocked && !selected ? 0.85 : 1,
+                        transition: 'background 150ms, border-color 150ms, opacity 150ms',
                       }}
                       onMouseEnter={(e) => {
-                        if (selected) return;
+                        if (selected || blocked) return;
                         e.currentTarget.style.background = 'rgba(16,185,129,0.25)';
                       }}
                       onMouseLeave={(e) => {
-                        if (selected) return;
+                        if (selected || blocked) return;
                         e.currentTarget.style.background = 'rgba(16,185,129,0.10)';
                       }}
                     >
                       <div
-                        className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[10px] font-semibold pointer-events-none select-none"
+                        className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[10px] font-semibold pointer-events-none select-none flex items-center gap-1"
                         style={{
-                          background: selected ? '#ec9324' : 'rgba(16,185,129,0.95)',
+                          background: selected ? '#ec9324' : blocked ? '#6b7280' : 'rgba(16,185,129,0.95)',
                           color: 'white', maxWidth: '90%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                         }}
-                      >{r.name} ({r.capacity})</div>
+                      >
+                        {occupiedNow && (
+                          <span data-testid={`mrb-map-now-${r.room_id}`} className="inline-flex items-center gap-0.5 px-1 py-[1px] rounded-full bg-red-500 text-white text-[9px] leading-none">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"/> NOW
+                          </span>
+                        )}
+                        <span className="truncate">{r.name} ({r.capacity})</span>
+                      </div>
                     </div>
                   );
                 })}
@@ -789,7 +947,11 @@ function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickRoom }) 
         <div className="space-y-1">
           <Legend color="#10b981" label="Available"/>
           <Legend color="#ec9324" label="Selected"/>
-          <Legend color="#9ca3af" label="Occupied"/>
+          <Legend color="#6b7280" label="Booked at slot"/>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex items-center px-1 py-[1px] rounded-full bg-red-500 text-white text-[8px] font-bold">NOW</span>
+            <span className="text-gray-600">Occupied right now</span>
+          </div>
         </div>
       </div>
     </div>
