@@ -30,6 +30,7 @@ from routers import tickets as _tickets  # noqa: F401
 from routers import files as _files  # noqa: F401
 from routers import dashboard as _dashboard  # noqa: F401
 from routers import floor_plans as _floor_plans  # noqa: F401
+from routers import room_bookings as _room_bookings  # noqa: F401
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)

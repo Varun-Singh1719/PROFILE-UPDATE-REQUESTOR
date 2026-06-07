@@ -12,6 +12,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/$
 
 const FloorMap = ({ 
   seats,
+  rooms = [],
   occupiedSeats = [],
   selectedSeats = [], // Changed from selectedSeat to selectedSeats (array)
   onSeatSelect,
@@ -175,6 +176,34 @@ const FloorMap = ({
                     ))}
                   </div>
                 </div>
+
+                {/* Meeting Rooms Overlay (read-only) — only rendered in the consolidated Floor Layout view */}
+                {rooms && rooms.length > 0 && (
+                  <div className="absolute inset-0 pointer-events-none" data-testid="floor-rooms-overlay">
+                    {rooms.map((r) => (
+                      <div
+                        key={r.id}
+                        data-testid={`floor-room-${r.id}`}
+                        className="absolute"
+                        style={{
+                          left: `${r.x}%`, top: `${r.y}%`,
+                          width: `${r.w}%`, height: `${r.h}%`,
+                          border: '2px solid #10b981',
+                          background: 'rgba(16,185,129,0.10)',
+                          boxSizing: 'border-box',
+                          zIndex: 5,
+                        }}
+                      >
+                        <div
+                          className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[10px] font-semibold pointer-events-none select-none"
+                          style={{ background: 'rgba(16,185,129,0.95)', color: 'white', maxWidth: '90%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                        >
+                          {r.name}{r.capacity ? ` (${r.capacity})` : ''}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </TransformComponent>
           </>

@@ -24,6 +24,7 @@ import DeskBookingPage from "./pages/DeskBookingPage";
 import FloorLayoutPage from "./pages/FloorLayoutPage";
 import SeatCalibrationPage from "./pages/SeatCalibrationPage";
 import FloorPlansListPage from "./pages/FloorPlansListPage";
+import MeetingRoomBookingPage from "./pages/MeetingRoomBookingPage";
 import { Loader2 } from "lucide-react";
 
 // v3 role model — every authenticated user (Super Admin or Admin) lands at /admin.
@@ -92,6 +93,7 @@ function App() {
             <Route path="/workspace-manager/calibration/:planId" element={<ProtectedRoute roles={ADMIN_ROLES}><SeatCalibrationPage /></ProtectedRoute>} />
             {/* Legacy /calibration (no planId): redirect to the floor-plans list */}
             <Route path="/workspace-manager/calibration" element={<Navigate to="/workspace-manager/floor-plans" replace />} />
+            <Route path="/workspace-manager/meeting-room-booking" element={<ProtectedRoute roles={ADMIN_ROLES}><MeetingRoomBookingPage /></ProtectedRoute>} />
             
             {/* Legacy redirect */}
             <Route path="/desk-booking" element={<Navigate to="/workspace-manager/floor-layout" replace />} />

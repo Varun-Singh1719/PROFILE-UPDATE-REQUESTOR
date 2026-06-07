@@ -51,6 +51,7 @@ function FloorPlanCard({ plan, onOpen }) {
 // ---------- Interactive view (per plan) ----------
 function PlanInteractiveView({ plan, onBack }) {
   const [seats, setSeats] = useState([]);
+  const [rooms, setRooms] = useState([]);
   const [pdfUrl, setPdfUrl] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedSeats, setSelectedSeats] = useState([]);
@@ -63,6 +64,7 @@ function PlanInteractiveView({ plan, onBack }) {
         const res = await api.get(`/floor-plans/${plan.id}`);
         if (cancelled) return;
         setSeats(res.data.live_seats || []);
+        setRooms(res.data.live_rooms || []);
         setPdfUrl(res.data.pdfUrl);
       } finally { if (!cancelled) setLoading(false); }
     })();
@@ -136,6 +138,7 @@ function PlanInteractiveView({ plan, onBack }) {
         ) : (
           <FloorMap
             seats={seats}
+            rooms={rooms}
             pdfUrl={pdfUrl}
             occupiedSeats={occupiedSeats}
             selectedSeats={selectedSeats}
