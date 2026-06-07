@@ -1,47 +1,51 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { Document, Page, pdfjs } from "react-pdf";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import {
-  CalendarClock, Search, Users, Building2, X, Plus, Trash2, MapPin, Clock, Loader2,
+  CalendarClock, Plus, Trash2, MapPin, Clock, Loader2, Users, Building2,
+  X, Search, UserPlus, ChevronDown, ChevronUp, AlertCircle, Repeat,
 } from "lucide-react";
 import Layout from "../components/Layout";
 import api from "../lib/api";
+import { resolvePdfUrl } from "../lib/pdfUrl";
+import { Button } from "../components/ui/button";
+import { toast } from "sonner";
+
+pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
 // ============================================================ Helpers
 const fmtDateTime = (iso) => {
   if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-  } catch { return iso; }
+  try { return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }); }
+  catch { return iso; }
+};
+const fmtTime = (iso) => {
+  if (!iso) return "—";
+  try { return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); } catch { return iso; }
 };
 const todayIso = () => {
-  const d = new Date(); d.setHours(0, 0, 0, 0);
-  const tz = -d.getTimezoneOffset();
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const d = new Date(); const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 };
 const combineDateTime = (dateStr, timeStr) => {
   if (!dateStr || !timeStr) return null;
   const dt = new Date(`${dateStr}T${timeStr}:00`);
   return isNaN(dt.getTime()) ? null : dt.toISOString();
 };
+const DOW = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
 // ============================================================ MAIN
 export default function MeetingRoomBookingPage() {
   const [rooms, setRooms] = useState([]);
-  const [bookings, setBookings] = useState([]);
   const [myBookings, setMyBookings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [date, setDate] = useState(todayIso());
-  const [bookFor, setBookFor] = useState(null);  // {plan_id, room_id, name, capacity, plan_name}
-  const [error, setError] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
+  const [selectedRoomId, setSelectedRoomId] = useState("");
+  const [conflict, setConflict] = useState(null);
 
   const loadRooms = useCallback(async () => {
     const res = await api.get("/room-bookings/rooms");
     setRooms(res.data || []);
-  }, []);
-  const loadBookingsForDate = useCallback(async (d) => {
-    const res = await api.get(`/room-bookings?date=${d}&include_past=true`);
-    setBookings(res.data || []);
   }, []);
   const loadMyBookings = useCallback(async () => {
     const res = await api.get(`/room-bookings?mine=true`);
@@ -51,287 +55,638 @@ export default function MeetingRoomBookingPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        await Promise.all([loadRooms(), loadBookingsForDate(date), loadMyBookings()]);
-      } finally { if (!cancelled) setLoading(false); }
+      try { await Promise.all([loadRooms(), loadMyBookings()]); }
+      finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadRooms, loadMyBookings]);
 
-  useEffect(() => { loadBookingsForDate(date); }, [date, loadBookingsForDate]);
-
-  const filteredRooms = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return rooms;
-    return rooms.filter(r =>
-      r.name?.toLowerCase().includes(q) ||
-      r.plan_name?.toLowerCase().includes(q)
-    );
-  }, [rooms, search]);
-
-  // Booking → first active overlapping booking for a room on the picked date
-  const bookingsByRoom = useMemo(() => {
-    const map = {};
-    bookings.forEach(b => {
-      if (b.cancelled) return;
-      (map[b.room_id] = map[b.room_id] || []).push(b);
-    });
-    return map;
-  }, [bookings]);
+  const selectedRoom = useMemo(() => rooms.find(r => r.room_id === selectedRoomId), [rooms, selectedRoomId]);
+  // Floor plan currently shown on the right panel = plan of the selected room, else first available
+  const focusPlan = useMemo(() => {
+    if (selectedRoom) return { plan_id: selectedRoom.plan_id, pdfUrl: selectedRoom.pdfUrl, plan_name: selectedRoom.plan_name };
+    if (rooms[0]) return { plan_id: rooms[0].plan_id, pdfUrl: rooms[0].pdfUrl, plan_name: rooms[0].plan_name };
+    return null;
+  }, [selectedRoom, rooms]);
+  const roomsOnFocusPlan = useMemo(() => {
+    if (!focusPlan) return [];
+    return rooms.filter(r => r.plan_id === focusPlan.plan_id);
+  }, [rooms, focusPlan]);
 
   const handleCancel = async (id) => {
     if (!window.confirm("Cancel this booking?")) return;
     try {
       await api.delete(`/room-bookings/${id}`);
-      await Promise.all([loadBookingsForDate(date), loadMyBookings()]);
+      await loadMyBookings();
+      toast.success("Booking cancelled");
     } catch (e) {
-      alert(`Cancel failed: ${e?.response?.data?.detail || e.message}`);
+      toast.error(`Cancel failed: ${e?.response?.data?.detail || e.message}`);
     }
   };
 
   const handleCreate = async (payload) => {
-    setError("");
+    setConflict(null);
     try {
-      await api.post("/room-bookings", payload);
-      setBookFor(null);
-      await Promise.all([loadBookingsForDate(date), loadMyBookings()]);
+      const res = await api.post("/room-bookings", payload);
+      await loadMyBookings();
+      setFormOpen(false);
+      const n = res.data?.created || 1;
+      toast.success("Meeting Room Booked Successfully", { description: n > 1 ? `${n} recurring occurrences created.` : undefined });
     } catch (e) {
-      const msg = e?.response?.data?.detail || e.message;
-      setError(msg);
-      throw new Error(msg);
+      const detail = e?.response?.data?.detail;
+      if (detail && typeof detail === "object" && detail.code === "BOOKING_CONFLICT") {
+        setConflict(detail);
+      } else {
+        toast.error(typeof detail === "string" ? detail : "Booking failed");
+      }
     }
   };
 
   return (
-    <Layout breadcrumbs={[{ label: "Workspace Manager" }, { label: "Meeting Room Booking" }]}>
-      <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
-        <div className="flex items-center gap-3">
-          <CalendarClock className="text-emerald-600" size={28} />
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight" data-testid="mrb-title">Meeting Room Booking</h1>
-            <p className="text-sm text-gray-500">Book meeting rooms across published floor calibrations.</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search size={14} className="absolute left-2.5 top-2.5 text-gray-400" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search rooms..."
-              className="pl-8 pr-3 py-1.5 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-emerald-500 w-56"
-              data-testid="mrb-search"
-            />
-          </div>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="px-3 py-1.5 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-emerald-500"
-            data-testid="mrb-date"
-          />
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-20 text-gray-500"><Loader2 className="animate-spin mr-2" /> Loading meeting rooms…</div>
-      ) : rooms.length === 0 ? (
-        <div className="bg-white border border-dashed border-gray-300 rounded-xl p-12 text-center" data-testid="mrb-no-rooms">
-          <Building2 className="mx-auto mb-3 text-gray-400" size={32} />
-          <h2 className="font-semibold text-gray-700">No meeting rooms available</h2>
-          <p className="text-sm text-gray-500 mt-1">Calibrate at least one meeting room in a Live floor plan to enable booking.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Rooms grid */}
-          <div className="lg:col-span-2">
-            <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">Available rooms ({filteredRooms.length})</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4" data-testid="mrb-room-grid">
-              {filteredRooms.map(r => {
-                const todays = bookingsByRoom[r.room_id] || [];
-                return (
-                  <div
-                    key={r.room_id}
-                    data-testid={`mrb-room-card-${r.room_id}`}
-                    className="bg-white rounded-xl border border-gray-200 hover:border-emerald-500 hover:shadow-md transition-all p-4 flex flex-col"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-bold text-gray-900 truncate" title={r.name}>{r.name}</h3>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-semibold border border-emerald-200">
-                        <Users size={10} /> {r.capacity}
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-gray-500 mt-1 inline-flex items-center gap-1"><MapPin size={11} />{r.plan_name}</div>
-                    <div className="mt-3 text-[11px] text-gray-600">
-                      {todays.length === 0 ? (
-                        <span className="text-emerald-700 font-semibold">Free on {date}</span>
-                      ) : (
-                        <span className="text-amber-700 font-semibold">{todays.length} booking{todays.length === 1 ? '' : 's'} on {date}</span>
-                      )}
-                    </div>
-                    {todays.length > 0 && (
-                      <div className="mt-2 space-y-1 max-h-24 overflow-y-auto">
-                        {todays.map(b => (
-                          <div key={b.id} className="text-[10px] text-gray-600 bg-gray-50 px-2 py-1 rounded border border-gray-100">
-                            <Clock size={9} className="inline mr-0.5" />
-                            {new Date(b.start_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                            {' – '}
-                            {new Date(b.end_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                            <span className="ml-1 text-gray-500">· {b.title}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <button
-                      onClick={() => setBookFor(r)}
-                      className="mt-3 inline-flex items-center justify-center gap-1 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-md text-xs font-semibold"
-                      data-testid={`mrb-book-btn-${r.room_id}`}
-                    ><Plus size={12} /> Book</button>
-                  </div>
-                );
-              })}
+    <Layout
+      fullBleed
+      breadcrumbs={[{ label: "Workspace Manager" }, { label: "Meeting Room Booking" }]}
+      contentClassName="h-screen flex flex-col"
+    >
+      <div className="flex-1 flex overflow-hidden">
+        {/* LEFT 40% — Header + bookings + form */}
+        <div className="w-2/5 min-w-[420px] border-r border-gray-200 bg-white flex flex-col overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <CalendarClock className="text-[#ec9324] flex-shrink-0" size={22} />
+              <div className="min-w-0">
+                <h1 className="text-lg font-bold text-gray-900 truncate" data-testid="mrb-title">Meeting Room Booking</h1>
+                <p className="text-[11px] text-gray-500">Schedule rooms across published floor calibrations.</p>
+              </div>
             </div>
+            <Button
+              onClick={() => { setFormOpen(o => !o); setConflict(null); }}
+              data-testid="mrb-book-meeting-room-btn"
+              className="bg-[#ec9324] hover:bg-[#d4811f] text-white shadow-sm flex-shrink-0"
+            >
+              {formOpen ? <ChevronUp size={16} className="mr-1.5" /> : <Plus size={16} className="mr-1.5" />}
+              Book Meeting Room
+            </Button>
           </div>
 
-          {/* My Bookings */}
-          <div>
-            <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">My upcoming bookings ({myBookings.length})</h2>
-            {myBookings.length === 0 ? (
-              <div className="bg-white border border-dashed border-gray-200 rounded-xl p-6 text-center text-xs text-gray-500" data-testid="mrb-my-bookings-empty">
-                You have no upcoming meeting room bookings.
-              </div>
-            ) : (
-              <div className="space-y-3" data-testid="mrb-my-bookings-list">
-                {myBookings.map(b => (
-                  <div key={b.id} data-testid={`mrb-my-booking-${b.id}`} className="bg-white rounded-xl border border-gray-200 p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="font-bold text-sm text-gray-900 truncate" title={b.title}>{b.title}</div>
-                        <div className="text-[11px] text-gray-600 mt-0.5 inline-flex items-center gap-1"><Building2 size={11} />{b.room_name} <span className="text-gray-400">·</span> {b.plan_name}</div>
-                        <div className="text-[11px] text-gray-500 mt-1"><Clock size={10} className="inline mr-0.5" />{fmtDateTime(b.start_at)} – {fmtDateTime(b.end_at)}</div>
-                        <div className="text-[10px] text-gray-500 mt-0.5">Attendees: {b.attendees_count} / {b.room_capacity}</div>
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+            {/* Upcoming bookings panel */}
+            <section>
+              <h2 className="text-[11px] font-bold tracking-wide text-gray-500 uppercase mb-2" data-testid="mrb-upcoming-title">Upcoming Bookings</h2>
+              {loading ? (
+                <div className="flex items-center text-gray-500 text-xs"><Loader2 className="animate-spin mr-2" size={14} /> Loading…</div>
+              ) : myBookings.length === 0 ? (
+                <div className="bg-gray-50 border border-dashed border-gray-200 rounded-lg p-5 text-center text-xs text-gray-500" data-testid="mrb-no-upcoming">
+                  No upcoming meetings — click "Book Meeting Room" to create one.
+                </div>
+              ) : (
+                <div className="space-y-2" data-testid="mrb-upcoming-list">
+                  {myBookings.map(b => (
+                    <div
+                      key={b.id}
+                      data-testid={`mrb-upcoming-${b.id}`}
+                      className="bg-white rounded-lg border border-gray-200 p-3 hover:border-[#ec9324]/40 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="font-bold text-sm text-gray-900 truncate" title={b.title}>{b.title}</div>
+                          <div className="text-[11px] text-gray-600 mt-0.5 inline-flex items-center gap-1">
+                            <Building2 size={10}/>{b.room_name}
+                            <span className="text-gray-300">·</span> {b.plan_name}
+                            {b.recurring && (<><span className="text-gray-300">·</span><span className="inline-flex items-center gap-0.5 text-emerald-700 font-semibold"><Repeat size={9}/>recurring</span></>)}
+                          </div>
+                          <div className="text-[11px] text-gray-500 mt-1"><Clock size={9} className="inline mr-0.5" />{fmtDateTime(b.start_at)} – {fmtTime(b.end_at)}</div>
+                          {b.attendees?.length > 0 && (
+                            <div className="text-[10px] text-gray-500 mt-1 inline-flex items-center gap-1">
+                              <Users size={9}/> {b.attendees.length} attendee group{b.attendees.length === 1 ? '' : 's'}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handleCancel(b.id)}
+                          title="Cancel booking"
+                          className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                          data-testid={`mrb-cancel-${b.id}`}
+                        ><Trash2 size={13} /></button>
                       </div>
-                      <button
-                        onClick={() => handleCancel(b.id)}
-                        title="Cancel booking"
-                        className="p-1.5 text-red-600 hover:bg-red-50 rounded"
-                        data-testid={`mrb-cancel-${b.id}`}
-                      ><Trash2 size={14} /></button>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* Booking form (collapsible) */}
+            {formOpen && (
+              <BookingForm
+                rooms={rooms}
+                selectedRoomId={selectedRoomId}
+                setSelectedRoomId={setSelectedRoomId}
+                onSubmit={handleCreate}
+                onCancel={() => { setFormOpen(false); setConflict(null); }}
+                conflict={conflict}
+                clearConflict={() => setConflict(null)}
+              />
             )}
           </div>
         </div>
-      )}
 
-      {bookFor && (
-        <BookingModal
-          room={bookFor}
-          date={date}
-          error={error}
-          onCancel={() => { setBookFor(null); setError(""); }}
-          onSubmit={handleCreate}
-        />
-      )}
+        {/* RIGHT 60% — Floor Map */}
+        <div className="flex-1 relative bg-gray-100">
+          <FloorMapMeetingRooms
+            focusPlan={focusPlan}
+            rooms={roomsOnFocusPlan}
+            selectedRoomId={selectedRoomId}
+            onPickRoom={(id) => setSelectedRoomId(id)}
+          />
+        </div>
+      </div>
     </Layout>
   );
 }
 
-// ============================================================ Booking Modal
-function BookingModal({ room, date, error, onCancel, onSubmit }) {
+// ============================================================ Booking Form
+function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCancel, conflict, clearConflict }) {
   const [title, setTitle] = useState("");
-  const [attendees, setAttendees] = useState(1);
-  const [bDate, setBDate] = useState(date);
+  const [bDate, setBDate] = useState(todayIso());
   const [startTime, setStartTime] = useState("10:00");
   const [endTime, setEndTime] = useState("11:00");
+  const [attendees, setAttendees] = useState([]); // [{type,id,name,email?}]
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [recurring, setRecurring] = useState(false);
+  const [freq, setFreq] = useState("daily"); // daily|weekly|monthly
+  const [days, setDays] = useState([]); // ['Mo',...]
+  const [endDate, setEndDate] = useState(todayIso());
   const [submitting, setSubmitting] = useState(false);
 
-  const validate = () => {
-    if (!title.trim()) return "Title is required";
-    if (attendees < 1) return "Attendees must be ≥ 1";
-    if (attendees > room.capacity) return `Attendees (${attendees}) exceed room capacity (${room.capacity})`;
-    const s = combineDateTime(bDate, startTime);
-    const e = combineDateTime(bDate, endTime);
-    if (!s || !e) return "Invalid date/time";
-    if (new Date(e) <= new Date(s)) return "End must be after start";
-    return null;
-  };
+  const selectedRoom = useMemo(() => rooms.find(r => r.room_id === selectedRoomId), [rooms, selectedRoomId]);
+  const dropdownDisabled = rooms.length === 0;
+  const dropdownPlaceholder =
+    rooms.length === 0
+      ? "No Active Floor Plan / No Meeting Room Available"
+      : "Select a Meeting Room…";
 
   const submit = async () => {
-    const v = validate();
-    if (v) { alert(v); return; }
+    clearConflict();
+    if (!title.trim()) { toast.error("Title is required"); return; }
+    if (!selectedRoomId) { toast.error("Please select a meeting room"); return; }
+    const s = combineDateTime(bDate, startTime);
+    const e = combineDateTime(bDate, endTime);
+    if (!s || !e) { toast.error("Invalid date/time"); return; }
+    if (new Date(e) <= new Date(s)) { toast.error("End must be after start"); return; }
+    if (recurring && !endDate) { toast.error("Recurring end date is required"); return; }
+    if (recurring && freq === "weekly" && days.length === 0) { toast.error("Select at least one weekday"); return; }
     setSubmitting(true);
     try {
       await onSubmit({
-        plan_id: room.plan_id,
-        room_id: room.room_id,
+        plan_id: selectedRoom.plan_id,
+        room_id: selectedRoom.room_id,
         title: title.trim(),
-        attendees_count: Number(attendees),
-        start_at: combineDateTime(bDate, startTime),
-        end_at: combineDateTime(bDate, endTime),
+        start_at: s,
+        end_at: e,
+        attendees,
+        recurring: recurring ? { frequency: freq, end_date: endDate, days: freq === "weekly" ? days : [] } : null,
       });
-    } catch { /* error shown by parent */ } finally { setSubmitting(false); }
+    } finally { setSubmitting(false); }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" data-testid="mrb-modal">
-      <div className="bg-white rounded-lg shadow-xl w-[440px] p-5">
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div>
-            <div className="text-sm font-bold text-gray-900">Book {room.name}</div>
-            <div className="text-[11px] text-gray-500">{room.plan_name} · capacity {room.capacity}</div>
-          </div>
-          <button onClick={onCancel} className="text-gray-400 hover:text-gray-700" data-testid="mrb-modal-close"><X size={16} /></button>
-        </div>
+    <section className="border border-gray-200 rounded-lg p-4 bg-gray-50" data-testid="mrb-booking-form">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-bold text-gray-900">New Meeting</h3>
+        <button onClick={onCancel} className="text-gray-400 hover:text-gray-700" data-testid="mrb-form-close"><X size={14}/></button>
+      </div>
 
-        <label className="block text-[11px] font-semibold text-gray-700 mt-1 mb-1">Title <span className="text-red-500">*</span></label>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Sprint planning"
-          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-emerald-500"
-          data-testid="mrb-modal-title" maxLength={120} />
+      <Field label="Title" required>
+        <input value={title} onChange={(e) => setTitle(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-[#ec9324]"
+          placeholder="e.g. Sprint Planning"
+          data-testid="mrb-form-title" maxLength={120}/>
+      </Field>
 
-        <div className="grid grid-cols-3 gap-2 mt-3">
-          <div>
-            <label className="block text-[11px] font-semibold text-gray-700 mb-1">Date</label>
-            <input type="date" value={bDate} onChange={(e) => setBDate(e.target.value)}
-              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-emerald-500"
-              data-testid="mrb-modal-date" />
+      <Field label="Meeting Room" required>
+        <select
+          value={selectedRoomId}
+          onChange={(e) => setSelectedRoomId(e.target.value)}
+          disabled={dropdownDisabled}
+          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-[#ec9324] bg-white disabled:bg-gray-100 disabled:text-gray-500"
+          data-testid="mrb-form-room"
+        >
+          <option value="">{dropdownPlaceholder}</option>
+          {rooms.map(r => (
+            <option key={r.room_id} value={r.room_id}>{r.name} · {r.plan_name}</option>
+          ))}
+        </select>
+        {selectedRoom && (
+          <div className="mt-1.5 text-[11px] text-gray-600 inline-flex items-center gap-1.5" data-testid="mrb-form-capacity">
+            <Users size={11} className="text-emerald-600"/>
+            <span className="font-semibold">{selectedRoom.name}</span> · Capacity: <span className="font-bold text-gray-900">{selectedRoom.capacity}</span> Seats
           </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-gray-700 mb-1">Start</label>
-            <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)}
-              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-emerald-500"
-              data-testid="mrb-modal-start" />
-          </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-gray-700 mb-1">End</label>
-            <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)}
-              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-emerald-500"
-              data-testid="mrb-modal-end" />
-          </div>
-        </div>
-
-        <label className="block text-[11px] font-semibold text-gray-700 mt-3 mb-1">Attendees (max {room.capacity})</label>
-        <input type="number" min={1} max={room.capacity} value={attendees}
-          onChange={(e) => setAttendees(parseInt(e.target.value, 10) || 1)}
-          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-emerald-500"
-          data-testid="mrb-modal-attendees" />
-
-        {error && (
-          <div className="mt-3 px-2.5 py-1.5 bg-red-50 border border-red-200 text-red-700 text-[11px] rounded" data-testid="mrb-modal-error">{error}</div>
         )}
+      </Field>
 
-        <div className="flex justify-end gap-2 mt-5">
-          <button onClick={onCancel} className="px-3 py-1.5 text-sm border border-gray-200 rounded hover:bg-gray-50" data-testid="mrb-modal-cancel">Cancel</button>
-          <button onClick={submit} disabled={submitting}
-            className="px-3 py-1.5 text-sm bg-emerald-500 hover:bg-emerald-600 text-white rounded disabled:opacity-40"
-            data-testid="mrb-modal-submit">
-            {submitting ? "Booking…" : "Confirm Booking"}
-          </button>
+      <div className="grid grid-cols-3 gap-2 mt-3">
+        <Field label="Date">
+          <input type="date" value={bDate} onChange={(e) => setBDate(e.target.value)}
+            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-[#ec9324]"
+            data-testid="mrb-form-date"/>
+        </Field>
+        <Field label="Start">
+          <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)}
+            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-[#ec9324]"
+            data-testid="mrb-form-start"/>
+        </Field>
+        <Field label="End">
+          <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)}
+            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-[#ec9324]"
+            data-testid="mrb-form-end"/>
+        </Field>
+      </div>
+
+      {/* Attendees */}
+      <div className="mt-3">
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-[11px] font-semibold text-gray-700">Attendees <span className="text-gray-400 font-normal">(optional)</span></label>
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            className="inline-flex items-center gap-1 text-[11px] text-[#ec9324] hover:text-[#d4811f] font-semibold"
+            data-testid="mrb-form-add-attendees"
+          ><UserPlus size={12}/> Add Attendees</button>
+        </div>
+        {attendees.length === 0 ? (
+          <div className="text-[11px] text-gray-400 italic">No attendees added yet.</div>
+        ) : (
+          <div className="flex flex-wrap gap-1.5" data-testid="mrb-attendee-chips">
+            {attendees.map(a => (
+              <span key={`${a.type}-${a.id}`} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${a.type === 'team' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                {a.type === 'team' ? <Users size={9}/> : null}
+                {a.name}
+                <button onClick={() => setAttendees(prev => prev.filter(x => !(x.type === a.type && x.id === a.id)))} className="hover:bg-black/5 rounded-full p-0.5" data-testid={`mrb-attendee-remove-${a.type}-${a.id}`}><X size={9}/></button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Recurring */}
+      <div className="mt-3 p-2 bg-white rounded border border-gray-200">
+        <label className="flex items-center justify-between cursor-pointer">
+          <span className="text-[11px] font-semibold text-gray-700 inline-flex items-center gap-1"><Repeat size={11}/> Recurring</span>
+          <input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} className="accent-[#ec9324]" data-testid="mrb-form-recurring-toggle"/>
+        </label>
+        {recurring && (
+          <div className="mt-2 space-y-2" data-testid="mrb-form-recurring-panel">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <div className="text-[10px] font-semibold text-gray-600 mb-1">Frequency</div>
+                <select value={freq} onChange={(e) => setFreq(e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:border-[#ec9324]" data-testid="mrb-form-freq">
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </div>
+              <div>
+                <div className="text-[10px] font-semibold text-gray-600 mb-1">End Date</div>
+                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:border-[#ec9324]" data-testid="mrb-form-end-date"/>
+              </div>
+            </div>
+            {freq === "weekly" && (
+              <div>
+                <div className="text-[10px] font-semibold text-gray-600 mb-1">Days of week</div>
+                <div className="flex gap-1" data-testid="mrb-form-weekdays">
+                  {DOW.map(d => {
+                    const on = days.includes(d);
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => setDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d])}
+                        data-testid={`mrb-form-weekday-${d}`}
+                        className={`w-7 h-7 rounded-full text-[10px] font-bold border transition-colors ${on ? 'bg-[#ec9324] text-white border-[#ec9324]' : 'bg-white text-gray-600 border-gray-300 hover:border-[#ec9324]'}`}
+                      >{d[0]}</button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Conflict */}
+      {conflict && (
+        <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded" data-testid="mrb-conflict">
+          <div className="flex items-start gap-2">
+            <AlertCircle size={14} className="text-red-600 mt-0.5"/>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-bold text-red-700 mb-1">Conflict Found</div>
+              <div className="text-[11px] text-red-700 mb-1">{conflict.room_name} already booked</div>
+              {(conflict.conflicts || []).slice(0, 3).map((c, i) => (
+                <div key={i} className="text-[11px] text-gray-700 mb-0.5">
+                  <span className="font-semibold">{fmtTime(c.with?.start_at)} – {fmtTime(c.with?.end_at)}</span>
+                  {c.with?.title && <> · "{c.with.title}"</>}
+                  <div className="text-[10px] text-gray-500">Booked By: {c.with?.organizer?.name || '—'}</div>
+                </div>
+              ))}
+              {(conflict.conflicts || []).length > 3 && (
+                <div className="text-[10px] text-gray-500">+{conflict.conflicts.length - 3} more conflicts</div>
+              )}
+              <div className="text-[10px] text-red-700 mt-1.5">Please select another room or time slot.</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2 mt-4">
+        <Button variant="outline" onClick={onCancel} data-testid="mrb-form-cancel-btn">Cancel</Button>
+        <Button onClick={submit} disabled={submitting || !selectedRoomId} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="mrb-form-submit">
+          {submitting ? "Booking…" : "Submit"}
+        </Button>
+      </div>
+
+      {pickerOpen && (
+        <AttendeePicker
+          selected={attendees}
+          onClose={() => setPickerOpen(false)}
+          onChange={setAttendees}
+        />
+      )}
+    </section>
+  );
+}
+
+function Field({ label, required, children }) {
+  return (
+    <div className="mt-3 first:mt-0">
+      <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+// ============================================================ Attendee picker (Employees / Teams)
+function AttendeePicker({ selected, onChange, onClose }) {
+  const [tab, setTab] = useState("user");
+  const [query, setQuery] = useState("");
+  const [users, setUsers] = useState([]);
+  const [teams, setTeams] = useState([]);
+  const [loadingList, setLoadingList] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [uRes, tRes] = await Promise.all([
+          api.get("/contacts?limit=200").catch(() => ({ data: [] })),
+          api.get("/teams").catch(() => ({ data: [] })),
+        ]);
+        if (cancelled) return;
+        const ulist = Array.isArray(uRes.data) ? uRes.data : (uRes.data?.rows || uRes.data?.items || []);
+        setUsers(ulist);
+        setTeams(Array.isArray(tRes.data) ? tRes.data : (tRes.data?.rows || []));
+      } finally { if (!cancelled) setLoadingList(false); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const q = query.trim().toLowerCase();
+  const filteredUsers = useMemo(() => users.filter(u => {
+    if (!q) return true;
+    return (u.name || u.full_name || "").toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q);
+  }), [users, q]);
+  const filteredTeams = useMemo(() => teams.filter(t => !q || (t.name || "").toLowerCase().includes(q)), [teams, q]);
+
+  const isSelected = (type, id) => selected.some(s => s.type === type && s.id === id);
+  const toggle = (item, type) => {
+    const id = item.id;
+    const name = item.name || item.full_name || item.email;
+    if (isSelected(type, id)) {
+      onChange(selected.filter(s => !(s.type === type && s.id === id)));
+    } else {
+      onChange([...selected, { type, id, name, email: item.email }]);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" data-testid="mrb-attendee-picker" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-lg shadow-xl w-[460px] max-h-[70vh] flex flex-col">
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <div className="text-sm font-bold text-gray-900">Add Attendees</div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700" data-testid="mrb-picker-close"><X size={16}/></button>
+        </div>
+        <div className="px-4 pt-3 flex items-center gap-1">
+          <TabBtn active={tab === 'user'} onClick={() => setTab('user')} testId="mrb-picker-tab-user">Add Employee</TabBtn>
+          <TabBtn active={tab === 'team'} onClick={() => setTab('team')} testId="mrb-picker-tab-team">Add Team</TabBtn>
+        </div>
+        <div className="px-4 pt-3">
+          <div className="relative">
+            <Search size={13} className="absolute left-2.5 top-2.5 text-gray-400"/>
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={tab === 'user' ? 'Search employees…' : 'Search teams…'} className="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:border-[#ec9324]" data-testid="mrb-picker-search"/>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-3" data-testid="mrb-picker-list">
+          {loadingList ? (
+            <div className="flex items-center justify-center py-6 text-gray-400 text-xs"><Loader2 className="animate-spin mr-2" size={14}/> Loading…</div>
+          ) : tab === 'user' ? (
+            filteredUsers.length === 0 ? (
+              <div className="text-center text-xs text-gray-400 py-6">No employees found.</div>
+            ) : filteredUsers.map(u => {
+              const id = u.id;
+              const name = u.name || u.full_name || u.email;
+              const sel = isSelected('user', id);
+              return (
+                <button
+                  key={id}
+                  onClick={() => toggle(u, 'user')}
+                  data-testid={`mrb-picker-user-${id}`}
+                  className={`w-full text-left flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-gray-50 ${sel ? 'bg-emerald-50' : ''}`}
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-gray-800 truncate">{name}</div>
+                    {u.email && <div className="text-[10px] text-gray-500 truncate">{u.email}</div>}
+                  </div>
+                  {sel && <span className="text-emerald-600 text-[10px] font-bold">Added</span>}
+                </button>
+              );
+            })
+          ) : (
+            filteredTeams.length === 0 ? (
+              <div className="text-center text-xs text-gray-400 py-6">No teams found.</div>
+            ) : filteredTeams.map(t => {
+              const sel = isSelected('team', t.id);
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => toggle(t, 'team')}
+                  data-testid={`mrb-picker-team-${t.id}`}
+                  className={`w-full text-left flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-gray-50 ${sel ? 'bg-emerald-50' : ''}`}
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-gray-800 truncate">{t.name}</div>
+                    <div className="text-[10px] text-gray-500 truncate">{(t.members || []).length} member{(t.members || []).length === 1 ? '' : 's'}</div>
+                  </div>
+                  {sel && <span className="text-emerald-600 text-[10px] font-bold">Added</span>}
+                </button>
+              );
+            })
+          )}
+        </div>
+        <div className="px-4 py-3 border-t border-gray-100 flex justify-end">
+          <Button onClick={onClose} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="mrb-picker-done">Done · {selected.length} selected</Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function TabBtn({ active, onClick, testId, children }) {
+  return (
+    <button
+      onClick={onClick}
+      data-testid={testId}
+      className={`px-3 py-1.5 text-[11px] font-bold rounded-t border-b-2 transition-colors ${active ? 'border-[#ec9324] text-[#ec9324]' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+    >{children}</button>
+  );
+}
+
+// ============================================================ Floor map (right panel) — rooms-only view
+function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickRoom }) {
+  const transformRef = useRef(null);
+  const initDoneRef = useRef(false);
+  const containerRef = useRef(null);
+  const viewportRef = useRef(null);
+  const [pageWidth] = useState(1200);
+
+  // Center the view on the selected room when it changes
+  useEffect(() => {
+    if (!selectedRoomId || !transformRef.current) return;
+    const room = rooms.find(r => r.room_id === selectedRoomId);
+    if (!room) return;
+    const vp = viewportRef.current?.getBoundingClientRect();
+    const content = containerRef.current?.getBoundingClientRect();
+    if (!vp || !content) return;
+    const state = transformRef.current.instance?.transformState || transformRef.current.state;
+    const scale = state?.scale || 1;
+    // Room center in content pixels (content is pageWidth wide, height ~= content.height/scale)
+    const contentW = content.width / scale;
+    const contentH = content.height / scale;
+    const cx = (room.x + room.w / 2) / 100 * contentW;
+    const cy = (room.y + room.h / 2) / 100 * contentH;
+    // We want this point at the viewport center, scaled
+    const targetScale = Math.max(scale, 1.4);
+    const newX = vp.width / 2 - cx * targetScale;
+    const newY = vp.height / 2 - cy * targetScale;
+    if (transformRef.current.setTransform) {
+      transformRef.current.setTransform(newX, newY, targetScale, 300, "easeOut");
+    }
+  }, [selectedRoomId, rooms]);
+
+  if (!focusPlan) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center text-center text-gray-500 px-6" data-testid="mrb-map-empty">
+        <div>
+          <Building2 size={48} className="mx-auto mb-3 text-gray-300"/>
+          <div className="text-base font-bold text-gray-500">NO ACTIVE FLOOR PLAN</div>
+          <div className="text-xs text-gray-400 mt-1">Publish a calibrated floor plan to see meeting rooms here.</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={viewportRef} className="absolute inset-0 overflow-hidden">
+      <TransformWrapper
+        initialScale={1} minScale={0.25} maxScale={4}
+        wheel={{ step: 0.15 }} pinch={{ step: 5 }}
+        doubleClick={{ disabled: true }}
+        centerOnInit={true}
+        smooth={true}
+        limitToBounds={false}
+        ref={transformRef}
+      >
+        {() => (
+          <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
+            <div ref={containerRef} className="relative inline-block" data-testid="mrb-map-canvas">
+              <Document file={resolvePdfUrl(focusPlan.pdfUrl)}
+                onLoadSuccess={() => {
+                  if (initDoneRef.current) return;
+                  initDoneRef.current = true;
+                  requestAnimationFrame(() => transformRef.current?.centerView?.(1, 0));
+                }}>
+                <Page
+                  pageNumber={1}
+                  width={pageWidth}
+                  devicePixelRatio={4}
+                  renderMode="canvas"
+                  renderTextLayer={false}
+                  renderAnnotationLayer={false}
+                />
+              </Document>
+
+              {/* Meeting rooms overlay only — workstations intentionally NOT rendered */}
+              <div className="absolute inset-0">
+                {rooms.map(r => {
+                  const selected = r.room_id === selectedRoomId;
+                  return (
+                    <div
+                      key={r.room_id}
+                      data-testid={`mrb-map-room-${r.room_id}`}
+                      onClick={() => onPickRoom(r.room_id)}
+                      className="absolute group cursor-pointer"
+                      style={{
+                        left: `${r.x}%`, top: `${r.y}%`,
+                        width: `${r.w}%`, height: `${r.h}%`,
+                        // Available = green, Selected = orange (app-wide selection color)
+                        background: selected ? 'rgba(236,147,36,0.55)' : 'rgba(16,185,129,0.10)',
+                        border: `2px solid ${selected ? '#ec9324' : '#10b981'}`,
+                        boxSizing: 'border-box',
+                        transition: 'background 150ms, border-color 150ms',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (selected) return;
+                        e.currentTarget.style.background = 'rgba(16,185,129,0.25)';
+                      }}
+                      onMouseLeave={(e) => {
+                        if (selected) return;
+                        e.currentTarget.style.background = 'rgba(16,185,129,0.10)';
+                      }}
+                    >
+                      <div
+                        className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[10px] font-semibold pointer-events-none select-none"
+                        style={{
+                          background: selected ? '#ec9324' : 'rgba(16,185,129,0.95)',
+                          color: 'white', maxWidth: '90%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        }}
+                      >{r.name} ({r.capacity})</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </TransformComponent>
+        )}
+      </TransformWrapper>
+
+      {/* Legend */}
+      <div className="absolute bottom-3 left-3 bg-white border border-gray-200 rounded-lg p-2 text-[10px] shadow-sm" data-testid="mrb-map-legend">
+        <div className="font-bold text-gray-700 mb-1">Legend</div>
+        <div className="space-y-1">
+          <Legend color="#10b981" label="Available"/>
+          <Legend color="#ec9324" label="Selected"/>
+          <Legend color="#9ca3af" label="Occupied"/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Legend({ color, label }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="w-3 h-3 rounded" style={{ background: color }}/>
+      <span className="text-gray-600">{label}</span>
     </div>
   );
 }
