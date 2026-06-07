@@ -1287,8 +1287,8 @@ function LiveToggle({ plan, draftDirty, totalMapped, hasDupes, onPublishRequeste
       onSetStatus("inactive");
       return;
     }
-    // Turning ON
-    if (!hasLive || draftDirty) {
+    // Turning ON — publish if no live yet, local edits unsaved, or a saved backend draft is pending
+    if (!hasLive || draftDirty || plan?.has_draft) {
       if (totalMapped === 0) { alert("Place at least one seat before going Live."); return; }
       if (hasDupes) { alert("Resolve duplicate seat IDs before publishing."); return; }
       onPublishRequested();
