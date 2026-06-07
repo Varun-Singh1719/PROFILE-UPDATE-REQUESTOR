@@ -143,6 +143,21 @@ export default function SeatCalibrationPage() {
   const mouseDownPosRef = useRef(null);
   const dragModeRef = useRef(null); // 'box' | 'lasso' | null
   const dragSeatRef = useRef(null); // { ids[], startMouseX, startMouseY, rectW, rectH, startPositions, moved }
+  const viewportInitDoneRef = useRef(false); // whether the canvas has been auto-centered once for this mount
+
+  // Per-session viewport persistence keyed by planId — survives saves/auto-saves/publishes/mode switches
+  const viewportKey = planId ? `floorplan_viewport_${planId}` : null;
+  const readViewport = useCallback(() => {
+    if (!viewportKey) return null;
+    try {
+      const raw = sessionStorage.getItem(viewportKey);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  }, [viewportKey]);
+  const writeViewport = useCallback((scale, positionX, positionY) => {
+    if (!viewportKey) return;
+    try { sessionStorage.setItem(viewportKey, JSON.stringify({ scale, positionX, positionY })); } catch {}
+  }, [viewportKey]);
 
   // ------------ Helpers: bay prefix + renumbering
   const bayOf = (id) => id.match(/^[A-Z]+/)?.[0] || id[0];
@@ -171,8 +186,8 @@ export default function SeatCalibrationPage() {
   }, []);
 
   // ---------------------------- Load plan
-  const loadPlan = useCallback(async () => {
-    setLoadingPlan(true);
+  const loadPlan = useCallback(async (silent = false) => {
+    if (!silent) setLoadingPlan(true);
     try {
       const res = await api.get(`/floor-plans/${planId}`);
       setPlan(res.data);
@@ -193,9 +208,12 @@ export default function SeatCalibrationPage() {
       setLastSaved(res.data.draft_updated_at || null);
     } catch (e) {
       alert(`Failed to load plan: ${e?.response?.data?.detail || e.message}`);
-    } finally { setLoadingPlan(false); }
+    } finally { if (!silent) setLoadingPlan(false); }
   }, [planId]);
   useEffect(() => { loadPlan(); }, [loadPlan]);
+
+  // Reset auto-centering flag when switching to a different plan so the new plan centers correctly.
+  useEffect(() => { viewportInitDoneRef.current = false; }, [planId]);
 
   // ---------------------------- Derived
   const seatsArray = useMemo(() => Object.values(mappedSeats), [mappedSeats]);
@@ -865,7 +883,7 @@ export default function SeatCalibrationPage() {
         try { await api.put(`/floor-plans/${planId}/thumbnail`, { thumbnail: thumb }); } catch (e) { /* non-blocking */ }
       }
       setShowPublishDialog(false);
-      await loadPlan();
+      await loadPlan(true);  // silent reload — keep canvas viewport intact
     } catch (e) {
       alert(`Publish failed: ${e?.response?.data?.detail || e.message}`);
     } finally { setPublishing(false); }
@@ -1046,7 +1064,7 @@ export default function SeatCalibrationPage() {
               onSetStatus={async (next) => {
                 try {
                   await api.patch(`/floor-plans/${planId}/status`, { status: next });
-                  await loadPlan();
+                  await loadPlan(true);  // silent reload — keep canvas viewport intact
                 } catch (e) {
                   alert(`Failed to update status: ${e?.response?.data?.detail || e.message}`);
                 }
@@ -1290,16 +1308,24 @@ export default function SeatCalibrationPage() {
 
       {/* ────────────────────────────── PDF Canvas */}
       <div className="flex-1 overflow-hidden bg-gray-100 relative">
+        {(() => { const _vp = readViewport(); return (
         <TransformWrapper
-          initialScale={1} minScale={0.25} maxScale={4}
+          initialScale={_vp?.scale ?? 1}
+          initialPositionX={_vp?.positionX}
+          initialPositionY={_vp?.positionY}
+          minScale={0.25} maxScale={4}
           wheel={{ step: 0.15, smoothStep: 0.01 }} pinch={{ step: 5 }}
           doubleClick={{ disabled: true }}
           panning={{ disabled: toolMode === 'box' || toolMode === 'lasso' || (calibMode === 'room' && roomTool === 'draw'), velocityDisabled: true }}
-          centerOnInit={true}
+          centerOnInit={!_vp}
           smooth={true}
           limitToBounds={false}
           onZoom={(ref) => setCurrentZoom(ref.state.scale)}
-          onTransformed={(ref) => setCurrentZoom(ref.state.scale)}
+          onTransformed={(ref) => {
+            setCurrentZoom(ref.state.scale);
+            // Persist viewport for this plan so subsequent loads/refreshes restore exactly
+            writeViewport(ref.state.scale, ref.state.positionX, ref.state.positionY);
+          }}
           ref={transformRef}
         >
           {({ zoomIn, zoomOut, resetTransform, centerView }) => (
@@ -1367,6 +1393,20 @@ export default function SeatCalibrationPage() {
                       renderMode="canvas"
                       renderTextLayer={false}
                       renderAnnotationLayer={false}
+                      onLoadSuccess={() => {
+                        // First time the PDF page renders for this mount: ensure a sensible viewport.
+                        // - If we have a saved per-session viewport, it's already applied via initial* props.
+                        // - Otherwise, center the freshly-rendered canvas now that real dimensions exist.
+                        if (viewportInitDoneRef.current) return;
+                        viewportInitDoneRef.current = true;
+                        const saved = readViewport();
+                        if (saved) return; // restored via initialPosition*/initialScale
+                        // Defer to next frame so layout has measured the rendered PDF canvas
+                        requestAnimationFrame(() => {
+                          const ref = transformRef.current;
+                          if (ref?.centerView) ref.centerView(1, 0);
+                        });
+                      }}
                     />
                   </Document>
 
@@ -1489,6 +1529,7 @@ export default function SeatCalibrationPage() {
             </>
           )}
         </TransformWrapper>
+        ); })()}
       </div>
     </div>
 
@@ -1506,7 +1547,7 @@ export default function SeatCalibrationPage() {
         liveVersionId={plan.live_version_id}
         open={showVersionPanel}
         onClose={() => setShowVersionPanel(false)}
-        onRollback={() => { setShowVersionPanel(false); loadPlan(); }}
+        onRollback={() => { setShowVersionPanel(false); loadPlan(true); }}
       />
       <AuditLogPanel
         planId={planId}
