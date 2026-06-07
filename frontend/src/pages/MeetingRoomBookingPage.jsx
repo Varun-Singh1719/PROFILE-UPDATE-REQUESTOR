@@ -153,6 +153,59 @@ export default function MeetingRoomBookingPage() {
     return set;
   }, [formOpen, formDate, formStart, formEnd, slotBookings]);
 
+  // Index bookings by room for today (used by the floor map's Quick-Book feature)
+  const bookingsByRoom = useMemo(() => {
+    const map = {};
+    for (const b of myBookings) {
+      if (b.cancelled) continue;
+      (map[b.room_id] = map[b.room_id] || []).push(b);
+    }
+    return map;
+  }, [myBookings]);
+
+  // Compute the next free 30-minute slot for a given room starting at `now` (rounded up to 5 min).
+  // Walks forward in 5-min increments up to 24h. Returns { startIso, endIso } or null.
+  const computeNextFreeSlot = useCallback((roomId) => {
+    const start = new Date();
+    const minutes = start.getMinutes();
+    const nextStart = new Date(start);
+    nextStart.setMinutes(minutes + (5 - (minutes % 5)) % 5 || (minutes % 5 === 0 ? 0 : 5), 0, 0);
+    if (nextStart < start) nextStart.setMinutes(nextStart.getMinutes() + 5);
+    const SLOT_MS = 30 * 60 * 1000;
+    const STEP_MS = 5 * 60 * 1000;
+    const MAX_STEPS = (24 * 60) / 5; // up to 24h ahead
+    const todays = bookingsByRoom[roomId] || [];
+    const intervals = todays.map(b => [new Date(b.start_at).getTime(), new Date(b.end_at).getTime()]);
+    for (let i = 0; i < MAX_STEPS; i++) {
+      const s = nextStart.getTime() + i * STEP_MS;
+      const e = s + SLOT_MS;
+      const clash = intervals.some(([bs, be]) => bs < e && be > s);
+      if (!clash) return { startIso: new Date(s).toISOString(), endIso: new Date(e).toISOString() };
+    }
+    return null;
+  }, [bookingsByRoom]);
+
+  const handleQuickBook = useCallback((room) => {
+    const slot = computeNextFreeSlot(room.room_id);
+    if (!slot) { toast.error("No free 30-min slot in the next 24h for this room"); return; }
+    const sd = new Date(slot.startIso);
+    const ed = new Date(slot.endIso);
+    const p = (n) => String(n).padStart(2, "0");
+    setFormDate(`${sd.getFullYear()}-${p(sd.getMonth() + 1)}-${p(sd.getDate())}`);
+    setFormStart(`${p(sd.getHours())}:${p(sd.getMinutes())}`);
+    setFormEnd(`${p(ed.getHours())}:${p(ed.getMinutes())}`);
+    setSelectedRoomId(room.room_id);
+    setFormOpen(true);
+    setConflict(null);
+    requestAnimationFrame(() => {
+      formAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setTimeout(() => titleInputFocusRef.current?.focus?.(), 250);
+    });
+    toast.info(`Quick-booked the next free 30 min for ${room.name}`, {
+      description: `${sd.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ${ed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}. Add a title and Submit.`,
+    });
+  }, [computeNextFreeSlot]);
+
   const selectedRoom = useMemo(() => rooms.find(r => r.room_id === selectedRoomId), [rooms, selectedRoomId]);
   // Floor plan currently shown on the right panel = plan of the selected room, else first available
   const focusPlan = useMemo(() => {
@@ -308,6 +361,7 @@ export default function MeetingRoomBookingPage() {
             onPickRoom={(id) => setSelectedRoomId(id)}
             occupiedNowRoomIds={occupiedNowRoomIds}
             blockedRoomIds={slotConflictRoomIds}
+            onQuickBook={handleQuickBook}
           />
         </div>
       </div>
@@ -800,7 +854,7 @@ function TabBtn({ active, onClick, testId, children }) {
 }
 
 // ============================================================ Floor map (right panel) — rooms-only view
-function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickRoom, occupiedNowRoomIds, blockedRoomIds }) {
+function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickRoom, occupiedNowRoomIds, blockedRoomIds, onQuickBook }) {
   const transformRef = useRef(null);
   const initDoneRef = useRef(false);
   const containerRef = useRef(null);
@@ -932,6 +986,18 @@ function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickRoom, oc
                         )}
                         <span className="truncate">{r.name} ({r.capacity})</span>
                       </div>
+
+                      {/* Quick-Book 30 min button — only on available rooms */}
+                      {!blocked && (
+                        <button
+                          type="button"
+                          data-testid={`mrb-map-quickbook-${r.room_id}`}
+                          title="Quick-book the next free 30-minute slot"
+                          onClick={(e) => { e.stopPropagation(); onQuickBook?.(r); }}
+                          className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-white/95 border border-emerald-500 text-emerald-700 hover:bg-emerald-500 hover:text-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                          style={{ pointerEvents: 'auto' }}
+                        >+30 min</button>
+                      )}
                     </div>
                   );
                 })}
