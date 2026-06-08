@@ -318,8 +318,8 @@ export default function MeetingRoomBookingPage() {
       contentClassName="h-screen flex flex-col"
     >
       <div className="flex-1 flex overflow-hidden">
-        {/* LEFT 40% — Header + bookings + form */}
-        <div className="w-2/5 min-w-[420px] border-r border-gray-200 bg-white flex flex-col overflow-hidden">
+        {/* LEFT panel — 32% of viewport (reduced 20% from previous 40%) */}
+        <div className="w-[32%] min-w-[340px] border-r border-gray-200 bg-white flex flex-col overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <CalendarClock className="text-[#ec9324] flex-shrink-0" size={22} />
@@ -770,20 +770,30 @@ function DayGroup({ group, onCancel, onReschedule }) {
               ) : null}
             </div>
             <div className="flex items-center gap-0.5 flex-shrink-0">
-              <button
-                onClick={() => onReschedule?.(b)}
-                title="Reschedule"
-                aria-label="Reschedule"
-                className="p-1 text-gray-600 hover:text-[#ec9324] hover:bg-orange-50 rounded"
-                data-testid={`mrb-reschedule-${b.id}`}
-              ><Pencil size={12}/></button>
-              <button
-                onClick={() => onCancel(b.id)}
-                title="Cancel Meeting"
-                aria-label="Cancel Meeting"
-                className="p-1 text-red-600 hover:bg-red-50 rounded"
-                data-testid={`mrb-cancel-${b.id}`}
-              ><Trash2 size={12}/></button>
+              <div className="relative group/edit">
+                <button
+                  onClick={() => onReschedule?.(b)}
+                  aria-label="Reschedule"
+                  className="p-1 text-gray-600 hover:text-[#ec9324] hover:bg-orange-50 rounded"
+                  data-testid={`mrb-reschedule-${b.id}`}
+                ><Pencil size={12}/></button>
+                <span
+                  role="tooltip"
+                  className="pointer-events-none absolute right-1/2 translate-x-1/2 -top-7 z-20 px-2 py-0.5 rounded bg-gray-900 text-white text-[10px] font-medium whitespace-nowrap shadow opacity-0 group-hover/edit:opacity-100 transition-opacity"
+                >Reschedule</span>
+              </div>
+              <div className="relative group/cancel">
+                <button
+                  onClick={() => onCancel(b.id)}
+                  aria-label="Cancel"
+                  className="p-1 text-red-600 hover:bg-red-50 rounded"
+                  data-testid={`mrb-cancel-${b.id}`}
+                ><Trash2 size={12}/></button>
+                <span
+                  role="tooltip"
+                  className="pointer-events-none absolute right-1/2 translate-x-1/2 -top-7 z-20 px-2 py-0.5 rounded bg-gray-900 text-white text-[10px] font-medium whitespace-nowrap shadow opacity-0 group-hover/cancel:opacity-100 transition-opacity"
+                >Cancel</span>
+              </div>
             </div>
           </div>
         </div>
