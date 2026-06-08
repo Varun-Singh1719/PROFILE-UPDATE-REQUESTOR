@@ -343,8 +343,13 @@ export default function MeetingRoomBookingPage() {
               bottom. After Submit / Cancel the form closes and the upcoming list returns. */}
           <div className="flex-1 overflow-hidden flex flex-col">
             {formOpen ? (
-              /* Form view — occupies the full left-panel body */
-              <div ref={formAnchorRef} className="flex-1 min-h-0 overflow-y-auto px-5 pt-4 pb-4">
+              /* Form view — occupies the full left-panel body.
+                 Subtle slide+fade-in from the right when it takes over. */
+              <div
+                ref={formAnchorRef}
+                key="mrb-form-view"
+                className="flex-1 min-h-0 overflow-y-auto px-5 pt-4 pb-4 animate-in fade-in slide-in-from-right-3 duration-300 ease-out"
+              >
                 <BookingForm
                   rooms={rooms}
                   selectedRoomId={selectedRoomId}
@@ -362,8 +367,13 @@ export default function MeetingRoomBookingPage() {
                 />
               </div>
             ) : (
-              /* Upcoming bookings — fills the entire remaining height of the left panel */
-              <section data-testid="mrb-upcoming-section" className="flex-1 min-h-0 flex flex-col px-5 pt-4 pb-2">
+              /* Upcoming bookings — fills the entire remaining height of the left panel.
+                 Subtle fade-in (+ slide-in-from-left) when it returns after Submit/Cancel. */
+              <section
+                data-testid="mrb-upcoming-section"
+                key="mrb-upcoming-view"
+                className="flex-1 min-h-0 flex flex-col px-5 pt-4 pb-2 animate-in fade-in slide-in-from-left-2 duration-300 ease-out"
+              >
                 <div className="flex items-center justify-between mb-2 gap-2 flex-shrink-0">
                   <h2 className="text-[11px] font-bold tracking-wide text-gray-500 uppercase" data-testid="mrb-upcoming-title">Upcoming Bookings</h2>
                   <div className="flex items-center gap-2">
