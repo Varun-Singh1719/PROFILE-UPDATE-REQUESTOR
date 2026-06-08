@@ -3,7 +3,7 @@ import { Document, Page, pdfjs } from "react-pdf";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import {
   CalendarClock, Plus, Trash2, MapPin, Clock, Loader2, Users, Building2,
-  X, Search, UserPlus, ChevronDown, ChevronUp, AlertCircle, Repeat,
+  X, Search, UserPlus, ChevronDown, ChevronUp, AlertCircle, Repeat, Pencil,
 } from "lucide-react";
 import Layout from "../components/Layout";
 import api from "../lib/api";
@@ -46,6 +46,10 @@ export default function MeetingRoomBookingPage() {
   const [rangeMode, setRangeMode] = useState("today");  // 'today' | 'next7'
   const formAnchorRef = useRef(null);
   const titleInputFocusRef = useRef(null);
+
+  // When set, the form is in "Reschedule" mode editing this booking instead of creating a new one.
+  // Carries enough info to pre-fill the form (title, attendees) and to know which booking to PATCH.
+  const [editing, setEditing] = useState(null); // { id, title, attendees }
 
   // Booking form's date+time (lifted) — used by the floor map to dim conflicting rooms
   const [formDate, setFormDate] = useState(todayIso());
@@ -221,6 +225,26 @@ export default function MeetingRoomBookingPage() {
   // Button click: always open the form, scroll into view, focus title input.
   // Per spec: do NOT toggle closed via this button — form has its own X close.
   const openBookingForm = useCallback(() => {
+    setEditing(null);
+    setFormOpen(true);
+    setConflict(null);
+    requestAnimationFrame(() => {
+      formAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setTimeout(() => titleInputFocusRef.current?.focus?.(), 200);
+    });
+  }, []);
+
+  // Open the form in "Reschedule" mode pre-filled with this booking's data.
+  // Pre-fills: title, room, date, start, end, attendees. Submitting will PATCH instead of POST.
+  const handleReschedule = useCallback((b) => {
+    const sd = new Date(b.start_at);
+    const ed = new Date(b.end_at);
+    const p = (n) => String(n).padStart(2, "0");
+    setFormDate(`${sd.getFullYear()}-${p(sd.getMonth() + 1)}-${p(sd.getDate())}`);
+    setFormStart(`${p(sd.getHours())}:${p(sd.getMinutes())}`);
+    setFormEnd(`${p(ed.getHours())}:${p(ed.getMinutes())}`);
+    setSelectedRoomId(b.room_id);
+    setEditing({ id: b.id, title: b.title, attendees: b.attendees || [] });
     setFormOpen(true);
     setConflict(null);
     requestAnimationFrame(() => {
@@ -247,6 +271,28 @@ export default function MeetingRoomBookingPage() {
   const handleCreate = async (payload) => {
     setConflict(null);
     try {
+      // Edit / Reschedule path → PATCH the existing booking. Only fields the form lets the user
+      // change for a reschedule are sent: title, room, slot, attendees. The recurring spec is
+      // intentionally ignored here because reschedule operates on a single occurrence.
+      if (editing?.id) {
+        const patchBody = {
+          title: payload.title,
+          plan_id: payload.plan_id,
+          room_id: payload.room_id,
+          start_at: payload.start_at,
+          end_at: payload.end_at,
+          attendees: payload.attendees,
+        };
+        await api.patch(`/room-bookings/${editing.id}`, patchBody);
+        await Promise.all([
+          loadBookingsForDate(filterDate, rangeMode),
+          api.get(`/room-bookings?date=${formDate}&include_past=true`).then(r => setSlotBookings(r.data || [])).catch(() => {}),
+        ]);
+        setFormOpen(false);
+        setEditing(null);
+        toast.success("Booking Rescheduled Successfully");
+        return;
+      }
       const res = await api.post("/room-bookings", payload);
       await Promise.all([
         loadBookingsForDate(filterDate, rangeMode),
@@ -260,7 +306,7 @@ export default function MeetingRoomBookingPage() {
       if (detail && typeof detail === "object" && detail.code === "BOOKING_CONFLICT") {
         setConflict(detail);
       } else {
-        toast.error(typeof detail === "string" ? detail : "Booking failed");
+        toast.error(typeof detail === "string" ? detail : (editing ? "Reschedule failed" : "Booking failed"));
       }
     }
   };
@@ -327,6 +373,7 @@ export default function MeetingRoomBookingPage() {
                 rangeMode={rangeMode}
                 loading={loading}
                 onCancel={handleCancel}
+                onReschedule={handleReschedule}
               />
             </section>
 
@@ -338,7 +385,7 @@ export default function MeetingRoomBookingPage() {
                   selectedRoomId={selectedRoomId}
                   setSelectedRoomId={setSelectedRoomId}
                   onSubmit={handleCreate}
-                  onCancel={() => { setFormOpen(false); setConflict(null); }}
+                  onCancel={() => { setFormOpen(false); setConflict(null); setEditing(null); }}
                   conflict={conflict}
                   clearConflict={() => setConflict(null)}
                   titleInputFocusRef={titleInputFocusRef}
@@ -346,6 +393,7 @@ export default function MeetingRoomBookingPage() {
                   startTime={formStart} setStartTime={setFormStart}
                   endTime={formEnd} setEndTime={setFormEnd}
                   slotConflictRoomIds={slotConflictRoomIds}
+                  editing={editing}
                 />
               )}
             </div>
@@ -371,8 +419,9 @@ export default function MeetingRoomBookingPage() {
 
 // ============================================================ Booking Form
 function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCancel, conflict, clearConflict, titleInputFocusRef,
-  bDate, setBDate, startTime, setStartTime, endTime, setEndTime, slotConflictRoomIds }) {
-  const [title, setTitle] = useState("");
+  bDate, setBDate, startTime, setStartTime, endTime, setEndTime, slotConflictRoomIds, editing }) {
+  const isEdit = !!editing?.id;
+  const [title, setTitle] = useState(editing?.title || "");
   const localTitleRef = useRef(null);
   // expose this input's focus to parent so the +Book Meeting Room button can focus it
   useEffect(() => {
@@ -389,7 +438,7 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
       : "Select a Meeting Room…";
   const isSelectedRoomBlocked = !!(selectedRoomId && slotConflictRoomIds?.has?.(selectedRoomId));
   // Local-only fields (lifted state owns date/start/end via props)
-  const [attendees, setAttendees] = useState([]);
+  const [attendees, setAttendees] = useState(editing?.attendees || []);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [recurring, setRecurring] = useState(false);
   const [freq, setFreq] = useState("daily");
@@ -424,7 +473,9 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
   return (
     <section className="border border-gray-200 rounded-lg p-4 bg-gray-50" data-testid="mrb-booking-form">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-bold text-gray-900">New Meeting</h3>
+        <h3 className="text-sm font-bold text-gray-900" data-testid="mrb-form-heading">
+          {isEdit ? "Reschedule Meeting" : "New Meeting"}
+        </h3>
         <button onClick={onCancel} className="text-gray-400 hover:text-gray-700" data-testid="mrb-form-close"><X size={14}/></button>
       </div>
 
@@ -463,20 +514,23 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
         )}
       </Field>
 
-      <div className="grid grid-cols-3 gap-2 mt-3">
+      <div className="grid grid-cols-3 gap-2 mt-3" data-testid="mrb-form-datetime-row">
         <Field label="Date">
           <input type="date" value={bDate} onChange={(e) => setBDate(e.target.value)}
-            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-[#ec9324]"
+            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-[#ec9324] mrb-orange-accent"
+            style={{ accentColor: '#ec9324' }}
             data-testid="mrb-form-date"/>
         </Field>
-        <Field label="Start">
+        <Field label="Start Time">
           <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)}
-            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-[#ec9324]"
+            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-[#ec9324] mrb-orange-accent"
+            style={{ accentColor: '#ec9324' }}
             data-testid="mrb-form-start"/>
         </Field>
-        <Field label="End">
+        <Field label="End Time">
           <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)}
-            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-[#ec9324]"
+            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-[#ec9324] mrb-orange-accent"
+            style={{ accentColor: '#ec9324' }}
             data-testid="mrb-form-end"/>
         </Field>
       </div>
@@ -507,7 +561,8 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
         )}
       </div>
 
-      {/* Recurring */}
+      {/* Recurring — hidden in Reschedule mode because rescheduling targets a single occurrence */}
+      {!isEdit && (
       <div className="mt-3 p-2 bg-white rounded border border-gray-200">
         <label className="flex items-center justify-between cursor-pointer">
           <span className="text-[11px] font-semibold text-gray-700 inline-flex items-center gap-1"><Repeat size={11}/> Recurring</span>
@@ -521,6 +576,7 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
                 <select value={freq} onChange={(e) => setFreq(e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:border-[#ec9324]" data-testid="mrb-form-freq">
                   <option value="daily">Daily</option>
                   <option value="weekly">Weekly</option>
+                  <option value="fortnightly">Fortnightly</option>
                   <option value="monthly">Monthly</option>
                 </select>
               </div>
@@ -551,6 +607,7 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
           </div>
         )}
       </div>
+      )}
 
       {/* Conflict */}
       {conflict && (
@@ -579,7 +636,7 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
       <div className="flex justify-end gap-2 mt-4">
         <Button variant="outline" onClick={onCancel} data-testid="mrb-form-cancel-btn">Cancel</Button>
         <Button onClick={submit} disabled={submitting || !selectedRoomId || isSelectedRoomBlocked} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="mrb-form-submit">
-          {submitting ? "Booking…" : "Submit"}
+          {submitting ? (isEdit ? "Rescheduling…" : "Booking…") : (isEdit ? "Save Changes" : "Submit")}
         </Button>
       </div>
 
@@ -611,7 +668,7 @@ function Field({ label, required, children }) {
 // - rangeMode="next7" → 7 day groups starting from today.
 // - Per-day pagination: first PAGE_SIZE shown, "+N more" expands the rest.
 const PAGE_SIZE = 4;
-function UpcomingBookingsList({ bookings, filterDate, rangeMode, loading, onCancel }) {
+function UpcomingBookingsList({ bookings, filterDate, rangeMode, loading, onCancel, onReschedule }) {
   const today = todayIso();
   const addDaysIso = (offset) => {
     const d = new Date(); d.setDate(d.getDate() + offset);
@@ -670,14 +727,14 @@ function UpcomingBookingsList({ bookings, filterDate, rangeMode, loading, onCanc
         </div>
       ) : (
         <div className="space-y-3" data-testid="mrb-upcoming-list">
-          {dayGroups.map(g => <DayGroup key={g.key} group={g} onCancel={onCancel}/>)}
+          {dayGroups.map(g => <DayGroup key={g.key} group={g} onCancel={onCancel} onReschedule={onReschedule}/>)}
         </div>
       )}
     </div>
   );
 }
 
-function DayGroup({ group, onCancel }) {
+function DayGroup({ group, onCancel, onReschedule }) {
   const [expanded, setExpanded] = useState(false);
   const list = expanded ? group.items : group.items.slice(0, PAGE_SIZE);
   const hidden = group.items.length - list.length;
@@ -699,14 +756,27 @@ function DayGroup({ group, onCancel }) {
                 {fmtTime(b.start_at)} – {fmtTime(b.end_at)}
                 <span className="text-gray-300 mx-1">·</span>{b.room_name}
               </div>
-              <div className="text-[10px] text-gray-500 truncate">{b.organizer?.name || b.organizer?.email || "—"}</div>
+              <div className="text-[10px] text-gray-500 truncate" data-testid={`mrb-organizer-${b.id}`}>{b.organizer?.name || b.organizer?.email || "—"}</div>
+              {b.organizer_team_name ? (
+                <div className="text-[10px] text-[#ec9324] font-semibold truncate" data-testid={`mrb-organizer-team-${b.id}`}>{b.organizer_team_name}</div>
+              ) : null}
             </div>
-            <button
-              onClick={() => onCancel(b.id)}
-              title="Cancel booking"
-              className="p-1 text-red-600 hover:bg-red-50 rounded flex-shrink-0"
-              data-testid={`mrb-cancel-${b.id}`}
-            ><Trash2 size={12}/></button>
+            <div className="flex items-center gap-0.5 flex-shrink-0">
+              <button
+                onClick={() => onReschedule?.(b)}
+                title="Reschedule"
+                aria-label="Reschedule"
+                className="p-1 text-gray-600 hover:text-[#ec9324] hover:bg-orange-50 rounded"
+                data-testid={`mrb-reschedule-${b.id}`}
+              ><Pencil size={12}/></button>
+              <button
+                onClick={() => onCancel(b.id)}
+                title="Cancel Meeting"
+                aria-label="Cancel Meeting"
+                className="p-1 text-red-600 hover:bg-red-50 rounded"
+                data-testid={`mrb-cancel-${b.id}`}
+              ><Trash2 size={12}/></button>
+            </div>
           </div>
         </div>
       ))}

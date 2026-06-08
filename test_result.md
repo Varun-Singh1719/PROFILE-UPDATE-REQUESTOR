@@ -121,6 +121,21 @@ user_problem_statement: |
   - Permission merge logic: OR (allow wins) across all assigned sets; Super Admin auto-grants all
 
 backend:
+  - task: "MRB enhancements — Fortnightly recurring + organizer_team_name enrichment + PATCH /room-bookings/{id}"
+    implemented: true
+    working: "NA"
+    file: "backend/routers/room_bookings.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+            Added three backend changes for the Meeting Room Booking UI enhancements:
+            1) Recurring `frequency` now accepts 'fortnightly' (every 14 days from start, expanded between start and end_date). Models + validation message updated.
+            2) New helper `_enrich_bookings_with_team` enriches each booking with `organizer_team_name` (first team where organizer.id ∈ team.member_ids; None if no mapping). Applied to GET /api/room-bookings response.
+            3) New PATCH /api/room-bookings/{booking_id} endpoint for reschedule. BookingUpdate accepts title/start_at/end_at/plan_id/room_id/attendees. Owner-or-admin only, rejects cancelled bookings, conflict-checks the target slot excluding the booking itself (returns 409 BOOKING_CONFLICT shape identical to POST), and returns the updated booking (enriched with organizer_team_name) under `booking`.
   - task: "v3 — Permission Sets CRUD endpoints"
     implemented: true
     working: true
@@ -243,15 +258,26 @@ metadata:
 
 test_plan:
   current_focus:
-    - "v3 — Permission Sets CRUD endpoints"
-    - "v3 — Role collapse migration"
-    - "v3 — Contacts permission_set_ids field"
-    - "v3 — Effective permissions rewrite (OR merge, Super Admin full access)"
+    - "MRB enhancements — Fortnightly recurring + organizer_team_name enrichment + PATCH /room-bookings/{id}"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
+    -agent: "main"
+    -message: |
+      Meeting Room Booking UI enhancements — backend changes:
+      1) GET /api/room-bookings now returns `organizer_team_name` on every booking. For a user in multiple teams the first matched team.name is used; if no team contains the organizer's id in member_ids, the field is None. Please verify the field is present (and null vs string in the expected cases).
+      2) POST /api/room-bookings with recurring.frequency='fortnightly' creates an occurrence every 14 days from the booking's start, up to and including recurring.end_date.
+      3) PATCH /api/room-bookings/{id} reschedules a single booking. Test:
+         - Owner can update title/start_at/end_at and the response includes the updated booking.
+         - A non-owner non-admin user gets 403.
+         - Update that conflicts with another active booking returns 409 with body `{code:'BOOKING_CONFLICT', conflicts:[...], room_name}`.
+         - Updating just `start_at`+`end_at` (without room/plan) keeps the original room_id/plan_id.
+         - Updating an already-cancelled booking returns 400.
+      Test credentials in /app/memory/test_credentials.md. Backend testing only this round.
+
+old_agent_communication:
     -agent: "main"
     -message: |
        Phase 1 — v3 backend changes complete. Please test:

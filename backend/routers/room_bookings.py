@@ -9,7 +9,7 @@ Data model
       start_at (ISO), end_at (ISO),
       organizer { id, name, email },
       attendees [ {type: 'user'|'team', id, name, email?} ],
-      recurring? { frequency: 'daily'|'weekly'|'monthly', end_date: 'YYYY-MM-DD', days?: ['Mo','Tu',...] },
+      recurring? { frequency: 'daily'|'weekly'|'fortnightly'|'monthly', end_date: 'YYYY-MM-DD', days?: ['Mo','Tu',...] },
       series_id (uuid grouping recurring instances),
       created_at, updated_at,
       cancelled: bool }
@@ -45,7 +45,7 @@ class Attendee(BaseModel):
 
 
 class Recurring(BaseModel):
-    frequency: str  # 'daily' | 'weekly' | 'monthly'
+    frequency: str  # 'daily' | 'weekly' | 'fortnightly' | 'monthly'
     end_date: str   # YYYY-MM-DD inclusive
     days: List[str] = Field(default_factory=list)  # for weekly: ['Mo','Tu','We','Th','Fr','Sa','Su']
 
@@ -65,6 +65,36 @@ class BookingCreate(BaseModel):
 # --------------------------------------------------------------------------- #
 
 WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']  # Monday=0..Sunday=6
+
+
+async def _enrich_bookings_with_team(docs: List[dict]) -> List[dict]:
+    """Attach `organizer_team_name` to each booking by looking up the organizer's user id in `db.teams`.
+    If the organizer is in multiple teams, the first one found is used. If no team is mapped, the field
+    is omitted (None) so the frontend can render blank without an "N/A" placeholder.
+    """
+    if not docs:
+        return docs
+    organizer_ids = list({(d.get("organizer") or {}).get("id") for d in docs if (d.get("organizer") or {}).get("id")})
+    if not organizer_ids:
+        for d in docs:
+            d["organizer_team_name"] = None
+        return docs
+    # one-shot: pull every team containing any of these member ids
+    cursor = db.teams.find(
+        {"member_ids": {"$in": organizer_ids}},
+        {"_id": 0, "id": 1, "name": 1, "member_ids": 1},
+    )
+    teams = await cursor.to_list(2000)
+    # Build user_id -> first team_name. If a user is in multiple teams we take the first encountered.
+    user_team: Dict[str, str] = {}
+    for t in teams:
+        tname = t.get("name")
+        for mid in (t.get("member_ids") or []):
+            user_team.setdefault(mid, tname)
+    for d in docs:
+        oid = (d.get("organizer") or {}).get("id")
+        d["organizer_team_name"] = user_team.get(oid) if oid else None
+    return docs
 
 
 def _actor(user: dict) -> dict:
@@ -132,6 +162,11 @@ def _expand_recurring(start: datetime, end: datetime, recurring: Recurring) -> L
             if WEEKDAYS[cur.weekday()] in target:
                 occurrences.append((cur, cur + duration))
             cur = cur + timedelta(days=1)
+    elif recurring.frequency == 'fortnightly':
+        # Every 2 weeks on the same weekday as `start`.
+        while cur.date() <= end_date.date():
+            occurrences.append((cur, cur + duration))
+            cur = cur + timedelta(days=14)
     elif recurring.frequency == 'monthly':
         while cur.date() <= end_date.date():
             occurrences.append((cur, cur + duration))
@@ -149,7 +184,7 @@ def _expand_recurring(start: datetime, end: datetime, recurring: Recurring) -> L
                     last = (datetime(y, m + 1, 1) - timedelta(days=1)).day
                     cur = cur.replace(year=y, month=m, day=last)
     else:
-        raise HTTPException(400, "recurring.frequency must be daily, weekly or monthly")
+        raise HTTPException(400, "recurring.frequency must be daily, weekly, fortnightly or monthly")
 
     if not occurrences:
         raise HTTPException(400, "Recurring rule produced no occurrences in the date range")
@@ -308,7 +343,104 @@ async def list_room_bookings(
             q["end_at"] = {"$gte": datetime.now().isoformat()}
 
     docs = await db.room_bookings.find(q, {"_id": 0}).sort("start_at", 1).to_list(500)
+    docs = await _enrich_bookings_with_team(docs)
     return docs
+
+
+class BookingUpdate(BaseModel):
+    """Partial update for a single booking instance (reschedule).
+    Only the fields provided are updated. Note: this updates ONLY this single occurrence,
+    even if it belongs to a recurring series — the series itself is not affected.
+    """
+    title: Optional[str] = Field(None, min_length=1, max_length=120)
+    start_at: Optional[str] = None
+    end_at: Optional[str] = None
+    plan_id: Optional[str] = None
+    room_id: Optional[str] = None
+    attendees: Optional[List[Attendee]] = None
+
+
+@api_router.patch("/room-bookings/{booking_id}")
+async def update_room_booking(booking_id: str, payload: BookingUpdate, user=Depends(get_current_user)):
+    """Reschedule / edit a single booking. Owner or admin only. Conflict-checks the new slot."""
+    doc = await db.room_bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Booking not found")
+    if doc.get("cancelled"):
+        raise HTTPException(400, "Cancelled bookings cannot be rescheduled")
+    is_owner = doc.get("organizer", {}).get("id") == user.get("id")
+    is_admin = user.get("role") in ("Super Admin", "Admin")
+    if not (is_owner or is_admin):
+        raise HTTPException(403, "You can only reschedule your own bookings")
+
+    # Determine the target room (allow moving to a different room on the same or different plan)
+    target_plan_id = payload.plan_id or doc.get("plan_id")
+    target_room_id = payload.room_id or doc.get("room_id")
+    if payload.plan_id or payload.room_id:
+        ctx = await _resolve_room(target_plan_id, target_room_id)
+        room = ctx["room"]
+        plan = ctx["plan"]
+    else:
+        room = None
+        plan = None
+
+    # Compute the new time window
+    start_iso = payload.start_at or doc.get("start_at")
+    end_iso = payload.end_at or doc.get("end_at")
+    start = _parse_iso(start_iso, "start_at")
+    end = _parse_iso(end_iso, "end_at")
+    if end <= start:
+        raise HTTPException(400, "end_at must be after start_at")
+
+    # Conflict check (exclude this booking from comparison)
+    s_iso = start.isoformat()
+    e_iso = end.isoformat()
+    conflict = await db.room_bookings.find_one(
+        {
+            "room_id": target_room_id,
+            "cancelled": False,
+            "id": {"$ne": booking_id},
+            "start_at": {"$lt": e_iso},
+            "end_at": {"$gt": s_iso},
+        },
+        {"_id": 0},
+    )
+    if conflict:
+        raise HTTPException(409, {
+            "code": "BOOKING_CONFLICT",
+            "message": "The room is already booked for this time slot",
+            "conflicts": [{
+                "occurrence_start": s_iso,
+                "occurrence_end": e_iso,
+                "with": {
+                    "id": conflict.get("id"),
+                    "title": conflict.get("title"),
+                    "organizer": conflict.get("organizer"),
+                    "start_at": conflict.get("start_at"),
+                    "end_at": conflict.get("end_at"),
+                },
+            }],
+            "room_name": conflict.get("room_name"),
+        })
+
+    update: Dict[str, Any] = {"updated_at": now_iso()}
+    if payload.title is not None:
+        update["title"] = payload.title.strip()
+    update["start_at"] = s_iso
+    update["end_at"] = e_iso
+    if room is not None:
+        update["plan_id"] = target_plan_id
+        update["room_id"] = target_room_id
+        update["plan_name"] = plan.get("name")
+        update["room_name"] = room.get("name")
+        update["room_capacity"] = int(room.get("capacity") or 1)
+    if payload.attendees is not None:
+        update["attendees"] = [a.model_dump() for a in payload.attendees]
+
+    await db.room_bookings.update_one({"id": booking_id}, {"$set": update})
+    fresh = await db.room_bookings.find_one({"id": booking_id}, {"_id": 0})
+    enriched = await _enrich_bookings_with_team([fresh]) if fresh else []
+    return {"ok": True, "booking": enriched[0] if enriched else None}
 
 
 @api_router.delete("/room-bookings/{booking_id}")
