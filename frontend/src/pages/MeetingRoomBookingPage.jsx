@@ -325,7 +325,6 @@ export default function MeetingRoomBookingPage() {
               <CalendarClock className="text-[#ec9324] flex-shrink-0" size={22} />
               <div className="min-w-0">
                 <h1 className="text-lg font-bold text-gray-900 truncate" data-testid="mrb-title">Meeting Room Booking</h1>
-                <p className="text-[11px] text-gray-500">Schedule rooms across published floor calibrations.</p>
               </div>
             </div>
             <Button
@@ -339,72 +338,68 @@ export default function MeetingRoomBookingPage() {
           </div>
 
           {/* Left panel body: a single flex column that fills the remaining height.
-              - Upcoming section grows to fill all available space (flex-1, min-h-0)
-              - Booking form, when open, sits below at its natural height (capped to 55vh
-                with its own scroll so it never starves the upcoming list). */}
+              When the booking form is open, it REPLACES the upcoming list (starts from the
+              same "Upcoming Bookings" position) so meeting cards never push the form to the
+              bottom. After Submit / Cancel the form closes and the upcoming list returns. */}
           <div className="flex-1 overflow-hidden flex flex-col">
-            {/* Upcoming bookings panel — fills the entire remaining height of the left panel */}
-            <section data-testid="mrb-upcoming-section" className="flex-1 min-h-0 flex flex-col px-5 pt-4 pb-2">
-              <div className="flex items-center justify-between mb-2 gap-2 flex-shrink-0">
-                <h2 className="text-[11px] font-bold tracking-wide text-gray-500 uppercase" data-testid="mrb-upcoming-title">Upcoming Bookings</h2>
-                <div className="flex items-center gap-2">
-                  <div className="inline-flex bg-gray-100 rounded p-0.5" data-testid="mrb-range-toggle">
-                    <button
-                      onClick={() => { setRangeMode("today"); setFilterDate(todayIso()); }}
-                      data-testid="mrb-range-today"
-                      className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors ${rangeMode === "today" ? "bg-white text-[#ec9324] shadow-sm" : "text-gray-500 hover:text-gray-800"}`}
-                    >Today</button>
-                    <button
-                      onClick={() => setRangeMode("next7")}
-                      data-testid="mrb-range-7"
-                      className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors ${rangeMode === "next7" ? "bg-white text-[#ec9324] shadow-sm" : "text-gray-500 hover:text-gray-800"}`}
-                    >Next 7 days</button>
-                  </div>
-                  {rangeMode === "today" && (
-                    <input
-                      type="date"
-                      value={filterDate}
-                      onChange={(e) => { setFilterDate(e.target.value); }}
-                      className="text-[11px] px-2 py-1 border border-gray-200 rounded focus:outline-none focus:border-[#ec9324]"
-                      data-testid="mrb-upcoming-date-filter"
-                    />
-                  )}
-                </div>
+            {formOpen ? (
+              /* Form view — occupies the full left-panel body */
+              <div ref={formAnchorRef} className="flex-1 min-h-0 overflow-y-auto px-5 pt-4 pb-4">
+                <BookingForm
+                  rooms={rooms}
+                  selectedRoomId={selectedRoomId}
+                  setSelectedRoomId={setSelectedRoomId}
+                  onSubmit={handleCreate}
+                  onCancel={() => { setFormOpen(false); setConflict(null); setEditing(null); }}
+                  conflict={conflict}
+                  clearConflict={() => setConflict(null)}
+                  titleInputFocusRef={titleInputFocusRef}
+                  bDate={formDate} setBDate={setFormDate}
+                  startTime={formStart} setStartTime={setFormStart}
+                  endTime={formEnd} setEndTime={setFormEnd}
+                  slotConflictRoomIds={slotConflictRoomIds}
+                  editing={editing}
+                />
               </div>
-              <UpcomingBookingsList
-                bookings={myBookings}
-                filterDate={filterDate}
-                rangeMode={rangeMode}
-                loading={loading}
-                onCancel={handleCancel}
-                onReschedule={handleReschedule}
-              />
-            </section>
-
-            {/* Booking form (collapsible). Lives below the upcoming list as a sibling flex
-                child so it doesn't steal the list's space when collapsed. When open it takes
-                its natural height up to ~55vh with internal scroll. */}
-            <div ref={formAnchorRef} className="flex-shrink-0">
-              {formOpen && (
-                <div className="border-t border-gray-100 px-5 py-4 max-h-[55vh] overflow-y-auto">
-                  <BookingForm
-                    rooms={rooms}
-                    selectedRoomId={selectedRoomId}
-                    setSelectedRoomId={setSelectedRoomId}
-                    onSubmit={handleCreate}
-                    onCancel={() => { setFormOpen(false); setConflict(null); setEditing(null); }}
-                    conflict={conflict}
-                    clearConflict={() => setConflict(null)}
-                    titleInputFocusRef={titleInputFocusRef}
-                    bDate={formDate} setBDate={setFormDate}
-                    startTime={formStart} setStartTime={setFormStart}
-                    endTime={formEnd} setEndTime={setFormEnd}
-                    slotConflictRoomIds={slotConflictRoomIds}
-                    editing={editing}
-                  />
+            ) : (
+              /* Upcoming bookings — fills the entire remaining height of the left panel */
+              <section data-testid="mrb-upcoming-section" className="flex-1 min-h-0 flex flex-col px-5 pt-4 pb-2">
+                <div className="flex items-center justify-between mb-2 gap-2 flex-shrink-0">
+                  <h2 className="text-[11px] font-bold tracking-wide text-gray-500 uppercase" data-testid="mrb-upcoming-title">Upcoming Bookings</h2>
+                  <div className="flex items-center gap-2">
+                    <div className="inline-flex bg-gray-100 rounded p-0.5" data-testid="mrb-range-toggle">
+                      <button
+                        onClick={() => { setRangeMode("today"); setFilterDate(todayIso()); }}
+                        data-testid="mrb-range-today"
+                        className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors ${rangeMode === "today" ? "bg-white text-[#ec9324] shadow-sm" : "text-gray-500 hover:text-gray-800"}`}
+                      >Today</button>
+                      <button
+                        onClick={() => setRangeMode("next7")}
+                        data-testid="mrb-range-7"
+                        className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors ${rangeMode === "next7" ? "bg-white text-[#ec9324] shadow-sm" : "text-gray-500 hover:text-gray-800"}`}
+                      >Next 7 days</button>
+                    </div>
+                    {rangeMode === "today" && (
+                      <input
+                        type="date"
+                        value={filterDate}
+                        onChange={(e) => { setFilterDate(e.target.value); }}
+                        className="text-[11px] px-2 py-1 border border-gray-200 rounded focus:outline-none focus:border-[#ec9324]"
+                        data-testid="mrb-upcoming-date-filter"
+                      />
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
+                <UpcomingBookingsList
+                  bookings={myBookings}
+                  filterDate={filterDate}
+                  rangeMode={rangeMode}
+                  loading={loading}
+                  onCancel={handleCancel}
+                  onReschedule={handleReschedule}
+                />
+              </section>
+            )}
           </div>
         </div>
 
