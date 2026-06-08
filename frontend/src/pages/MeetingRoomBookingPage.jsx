@@ -338,10 +338,14 @@ export default function MeetingRoomBookingPage() {
             </Button>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-            {/* Upcoming bookings panel — capped to ~1/3 viewport per spec to give the floor map priority */}
-            <section data-testid="mrb-upcoming-section">
-              <div className="flex items-center justify-between mb-2 gap-2">
+          {/* Left panel body: a single flex column that fills the remaining height.
+              - Upcoming section grows to fill all available space (flex-1, min-h-0)
+              - Booking form, when open, sits below at its natural height (capped to 55vh
+                with its own scroll so it never starves the upcoming list). */}
+          <div className="flex-1 overflow-hidden flex flex-col">
+            {/* Upcoming bookings panel — fills the entire remaining height of the left panel */}
+            <section data-testid="mrb-upcoming-section" className="flex-1 min-h-0 flex flex-col px-5 pt-4 pb-2">
+              <div className="flex items-center justify-between mb-2 gap-2 flex-shrink-0">
                 <h2 className="text-[11px] font-bold tracking-wide text-gray-500 uppercase" data-testid="mrb-upcoming-title">Upcoming Bookings</h2>
                 <div className="flex items-center gap-2">
                   <div className="inline-flex bg-gray-100 rounded p-0.5" data-testid="mrb-range-toggle">
@@ -377,24 +381,28 @@ export default function MeetingRoomBookingPage() {
               />
             </section>
 
-            {/* Booking form (collapsible) */}
-            <div ref={formAnchorRef}>
+            {/* Booking form (collapsible). Lives below the upcoming list as a sibling flex
+                child so it doesn't steal the list's space when collapsed. When open it takes
+                its natural height up to ~55vh with internal scroll. */}
+            <div ref={formAnchorRef} className="flex-shrink-0">
               {formOpen && (
-                <BookingForm
-                  rooms={rooms}
-                  selectedRoomId={selectedRoomId}
-                  setSelectedRoomId={setSelectedRoomId}
-                  onSubmit={handleCreate}
-                  onCancel={() => { setFormOpen(false); setConflict(null); setEditing(null); }}
-                  conflict={conflict}
-                  clearConflict={() => setConflict(null)}
-                  titleInputFocusRef={titleInputFocusRef}
-                  bDate={formDate} setBDate={setFormDate}
-                  startTime={formStart} setStartTime={setFormStart}
-                  endTime={formEnd} setEndTime={setFormEnd}
-                  slotConflictRoomIds={slotConflictRoomIds}
-                  editing={editing}
-                />
+                <div className="border-t border-gray-100 px-5 py-4 max-h-[55vh] overflow-y-auto">
+                  <BookingForm
+                    rooms={rooms}
+                    selectedRoomId={selectedRoomId}
+                    setSelectedRoomId={setSelectedRoomId}
+                    onSubmit={handleCreate}
+                    onCancel={() => { setFormOpen(false); setConflict(null); setEditing(null); }}
+                    conflict={conflict}
+                    clearConflict={() => setConflict(null)}
+                    titleInputFocusRef={titleInputFocusRef}
+                    bDate={formDate} setBDate={setFormDate}
+                    startTime={formStart} setStartTime={setFormStart}
+                    endTime={formEnd} setEndTime={setFormEnd}
+                    slotConflictRoomIds={slotConflictRoomIds}
+                    editing={editing}
+                  />
+                </div>
               )}
             </div>
           </div>
@@ -717,7 +725,7 @@ function UpcomingBookingsList({ bookings, filterDate, rangeMode, loading, onCanc
     return <div className="flex items-center text-gray-500 text-xs"><Loader2 className="animate-spin mr-2" size={14}/> Loading…</div>;
   }
   return (
-    <div className="max-h-[34vh] overflow-y-auto pr-1" data-testid="mrb-upcoming-list-wrapper">
+    <div className="flex-1 min-h-0 overflow-y-auto pr-1" data-testid="mrb-upcoming-list-wrapper">
       {totalForView === 0 ? (
         <div className="flex items-center justify-center text-center bg-gray-50 border border-dashed border-gray-200 rounded-lg py-8 px-4" data-testid="mrb-no-upcoming">
           <div>
