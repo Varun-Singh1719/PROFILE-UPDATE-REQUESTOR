@@ -67,6 +67,71 @@ class BookingCreate(BaseModel):
 WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']  # Monday=0..Sunday=6
 
 
+# ---- Booking sequence number (human-friendly numeric id) ------------------ #
+# Stored alongside the uuid `id`. Starts at 10001 to match the spec example.
+SEQ_KEY = "room_booking_seq"
+SEQ_START = 10000  # next() returns 10001 first
+
+async def _next_seq() -> int:
+    """Atomically increment the counter and return the new value.
+
+    Uses a `counters` collection with key=SEQ_KEY. On first call the doc is created
+    with value SEQ_START + 1 = 10001.
+    """
+    doc = await db.counters.find_one_and_update(
+        {"_id": SEQ_KEY},
+        {"$inc": {"value": 1}},
+        upsert=True,
+        return_document=True,  # ReturnDocument.AFTER equivalent for motor
+    )
+    # When upserting from scratch motor seeds the doc with $inc applied to 0 → value=1.
+    # Detect that case and bump to SEQ_START + 1 so the very first booking is 10001.
+    if doc and doc.get("value", 0) < SEQ_START + 1:
+        doc = await db.counters.find_one_and_update(
+            {"_id": SEQ_KEY},
+            {"$set": {"value": SEQ_START + 1}},
+            return_document=True,
+        )
+    return int(doc["value"])
+
+
+async def _ensure_seq_no_backfill():
+    """One-shot backfill: assign seq_no to any existing booking that lacks one,
+    in chronological (created_at) order so older bookings get smaller numbers.
+    Also seeds the counter to the highest assigned value.
+    """
+    # Already-numbered? skip work
+    has_seq = await db.room_bookings.count_documents({"seq_no": {"$exists": True}})
+    total = await db.room_bookings.count_documents({})
+    if total == 0:
+        return
+    if has_seq == total:
+        # Just make sure the counter is in sync with the max
+        agg = await db.room_bookings.aggregate([{"$group": {"_id": None, "m": {"$max": "$seq_no"}}}]).to_list(1)
+        max_seq = (agg[0]["m"] if agg else None) or SEQ_START
+        await db.counters.update_one(
+            {"_id": SEQ_KEY},
+            {"$max": {"value": int(max_seq)}, "$setOnInsert": {"_id": SEQ_KEY}},
+            upsert=True,
+        )
+        return
+    # Backfill missing values
+    cursor = db.room_bookings.find({"seq_no": {"$exists": False}}, {"_id": 0, "id": 1, "created_at": 1}).sort([("created_at", 1)])
+    docs = await cursor.to_list(100000)
+    # Compute starting point from current max(seq_no) or SEQ_START
+    agg = await db.room_bookings.aggregate([{"$group": {"_id": None, "m": {"$max": "$seq_no"}}}]).to_list(1)
+    current_max = (agg[0]["m"] if agg else None) or SEQ_START
+    for i, d in enumerate(docs, start=1):
+        await db.room_bookings.update_one({"id": d["id"]}, {"$set": {"seq_no": int(current_max) + i}})
+    # sync counter
+    new_max = int(current_max) + len(docs)
+    await db.counters.update_one(
+        {"_id": SEQ_KEY},
+        {"$set": {"value": new_max}},
+        upsert=True,
+    )
+
+
 async def _enrich_bookings_with_team(docs: List[dict]) -> List[dict]:
     """Attach `organizer_team_name` to each booking by looking up the organizer's user id in `db.teams`.
     If the organizer is in multiple teams, the first one found is used. If no team is mapped, the field
@@ -265,8 +330,10 @@ async def create_room_booking(payload: BookingCreate, user=Depends(get_current_u
     docs = []
     for occ_s, occ_e in occurrences:
         bid = str(uuid.uuid4())
+        seq_no = await _next_seq()
         docs.append({
             "id": bid,
+            "seq_no": seq_no,
             "plan_id": payload.plan_id,
             "plan_name": plan.get("name"),
             "room_id": payload.room_id,

@@ -31,6 +31,7 @@ from routers import files as _files  # noqa: F401
 from routers import dashboard as _dashboard  # noqa: F401
 from routers import floor_plans as _floor_plans  # noqa: F401
 from routers import room_bookings as _room_bookings  # noqa: F401
+from routers import bookings as _bookings  # noqa: F401
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -65,7 +66,14 @@ async def startup():
     await db.password_reset_tokens.create_index("token_hash")
     await db.notifications_outbox.create_index([("created_at", -1)])
     await db.email_templates.create_index("kind")
+    await db.room_bookings.create_index("seq_no", unique=True, sparse=True)
+    await db.room_bookings.create_index([("start_at", 1)])
+    await db.room_bookings.create_index([("organizer.id", 1)])
     init_storage()
+
+    # Backfill seq_no on existing bookings (idempotent, one-shot)
+    from routers.room_bookings import _ensure_seq_no_backfill
+    await _ensure_seq_no_backfill()
 
     # Seed default email templates (idempotent — by `kind`)
     for t in DEFAULT_TEMPLATES:
