@@ -10,13 +10,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from "../components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip";
 import notify from "../lib/notify";
 import {
   Search, Plus, Eye, Pencil, Copy, Trash2, Mail, FileText, Bold, Italic, List, ListOrdered, Link as LinkIcon, RotateCcw,
+  ArrowUp, ArrowDown, ChevronsUpDown,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 function fmt(iso) { if (!iso) return "—"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
+
+// "Type" is a UI-only grouping: meeting-flow templates vs. everything else (the core
+// Profix product transactional/security templates). Derived from `kind` so backend stays
+// untouched.
+function templateType(tpl) {
+  if (tpl?.local || (tpl?.kind || "").startsWith("meeting_")) return "Meeting";
+  return "Profix";
+}
 
 const CATEGORIES = ["transactional", "onboarding", "security", "notification", "marketing"];
 
@@ -166,6 +176,39 @@ const EMPTY_FORM = {
   name: "", kind: "", category: "transactional", subject: "", body: "", status: "Active", from_email: "",
 };
 
+// Sortable column header. Click toggles asc/desc; visually indicates current sort col/dir.
+function SortableTh({ label, col, sortBy, sortDir, onSort, testId, align = "left" }) {
+  const active = sortBy === col;
+  const Icon = active ? (sortDir === "asc" ? ArrowUp : ArrowDown) : ChevronsUpDown;
+  return (
+    <th className={`px-4 py-3 text-${align}`}>
+      <button
+        type="button"
+        onClick={() => onSort(col)}
+        data-testid={testId}
+        className={`inline-flex items-center gap-1 uppercase tracking-wider font-bold text-xs ${active ? "text-[#ec9324]" : "text-gray-700 hover:text-gray-900"}`}
+      >
+        {label}
+        <Icon size={12} className={active ? "" : "text-gray-400"}/>
+      </button>
+    </th>
+  );
+}
+
+// Tooltip-wrapped icon action button — shows the action name on hover.
+function IconAction({ label, onClick, testId, variant = "outline", className = "", children }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button size="sm" variant={variant} onClick={onClick} className={`h-8 w-8 p-0 ${className}`} data-testid={testId} aria-label={label} title={label}>
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 export default function EmailTemplatesPage() {
   const { user } = useAuth();
   // Both Admin and Super Admin can edit templates. (Previous code only checked "Admin"
@@ -179,8 +222,20 @@ export default function EmailTemplatesPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState(null);
+  // Sortable column state — default sort is by template Name (asc).
+  const [sortBy, setSortBy] = useState("name");
+  const [sortDir, setSortDir] = useState("asc");
 
-  const load = async () => {
+  const toggleSort = (col) => {
+    if (sortBy === col) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(col);
+      setSortDir("asc");
+    }
+  };
+
+  const load = React.useCallback(async () => {
     const r = await api.get("/email-templates", {
       params: {
         q: q || undefined,
@@ -188,9 +243,9 @@ export default function EmailTemplatesPage() {
         status: status === "all" ? undefined : status,
       },
     });
-    // Inject the 3 frontend-only meeting templates (with any localStorage overrides) at
-    // the top of the list. Filter them by the same search/category/status criteria so the
-    // page-level filter UI behaves consistently.
+    // Inject the 3 frontend-only meeting templates (with any localStorage overrides) and
+    // merge them with backend rows. Default view sorts by Name so meeting + profix rows
+    // are interleaved alphabetically rather than always pinned to the top.
     const locals = mergeLocalTemplates().filter((t) => {
       if (status !== "all" && t.status !== status) return false;
       if (category !== "all" && t.category !== category) return false;
@@ -202,10 +257,36 @@ export default function EmailTemplatesPage() {
       return true;
     });
     setItems([...locals, ...(r.data || [])]);
-  };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [q, category, status]);
+  }, [q, category, status]);
+  // eslint-disable-next-line
+  useEffect(() => { load(); }, [load]);
 
   const filteredKinds = useMemo(() => Array.from(new Set(items.map((i) => i.kind))), [items]);
+
+  // Apply client-side sort on top of the merged list so headers can drive ordering.
+  const sortedItems = useMemo(() => {
+    const arr = [...items];
+    const dir = sortDir === "asc" ? 1 : -1;
+    const get = (t) => {
+      switch (sortBy) {
+        case "name": return (t.name || "").toLowerCase();
+        case "type": return templateType(t).toLowerCase();
+        case "kind": return (t.kind || "").toLowerCase();
+        case "category": return (t.category || "").toLowerCase();
+        case "from": return (t.from_email || "").toLowerCase();
+        case "status": return (t.status || "").toLowerCase();
+        case "updated": return t.updated_at ? new Date(t.updated_at).getTime() : 0;
+        default: return "";
+      }
+    };
+    arr.sort((a, b) => {
+      const av = get(a), bv = get(b);
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    });
+    return arr;
+  }, [items, sortBy, sortDir]);
 
   const openCreate = () => {
     setEditing(null);
@@ -308,6 +389,7 @@ export default function EmailTemplatesPage() {
 
   return (
     <Layout>
+      <TooltipProvider delayDuration={150}>
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
@@ -352,24 +434,31 @@ export default function EmailTemplatesPage() {
           <table className="w-full text-sm">
             <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200">
               <tr>
-                <th className="px-4 py-3 text-left">Template Name</th>
-                <th className="px-4 py-3 text-left">Kind</th>
-                <th className="px-4 py-3 text-left">Category</th>
-                <th className="px-4 py-3 text-left">From Email</th>
-                <th className="px-4 py-3 text-left">Status</th>
-                <th className="px-4 py-3 text-left">Last Updated</th>
+                <SortableTh label="Template Name" col="name" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} testId="sort-name"/>
+                <SortableTh label="Type" col="type" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} testId="sort-type"/>
+                <SortableTh label="Kind" col="kind" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} testId="sort-kind"/>
+                <SortableTh label="Category" col="category" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} testId="sort-category"/>
+                <SortableTh label="From Email" col="from" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} testId="sort-from"/>
+                <SortableTh label="Status" col="status" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} testId="sort-status"/>
+                <SortableTh label="Last Updated" col="updated" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} testId="sort-updated"/>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {items.map((t) => (
+              {sortedItems.map((t) => (
                 <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50/80" data-testid={`template-row-${t.kind}`}>
                   <td className="px-4 py-3 font-medium text-gray-900">
                     <button type="button" onClick={() => setPreview(t)} className="text-left hover:text-[#ec9324] hover:underline focus:outline-none" data-testid={`preview-${t.kind}`}>
                       {t.name}
                     </button>
-                    {t.local && <span className="ml-2 inline-flex text-[10px] bg-orange-50 border border-orange-200 text-[#ec9324] rounded px-1.5 py-0.5 font-bold tracking-wider">MEETING</span>}
                     {t.system && !t.local && <span className="ml-2 inline-flex text-[10px] bg-gray-100 text-gray-600 rounded px-1.5 py-0.5">SYSTEM</span>}
+                  </td>
+                  <td className="px-4 py-3" data-testid={`type-${t.kind}`}>
+                    {templateType(t) === "Meeting" ? (
+                      <span className="inline-flex items-center text-[11px] font-bold tracking-wider bg-orange-50 border border-orange-200 text-[#ec9324] rounded px-2 py-0.5">Meeting</span>
+                    ) : (
+                      <span className="inline-flex items-center text-[11px] font-bold tracking-wider bg-slate-100 border border-slate-200 text-slate-700 rounded px-2 py-0.5">Profix</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-gray-600 font-mono text-xs">{t.kind}</td>
                   <td className="px-4 py-3">
@@ -398,21 +487,26 @@ export default function EmailTemplatesPage() {
                   <td className="px-4 py-3 text-gray-500 text-xs">{fmt(t.updated_at)}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="inline-flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => setPreview(t)} className="h-8 w-8 p-0" data-testid={`view-${t.kind}`} aria-label="Preview">
+                      <IconAction label="Preview" onClick={() => setPreview(t)} testId={`view-${t.kind}`}>
                         <Eye size={14}/>
-                      </Button>
+                      </IconAction>
                       {isAdmin && (
                         <>
-                          <Button size="sm" variant="outline" onClick={() => openEdit(t)} className="h-8 w-8 p-0" data-testid={`edit-${t.kind}`} aria-label="Edit">
+                          <IconAction label="Edit" onClick={() => openEdit(t)} testId={`edit-${t.kind}`}>
                             <Pencil size={14}/>
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => duplicate(t)} className="h-8 w-8 p-0" data-testid={`duplicate-${t.kind}`} aria-label="Duplicate">
+                          </IconAction>
+                          <IconAction label="Duplicate" onClick={() => duplicate(t)} testId={`duplicate-${t.kind}`}>
                             <Copy size={14}/>
-                          </Button>
+                          </IconAction>
                           {(!t.system || t.local) && (
-                            <Button size="sm" variant="outline" onClick={() => remove(t)} className="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-600 hover:border-red-300" data-testid={`delete-${t.kind}`} aria-label={t.local ? "Reset to default" : "Delete"} title={t.local ? "Reset to default" : "Delete"}>
+                            <IconAction
+                              label={t.local ? "Reset to default" : "Delete"}
+                              onClick={() => remove(t)}
+                              testId={`delete-${t.kind}`}
+                              className="hover:bg-red-50 hover:text-red-600 hover:border-red-300"
+                            >
                               {t.local ? <RotateCcw size={14}/> : <Trash2 size={14}/>}
-                            </Button>
+                            </IconAction>
                           )}
                         </>
                       )}
@@ -420,8 +514,8 @@ export default function EmailTemplatesPage() {
                   </td>
                 </tr>
               ))}
-              {items.length === 0 && (
-                <tr><td colSpan={7} className="text-center py-10 text-gray-400">No templates</td></tr>
+              {sortedItems.length === 0 && (
+                <tr><td colSpan={8} className="text-center py-10 text-gray-400">No templates</td></tr>
               )}
             </tbody>
           </table>
@@ -506,6 +600,7 @@ export default function EmailTemplatesPage() {
           </div>
         </DialogContent>
       </Dialog>
+      </TooltipProvider>
     </Layout>
   );
 }

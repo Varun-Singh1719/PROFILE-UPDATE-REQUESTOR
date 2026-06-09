@@ -11,6 +11,16 @@ Internal admin platform for Infollion. Combines:
 - **Admin** — Day-to-day operational access (no employee/permission edits).
 
 ## Latest delivered feature (Feb 2026)
+### Email Templates page — Type column, sortable headers, hover-name action buttons (Feb 2026)
+- File: `/app/frontend/src/pages/EmailTemplatesPage.jsx`
+- 3 frontend-only meeting templates injected with `localStorage` persistence (backend wiring TBD):
+  - `meeting_room_booked`, `meeting_rescheduled`, `meeting_cancelled` — From Email shown as **TBD** pill.
+- Both **Admin** and **Super Admin** roles can edit (previously Super Admin was excluded).
+- **Type** column: orange "Meeting" pill for the 3 meeting templates, slate "Profix" pill for the rest (derived from `kind` prefix; no backend schema change).
+- **Sortable column headers** (Name, Type, Kind, Category, From Email, Status, Last Updated) — clickable with up/down/chevron icons. **Default sort: Name asc**, so meeting + profix rows are interleaved alphabetically.
+- **Hover tooltips on action buttons** (Preview, Edit, Duplicate, Delete / Reset to default) via shadcn `Tooltip` wrapped in `IconAction` helper. Tooltips appear after 150ms hover.
+- Meeting templates use a **Reset to default** action (RotateCcw icon) instead of Delete; system Profix templates remain non-deletable.
+
 ### Bookings Module — centralized read-only repository
 - Route: `/workspace-manager/bookings`
 - Backend: `/app/backend/routers/bookings.py`
