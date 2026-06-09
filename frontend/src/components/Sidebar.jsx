@@ -10,37 +10,6 @@ import {
 } from "lucide-react";
 
 // --------------------------------------------------------------------------
-// Custom image-based icons (provided by product team — used for 4 sidebar items)
-// They accept a `size` prop just like lucide-react icons so they can be drop-in
-// replacements inside NAV_CONFIG.
-// --------------------------------------------------------------------------
-const IMG_ICON_SRC = {
-  floor:       "https://customer-assets.emergentagent.com/job_room-scheduler-ui/artifacts/bdi8maz1_Floor.png",
-  calibration: "https://customer-assets.emergentagent.com/job_room-scheduler-ui/artifacts/i5sjm1ii_Callibration.jpg",
-  employee:    "https://customer-assets.emergentagent.com/job_room-scheduler-ui/artifacts/y88pn44s_Employee.png",
-  team:        "https://customer-assets.emergentagent.com/job_room-scheduler-ui/artifacts/4x30d38o_Team.jpg",
-};
-
-const makeImgIcon = (src, alt) => function ImgIcon({ size = 18 }) {
-  return (
-    <img
-      src={src}
-      alt={alt}
-      width={size}
-      height={size}
-      draggable={false}
-      className="inline-block object-contain mix-blend-multiply select-none"
-      style={{ width: size, height: size }}
-    />
-  );
-};
-
-const FloorIcon       = makeImgIcon(IMG_ICON_SRC.floor,       "Floor Layout");
-const CalibrationIcon = makeImgIcon(IMG_ICON_SRC.calibration, "Floor Calibration");
-const EmployeeIcon    = makeImgIcon(IMG_ICON_SRC.employee,    "Employee");
-const TeamIcon        = makeImgIcon(IMG_ICON_SRC.team,        "Team");
-
-// --------------------------------------------------------------------------
 // Navigation config (single source of truth)
 // --------------------------------------------------------------------------
 const NAV_CONFIG = [
@@ -55,8 +24,8 @@ const NAV_CONFIG = [
   {
     kind: "group", label: "Workspace Manager", icon: Armchair,
     children: [
-      { to: "/workspace-manager/floor-layout", label: "Floor Layout",     icon: FloorIcon, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
-      { to: "/workspace-manager/floor-plans",  label: "Floor Calibration", icon: CalibrationIcon,   perm: { module: "desk_booking", feature: "seat_request", action: "edit" } },
+      { to: "/workspace-manager/floor-layout", label: "Floor Layout",     icon: LayoutGrid, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
+      { to: "/workspace-manager/floor-plans",  label: "Floor Calibration", icon: Settings,   perm: { module: "desk_booking", feature: "seat_request", action: "edit" } },
       { to: "/workspace-manager/bookings",     label: "Bookings",          icon: ClipboardList, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
       { to: "/workspace-manager/meeting-room-booking", label: "Meeting Room Booking", icon: CalendarClock, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
     ],
@@ -64,11 +33,11 @@ const NAV_CONFIG = [
   {
     kind: "group", label: "Manage", icon: Settings, superAdminOnly: true,
     children: [
-      { to: "/admin/teams",           label: "Teams",           icon: TeamIcon },
+      { to: "/admin/teams",           label: "Teams",           icon: UsersRound },
       { to: "/admin/permissions",     label: "Permissions",     icon: Shield },
       { to: "/admin/email-templates", label: "Email Templates", icon: MailPlus },
       { to: "/admin/notifications",   label: "Notifications",   icon: Send },
-      { to: "/admin/contacts",        label: "Employee List",   icon: EmployeeIcon },
+      { to: "/admin/contacts",        label: "Employee List",   icon: Users },
     ],
   },
 ];
