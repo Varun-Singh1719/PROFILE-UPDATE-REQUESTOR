@@ -3,7 +3,7 @@ import os
 import pytest
 import requests
 
-BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://room-scheduler-ui.preview.emergentagent.com").rstrip("/")
+BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://floor-layout-icons.preview.emergentagent.com").rstrip("/")
 API = f"{BASE}/api"
 
 CREDS = {

@@ -4,9 +4,10 @@ import { useAuth } from "../context/AuthContext";
 import { usePermissions } from "../hooks/usePermissions";
 import {
   LayoutDashboard, Ticket, Users, Inbox, LogOut, Mail,
-  ChevronDown, ChevronRight, Briefcase, Settings, Shield, UsersRound,
-  Armchair, Send, MailPlus, LayoutGrid, PanelLeftClose, PanelLeftOpen,
+  ChevronDown, ChevronRight, Briefcase, Settings, Shield,
+  Armchair, Send, MailPlus, PanelLeftClose, PanelLeftOpen,
   Search, Menu, X, CalendarClock, ClipboardList,
+  Map, Crosshair, BookUser,
 } from "lucide-react";
 
 // --------------------------------------------------------------------------
@@ -24,8 +25,8 @@ const NAV_CONFIG = [
   {
     kind: "group", label: "Workspace Manager", icon: Armchair,
     children: [
-      { to: "/workspace-manager/floor-layout", label: "Floor Layout",     icon: LayoutGrid, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
-      { to: "/workspace-manager/floor-plans",  label: "Floor Calibration", icon: Settings,   perm: { module: "desk_booking", feature: "seat_request", action: "edit" } },
+      { to: "/workspace-manager/floor-layout", label: "Floor Layout",     icon: Map, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
+      { to: "/workspace-manager/floor-plans",  label: "Floor Calibration", icon: Crosshair,   perm: { module: "desk_booking", feature: "seat_request", action: "edit" } },
       { to: "/workspace-manager/bookings",     label: "Bookings",          icon: ClipboardList, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
       { to: "/workspace-manager/meeting-room-booking", label: "Meeting Room Booking", icon: CalendarClock, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
     ],
@@ -33,11 +34,11 @@ const NAV_CONFIG = [
   {
     kind: "group", label: "Manage", icon: Settings, superAdminOnly: true,
     children: [
-      { to: "/admin/teams",           label: "Teams",           icon: UsersRound },
+      { to: "/admin/teams",           label: "Teams",           icon: Users },
       { to: "/admin/permissions",     label: "Permissions",     icon: Shield },
       { to: "/admin/email-templates", label: "Email Templates", icon: MailPlus },
       { to: "/admin/notifications",   label: "Notifications",   icon: Send },
-      { to: "/admin/contacts",        label: "Employee List",   icon: Users },
+      { to: "/admin/contacts",        label: "Employee List",   icon: BookUser },
     ],
   },
 ];
