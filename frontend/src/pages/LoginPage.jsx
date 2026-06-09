@@ -55,7 +55,7 @@ export default function LoginPage() {
             />
           </div>
           <h1 className="mt-10 text-3xl xl:text-5xl font-bold leading-tight text-white text-center max-w-md drop-shadow-md">
-            Infollion Expert Profile Update
+            Infollion Utilities
           </h1>
         </div>
       </div>
@@ -68,7 +68,7 @@ export default function LoginPage() {
             />
             <div className="font-bold text-gray-900 text-lg">Infollion</div>
           </div>
-          <div className="text-sm uppercase tracking-widest text-[#ec9324] font-semibold mb-3 text-center">Infollion Expert Profile Update</div>
+          <div className="text-sm uppercase tracking-widest text-[#ec9324] font-semibold mb-3 text-center">Infollion Utilities</div>
           <h2 className="text-3xl font-bold text-gray-900 tracking-tight text-center" data-testid="login-title">Sign in</h2>
           <p className="mt-2 text-gray-500 text-center">Use your registered email to access your dashboard.</p>
 
