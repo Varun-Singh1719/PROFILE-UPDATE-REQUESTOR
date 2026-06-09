@@ -4,12 +4,15 @@ import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import {
   CalendarClock, Plus, Trash2, MapPin, Clock, Loader2, Users, Building2,
   X, Search, UserPlus, ChevronDown, ChevronUp, AlertCircle, Repeat, Pencil,
+  Calendar as CalendarIcon,
 } from "lucide-react";
 import Layout from "../components/Layout";
 import api from "../lib/api";
 import { resolvePdfUrl } from "../lib/pdfUrl";
 import { Button } from "../components/ui/button";
 import { toast } from "sonner";
+import { useAuth } from "../context/AuthContext";
+import MRBCalendarView from "../components/MRBCalendarView";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
@@ -36,6 +39,9 @@ const DOW = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
 // ============================================================ MAIN
 export default function MeetingRoomBookingPage() {
+  const { user } = useAuth();
+  // 'default' = existing split-panel view, 'calendar' = Check Availability schedule view.
+  const [viewMode, setViewMode] = useState("default");
   const [rooms, setRooms] = useState([]);
   const [myBookings, setMyBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -311,12 +317,44 @@ export default function MeetingRoomBookingPage() {
     }
   };
 
+  // Triggered from the calendar's empty-slot click. Prefills date / room / time, then flips
+  // back to default view and opens the booking form so the user can finish the details.
+  const handleCalendarPickSlot = useCallback(({ roomId, date, start, end }) => {
+    setEditing(null);
+    setConflict(null);
+    setSelectedRoomId(roomId);
+    setFormDate(date);
+    setFormStart(start);
+    setFormEnd(end);
+    setViewMode("default");
+    setFormOpen(true);
+    requestAnimationFrame(() => {
+      formAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setTimeout(() => titleInputFocusRef.current?.focus?.(), 200);
+    });
+  }, []);
+
+  // Reschedule coming back from calendar's preview/details card — same flow as the row icon.
+  const handleCalendarReschedule = useCallback((b) => {
+    setViewMode("default");
+    handleReschedule(b);
+  }, [handleReschedule]);
+
   return (
     <Layout
       fullBleed
       breadcrumbs={[{ label: "Workspace Manager" }, { label: "Meeting Room Booking" }]}
       contentClassName="h-screen flex flex-col"
     >
+      {viewMode === "calendar" ? (
+        <MRBCalendarView
+          user={user}
+          onClose={() => setViewMode("default")}
+          onPickSlot={handleCalendarPickSlot}
+          onReschedule={handleCalendarReschedule}
+          onCancelBooking={() => loadBookingsForDate(filterDate, rangeMode)}
+        />
+      ) : (
       <div className="flex-1 flex overflow-hidden">
         {/* LEFT panel — 32% of viewport (reduced 20% from previous 40%) */}
         <div className="w-[32%] min-w-[340px] border-r border-gray-200 bg-white flex flex-col overflow-hidden">
@@ -415,6 +453,15 @@ export default function MeetingRoomBookingPage() {
 
         {/* RIGHT 60% — Floor Map */}
         <div className="flex-1 relative bg-gray-100">
+          {/* Top-right floating action: opens the Google-Calendar-style schedule view. */}
+          <Button
+            onClick={() => setViewMode("calendar")}
+            data-testid="mrb-check-availability-btn"
+            className="absolute top-3 right-4 z-20 bg-[#ec9324] hover:bg-[#d4811f] text-white shadow"
+          >
+            <CalendarIcon size={16} className="mr-1.5" />
+            Check Availability
+          </Button>
           <FloorMapMeetingRooms
             focusPlan={focusPlan}
             rooms={roomsOnFocusPlan}
@@ -426,6 +473,7 @@ export default function MeetingRoomBookingPage() {
           />
         </div>
       </div>
+      )}
     </Layout>
   );
 }
