@@ -1,59 +1,51 @@
-# PRD — Workspace Manager
+# Infollion Utilities — PRD
 
-## Original Problem Statement
-- Rename "Desk App booking" to "Workspace Manager" in the sidebar and add a "Floor layout" sub-heading.
-- Build an Interactive Office Floor Map component using provided PDF floor plans.
-- Build an Interactive Seat Calibration Tool (Figma/AutoCAD-like) for admins to manually map seats onto the PDF floor plan with extreme precision (pan, zoom, rotation, draft states, auto-align, bulk generation, etc.).
-- Link calibrated seats to the booking system (single source of truth).
+## Overview
+Internal admin platform for Infollion. Combines:
+- **ProfiX** — Ticketing / requests workflow.
+- **Workspace Manager** — Floor calibration, desk/seat booking, meeting room booking, and a **centralized Bookings module** that aggregates every booking in one searchable / filterable / exportable table.
+- **Manage** — Teams, Permissions, Email Templates, Notifications, Employee list.
 
-## Tech Stack
-- Frontend: React + react-pdf + react-zoom-pan-pinch + Tailwind/shadcn
-- Backend: FastAPI + MongoDB (Motor)
-- Auth: JWT in localStorage (no withCredentials, wildcard CORS for iframe previews)
+## Core Personas
+- **Super Admin** — Full access incl. employee/team/permission management.
+- **Admin** — Day-to-day operational access (no employee/permission edits).
 
-## Completed (CHANGELOG)
-- 2026-02 Sidebar rename to "Workspace Manager" + Floor layout sub-heading
-- 2026-02 Base FloorMap + Seat components
-- 2026-02 Backend CORS fix for emergent iframe previews
-- 2026-02 Initial Seat Calibration Page with PDF background
-- 2026-02 16-point UX enhancements: draft size/rotation, undo/redo, alignment H/V, auto-generate, multi-select, keyboard shortcuts, accuracy mode, preview mode
-- 2026-02 **Fixed P0 seat-placement bug**: onMouseDown/onMouseUp + 4px drag threshold prevents pan gestures from swallowing clicks; doubleClick zoom disabled.
-- 2026-02 **Fixed bay-numbering bug (HIGH)**: removed `nextSeatNumber` state — now derived from current bay's existing seats. Bay switching resets the counter correctly (A1,A2,A3 → switch to B → next is B1).
-- 2026-02 **Fixed Auto Generate lexicographic sort (MEDIUM)**: `getSeatsInBay` now sorts numerically so bays with ≥10 seats use the correct first/last anchors.
-- 2026-02 **Phase 2: Persistence + Single Source of Truth**
-  - New backend module `routers/floor_plans.py` with `GET /api/floor-plans/active` (auth) and `PUT /api/floor-plans/active` (admin-only). Audit-logged.
-  - Calibration page: "Save to Server" button (✓ animated success state). Loads existing plan on mount so admins can iteratively edit.
-  - Floor Layout page now reads seats + pdfUrl from backend, with a "Live · N seats" badge. Falls back to legacy `seatMaster.js` when no plan saved.
+## Latest delivered feature (Feb 2026)
+### Bookings Module — centralized read-only repository
+- Route: `/workspace-manager/bookings`
+- Backend: `/app/backend/routers/bookings.py`
+  - `GET /api/bookings` — paginated/filterable/sortable list (filters: date range, status, team, employee, created-by, search; sorts: seq_no/date/title/room_name/organizer/status/created_at).
+  - `GET /api/bookings/filters` — distinct teams / employees / creators for dropdowns.
+  - `GET /api/bookings/{id}` — single booking detail (by uuid OR seq_no).
+  - `POST /api/bookings/bulk-cancel` — admin-only bulk cancellation.
+  - `GET /api/bookings/export` — CSV / XLSX export (respects same filters; supports `ids=` for selection-only export).
+- Frontend: `/app/frontend/src/pages/BookingsPage.jsx`
+  - Filter bar, sortable shadcn-style data table, row checkboxes, bulk action bar (Export Selected + Bulk Cancel), per-row View/Edit/Cancel, side details drawer with sections (Booking Info, Resource, Meeting, Attendees), Confirm modal for bulk cancel.
+- Auto-incrementing `seq_no` integer ID added to `room_bookings` collection (backfill runs on backend startup). User-facing IDs displayed as `#<seq_no>`.
+- Workstation type is **deliberately out of scope** — only Meeting Room bookings aggregated today.
+- Added `openpyxl` to backend requirements for Excel export.
 
-## Backlog
-### P1
-- Desk Booking module (currently `DeskBookingPage` is "Coming Soon" placeholder). Click-to-book flow + bookings collection.
-- Display real `occupiedSeats` from bookings on Floor Layout (currently a demo array).
-- Replace alert() in Calibration page with non-blocking toast (sonner).
-- Auto-fit PDF to canvas viewport on first load (call `resetTransform`/`centerView` in `onPageLoadSuccess`).
+### Earlier features (Feb 2026)
+- Meeting Room booking page: form slide-in animation, edit/reschedule tooltip, responsive layout, +20% reduced upcoming-panel width, horizontal datetime picker.
+- Meeting room reschedule backend: `PATCH /api/room-bookings/{id}`, team-name enrichment, fortnightly recurrence.
+- Login page rename: "Infollion Expert Profile Update" → "Infollion Utilities".
+- Test data seed: `/app/scripts/seed_mrb_test_data.py` (test users, teams, rooms).
 
-### P2
-- Refactor `SeatCalibrationPage.jsx` (now ~880 lines) into Toolbar / Canvas / PropertiesPanel sub-components.
-- Bay management UI (rename, reorder, delete entire bay).
-- Snap-to-grid + dimensional measurements.
-- Versioning: keep history of saved floor plans (currently single `active` doc is overwritten).
+## Architecture
+- `/app/backend/` — FastAPI + motor MongoDB. Routers under `/app/backend/routers/`. Aggregator (`bookings.py`) reuses `_enrich_bookings_with_team` from `room_bookings.py`.
+- `/app/frontend/` — React + TailwindCSS + Shadcn UI. Pages under `/app/frontend/src/pages/`.
 
-## API Surface (Floor Plans)
-| Method | Path                          | Auth         | Body / Returns                                                 |
-|--------|-------------------------------|--------------|-----------------------------------------------------------------|
-| GET    | /api/floor-plans/active       | any user     | `{ id, name, pdfUrl, seats[], updated_at, updated_by }` or null |
-| PUT    | /api/floor-plans/active       | Super Admin / Admin | `{ name, pdfUrl, seats[] }` → same shape as GET          |
+## Key DB collections
+- `room_bookings` — `{id, seq_no, title, start_at, end_at, organizer, room_id/name, plan_id/name, attendees, recurring, cancelled, created_at, ...}`
+- `teams` — `{id, name, member_ids}`
+- `contacts` — `{id, name, email, emp_id, ...}`
 
-## Critical Files
-- `/app/frontend/src/pages/SeatCalibrationPage.jsx` — main calibration tool
-- `/app/frontend/src/pages/FloorLayoutPage.jsx` — backend-driven floor map view
-- `/app/frontend/src/components/FloorMap.jsx`, `Seat.jsx`, `Sidebar.jsx`
-- `/app/backend/routers/floor_plans.py` — REST endpoints
-- `/app/backend/server.py` — custom CORS for iframe previews + router registration
+## Test credentials
+See `/app/memory/test_credentials.md` (admin@ticketing.com / Admin@123).
 
-## Test Credentials
-See `/app/memory/test_credentials.md`. Super admin: `admin@ticketing.com` / `Admin@123`
-
-## Known Constraints
-- DO NOT add `withCredentials: true` back to Axios — breaks wildcard CORS preflight in iframes.
-- Single active floor plan (no versioning yet) — `PUT` overwrites.
+## Roadmap (backlog)
+- **P1**: Integrate Workstation bookings into the Bookings Module once that backend is built (filter chip, type column already supports it; backend `__none__` shortcut to be replaced with real query).
+- **P1**: Reschedule deep-link → MRB page reads `?reschedule=<id>` query param and opens the booking form pre-populated (currently routes but doesn't auto-load).
+- **P2**: Saved filter presets per user.
+- **P2**: Email notification on bulk-cancel.
+- **P2**: PDF export option.
