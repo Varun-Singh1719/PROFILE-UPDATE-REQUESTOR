@@ -19,14 +19,17 @@ const fmtTime = (iso) => {
 const fmtLongDate = (d) =>
   d.toLocaleDateString(undefined, { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
 
-// Day grid configuration: 30-min slots from 07:00 to 21:00
-const START_HOUR = 7;
-const END_HOUR = 21;
+// Day grid configuration: 30-min slots across a full 24-hour day so the grid is
+// always taller than the viewport (guarantees the time frame scrolls).
+const START_HOUR = 0;
+const END_HOUR = 24;
 const SLOT_MINUTES = 30;
 const SLOTS_PER_HOUR = 60 / SLOT_MINUTES;
-const SLOT_PX = 28;                  // visual height of one 30-min row
+const SLOT_PX = 30;                  // visual height of one 30-min row
+const HEADER_PX = 48;                // sticky room-header row height
+const GUTTER_PX = 64;                // sticky time-gutter column width
+const DEFAULT_SCROLL_HOUR = 7;       // initial scroll lands at ~7AM (business hours)
 const TOTAL_SLOTS = (END_HOUR - START_HOUR) * SLOTS_PER_HOUR;
-const TIME_LABELS = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
 
 // Convert an ISO datetime to a fractional row index (0 == START_HOUR:00).
 // Values < 0 or > TOTAL_SLOTS are clamped — bookings that extend beyond the visible
@@ -329,6 +332,26 @@ function DayGrid({ rooms, bookings, date, onPickSlot, onPickEvent, hoverSlot, se
     return set;
   }, [byRoom]);
 
+  // Scroll container ref — on first mount we jump to DEFAULT_SCROLL_HOUR so the user
+  // sees business hours without needing to scroll, but the full 24h grid is reachable.
+  // Declared BEFORE the empty-state early return so hook order stays stable.
+  const scrollRef = useRef(null);
+  const didInitialScroll = useRef(false);
+
+  // Now indicator (orange line) when viewing today
+  const now = new Date();
+  const showNow = sameDay(now, date);
+  const nowOffset = showNow ? Math.max(0, Math.min(TOTAL_SLOTS, (now.getHours() * 60 + now.getMinutes() - START_HOUR * 60) / SLOT_MINUTES)) : null;
+
+  useEffect(() => {
+    if (didInitialScroll.current) return;
+    if (!scrollRef.current) return;
+    if (roomCount === 0) return;
+    const targetHour = showNow ? Math.max(START_HOUR, Math.min(END_HOUR - 1, now.getHours() - 1)) : DEFAULT_SCROLL_HOUR;
+    scrollRef.current.scrollTop = (targetHour - START_HOUR) * SLOTS_PER_HOUR * SLOT_PX;
+    didInitialScroll.current = true;
+  });
+
   if (roomCount === 0) {
     return (
       <div className="flex-1 flex items-center justify-center p-10 text-center text-gray-500">
@@ -341,23 +364,27 @@ function DayGrid({ rooms, bookings, date, onPickSlot, onPickEvent, hoverSlot, se
     );
   }
 
-  // Now indicator (orange line) when viewing today
-  const now = new Date();
-  const showNow = sameDay(now, date);
-  const nowOffset = showNow ? Math.max(0, Math.min(TOTAL_SLOTS, (now.getHours() * 60 + now.getMinutes() - START_HOUR * 60) / SLOT_MINUTES)) : null;
-
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto bg-white" data-testid="mrb-day-grid">
+    <div
+      ref={scrollRef}
+      className="flex-1 min-h-0 overflow-auto bg-white relative"
+      data-testid="mrb-day-grid"
+    >
       <div
-        className="inline-grid min-w-full"
-        style={{ gridTemplateColumns: `64px repeat(${roomCount}, minmax(180px, 1fr))` }}
+        className="relative inline-grid min-w-full"
+        style={{ gridTemplateColumns: `${GUTTER_PX}px repeat(${roomCount}, minmax(180px, 1fr))` }}
       >
-        {/* Sticky header row: room labels */}
-        <div className="sticky top-0 z-20 bg-white border-b border-gray-200 h-12"></div>
+        {/* Top-left corner: sticky on BOTH axes so it never moves while scrolling. */}
+        <div
+          className="sticky top-0 left-0 z-30 bg-white border-b border-r border-gray-200"
+          style={{ height: HEADER_PX }}
+        />
+        {/* Sticky room headers — pin to top of the scroll container during vertical scroll. */}
         {rooms.map((r) => (
           <div
             key={`h-${r.room_id}`}
-            className="sticky top-0 z-20 bg-white border-b border-l border-gray-200 px-3 h-12 flex items-center"
+            className="sticky top-0 z-20 bg-white border-b border-l border-gray-200 px-3 flex items-center"
+            style={{ height: HEADER_PX }}
             data-testid={`mrb-cal-room-header-${r.room_id}`}
           >
             <div className="min-w-0">
@@ -374,9 +401,9 @@ function DayGrid({ rooms, bookings, date, onPickSlot, onPickEvent, hoverSlot, se
           const onTheHour = minute === 0;
           return (
             <React.Fragment key={`row-${slotIdx}`}>
-              {/* Time gutter cell — label only on the hour. */}
+              {/* Time gutter cell — sticky-left so labels stay visible during horizontal scroll. */}
               <div
-                className={`relative border-r border-gray-200 text-right pr-2 text-[10px] font-semibold text-gray-400 ${onTheHour ? "border-t border-gray-200" : ""}`}
+                className={`sticky left-0 z-10 bg-white border-r border-gray-200 text-right pr-2 text-[10px] font-semibold text-gray-400 ${onTheHour ? "border-t border-gray-200" : ""}`}
                 style={{ height: SLOT_PX }}
               >
                 {onTheHour && (
@@ -423,47 +450,44 @@ function DayGrid({ rooms, bookings, date, onPickSlot, onPickEvent, hoverSlot, se
             </React.Fragment>
           );
         })}
-      </div>
 
-      {/* Absolute-positioned event cards layered on top of the grid */}
-      <EventOverlay
-        rooms={rooms}
-        bookings={bookings}
-        date={date}
-        showNow={showNow}
-        nowOffset={nowOffset}
-        onPickEvent={onPickEvent}
-      />
+        {/* Event cards & now-indicator are layered INSIDE the inline-grid wrapper so
+            they translate together with the grid when the user scrolls in either axis. */}
+        <EventOverlay
+          rooms={rooms}
+          bookings={bookings}
+          date={date}
+          showNow={showNow}
+          nowOffset={nowOffset}
+          onPickEvent={onPickEvent}
+        />
+      </div>
     </div>
   );
 }
 
 // ============================================================ Event overlay (absolute-positioned)
-// Renders booking cards on top of the grid so they can span multiple slot rows accurately.
+// Renders booking cards and the "now" line INSIDE the inline-grid wrapper so they
+// translate together with the grid during both vertical and horizontal scrolling.
 function EventOverlay({ rooms, bookings, date, showNow, nowOffset, onPickEvent }) {
   const overlayRef = useRef(null);
-  // Compute pixel offsets relative to the grid: header is 48px tall.
-  const HEADER_H = 48;
-  const COL_GUTTER_W = 64;
 
-  // Each booking renders inside its room column. To absolutely position, we need to
-  // know the column's offsetLeft and width. We attach an observer to the grid wrapper
-  // (the parent of overlayRef) to read those whenever room count or container size changes.
+  // Read each room column's left/width relative to the inline-grid wrapper. Because
+  // the overlay is itself inside the wrapper, no scroll math is required — offsets
+  // are intrinsic to the wrapper's layout.
   const [colMetrics, setColMetrics] = useState(null);
   useEffect(() => {
     if (!overlayRef.current) return;
     const updateMetrics = () => {
-      const root = overlayRef.current?.parentElement;
-      if (!root) return;
-      const headers = root.querySelectorAll('[data-testid^="mrb-cal-room-header-"]');
+      const wrapper = overlayRef.current?.parentElement;
+      if (!wrapper) return;
+      const headers = wrapper.querySelectorAll('[data-testid^="mrb-cal-room-header-"]');
       const cols = [];
-      headers.forEach(h => {
-        const rect = h.getBoundingClientRect();
-        const rootRect = root.getBoundingClientRect();
+      headers.forEach((h) => {
         cols.push({
           id: h.getAttribute("data-testid").replace("mrb-cal-room-header-", ""),
-          left: rect.left - rootRect.left + root.scrollLeft,
-          width: rect.width,
+          left: h.offsetLeft,
+          width: h.offsetWidth,
         });
       });
       setColMetrics(cols);
@@ -472,12 +496,9 @@ function EventOverlay({ rooms, bookings, date, showNow, nowOffset, onPickEvent }
     const ro = new ResizeObserver(updateMetrics);
     ro.observe(overlayRef.current.parentElement);
     window.addEventListener("resize", updateMetrics);
-    // Also re-measure after scroll because we use offsets relative to the scrollable parent.
-    overlayRef.current.parentElement.addEventListener("scroll", updateMetrics);
     return () => {
       ro.disconnect();
       window.removeEventListener("resize", updateMetrics);
-      overlayRef.current?.parentElement?.removeEventListener("scroll", updateMetrics);
     };
   }, [rooms.length]);
 
@@ -489,14 +510,22 @@ function EventOverlay({ rooms, bookings, date, showNow, nowOffset, onPickEvent }
     });
   }, [bookings, date]);
 
+  // The overlay must cover the same area as the inline-grid (header + all slot rows).
+  const totalHeight = HEADER_PX + TOTAL_SLOTS * SLOT_PX;
+
   return (
-    <div ref={overlayRef} className="absolute inset-0 pointer-events-none" data-testid="mrb-event-overlay">
+    <div
+      ref={overlayRef}
+      className="absolute top-0 left-0 right-0 pointer-events-none"
+      style={{ height: totalHeight }}
+      data-testid="mrb-event-overlay"
+    >
       {colMetrics && dayBookings.map(b => {
         const col = colMetrics.find(c => c.id === b.room_id);
         if (!col) return null;
         const startOff = isoToRowOffset(b.start_at);
         const endOff = isoToRowOffset(b.end_at);
-        const top = HEADER_H + Math.max(0, startOff) * SLOT_PX;
+        const top = HEADER_PX + Math.max(0, startOff) * SLOT_PX;
         const heightSlots = Math.max(1, Math.min(TOTAL_SLOTS, endOff) - Math.max(0, startOff));
         const height = Math.max(22, heightSlots * SLOT_PX - 2);
         return (
@@ -529,9 +558,9 @@ function EventOverlay({ rooms, bookings, date, showNow, nowOffset, onPickEvent }
         <div
           className="absolute pointer-events-none flex items-center"
           style={{
-            top: HEADER_H + nowOffset * SLOT_PX,
-            left: COL_GUTTER_W,
-            width: (colMetrics[colMetrics.length - 1].left + colMetrics[colMetrics.length - 1].width) - COL_GUTTER_W,
+            top: HEADER_PX + nowOffset * SLOT_PX,
+            left: GUTTER_PX,
+            width: (colMetrics[colMetrics.length - 1].left + colMetrics[colMetrics.length - 1].width) - GUTTER_PX,
           }}
           data-testid="mrb-cal-now-line"
         >
@@ -665,21 +694,24 @@ export default function MRBCalendarView({ user, onClose, onPickSlot, onReschedul
           </button>
 
           {sidebarOpen ? (
-            <div className="p-4 pt-9 space-y-4">
-              <MiniMonth value={date} onChange={setDate}/>
-              <div className="pt-2 border-t border-gray-200">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-2 flex items-center gap-1"><Building2 size={10}/> Rooms</div>
+            // The sidebar itself does NOT scroll — the mini-month stays anchored. If the
+            // room list overflows, only that inner section scrolls.
+            <div className="absolute inset-0 pt-9 px-4 pb-4 flex flex-col gap-4 overflow-hidden">
+              <div className="flex-shrink-0">
+                <MiniMonth value={date} onChange={setDate}/>
+              </div>
+              <div className="pt-2 border-t border-gray-200 flex flex-col min-h-0 flex-1">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-2 flex items-center gap-1 flex-shrink-0"><Building2 size={10}/> Rooms ({rooms.length})</div>
                 {rooms.length === 0 ? (
                   <div className="text-[11px] text-gray-400 italic">No active rooms.</div>
                 ) : (
-                  <div className="space-y-1">
-                    {rooms.slice(0, 12).map(r => (
+                  <div className="space-y-1 overflow-y-auto pr-1 -mr-1">
+                    {rooms.map(r => (
                       <div key={r.room_id} className="flex items-center gap-1.5 text-[11px] text-gray-700 truncate">
                         <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#ec9324]"></span>
                         <span className="truncate">{r.name}</span>
                       </div>
                     ))}
-                    {rooms.length > 12 && <div className="text-[10px] text-gray-400">+ {rooms.length - 12} more</div>}
                   </div>
                 )}
               </div>

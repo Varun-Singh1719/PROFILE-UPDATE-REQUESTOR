@@ -317,8 +317,9 @@ export default function MeetingRoomBookingPage() {
     }
   };
 
-  // Triggered from the calendar's empty-slot click. Prefills date / room / time, then flips
-  // back to default view and opens the booking form so the user can finish the details.
+  // Triggered from the calendar's empty-slot click. Pre-fills date / room / time and
+  // opens the booking form WITHOUT leaving the calendar view — the form renders as a
+  // modal overlay on top of the calendar (see `viewMode === 'calendar' && formOpen` JSX).
   const handleCalendarPickSlot = useCallback(({ roomId, date, start, end }) => {
     setEditing(null);
     setConflict(null);
@@ -326,17 +327,15 @@ export default function MeetingRoomBookingPage() {
     setFormDate(date);
     setFormStart(start);
     setFormEnd(end);
-    setViewMode("default");
     setFormOpen(true);
     requestAnimationFrame(() => {
-      formAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       setTimeout(() => titleInputFocusRef.current?.focus?.(), 200);
     });
   }, []);
 
-  // Reschedule coming back from calendar's preview/details card — same flow as the row icon.
+  // Reschedule from the calendar's preview/details card — keep user inside the calendar
+  // and open the existing booking form in modal mode.
   const handleCalendarReschedule = useCallback((b) => {
-    setViewMode("default");
     handleReschedule(b);
   }, [handleReschedule]);
 
@@ -347,13 +346,63 @@ export default function MeetingRoomBookingPage() {
       contentClassName="h-screen flex flex-col"
     >
       {viewMode === "calendar" ? (
-        <MRBCalendarView
-          user={user}
-          onClose={() => setViewMode("default")}
-          onPickSlot={handleCalendarPickSlot}
-          onReschedule={handleCalendarReschedule}
-          onCancelBooking={() => loadBookingsForDate(filterDate, rangeMode)}
-        />
+        <>
+          <MRBCalendarView
+            user={user}
+            onClose={() => setViewMode("default")}
+            onPickSlot={handleCalendarPickSlot}
+            onReschedule={handleCalendarReschedule}
+            onCancelBooking={() => loadBookingsForDate(filterDate, rangeMode)}
+          />
+          {/* Booking form rendered as a modal overlay on top of the calendar so the
+              user never leaves the schedule view while filling in meeting details. */}
+          {formOpen && (
+            <div
+              className="fixed inset-0 z-[55] bg-black/40 backdrop-blur-sm flex items-start justify-center overflow-y-auto p-4 sm:p-8 animate-in fade-in duration-150"
+              onMouseDown={(e) => {
+                if (e.target === e.currentTarget) {
+                  setFormOpen(false); setConflict(null); setEditing(null);
+                }
+              }}
+              data-testid="mrb-calendar-form-modal"
+            >
+              <div className="relative w-full max-w-[640px] bg-white rounded-lg shadow-2xl border border-gray-200 my-4 animate-in zoom-in-95 slide-in-from-top-2 duration-200">
+                <div className="px-5 pt-5 pb-3 border-b border-gray-100 flex items-center justify-between gap-3 sticky top-0 bg-white z-10 rounded-t-lg">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Plus size={18} className="text-[#ec9324] flex-shrink-0"/>
+                    <h2 className="text-base font-bold text-gray-900 truncate">
+                      {editing ? "Reschedule Meeting" : "Book Meeting Room"}
+                    </h2>
+                  </div>
+                  <button
+                    onClick={() => { setFormOpen(false); setConflict(null); setEditing(null); }}
+                    className="p-1.5 rounded text-gray-400 hover:text-gray-800 hover:bg-gray-100"
+                    aria-label="Close form"
+                    data-testid="mrb-calendar-form-close"
+                  ><X size={16}/></button>
+                </div>
+                <div className="px-5 pb-5 pt-3">
+                  <BookingForm
+                    rooms={rooms}
+                    selectedRoomId={selectedRoomId}
+                    setSelectedRoomId={setSelectedRoomId}
+                    onSubmit={handleCreate}
+                    onCancel={() => { setFormOpen(false); setConflict(null); setEditing(null); }}
+                    conflict={conflict}
+                    clearConflict={() => setConflict(null)}
+                    titleInputFocusRef={titleInputFocusRef}
+                    bDate={formDate} setBDate={setFormDate}
+                    startTime={formStart} setStartTime={setFormStart}
+                    endTime={formEnd} setEndTime={setFormEnd}
+                    slotConflictRoomIds={slotConflictRoomIds}
+                    editing={editing}
+                    hideHeader
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       ) : (
       <div className="flex-1 flex overflow-hidden">
         {/* LEFT panel — 32% of viewport (reduced 20% from previous 40%) */}
@@ -480,7 +529,7 @@ export default function MeetingRoomBookingPage() {
 
 // ============================================================ Booking Form
 function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCancel, conflict, clearConflict, titleInputFocusRef,
-  bDate, setBDate, startTime, setStartTime, endTime, setEndTime, slotConflictRoomIds, editing }) {
+  bDate, setBDate, startTime, setStartTime, endTime, setEndTime, slotConflictRoomIds, editing, hideHeader }) {
   const isEdit = !!editing?.id;
   const [title, setTitle] = useState(editing?.title || "");
   const localTitleRef = useRef(null);
@@ -532,13 +581,15 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
   };
 
   return (
-    <section className="border border-gray-200 rounded-lg p-4 bg-gray-50" data-testid="mrb-booking-form">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-bold text-gray-900" data-testid="mrb-form-heading">
-          {isEdit ? "Reschedule Meeting" : "New Meeting"}
-        </h3>
-        <button onClick={onCancel} className="text-gray-400 hover:text-gray-700" data-testid="mrb-form-close"><X size={14}/></button>
-      </div>
+    <section className={hideHeader ? "" : "border border-gray-200 rounded-lg p-4 bg-gray-50"} data-testid="mrb-booking-form">
+      {!hideHeader && (
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-bold text-gray-900" data-testid="mrb-form-heading">
+            {isEdit ? "Reschedule Meeting" : "New Meeting"}
+          </h3>
+          <button onClick={onCancel} className="text-gray-400 hover:text-gray-700" data-testid="mrb-form-close"><X size={14}/></button>
+        </div>
+      )}
 
       <Field label="Title" required>
         <input
