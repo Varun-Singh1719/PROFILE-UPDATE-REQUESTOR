@@ -383,14 +383,12 @@ function DayGrid({ rooms, bookings, date, onPickSlot, onPickEvent, hoverSlot, se
         {rooms.map((r) => (
           <div
             key={`h-${r.room_id}`}
-            className="sticky top-0 z-20 bg-white border-b border-l border-gray-200 px-3 flex items-center"
+            className="sticky top-0 z-20 bg-white border-b border-l border-gray-200 px-3 flex flex-col items-center justify-center text-center"
             style={{ height: HEADER_PX }}
             data-testid={`mrb-cal-room-header-${r.room_id}`}
           >
-            <div className="min-w-0">
-              <div className="text-[12px] font-bold text-gray-900 truncate">{r.name}</div>
-              <div className="text-[10px] text-gray-500 truncate">{r.plan_name} · {r.capacity} seats</div>
-            </div>
+            <div className="text-[12px] font-bold text-gray-900 truncate max-w-full">{r.name}</div>
+            <div className="text-[10px] text-gray-500 truncate max-w-full">{r.capacity} seats</div>
           </div>
         ))}
 
@@ -694,26 +692,10 @@ export default function MRBCalendarView({ user, onClose, onPickSlot, onReschedul
           </button>
 
           {sidebarOpen ? (
-            // The sidebar itself does NOT scroll — the mini-month stays anchored. If the
-            // room list overflows, only that inner section scrolls.
+            // The sidebar itself does NOT scroll — only the mini-month is shown.
             <div className="absolute inset-0 pt-9 px-4 pb-4 flex flex-col gap-4 overflow-hidden">
               <div className="flex-shrink-0">
                 <MiniMonth value={date} onChange={setDate}/>
-              </div>
-              <div className="pt-2 border-t border-gray-200 flex flex-col min-h-0 flex-1">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-2 flex items-center gap-1 flex-shrink-0"><Building2 size={10}/> Rooms ({rooms.length})</div>
-                {rooms.length === 0 ? (
-                  <div className="text-[11px] text-gray-400 italic">No active rooms.</div>
-                ) : (
-                  <div className="space-y-1 overflow-y-auto pr-1 -mr-1">
-                    {rooms.map(r => (
-                      <div key={r.room_id} className="flex items-center gap-1.5 text-[11px] text-gray-700 truncate">
-                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#ec9324]"></span>
-                        <span className="truncate">{r.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
           ) : (
