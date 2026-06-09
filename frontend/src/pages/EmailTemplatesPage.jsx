@@ -20,6 +20,93 @@ function fmt(iso) { if (!iso) return "—"; try { return new Date(iso).toLocaleS
 
 const CATEGORIES = ["transactional", "onboarding", "security", "notification", "marketing"];
 
+// ============================================================ Frontend-only meeting templates
+// These 3 templates live on the frontend and are persisted in localStorage. The backend
+// source email is left as "TBD" — wire-up will happen when the meeting-email pipeline is
+// implemented server-side.
+const LOCAL_TPL_STORAGE_KEY = "infollion.email_templates.local.v1";
+
+const DEFAULT_LOCAL_TEMPLATES = [
+  {
+    id: "local:meeting_room_booked",
+    kind: "meeting_room_booked",
+    name: "Meeting Room Booked",
+    category: "notification",
+    subject: "Your meeting room is confirmed — {{room_name}} on {{meeting_date}}",
+    body:
+      "<p>Hi {{attendee_name}},</p>" +
+      "<p>Your meeting room booking has been <strong>confirmed</strong>.</p>" +
+      "<ul>" +
+      "<li><strong>Meeting:</strong> {{meeting_title}}</li>" +
+      "<li><strong>Room:</strong> {{room_name}}</li>" +
+      "<li><strong>Date:</strong> {{meeting_date}}</li>" +
+      "<li><strong>Time:</strong> {{start_time}} – {{end_time}}</li>" +
+      "<li><strong>Organizer:</strong> {{organizer_name}} ({{organizer_team}})</li>" +
+      "</ul>" +
+      "<p>You can review or cancel the booking from the <a href=\"{{booking_url}}\">Meeting Room Booking</a> page.</p>" +
+      "<p>Thanks,<br/>Workspace Team</p>",
+    from_email: "TBD",
+    status: "Active",
+    system: true,
+    local: true,
+    updated_at: null,
+  },
+  {
+    id: "local:meeting_rescheduled",
+    kind: "meeting_rescheduled",
+    name: "Meeting Rescheduled",
+    category: "notification",
+    subject: "Meeting rescheduled — {{meeting_title}} now on {{meeting_date}}",
+    body:
+      "<p>Hi {{attendee_name}},</p>" +
+      "<p>The following meeting has been <strong>rescheduled</strong>.</p>" +
+      "<ul>" +
+      "<li><strong>Meeting:</strong> {{meeting_title}}</li>" +
+      "<li><strong>Room:</strong> {{room_name}}</li>" +
+      "<li><strong>New Date:</strong> {{meeting_date}}</li>" +
+      "<li><strong>New Time:</strong> {{start_time}} – {{end_time}}</li>" +
+      "<li><strong>Previous slot:</strong> {{previous_date}} {{previous_start_time}} – {{previous_end_time}}</li>" +
+      "<li><strong>Organizer:</strong> {{organizer_name}}</li>" +
+      "</ul>" +
+      "<p>Please update your calendar. View the updated booking <a href=\"{{booking_url}}\">here</a>.</p>" +
+      "<p>Thanks,<br/>Workspace Team</p>",
+    from_email: "TBD",
+    status: "Active",
+    system: true,
+    local: true,
+    updated_at: null,
+  },
+  {
+    id: "local:meeting_cancelled",
+    kind: "meeting_cancelled",
+    name: "Meeting Cancelled",
+    category: "notification",
+    subject: "Meeting cancelled — {{meeting_title}}",
+    body:
+      "<p>Hi {{attendee_name}},</p>" +
+      "<p>The meeting <strong>{{meeting_title}}</strong> scheduled for {{meeting_date}} at {{start_time}} in {{room_name}} has been <strong>cancelled</strong>.</p>" +
+      "<p><em>Reason:</em> {{cancel_reason}}</p>" +
+      "<p>If you have any questions, please contact the organizer ({{organizer_name}}).</p>" +
+      "<p>Thanks,<br/>Workspace Team</p>",
+    from_email: "TBD",
+    status: "Active",
+    system: true,
+    local: true,
+    updated_at: null,
+  },
+];
+
+function loadLocalOverrides() {
+  try { return JSON.parse(localStorage.getItem(LOCAL_TPL_STORAGE_KEY) || "{}"); } catch { return {}; }
+}
+function saveLocalOverrides(overrides) {
+  localStorage.setItem(LOCAL_TPL_STORAGE_KEY, JSON.stringify(overrides));
+}
+function mergeLocalTemplates() {
+  const overrides = loadLocalOverrides();
+  return DEFAULT_LOCAL_TEMPLATES.map((t) => ({ ...t, ...(overrides[t.kind] || {}) }));
+}
+
 // ---------- Mini RichText editor (contentEditable + toolbar) ----------
 function RichTextEditor({ value, onChange, testId = "rte" }) {
   const ref = React.useRef(null);
@@ -76,12 +163,14 @@ function RichTextEditor({ value, onChange, testId = "rte" }) {
 }
 
 const EMPTY_FORM = {
-  name: "", kind: "", category: "transactional", subject: "", body: "", status: "Active",
+  name: "", kind: "", category: "transactional", subject: "", body: "", status: "Active", from_email: "",
 };
 
 export default function EmailTemplatesPage() {
   const { user } = useAuth();
-  const isAdmin = user?.role === "Admin";
+  // Both Admin and Super Admin can edit templates. (Previous code only checked "Admin"
+  // which excluded Super Admin — fixed here so the seeded admin can edit meeting templates.)
+  const isAdmin = user?.role === "Admin" || user?.role === "Super Admin";
   const [items, setItems] = useState([]);
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("all");
@@ -99,7 +188,20 @@ export default function EmailTemplatesPage() {
         status: status === "all" ? undefined : status,
       },
     });
-    setItems(r.data);
+    // Inject the 3 frontend-only meeting templates (with any localStorage overrides) at
+    // the top of the list. Filter them by the same search/category/status criteria so the
+    // page-level filter UI behaves consistently.
+    const locals = mergeLocalTemplates().filter((t) => {
+      if (status !== "all" && t.status !== status) return false;
+      if (category !== "all" && t.category !== category) return false;
+      if (q) {
+        const needle = q.toLowerCase();
+        const hay = `${t.name} ${t.kind} ${t.subject}`.toLowerCase();
+        if (!hay.includes(needle)) return false;
+      }
+      return true;
+    });
+    setItems([...locals, ...(r.data || [])]);
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [q, category, status]);
 
@@ -116,12 +218,22 @@ export default function EmailTemplatesPage() {
     setForm({
       name: tpl.name, kind: tpl.kind, category: tpl.category || "transactional",
       subject: tpl.subject, body: tpl.body, status: tpl.status || "Active",
+      from_email: tpl.from_email || "",
     });
     setOpen(true);
   };
 
   const toggleStatus = async (tpl) => {
     const next = tpl.status === "Active" ? "Inactive" : "Active";
+    // Local/frontend-only templates persist their state in localStorage instead of the API.
+    if (tpl.local) {
+      const overrides = loadLocalOverrides();
+      overrides[tpl.kind] = { ...(overrides[tpl.kind] || {}), status: next, updated_at: new Date().toISOString() };
+      saveLocalOverrides(overrides);
+      notify.success(`"${tpl.name}" is now ${next}`);
+      load();
+      return;
+    }
     try {
       await api.patch(`/email-templates/${tpl.id}`, { status: next });
       notify.success(`"${tpl.name}" is now ${next}`);
@@ -131,6 +243,25 @@ export default function EmailTemplatesPage() {
 
   const submit = async (e) => {
     e.preventDefault();
+    // Editing a frontend-only template — save to localStorage, never call the API.
+    if (editing?.local) {
+      const overrides = loadLocalOverrides();
+      overrides[editing.kind] = {
+        ...(overrides[editing.kind] || {}),
+        name: form.name,
+        subject: form.subject,
+        body: form.body,
+        category: form.category,
+        status: form.status,
+        from_email: form.from_email || "TBD",
+        updated_at: new Date().toISOString(),
+      };
+      saveLocalOverrides(overrides);
+      notify.success("Template updated");
+      setOpen(false); setEditing(null); setForm(EMPTY_FORM);
+      load();
+      return;
+    }
     try {
       if (editing) {
         await api.patch(`/email-templates/${editing.id}`, form);
@@ -145,6 +276,10 @@ export default function EmailTemplatesPage() {
   };
 
   const duplicate = async (tpl) => {
+    if (tpl.local) {
+      notify.error("Frontend-only meeting templates can't be duplicated yet.");
+      return;
+    }
     try {
       await api.post(`/email-templates/${tpl.id}/duplicate`);
       notify.success("Duplicated");
@@ -153,6 +288,16 @@ export default function EmailTemplatesPage() {
   };
 
   const remove = async (tpl) => {
+    if (tpl.local) {
+      // Resetting a local template (restore defaults) is friendlier than blocking outright.
+      if (!window.confirm(`Reset "${tpl.name}" back to its default content?`)) return;
+      const overrides = loadLocalOverrides();
+      delete overrides[tpl.kind];
+      saveLocalOverrides(overrides);
+      notify.success("Template reset to default");
+      load();
+      return;
+    }
     if (!window.confirm(`Delete template "${tpl.name}"? This cannot be undone.`)) return;
     try {
       await api.delete(`/email-templates/${tpl.id}`);
@@ -210,6 +355,7 @@ export default function EmailTemplatesPage() {
                 <th className="px-4 py-3 text-left">Template Name</th>
                 <th className="px-4 py-3 text-left">Kind</th>
                 <th className="px-4 py-3 text-left">Category</th>
+                <th className="px-4 py-3 text-left">From Email</th>
                 <th className="px-4 py-3 text-left">Status</th>
                 <th className="px-4 py-3 text-left">Last Updated</th>
                 <th className="px-4 py-3 text-right">Actions</th>
@@ -222,11 +368,21 @@ export default function EmailTemplatesPage() {
                     <button type="button" onClick={() => setPreview(t)} className="text-left hover:text-[#ec9324] hover:underline focus:outline-none" data-testid={`preview-${t.kind}`}>
                       {t.name}
                     </button>
-                    {t.system && <span className="ml-2 inline-flex text-[10px] bg-gray-100 text-gray-600 rounded px-1.5 py-0.5">SYSTEM</span>}
+                    {t.local && <span className="ml-2 inline-flex text-[10px] bg-orange-50 border border-orange-200 text-[#ec9324] rounded px-1.5 py-0.5 font-bold tracking-wider">MEETING</span>}
+                    {t.system && !t.local && <span className="ml-2 inline-flex text-[10px] bg-gray-100 text-gray-600 rounded px-1.5 py-0.5">SYSTEM</span>}
                   </td>
                   <td className="px-4 py-3 text-gray-600 font-mono text-xs">{t.kind}</td>
                   <td className="px-4 py-3">
                     <span className="inline-flex text-xs font-medium bg-[#ec9324]/10 text-[#ec9324] rounded px-2 py-0.5">{t.category}</span>
+                  </td>
+                  <td className="px-4 py-3 text-xs" data-testid={`from-${t.kind}`}>
+                    {t.from_email === "TBD" ? (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-bold tracking-wider bg-amber-50 border border-amber-200 text-amber-700 text-[10px]">TBD</span>
+                    ) : t.from_email ? (
+                      <span className="text-gray-700">{t.from_email}</span>
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="inline-flex items-center gap-2">
@@ -253,9 +409,9 @@ export default function EmailTemplatesPage() {
                           <Button size="sm" variant="outline" onClick={() => duplicate(t)} className="h-8 w-8 p-0" data-testid={`duplicate-${t.kind}`} aria-label="Duplicate">
                             <Copy size={14}/>
                           </Button>
-                          {!t.system && (
-                            <Button size="sm" variant="outline" onClick={() => remove(t)} className="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-600 hover:border-red-300" data-testid={`delete-${t.kind}`} aria-label="Delete">
-                              <Trash2 size={14}/>
+                          {(!t.system || t.local) && (
+                            <Button size="sm" variant="outline" onClick={() => remove(t)} className="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-600 hover:border-red-300" data-testid={`delete-${t.kind}`} aria-label={t.local ? "Reset to default" : "Delete"} title={t.local ? "Reset to default" : "Delete"}>
+                              {t.local ? <RotateCcw size={14}/> : <Trash2 size={14}/>}
                             </Button>
                           )}
                         </>
@@ -265,7 +421,7 @@ export default function EmailTemplatesPage() {
                 </tr>
               ))}
               {items.length === 0 && (
-                <tr><td colSpan={6} className="text-center py-10 text-gray-400">No templates</td></tr>
+                <tr><td colSpan={7} className="text-center py-10 text-gray-400">No templates</td></tr>
               )}
             </tbody>
           </table>
@@ -298,6 +454,15 @@ export default function EmailTemplatesPage() {
                     {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="col-span-2">
+                <Label>From Email {editing?.local && <span className="text-[10px] text-amber-700 ml-1">(backend wiring pending — leave as TBD for now)</span>}</Label>
+                <Input
+                  placeholder="TBD"
+                  value={form.from_email}
+                  onChange={(e) => setForm({ ...form, from_email: e.target.value })}
+                  data-testid="template-from-email"
+                />
               </div>
               <div className="col-span-2">
                 <Label>Subject *</Label>
