@@ -358,7 +358,7 @@ export default function MeetingRoomBookingPage() {
               user never leaves the schedule view while filling in meeting details. */}
           {formOpen && (
             <div
-              className="fixed inset-0 z-[55] bg-black/40 backdrop-blur-sm flex items-start justify-center overflow-y-auto p-4 sm:p-8 animate-in fade-in duration-150"
+              className="fixed inset-0 z-[55] bg-black/40 backdrop-blur-sm flex items-center justify-center overflow-y-auto p-4 sm:p-8 animate-in fade-in duration-150"
               onMouseDown={(e) => {
                 if (e.target === e.currentTarget) {
                   setFormOpen(false); setConflict(null); setEditing(null);
@@ -366,8 +366,8 @@ export default function MeetingRoomBookingPage() {
               }}
               data-testid="mrb-calendar-form-modal"
             >
-              <div className="relative w-full max-w-[640px] bg-white rounded-lg shadow-2xl border border-gray-200 my-4 animate-in zoom-in-95 slide-in-from-top-2 duration-200">
-                <div className="px-5 pt-5 pb-3 border-b border-gray-100 flex items-center justify-between gap-3 sticky top-0 bg-white z-10 rounded-t-lg">
+              <div className="relative w-full max-w-[640px] max-h-[90vh] flex flex-col bg-white rounded-lg shadow-2xl border border-gray-200 animate-in zoom-in-95 duration-200">
+                <div className="px-5 pt-5 pb-3 border-b border-gray-100 flex items-center justify-between gap-3 bg-white z-10 rounded-t-lg flex-shrink-0">
                   <div className="flex items-center gap-2 min-w-0">
                     <Plus size={18} className="text-[#ec9324] flex-shrink-0"/>
                     <h2 className="text-base font-bold text-gray-900 truncate">
@@ -381,7 +381,7 @@ export default function MeetingRoomBookingPage() {
                     data-testid="mrb-calendar-form-close"
                   ><X size={16}/></button>
                 </div>
-                <div className="px-5 pb-5 pt-3">
+                <div className="px-5 pb-5 pt-3 overflow-y-auto flex-1 min-h-0">
                   <BookingForm
                     rooms={rooms}
                     selectedRoomId={selectedRoomId}
