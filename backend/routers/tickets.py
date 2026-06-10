@@ -12,6 +12,7 @@ from core import (
     api_router, db, now_iso, get_current_user,
     TicketCreate, TicketUpdate, BulkAssign, BulkStatus, CommentCreate,
 )
+from notifications import send_email
 from routers.permissions import get_effective_scope, get_user_scope_context, scope_to_id_filter
 
 
@@ -347,6 +348,34 @@ async def update_ticket(ticket_id: str, body: TicketUpdate, user=Depends(get_cur
             "id": str(uuid.uuid4()), "ticket_id": ticket_id, "action": "updated",
             "by_id": user["id"], "by_name": user["name"], "at": now_iso(), "detail": a
         })
+
+    # Notify the request creator when the ticket transitions to Closed.
+    # Driven by the `request_closed` email template (seeded in DEFAULT_TEMPLATES).
+    if update.get("status") == "Closed" and t.get("status") != "Closed":
+        try:
+            creator = await db.contacts.find_one({"id": t.get("created_by_id")}) if t.get("created_by_id") else None
+            to_email = (creator or {}).get("email")
+            to_name = (creator or {}).get("name") or t.get("created_by_name") or "there"
+            if to_email:
+                await send_email(
+                    db,
+                    to_email=to_email,
+                    to_name=to_name,
+                    kind="request_closed",
+                    subject="Request Closed",
+                    body="<p>Your request has been closed.</p>",
+                    related_id=ticket_id,
+                    metadata={
+                        "ticket_id": t.get("ticket_id") or ticket_id,
+                        "subject": t.get("subject") or "",
+                        "closed_by": user.get("name") or "",
+                        "closed_at": update["updated_on"],
+                    },
+                )
+        except Exception as e:  # noqa: BLE001 — never block the API on a notification failure
+            import logging as _l
+            _l.getLogger(__name__).warning(f"request_closed email failed for ticket={ticket_id}: {e}")
+
     return await db.tickets.find_one({"id": ticket_id}, {"_id": 0})
 
 
@@ -442,6 +471,31 @@ async def bulk_status(body: BulkStatus, user=Depends(get_current_user)):
             "by_id": user["id"], "by_name": user["name"], "at": now_iso(),
             "detail": f"Status changed from {t.get('status')} to {body.status}"
         })
+        # Notify creator on Closed transition (same template as single-update path).
+        if body.status == "Closed" and t.get("status") != "Closed":
+            try:
+                creator = await db.contacts.find_one({"id": t.get("created_by_id")}) if t.get("created_by_id") else None
+                to_email = (creator or {}).get("email")
+                to_name = (creator or {}).get("name") or t.get("created_by_name") or "there"
+                if to_email:
+                    await send_email(
+                        db,
+                        to_email=to_email,
+                        to_name=to_name,
+                        kind="request_closed",
+                        subject="Request Closed",
+                        body="<p>Your request has been closed.</p>",
+                        related_id=tid,
+                        metadata={
+                            "ticket_id": t.get("ticket_id") or tid,
+                            "subject": t.get("subject") or "",
+                            "closed_by": user.get("name") or "",
+                            "closed_at": now_iso(),
+                        },
+                    )
+            except Exception as e:  # noqa: BLE001
+                import logging as _l
+                _l.getLogger(__name__).warning(f"request_closed email failed for ticket={tid}: {e}")
         success += 1
     return {"updated": success}
 

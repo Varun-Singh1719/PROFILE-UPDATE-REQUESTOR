@@ -380,6 +380,28 @@ DEFAULT_TEMPLATES = [
             "<p>If you didn't request this, you can ignore this email.</p>"
         ),
     },
+    {
+        # ProfiX notification — fired when a ticket's status transitions to "Closed".
+        # Sent to the request creator. Variables resolved at send-time:
+        #   {{name}}, {{ticket_id}}, {{subject}}, {{closed_by}}, {{closed_at}}
+        "kind": "request_closed",
+        "name": "Request closed",
+        "category": "notification",
+        "subject": "Request Closed",
+        "body": (
+            "<p>Hi {{name}},</p>"
+            "<p>Your request <strong>{{ticket_id}}</strong> — \"{{subject}}\" has been "
+            "<strong>closed</strong>.</p>"
+            "<ul>"
+            "<li><b>Ticket ID:</b> {{ticket_id}}</li>"
+            "<li><b>Subject:</b> {{subject}}</li>"
+            "<li><b>Closed by:</b> {{closed_by}}</li>"
+            "<li><b>Closed on:</b> {{closed_at}}</li>"
+            "</ul>"
+            "<p>If you believe this was closed in error, please reach out to the team.</p>"
+            "<p>— Infollion ProfiX</p>"
+        ),
+    },
 ]
 
 # ---------- Team color palette ----------

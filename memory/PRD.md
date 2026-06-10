@@ -11,6 +11,12 @@ Internal admin platform for Infollion. Combines:
 - **Admin** — Day-to-day operational access (no employee/permission edits).
 
 ## Latest delivered feature (Feb 2026)
+### ProfiX "Request Closed" email (Feb 2026)
+- New seeded template `request_closed` (subject: **Request Closed**, category: notification) in `/app/backend/core.py::DEFAULT_TEMPLATES`.
+- Fired from `/app/backend/routers/tickets.py` when ticket status transitions to `Closed` — both the single PATCH endpoint and the bulk `/tickets/bulk-status` endpoint. Email goes to the request **creator** (looked up from `contacts` by `created_by_id`).
+- Uses the standard outbox notifications pipeline (`notifications.send_email`) so the template-driven subject/body are honored and the email is queued in `notifications_outbox`.
+- Surfaces in the Email Templates page as a Profix-type row (interleaved alphabetically; "Request closed" sorts after "New employee welcome").
+
 ### Email Templates page — Type column, sortable headers, hover-name action buttons (Feb 2026)
 - File: `/app/frontend/src/pages/EmailTemplatesPage.jsx`
 - 3 frontend-only meeting templates injected with `localStorage` persistence (backend wiring TBD):
