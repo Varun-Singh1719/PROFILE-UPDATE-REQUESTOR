@@ -103,25 +103,205 @@
 #====================================================================================================
 
 user_problem_statement: |
-  v3 Permissions Module + Role Management overhaul:
-  Permissions Module:
-  - Remove sidebar Filters section (Module/Role/Team/Employee/Preset/Preview)
-  - Editing section: two accordions — "ProfiX Features" and "Desk Booking Features"
-  - Save Changes opens a modal asking for Permission Set Title; saves via POST /api/permission-sets
-  - Rename "Permission Rules" to "Permission Sets" everywhere
-  - New Permission Sets list view at /admin/permission-sets with columns: numeric ID, Name, Created By, Created On, View, Edit, Delete + filters (Created On range, Created By, Module ProfiX/Desk Booking)
-  - View action → detail page with all permissions preselected, Edit button top-right toggling read-only ↔ edit mode
-  - Delete action with confirmation popup
-  Role Module:
-  - GLOBAL role collapse: only "Super Admin" and "Admin" remain (Admin→Super Admin; Manager/Research/Delivery/Member/DQ Team → Admin)
-  - Routing driven by Permission Sets, not role; both roles land on /admin
-  - Access control: role only gates Super Admin functions; everything else via Permission Sets
-  - Employee form: add multi-select "Permission Sets" field
-  - Employee detail/list: show assigned Permission Sets as chips
-  - Permission merge logic: OR (allow wins) across all assigned sets; Super Admin auto-grants all
+  Workstation Booking Module (continuation):
+  Add full-day workstation booking that uses the Active (Live) Floor Layout.
+  Sidebar: "Workstation Booking" placed immediately above "Meeting Room Booking" under Workspace Manager.
+  Strict isolation from Meeting Room Booking — only workstation/seat data is loaded; rooms are never displayed.
+  Page: split-screen (75% Floor Map · 25% Booking Form) with a header date filter (default Today, IST), a floor plan selector when multiple live plans exist, and an explicit "No Active Floor Plan Available" empty state.
+  Seat color coding (per UX confirmation): White=Available, Orange=Selected, Grey=Occupied/Not available, Team color overlay for team-assigned seats. Uses the existing workstation PNG, recolored via CSS mask-image.
+  Floor map: zoom in/out + reset, search by seat label, legend, loading skeleton, occupied-seat hover tooltip (employee/team/date), occupied click navigates to centralized Bookings detail.
+  Form: workstation MultiSelect (hides booked seats) + Employee dropdown (single seat) OR Team dropdown (multiple seats) + Booking Date + Recurring toggle (end date + Su M T W Th F S day chips) + Save / Cancel.
+  Team allocation: random or manual (manual = pick employees up to seat count). Validation prevents duplicate seat/employee on a date.
+  Role-based access: Super Admin = full CRUD; Admin = read-only banner.
+  Auto-release: Inactive employees release their future workstation bookings.
+  Integration: workstation rows flow into /bookings list with type "Workstation" + detail drawer; floor-map click opens the row via ?bookingId=.
 
 backend:
-  - task: "MRB enhancements — Fortnightly recurring + organizer_team_name enrichment + PATCH /room-bookings/{id}"
+  - task: "Workstation Booking — backend (routers/workstation_bookings.py)"
+    implemented: true
+    working: "NA"
+    file: "backend/routers/workstation_bookings.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          New collection workstation_bookings + endpoints under /api:
+          • GET /workstation-bookings/floor-plans → live plans with >=1 seat
+          • GET /workstation-bookings/availability?plan_id=&date= → {plan, seats[], bookings[], booked_seat_ids[], booked_employee_ids[]}; auto-hides bookings of Inactive employees
+          • GET /workstation-bookings (filterable by plan_id/seat_id/employee_id/team_id/date/date_from/date_to/include_cancelled)
+          • GET /workstation-bookings/{id} — supports uuid or seq_no (seq starts at 20001)
+          • POST /workstation-bookings — single-seat → employee_id required; multi-seat → team_id + team_employee_ids (length==seat count) required; recurring expands by weekday codes ['Su','M','T','W','Th','F','S']; 409 with code WORKSTATION_OCCUPIED or EMPLOYEE_ALREADY_BOOKED on conflict
+          • PATCH /workstation-bookings/{id} — reschedule with duplicate guards
+          • DELETE /workstation-bookings/{id}?series=bool — cancel single or future-of-series
+          • POST /workstation-bookings/release-inactive — idempotent admin helper
+          Manual curl smoke tests confirmed: single create, recurring (Mon+Wed × 3 weeks → 6 rows), duplicate seat → 409 WORKSTATION_OCCUPIED, duplicate employee → 409 EMPLOYEE_ALREADY_BOOKED.
+
+  - task: "Bookings aggregator — merge Meeting Room + Workstation in /api/bookings"
+    implemented: true
+    working: "NA"
+    file: "backend/routers/bookings.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          /api/bookings queries BOTH room_bookings and workstation_bookings, projects each into a
+          unified shape (type "Meeting Room" or "Workstation") and sorts/paginates in memory. Type
+          filter (all/meeting_room/workstation), status (active/completed/cancelled), date range,
+          employee/team/created_by filters and search work against both sources.
+          GET /api/bookings/{id} resolves uuid or seq_no across BOTH collections.
+          POST /api/bookings/bulk-cancel cancels across BOTH collections.
+
+  - task: "Contacts auto-release on deactivation (PATCH + bulk-status)"
+    implemented: true
+    working: "NA"
+    file: "backend/routers/contacts.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          PATCH /api/contacts/{id} and POST /api/contacts/bulk-status now call
+          workstation_bookings.auto_release_for_employee on Active->Inactive transitions, marking
+          all of that employee's future workstation bookings cancelled with reason
+          'employee_deactivated'. bulk-status returns workstation_released count.
+
+frontend:
+  - task: "Workstation Booking page (split-screen + form + recurring + team allocation)"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/WorkstationBookingPage.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          Split-screen lg:75/25 → stacks below lg. Header: title, date filter (default today),
+          Today button, refresh, floor plan selector when >1 live plans.
+          Form fields: workstation MultiSelect (hides booked seats), employee dropdown (single
+          seat), team dropdown (multi-seat) with Random/Manual allocation, booking date,
+          recurring toggle + end date + Su M T W Th F S buttons, Save/Cancel.
+          Empty states: "No Active Floor Plan Available" and "Add Workstation to Floor".
+          Occupied click navigates to /workspace-manager/bookings?bookingId=<id>.
+
+  - task: "Workstation FloorMap + colored seats (white/orange/grey/team)"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/WorkstationFloorMap.jsx + components/WorkstationSeat.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          New components — Workstation-only floor map. Seats use CSS mask-image to recolor the
+          workstation PNG. Map: zoom in/out/reset, debounced search (300ms) with match counter,
+          legend, loading skeleton.
+
+  - task: "Sidebar entry above Meeting Room Booking + App.js route"
+    implemented: true
+    working: true
+    file: "frontend/src/components/Sidebar.jsx + frontend/src/App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: |
+          Confirmed via screenshot: sidebar order Floor Layout -> Floor Calibration -> Bookings ->
+          Workstation Booking -> Meeting Room Booking. Route registered at
+          /workspace-manager/workstation-booking under ADMIN_ROLES.
+
+  - task: "Bookings page deep-link ?bookingId=<id> opens detail drawer"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/BookingsPage.jsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          On mount, if ?bookingId is present, fetch the booking and open the drawer. Strips the
+          query param after open so refresh doesn't keep re-triggering.
+
+metadata:
+  created_by: "main_agent"
+  version: "4.0"
+  test_sequence: 3
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Workstation Booking — backend (routers/workstation_bookings.py)"
+    - "Bookings aggregator — merge Meeting Room + Workstation in /api/bookings"
+    - "Contacts auto-release on deactivation (PATCH + bulk-status)"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: |
+      Workstation Booking module is implemented end-to-end. Please test the new BACKEND endpoints.
+      Frontend has been verified via screenshot (sidebar, empty state, layout) and is NOT in the
+      test scope for this round (user will test UI separately).
+      
+      Test scenarios:
+      
+      1. **POST /api/workstation-bookings** as Super Admin (admin@ticketing.com):
+         - Single seat + employee_id (happy path) → 200 created=1
+         - Multi-seat + team_id + team_employee_ids (manual allocation) → 200 created=N
+         - Recurring weekly (e.g. days ['M','W'] over 3 weeks) → expanded
+         - Duplicate seat on same date → 409 with detail.code WORKSTATION_OCCUPIED
+         - Duplicate employee on same date → 409 with detail.code EMPLOYEE_ALREADY_BOOKED
+         - team_employee_ids length != seat count → 400
+         - Employees not in team's members/managers → 400
+         - As Admin (manager@ticketing.com) → 403
+         - With Inactive employee → 400
+      
+      2. **GET /api/workstation-bookings/floor-plans** → only Live plans with >=1 seat
+      
+      3. **GET /api/workstation-bookings/availability** returns expected shape (plan, seats[],
+         bookings[], booked_seat_ids[], booked_employee_ids[]). After deactivating an employee,
+         re-fetching availability should NOT include their booking.
+      
+      4. **PATCH /api/workstation-bookings/{id}** — reschedule + reassign with duplicate guards.
+      
+      5. **DELETE /api/workstation-bookings/{id}?series=true|false** — single + series cancel.
+      
+      6. **Auto-release**: PATCH /api/contacts/{id} status="Inactive" should auto-cancel that
+         employee's future workstation bookings (audit log entry workstation_booking.auto_release).
+         POST /api/contacts/bulk-status with status="Inactive" returns workstation_released count.
+      
+      7. **Centralised /api/bookings**:
+         - type=all returns BOTH Meeting Room AND Workstation rows
+         - type=workstation filters correctly (only workstation rows)
+         - type=meeting_room filters correctly (only MR rows)
+         - status=cancelled/active/completed honored for both types
+         - GET /api/bookings/{id} resolves workstation booking ids (uuid and seq_no >= 20001)
+         - POST /api/bookings/bulk-cancel cancels a mix of MR + WS in one call
+      
+      Credentials in /app/memory/test_credentials.md:
+      - admin@ticketing.com / Admin@123 (Super Admin) — full access
+      - manager@ticketing.com / Test@123 (Admin) — should be 403 on writes
+      
+      Existing data: 1 Live floor plan "HQ — Ground Floor" with 32 seats. Some workstation
+      bookings already exist from smoke tests (testing agent can ignore or delete them).
+
+  - task: "v3 Permissions Module — Permission Sets CRUD and management (LEGACY)"
     implemented: true
     working: "NA"
     file: "backend/routers/room_bookings.py"

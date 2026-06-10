@@ -161,13 +161,23 @@ async def bulk_contact_status(body: BulkContactStatus, user=Depends(require_role
     if not targets:
         raise HTTPException(400, "Cannot change your own status")
     r = await db.contacts.update_many({"id": {"$in": targets}}, {"$set": {"status": body.status}})
+    # Auto-release workstation bookings if employees became Inactive
+    released_count = 0
+    if (body.status or "").lower() == "inactive":
+        try:
+            from routers.workstation_bookings import auto_release_for_employee
+            actor = {"id": user.get("id"), "name": user.get("name"), "email": user.get("email")}
+            for cid in targets:
+                released_count += await auto_release_for_employee(cid, actor)
+        except Exception as e:
+            logger.error(f"Auto-release failed for bulk_contact_status: {e}")
     await log_audit(
         actor=user, action="contact.bulk_status", resource="contact",
-        detail=f"Bulk set status={body.status} for {r.modified_count} employee(s)",
-        metadata={"count": r.modified_count, "status": body.status},
+        detail=f"Bulk set status={body.status} for {r.modified_count} employee(s); released {released_count} workstation booking(s)",
+        metadata={"count": r.modified_count, "status": body.status, "workstation_released": released_count},
         severity="warning",
     )
-    return {"updated": r.modified_count}
+    return {"updated": r.modified_count, "workstation_released": released_count}
 
 
 @api_router.post("/contacts/bulk-role")
@@ -243,14 +253,30 @@ async def update_contact(contact_id: str, body: ContactUpdate, user=Depends(requ
     update = {k: v for k, v in body.model_dump().items() if v is not None}
     if not update:
         raise HTTPException(400, "Nothing to update")
-    before = None
-    if "permission_set_ids" in update:
-        before = await db.contacts.find_one({"id": contact_id}, {"_id": 0, "permission_set_ids": 1, "name": 1, "email": 1})
+    before = await db.contacts.find_one({"id": contact_id}, {"_id": 0, "permission_set_ids": 1, "name": 1, "email": 1, "status": 1})
     await db.contacts.update_one({"id": contact_id}, {"$set": update})
     contact = await db.contacts.find_one({"id": contact_id}, {"_id": 0, "password_hash": 0, "password_encrypted": 0})
     if not contact:
         raise HTTPException(404, "Not found")
-    if before is not None:
+    # Auto-release workstation bookings on Active -> Inactive transitions
+    if (
+        "status" in update
+        and (update["status"] or "").lower() == "inactive"
+        and (before or {}).get("status") != "Inactive"
+    ):
+        try:
+            from routers.workstation_bookings import auto_release_for_employee
+            actor = {"id": user.get("id"), "name": user.get("name"), "email": user.get("email")}
+            released = await auto_release_for_employee(contact_id, actor)
+            if released:
+                await log_audit(
+                    actor=user, action="workstation_booking.auto_release", resource="contact", resource_id=contact_id,
+                    detail=f"Auto-released {released} workstation booking(s) after employee deactivation",
+                    metadata={"contact_id": contact_id, "released": released}, severity="info",
+                )
+        except Exception as e:
+            logger.error(f"Auto-release failed for update_contact: {e}")
+    if before is not None and "permission_set_ids" in update:
         old_ids = set(before.get("permission_set_ids") or [])
         new_ids = set(update["permission_set_ids"])
         if old_ids != new_ids:

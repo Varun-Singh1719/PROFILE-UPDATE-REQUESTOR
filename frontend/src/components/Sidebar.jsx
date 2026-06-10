@@ -28,6 +28,7 @@ const NAV_CONFIG = [
       { to: "/workspace-manager/floor-layout", label: "Floor Layout",     icon: Map, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
       { to: "/workspace-manager/floor-plans",  label: "Floor Calibration", icon: Crosshair,   perm: { module: "desk_booking", feature: "seat_request", action: "edit" } },
       { to: "/workspace-manager/bookings",     label: "Bookings",          icon: ClipboardList, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
+      { to: "/workspace-manager/workstation-booking", label: "Workstation Booking", icon: Armchair, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
       { to: "/workspace-manager/meeting-room-booking", label: "Meeting Room Booking", icon: CalendarClock, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
     ],
   },

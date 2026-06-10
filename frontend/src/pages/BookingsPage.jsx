@@ -19,7 +19,7 @@ import api from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Checkbox } from "../components/ui/checkbox";
 import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 // ---------------------------------------------------------------------------- helpers
 const PAGE_SIZE = 25;
@@ -101,6 +101,32 @@ export default function BookingsPage() {
 
   // Drawer
   const [drawerBooking, setDrawerBooking] = useState(null);
+
+  // Deep-link: ?bookingId=<id|seq_no> opens the detail drawer once the data loads.
+  // Used by Workstation Booking floor map when an occupied seat is clicked.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const bid = searchParams.get("bookingId");
+    if (!bid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await api.get(`/bookings/${encodeURIComponent(bid)}`);
+        if (!cancelled && r.data) setDrawerBooking(r.data);
+      } catch {
+        if (!cancelled) toast.error("Booking not found");
+      } finally {
+        // Strip the query so refreshing doesn't keep reopening the drawer
+        if (!cancelled) {
+          const sp = new URLSearchParams(searchParams);
+          sp.delete("bookingId");
+          setSearchParams(sp, { replace: true });
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Bulk cancel confirm
   const [confirmBulkCancel, setConfirmBulkCancel] = useState(false);
