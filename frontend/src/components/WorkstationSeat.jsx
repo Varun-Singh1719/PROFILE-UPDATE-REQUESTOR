@@ -90,18 +90,21 @@ const WorkstationSeat = ({
             maskRepeat: 'no-repeat',
             maskSize: 'contain',
             maskPosition: 'center',
-            // For 'available' (white) we add a soft outline so the shape is still visible
-            // over the floor plan background.
-            filter: status === "available"
-              ? 'drop-shadow(0 0 0.5px #4b5563) drop-shadow(0 0 0.5px #4b5563)'
-              : isSelected
-                ? 'drop-shadow(0 0 4px rgba(236,147,36,0.7))'
-                : searchHighlight
-                  ? 'drop-shadow(0 0 5px #2563eb)'
-                  : 'none',
+            // 1px black outline around the silhouette (4-direction drop-shadow stack
+            // produces a crisp border that follows the seat shape) so available
+            // (white-filled) seats stay visible against the white floor plan.
+            // Additional outer glow is appended for selected / search-highlighted seats.
+            filter: [
+              'drop-shadow(1px 0 0 #000)',
+              'drop-shadow(-1px 0 0 #000)',
+              'drop-shadow(0 1px 0 #000)',
+              'drop-shadow(0 -1px 0 #000)',
+              isSelected ? 'drop-shadow(0 0 4px rgba(236,147,36,0.7))' : '',
+              searchHighlight ? 'drop-shadow(0 0 5px #2563eb)' : '',
+            ].filter(Boolean).join(' '),
           }}
         />
-        {/* Seat label */}
+        {/* Seat label — always black, regardless of fill colour */}
         {seat.label && (
           <div
             style={{
@@ -111,12 +114,10 @@ const WorkstationSeat = ({
               transform: 'translate(-50%, -50%)',
               fontSize: Math.max(3, size * 0.25) + 'px',
               fontWeight: 'bold',
-              color: status === "available" ? '#1f2937' : '#ffffff',
+              color: '#000000',
               pointerEvents: 'none',
               whiteSpace: 'nowrap',
-              textShadow: status === "available"
-                ? '0 0 2px white'
-                : '0 0 2px rgba(0,0,0,0.5)',
+              textShadow: '0 0 2px #ffffff, 0 0 2px #ffffff',
               zIndex: 10,
             }}
           >
