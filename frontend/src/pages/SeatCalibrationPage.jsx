@@ -297,6 +297,16 @@ export default function SeatCalibrationPage() {
 
   // ---------------------------- Room helpers
   const roomsArray = useMemo(() => Object.values(mappedRooms), [mappedRooms]);
+
+  // Live meeting rooms (baseline) — used for publish diff & confirmation summary
+  const liveRooms = useMemo(() => plan?.live_rooms || [], [plan]);
+  const roomDiff = useMemo(() => {
+    const prevIds = new Set(liveRooms.map(r => r.id));
+    const currIds = new Set(roomsArray.map(r => r.id));
+    const added = roomsArray.filter(r => !prevIds.has(r.id)).map(r => r.name);
+    const removed = liveRooms.filter(r => !currIds.has(r.id)).map(r => r.name);
+    return { added, removed, total: roomsArray.length };
+  }, [liveRooms, roomsArray]);
   const nextRoomDefaultName = useCallback(() => {
     const taken = new Set(Object.values(mappedRooms).map(r => r.name));
     let i = 1;
@@ -869,8 +879,14 @@ export default function SeatCalibrationPage() {
   const handlePublish = async (comments) => {
     setPublishing(true);
     try {
-      // Persist current state as draft first
-      await api.put(`/floor-plans/${planId}/draft`, { name: plan.name, pdfUrl, seats: Object.values(mappedSeats) });
+      // Persist current state as draft first — include both seats AND rooms so
+      // publishing creates a version that preserves the meeting-room calibration.
+      await api.put(`/floor-plans/${planId}/draft`, {
+        name: plan.name,
+        pdfUrl,
+        seats: Object.values(mappedSeats),
+        rooms: Object.values(mappedRooms),
+      });
       await api.post(`/floor-plans/${planId}/publish`, { comments });
       // Best-effort thumbnail
       const thumb = generateThumbnail();
@@ -1471,8 +1487,8 @@ export default function SeatCalibrationPage() {
                       top: `${Math.min(drawingRoom.y0, drawingRoom.y1)}%`,
                       width: `${Math.abs(drawingRoom.x1 - drawingRoom.x0)}%`,
                       height: `${Math.abs(drawingRoom.y1 - drawingRoom.y0)}%`,
-                      border: '2px dashed #10b981',
-                      background: 'rgba(16,185,129,0.12)',
+                      border: '1px dashed #ec9324',
+                      background: 'rgba(236,147,36,0.10)',
                       zIndex: 30,
                     }}/>
                   )}
@@ -1529,6 +1545,7 @@ export default function SeatCalibrationPage() {
       {showPublishDialog && (
         <PublishDialog
           diff={localDiff}
+          roomDiff={roomDiff}
           busy={publishing}
           onCancel={() => setShowPublishDialog(false)}
           onConfirm={handlePublish}
@@ -1707,8 +1724,8 @@ function RoomToolPanel({ roomTool, setRoomTool, roomsArray, selectedRooms, setSe
                 title={label}
                 className={`p-1.5 rounded text-[9px] flex flex-col items-center gap-0.5 border transition-colors ${
                   active
-                    ? 'bg-[#10b981] text-white border-[#10b981]'
-                    : 'bg-white text-gray-700 border-gray-200 hover:border-[#10b981] hover:text-[#10b981]'
+                    ? 'bg-[#ec9324] text-white border-[#ec9324]'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-[#ec9324] hover:text-[#ec9324]'
                 }`}
               >
                 <Icon size={12}/>
@@ -1724,9 +1741,9 @@ function RoomToolPanel({ roomTool, setRoomTool, roomsArray, selectedRooms, setSe
 
       {/* Selection panel */}
       {selectedRooms.length > 0 && (
-        <div className="mb-3 border border-emerald-300 bg-emerald-50/60 rounded overflow-hidden" data-testid="room-bulk-panel">
-          <div className="px-2 py-1.5 bg-emerald-100 flex items-center justify-between border-b border-emerald-200">
-            <span className="text-[11px] font-bold text-emerald-700">{selectedRooms.length} room{selectedRooms.length === 1 ? '' : 's'} selected</span>
+        <div className="mb-3 border border-[#ec9324]/40 bg-orange-50/60 rounded overflow-hidden" data-testid="room-bulk-panel">
+          <div className="px-2 py-1.5 bg-[#ec9324]/10 flex items-center justify-between border-b border-[#ec9324]/20">
+            <span className="text-[11px] font-bold text-[#ec9324]">{selectedRooms.length} room{selectedRooms.length === 1 ? '' : 's'} selected</span>
             <button onClick={() => setSelectedRooms([])} className="text-[10px] text-gray-600 hover:text-gray-900" data-testid="room-clear-selection">Clear</button>
           </div>
           <div className="p-2 space-y-1.5">
@@ -1746,7 +1763,7 @@ function RoomToolPanel({ roomTool, setRoomTool, roomsArray, selectedRooms, setSe
                 </div>
                 <button
                   onClick={() => onRequestRename(selectedRooms[0])}
-                  className="w-full text-[10px] px-2 py-1.5 border border-gray-200 hover:border-emerald-500 hover:text-emerald-600 rounded"
+                  className="w-full text-[10px] px-2 py-1.5 border border-gray-200 hover:border-[#ec9324] hover:text-[#ec9324] rounded"
                   data-testid="room-rename-btn"
                 >Edit Room</button>
               </div>
@@ -1838,8 +1855,8 @@ function MeetingRoomsLayer({
     <div className="absolute inset-0" style={{ pointerEvents: 'none' }} data-testid="rooms-layer">
       {rooms.map(room => {
         const isSelected = selectedRooms.includes(room.id);
-        const bg = isSelected ? 'rgba(16,185,129,0.55)' : 'rgba(255,255,255,0.0)';
-        const borderColor = isSelected ? '#10b981' : '#9ca3af';
+        const bg = isSelected ? 'rgba(236,147,36,0.45)' : 'rgba(255,255,255,0.0)';
+        const borderColor = isSelected ? '#ec9324' : '#9ca3af';
         return (
           <div
             key={room.id}
@@ -1851,20 +1868,21 @@ function MeetingRoomsLayer({
               width: `${room.w}%`,
               height: `${room.h}%`,
               background: bg,
-              border: `2px solid ${borderColor}`,
+              border: `${isSelected ? '1.5px' : '1px'} solid ${borderColor}`,
               boxSizing: 'border-box',
               pointerEvents: interactive ? 'auto' : 'none',
               cursor: roomTool === 'select' ? (isSelected ? 'move' : 'pointer') : (roomTool === 'delete' ? 'pointer' : 'inherit'),
               zIndex: 20,
               transition: 'background 120ms, border-color 120ms',
+              containerType: 'size',
             }}
             onMouseDown={(e) => onRoomMouseDown(room, e)}
             onDoubleClick={(e) => { if (interactive) { e.stopPropagation(); onRequestRename(room.id); } }}
             onContextMenu={(e) => { if (interactive) { e.preventDefault(); onRequestRename(room.id); } }}
             onMouseEnter={(e) => {
               if (!interactive || isSelected) return;
-              e.currentTarget.style.background = 'rgba(16,185,129,0.18)';
-              e.currentTarget.style.borderColor = '#10b981';
+              e.currentTarget.style.background = 'rgba(236,147,36,0.16)';
+              e.currentTarget.style.borderColor = '#ec9324';
             }}
             onMouseLeave={(e) => {
               if (!interactive || isSelected) return;
@@ -1872,16 +1890,18 @@ function MeetingRoomsLayer({
               e.currentTarget.style.borderColor = '#9ca3af';
             }}
           >
-            {/* Room label */}
+            {/* Room label — auto-scales with room size (container query units) */}
             <div
-              className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[10px] font-semibold pointer-events-none select-none"
+              className="absolute top-1 left-1 px-1.5 py-0.5 rounded font-semibold pointer-events-none select-none"
               style={{
-                background: isSelected ? '#10b981' : 'rgba(255,255,255,0.85)',
+                background: isSelected ? '#ec9324' : 'rgba(255,255,255,0.85)',
                 color: isSelected ? 'white' : '#111827',
                 maxWidth: '90%',
                 textOverflow: 'ellipsis',
                 overflow: 'hidden',
                 whiteSpace: 'nowrap',
+                fontSize: 'clamp(7px, 18cqh, 16px)',
+                lineHeight: 1.15,
               }}
             >
               {room.name}{room.capacity ? ` (${room.capacity})` : ''}
@@ -1904,7 +1924,7 @@ function MeetingRoomsLayer({
                     position: 'absolute',
                     width: 8, height: 8,
                     background: '#fff',
-                    border: '1.5px solid #10b981',
+                    border: '1.5px solid #ec9324',
                     borderRadius: 2,
                     cursor: cursorFor(h),
                     zIndex: 21,

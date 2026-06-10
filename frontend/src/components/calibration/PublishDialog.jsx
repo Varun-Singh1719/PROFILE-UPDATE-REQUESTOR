@@ -3,7 +3,7 @@
  * Receives a diff object: { added[], removed[], moved[], rotated[], resized[], counts }
  */
 import React, { useState } from 'react';
-import { X, AlertTriangle, Plus, Minus, Move, RotateCw, Maximize2 } from 'lucide-react';
+import { X, AlertTriangle, Plus, Minus, Move, RotateCw, Maximize2, DoorOpen } from 'lucide-react';
 
 const ROWS = [
   { key: 'added',   Icon: Plus,      color: 'text-emerald-700 bg-emerald-50',  label: 'Seats added' },
@@ -13,9 +13,13 @@ const ROWS = [
   { key: 'resized', Icon: Maximize2, color: 'text-amber-700 bg-amber-50',      label: 'Seats resized' },
 ];
 
-export default function PublishDialog({ diff, onCancel, onConfirm, busy }) {
+export default function PublishDialog({ diff, roomDiff, onCancel, onConfirm, busy }) {
   const [comments, setComments] = useState('');
-  const total = (diff?.counts && Object.values(diff.counts).reduce((a, b) => a + b, 0)) || 0;
+  const seatTotal = (diff?.counts && Object.values(diff.counts).reduce((a, b) => a + b, 0)) || 0;
+  const roomAdded = roomDiff?.added?.length || 0;
+  const roomRemoved = roomDiff?.removed?.length || 0;
+  const roomTotal = roomDiff?.total || 0;
+  const total = seatTotal + roomAdded + roomRemoved;
   const noChanges = total === 0;
 
   return (
@@ -31,7 +35,7 @@ export default function PublishDialog({ diff, onCancel, onConfirm, busy }) {
 
         <div className="p-5">
           <p className="text-sm text-gray-600 mb-4">
-            Publishing will replace the current live floor plan and create a new version. End users will see these changes immediately.
+            Publishing will replace the current live floor plan and create a new version. Both workstation seats and meeting rooms in this draft will go Live together — end users will see these changes immediately.
           </p>
 
           {noChanges ? (
@@ -53,8 +57,31 @@ export default function PublishDialog({ diff, onCancel, onConfirm, busy }) {
                   </div>
                 );
               })}
+
+              {/* Meeting rooms summary */}
+              {(roomAdded > 0 || roomRemoved > 0) && (
+                <div className="flex items-start gap-3 p-2.5 rounded-lg text-orange-800 bg-orange-50" data-testid="diff-row-rooms">
+                  <DoorOpen size={16} className="mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold">
+                      Meeting rooms: {roomAdded > 0 ? `${roomAdded} added` : ''}{roomAdded > 0 && roomRemoved > 0 ? ', ' : ''}{roomRemoved > 0 ? `${roomRemoved} removed` : ''}
+                    </div>
+                    {roomAdded > 0 && (
+                      <div className="text-xs mt-0.5 truncate"><span className="font-semibold">+</span> {roomDiff.added.slice(0, 10).join(', ')}{roomDiff.added.length > 10 ? ` … +${roomDiff.added.length - 10}` : ''}</div>
+                    )}
+                    {roomRemoved > 0 && (
+                      <div className="text-xs mt-0.5 truncate"><span className="font-semibold">−</span> {roomDiff.removed.slice(0, 10).join(', ')}{roomDiff.removed.length > 10 ? ` … +${roomDiff.removed.length - 10}` : ''}</div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
+
+          {/* Totals footer so user sees the full picture even when no diff rows */}
+          <div className="text-[11px] text-gray-500 mb-4" data-testid="publish-totals">
+            Going Live with <span className="font-semibold text-gray-700">{roomTotal}</span> meeting room{roomTotal === 1 ? '' : 's'} on this floor plan.
+          </div>
 
           <label className="block text-xs font-semibold text-gray-700 mb-1">Version notes (optional)</label>
           <textarea
@@ -72,7 +99,7 @@ export default function PublishDialog({ diff, onCancel, onConfirm, busy }) {
               data-testid="confirm-publish-btn"
               onClick={() => onConfirm(comments)}
               disabled={busy}
-              className="px-4 py-1.5 text-sm rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold disabled:opacity-50"
+              className="px-4 py-1.5 text-sm rounded bg-[#ec9324] hover:bg-[#d6831f] text-white font-semibold disabled:opacity-50"
             >
               {busy ? 'Publishing…' : 'Publish Live'}
             </button>

@@ -119,59 +119,68 @@ user_problem_statement: |
 backend:
   - task: "Workstation Booking — backend (routers/workstation_bookings.py)"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/routers/workstation_bookings.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: |
-          New collection workstation_bookings + endpoints under /api:
-          • GET /workstation-bookings/floor-plans → live plans with >=1 seat
-          • GET /workstation-bookings/availability?plan_id=&date= → {plan, seats[], bookings[], booked_seat_ids[], booked_employee_ids[]}; auto-hides bookings of Inactive employees
-          • GET /workstation-bookings (filterable by plan_id/seat_id/employee_id/team_id/date/date_from/date_to/include_cancelled)
-          • GET /workstation-bookings/{id} — supports uuid or seq_no (seq starts at 20001)
-          • POST /workstation-bookings — single-seat → employee_id required; multi-seat → team_id + team_employee_ids (length==seat count) required; recurring expands by weekday codes ['Su','M','T','W','Th','F','S']; 409 with code WORKSTATION_OCCUPIED or EMPLOYEE_ALREADY_BOOKED on conflict
-          • PATCH /workstation-bookings/{id} — reschedule with duplicate guards
-          • DELETE /workstation-bookings/{id}?series=bool — cancel single or future-of-series
-          • POST /workstation-bookings/release-inactive — idempotent admin helper
-          Manual curl smoke tests confirmed: single create, recurring (Mon+Wed × 3 weeks → 6 rows), duplicate seat → 409 WORKSTATION_OCCUPIED, duplicate employee → 409 EMPLOYEE_ALREADY_BOOKED.
+          New collection workstation_bookings + endpoints under /api: floor-plans, availability,
+          list, detail, POST (single + team + recurring), PATCH, DELETE (single + series=true),
+          release-inactive. Seq numbers start at 20001 to stay distinct from MR's 10000s.
+        -working: true
+        -agent: "main"
+        -comment: |
+          Manually verified end-to-end via curl (user opted to test manually rather than run
+          deep_testing_backend_v2). 16 scenarios passed: floor-plans, availability, single seat,
+          multi-seat team allocation, recurring (M ×4 weeks → 5 created), duplicate seat 409,
+          duplicate employee 409, mismatched team_employee_ids 400, single-seat with team_id 400,
+          Admin write 403, PATCH reschedule, PATCH conflict 409, PATCH as Admin 403, DELETE single,
+          DELETE series=true (first 2 instances kept, future 3 cancelled), GET by seq_no.
 
   - task: "Bookings aggregator — merge Meeting Room + Workstation in /api/bookings"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/routers/bookings.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: |
-          /api/bookings queries BOTH room_bookings and workstation_bookings, projects each into a
-          unified shape (type "Meeting Room" or "Workstation") and sorts/paginates in memory. Type
-          filter (all/meeting_room/workstation), status (active/completed/cancelled), date range,
-          employee/team/created_by filters and search work against both sources.
-          GET /api/bookings/{id} resolves uuid or seq_no across BOTH collections.
-          POST /api/bookings/bulk-cancel cancels across BOTH collections.
+          /api/bookings now queries both collections + projects into a unified shape with
+          type "Meeting Room" or "Workstation". GET/{id} resolves uuid or seq_no across both.
+          POST /bulk-cancel cancels across both.
+        -working: true
+        -agent: "main"
+        -comment: |
+          Verified via curl: type=all returns 9 MR + 12 WS rows, type=workstation filters to WS
+          only with team_color preserved, GET /bookings/{ws_uuid} and /bookings/{ws_seq_no} both
+          resolve, bulk-cancel with mixed MR+WS ids returns cancelled=[both ids].
 
   - task: "Contacts auto-release on deactivation (PATCH + bulk-status)"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/routers/contacts.py"
     stuck_count: 0
     priority: "medium"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: |
-          PATCH /api/contacts/{id} and POST /api/contacts/bulk-status now call
-          workstation_bookings.auto_release_for_employee on Active->Inactive transitions, marking
-          all of that employee's future workstation bookings cancelled with reason
-          'employee_deactivated'. bulk-status returns workstation_released count.
+          PATCH /api/contacts/{id} and POST /api/contacts/bulk-status invoke
+          workstation_bookings.auto_release_for_employee on Active->Inactive transitions.
+        -working: true
+        -agent: "main"
+        -comment: |
+          Verified via curl: created a future workstation booking for an employee, then PATCHed
+          status="Inactive". Re-querying availability showed booked_seat_ids and
+          booked_employee_ids empty for that date — booking auto-cancelled successfully.
 
 frontend:
   - task: "Workstation Booking page (split-screen + form + recurring + team allocation)"

@@ -109,6 +109,23 @@ export default function FloorPlansListPage() {
     }
   };
 
+  const togglePlanLive = async (p) => {
+    if (!p.live_version_id) {
+      // No live version yet — guide the user to publish from calibration page.
+      if (window.confirm(`"${p.name}" has no published version yet. Open calibration to publish?`)) {
+        navigate(`/workspace-manager/calibration/${p.id}`);
+      }
+      return;
+    }
+    const next = p.status === "live" ? "inactive" : "live";
+    try {
+      await api.patch(`/floor-plans/${p.id}/status`, { status: next });
+      await load();
+    } catch (e) {
+      alert(`Failed to update status: ${e?.response?.data?.detail || e.message}`);
+    }
+  };
+
   return (
     <Layout breadcrumbs={[{ label: "Workspace Manager" }, { label: "Floor Plans" }]}>
       <div className="flex items-center justify-between mb-6">
@@ -142,6 +159,7 @@ export default function FloorPlansListPage() {
                 plan={p}
                 onClone={() => { setCloneName(`${p.name} (copy)`); setShowClone({ id: p.id, name: p.name }); }}
                 onDelete={() => deletePlan(p)}
+                onToggleLive={() => togglePlanLive(p)}
               />
             ))}
           </div>
@@ -310,8 +328,42 @@ function IconBtn({ icon: Icon, label, onClick, disabled, danger, testId }) {
   );
 }
 
+// -------------------- Card-level Live On/Off toggle ---------------------- //
+// Same visual style as the LiveToggle inside SeatCalibrationPage.
+function CardLiveToggle({ plan, onToggle }) {
+  const isLive = plan.status === "live";
+  const hasLive = !!plan.live_version_id;
+  const title = !hasLive
+    ? "No published version yet — open calibration to publish"
+    : isLive
+      ? "Plan is Live — click to mark Inactive"
+      : "Click to mark this plan Live";
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); e.preventDefault(); onToggle(); }}
+      data-testid={`card-live-toggle-${plan.id}`}
+      aria-pressed={isLive}
+      title={title}
+      className="relative inline-flex items-center w-[52px] h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#ec9324]"
+      style={{ backgroundColor: isLive ? "#ec9324" : "#b2b2b2" }}
+    >
+      <span
+        className="absolute text-[9px] font-bold text-white pointer-events-none select-none"
+        style={isLive ? { left: 7 } : { right: 7 }}
+      >
+        {isLive ? "On" : "Off"}
+      </span>
+      <span
+        className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200"
+        style={{ transform: isLive ? "translateX(28px)" : "translateX(2px)" }}
+      />
+    </button>
+  );
+}
+
 // -------------------- Plan card ----------------------------------------- //
-function PlanCard({ plan: p, onClone, onDelete }) {
+function PlanCard({ plan: p, onClone, onDelete, onToggleLive }) {
   return (
     <div
       data-testid={`plan-card-${p.id}`}
@@ -340,10 +392,13 @@ function PlanCard({ plan: p, onClone, onDelete }) {
 
       {/* Body */}
       <div className="p-4">
-        {/* Header row: name + status (right) */}
+        {/* Header row: name + (toggle + status) on right */}
         <div className="flex items-start justify-between gap-3 mb-2">
           <h3 className="font-bold text-gray-900 truncate text-base" title={p.name}>{p.name}</h3>
-          <StatusBadge status={p.status} />
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <CardLiveToggle plan={p} onToggle={onToggleLive} />
+            <StatusBadge status={p.status} />
+          </div>
         </div>
 
         {/* Meta */}
