@@ -124,17 +124,16 @@ const WorkstationSeat = ({
           transition: 'transform .15s ease',
         }}
       >
-        {/* Black outline silhouette (scaled slightly larger than the fill so it
-            peeks out around the edge — produces a guaranteed-visible black border
-            around the workstation shape, regardless of fill colour). */}
+        {/* Black outline silhouette — kept at the exact same size as the
+            calibrated <img> in Seat.jsx so the on-floor footprint matches the
+            Floor Layout view 1:1. The inner fill layer (below) is shrunk
+            slightly so this black silhouette shows through as a rim. */}
         <div
           aria-hidden
           style={{
             position: 'absolute',
             inset: 0,
             backgroundColor: '#000',
-            transform: 'scale(1.18)',
-            transformOrigin: 'center',
             WebkitMaskImage: `url(${SEAT_PNG})`,
             WebkitMaskRepeat: 'no-repeat',
             WebkitMaskSize: 'contain',
@@ -151,13 +150,17 @@ const WorkstationSeat = ({
             ].filter(Boolean).join(' '),
           }}
         />
-        {/* Coloured fill silhouette on top — the visible workstation colour. */}
+        {/* Coloured fill silhouette — shrunk to ~0.86 so the black outline
+            below peeks around it as a crisp rim. The overall visible
+            footprint stays at `size × size`, matching calibration exactly. */}
         <div
           aria-hidden
           style={{
             position: 'absolute',
             inset: 0,
             backgroundColor: fill,
+            transform: 'scale(0.86)',
+            transformOrigin: 'center',
             WebkitMaskImage: `url(${SEAT_PNG})`,
             WebkitMaskRepeat: 'no-repeat',
             WebkitMaskSize: 'contain',
