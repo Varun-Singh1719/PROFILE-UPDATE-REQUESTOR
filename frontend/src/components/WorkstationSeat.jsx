@@ -75,12 +75,39 @@ const WorkstationSeat = ({
           transition: 'transform .15s ease',
         }}
       >
-        {/* Colored silhouette of the workstation icon (PNG used as mask) */}
+        {/* Black outline silhouette (scaled slightly larger than the fill so it
+            peeks out around the edge — produces a guaranteed-visible black border
+            around the workstation shape, regardless of fill colour). */}
         <div
           aria-hidden
           style={{
-            width: '100%',
-            height: '100%',
+            position: 'absolute',
+            inset: 0,
+            backgroundColor: '#000',
+            transform: 'scale(1.18)',
+            transformOrigin: 'center',
+            WebkitMaskImage: `url(${SEAT_PNG})`,
+            WebkitMaskRepeat: 'no-repeat',
+            WebkitMaskSize: 'contain',
+            WebkitMaskPosition: 'center',
+            maskImage: `url(${SEAT_PNG})`,
+            maskRepeat: 'no-repeat',
+            maskSize: 'contain',
+            maskPosition: 'center',
+            // Outer glow for selected / search-highlighted seats sits on the
+            // outline layer so it surrounds the entire seat shape.
+            filter: [
+              isSelected ? 'drop-shadow(0 0 4px rgba(34,197,94,0.8))' : '',
+              searchHighlight ? 'drop-shadow(0 0 5px #2563eb)' : '',
+            ].filter(Boolean).join(' '),
+          }}
+        />
+        {/* Coloured fill silhouette on top — the visible workstation colour. */}
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute',
+            inset: 0,
             backgroundColor: fill,
             WebkitMaskImage: `url(${SEAT_PNG})`,
             WebkitMaskRepeat: 'no-repeat',
@@ -90,23 +117,6 @@ const WorkstationSeat = ({
             maskRepeat: 'no-repeat',
             maskSize: 'contain',
             maskPosition: 'center',
-            // Black outline around the silhouette so available (white-filled)
-            // seats stay clearly visible against the white floor plan.
-            // We stack drop-shadows in 8 directions at ~1.5px so the outline
-            // is crisp and visible without looking blurry.
-            // Additional outer glow is appended for selected / search-highlighted seats.
-            filter: [
-              'drop-shadow(1.5px 0 0 #000)',
-              'drop-shadow(-1.5px 0 0 #000)',
-              'drop-shadow(0 1.5px 0 #000)',
-              'drop-shadow(0 -1.5px 0 #000)',
-              'drop-shadow(1px 1px 0 #000)',
-              'drop-shadow(-1px 1px 0 #000)',
-              'drop-shadow(1px -1px 0 #000)',
-              'drop-shadow(-1px -1px 0 #000)',
-              isSelected ? 'drop-shadow(0 0 4px rgba(34,197,94,0.7))' : '',
-              searchHighlight ? 'drop-shadow(0 0 5px #2563eb)' : '',
-            ].filter(Boolean).join(' '),
           }}
         />
         {/* Seat label — always black, regardless of fill colour */}

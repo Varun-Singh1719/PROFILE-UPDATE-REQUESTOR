@@ -83,9 +83,12 @@ const WorkstationFloorMap = ({
         minScale={0.5}
         maxScale={4}
         centerOnInit={true}
-        wheel={{ step: 0.1 }}
+        wheel={{ step: 0.2, smoothStep: 0.008 }}
         pinch={{ step: 5 }}
         doubleClick={{ mode: 'reset' }}
+        panning={{ velocityDisabled: false }}
+        velocityAnimation={{ sensitivity: 1, animationTime: 250, animationType: 'easeOut' }}
+        zoomAnimation={{ animationTime: 250, animationType: 'easeOut' }}
       >
         {({ zoomIn, zoomOut, resetTransform }) => (
           <>
@@ -138,13 +141,13 @@ const WorkstationFloorMap = ({
 
             {/* Top-right zoom controls */}
             <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
-              <button onClick={() => zoomIn()} className="p-3 bg-white rounded-lg shadow-lg hover:bg-gray-50" title="Zoom In" data-testid="ws-zoom-in">
+              <button onClick={() => zoomIn(0.25, 250, 'easeOut')} className="p-3 bg-white rounded-lg shadow-lg hover:bg-gray-50" title="Zoom In" data-testid="ws-zoom-in">
                 <ZoomIn size={20} />
               </button>
-              <button onClick={() => zoomOut()} className="p-3 bg-white rounded-lg shadow-lg hover:bg-gray-50" title="Zoom Out" data-testid="ws-zoom-out">
+              <button onClick={() => zoomOut(0.25, 250, 'easeOut')} className="p-3 bg-white rounded-lg shadow-lg hover:bg-gray-50" title="Zoom Out" data-testid="ws-zoom-out">
                 <ZoomOut size={20} />
               </button>
-              <button onClick={() => resetTransform()} className="p-3 bg-white rounded-lg shadow-lg hover:bg-gray-50" title="Reset Zoom" data-testid="ws-zoom-reset">
+              <button onClick={() => resetTransform(300, 'easeOut')} className="p-3 bg-white rounded-lg shadow-lg hover:bg-gray-50" title="Reset Zoom" data-testid="ws-zoom-reset">
                 <Maximize2 size={20} />
               </button>
             </div>
