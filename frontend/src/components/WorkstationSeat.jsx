@@ -1,5 +1,6 @@
 import React, { useRef, useState, useLayoutEffect, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { WORKSTATION_MASK_URL } from './icons/workstationSilhouette';
 
 /**
  * Color-coded workstation seat used by the Workstation Booking floor map.
@@ -11,11 +12,13 @@ import { createPortal } from 'react-dom';
  *   Black  — Pending Approval (locked by a workstation request)
  *   Team color (from teams table) — Team-assigned (when occupied as part of a team)
  *
- * Rendering trick: we use the same workstation PNG that calibration uses, but
- * load it as a CSS `mask-image` so the silhouette can be tinted to any color.
- * This keeps the recognisable workstation shape while honoring the new palette.
+ * Rendering trick: we render a single SOLID top-down workstation silhouette
+ * (see `icons/workstationSilhouette.js`) as a CSS `mask-image`. Because the
+ * silhouette is fully filled (not just an outline), the whole workstation
+ * shape can be tinted to any color we want — including pure black for the
+ * Pending Approval state.
  */
-const SEAT_PNG = "https://customer-assets.emergentagent.com/job_workspace-manager-19/artifacts/96yixbn4_pngegg.png";
+const SEAT_PNG = WORKSTATION_MASK_URL;
 
 const COLOR = {
   available: "#FFFFFF",
@@ -190,16 +193,20 @@ const WorkstationSeat = ({
           }}
         />
         {/* Seat label — black on light fills; white on the black "pending"
-            silhouette so the workstation number stays readable. */}
+            silhouette so the workstation number stays readable. The label is
+            centred on the chair body (≈69% down the silhouette viewBox), not
+            on the geometric centre of the bounding box, so it sits squarely
+            inside the visible chair area rather than floating over the
+            backrest connector. */}
         {seat.label && (
           <div
             style={{
               position: 'absolute',
-              top: '50%',
+              top: '69%',
               left: '50%',
               transform: 'translate(-50%, -50%)',
-              fontSize: Math.max(3, size * 0.25) + 'px',
-              fontWeight: 'bold',
+              fontSize: Math.max(5, size * 0.25 + 2) + 'px',
+              fontWeight: 900,
               color: isPending ? '#FFFFFF' : '#000000',
               pointerEvents: 'none',
               whiteSpace: 'nowrap',

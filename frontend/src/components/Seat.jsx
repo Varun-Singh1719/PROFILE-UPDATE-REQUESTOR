@@ -1,6 +1,9 @@
 import React from 'react';
+import { WORKSTATION_MASK_URL } from './icons/workstationSilhouette';
 
-const SEAT_PNG = "https://customer-assets.emergentagent.com/job_workspace-manager-19/artifacts/96yixbn4_pngegg.png";
+// Use the shared solid top-down workstation silhouette so the Floor Layout /
+// Calibration view stays visually identical to the Booking / Request views.
+const SEAT_PNG = WORKSTATION_MASK_URL;
 
 const Seat = ({ seat, onClick, isClickable, debugMode = false, isSelected = false, isOccupied = false }) => {
   const handleClick = () => {
