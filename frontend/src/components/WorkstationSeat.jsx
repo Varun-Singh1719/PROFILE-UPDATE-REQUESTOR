@@ -90,15 +90,20 @@ const WorkstationSeat = ({
             maskRepeat: 'no-repeat',
             maskSize: 'contain',
             maskPosition: 'center',
-            // 1px black outline around the silhouette (4-direction drop-shadow stack
-            // produces a crisp border that follows the seat shape) so available
-            // (white-filled) seats stay visible against the white floor plan.
+            // Black outline around the silhouette so available (white-filled)
+            // seats stay clearly visible against the white floor plan.
+            // We stack drop-shadows in 8 directions at ~1.5px so the outline
+            // is crisp and visible without looking blurry.
             // Additional outer glow is appended for selected / search-highlighted seats.
             filter: [
-              'drop-shadow(1px 0 0 #000)',
-              'drop-shadow(-1px 0 0 #000)',
-              'drop-shadow(0 1px 0 #000)',
-              'drop-shadow(0 -1px 0 #000)',
+              'drop-shadow(1.5px 0 0 #000)',
+              'drop-shadow(-1.5px 0 0 #000)',
+              'drop-shadow(0 1.5px 0 #000)',
+              'drop-shadow(0 -1.5px 0 #000)',
+              'drop-shadow(1px 1px 0 #000)',
+              'drop-shadow(-1px 1px 0 #000)',
+              'drop-shadow(1px -1px 0 #000)',
+              'drop-shadow(-1px -1px 0 #000)',
               isSelected ? 'drop-shadow(0 0 4px rgba(34,197,94,0.7))' : '',
               searchHighlight ? 'drop-shadow(0 0 5px #2563eb)' : '',
             ].filter(Boolean).join(' '),

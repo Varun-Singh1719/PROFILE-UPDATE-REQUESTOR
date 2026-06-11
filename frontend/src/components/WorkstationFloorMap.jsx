@@ -117,7 +117,7 @@ const WorkstationFloorMap = ({
                 <h3 className="font-semibold text-xs mb-2 text-gray-700">Legend</h3>
                 <div className="flex flex-col gap-1.5 text-[11px]">
                   <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded-sm bg-white border border-gray-500" />
+                    <div className="w-4 h-4 rounded-sm bg-white border-2 border-black" />
                     <span>Available</span>
                   </div>
                   <div className="flex items-center gap-2">
