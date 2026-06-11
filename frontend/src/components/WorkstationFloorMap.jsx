@@ -121,7 +121,7 @@ const WorkstationFloorMap = ({
                     <span>Available</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded-sm bg-[#EC9324]" />
+                    <div className="w-4 h-4 rounded-sm bg-[#22C55E]" />
                     <span>Selected</span>
                   </div>
                   <div className="flex items-center gap-2">

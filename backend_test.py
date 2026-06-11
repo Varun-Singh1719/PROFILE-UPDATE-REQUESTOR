@@ -11,7 +11,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 
 # Backend URL from environment
-BASE_URL = "https://af4a66e9-bd8c-4315-a729-51b73233bd3e.preview.emergentagent.com/api"
+BASE_URL = "https://booking-color-patch.preview.emergentagent.com/api"
 
 # Test credentials
 SUPER_ADMIN_EMAIL = "admin@ticketing.com"

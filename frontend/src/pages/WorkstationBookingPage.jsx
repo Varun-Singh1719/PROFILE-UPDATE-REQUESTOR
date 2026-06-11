@@ -507,7 +507,7 @@ export default function WorkstationBookingPage() {
                     <div className="mt-1 text-[11px] text-gray-500 flex items-center gap-2">
                       <span>{availableSeatOptions.length} available</span>
                       {selectedSeatIds.length > 0 && (
-                        <span className="text-[#ec9324]">· {selectedSeatIds.length} selected</span>
+                        <span className="text-[#22C55E]">· {selectedSeatIds.length} selected</span>
                       )}
                     </div>
                   </div>

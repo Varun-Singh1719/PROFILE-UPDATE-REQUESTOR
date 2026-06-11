@@ -17,7 +17,7 @@ const SEAT_PNG = "https://customer-assets.emergentagent.com/job_workspace-manage
 
 const COLOR = {
   available: "#FFFFFF",
-  selected:  "#EC9324", // brand orange — also the "selected" indicator per UX confirmation
+  selected:  "#22C55E", // green — used as the "selected" indicator per UX update
   occupied:  "#9CA3AF", // grey-400
 };
 
@@ -99,7 +99,7 @@ const WorkstationSeat = ({
               'drop-shadow(-1px 0 0 #000)',
               'drop-shadow(0 1px 0 #000)',
               'drop-shadow(0 -1px 0 #000)',
-              isSelected ? 'drop-shadow(0 0 4px rgba(236,147,36,0.7))' : '',
+              isSelected ? 'drop-shadow(0 0 4px rgba(34,197,94,0.7))' : '',
               searchHighlight ? 'drop-shadow(0 0 5px #2563eb)' : '',
             ].filter(Boolean).join(' '),
           }}
@@ -143,7 +143,7 @@ const WorkstationSeat = ({
             style={{
               position: 'absolute',
               inset: -2,
-              border: '2px solid #EC9324',
+              border: '2px solid #22C55E',
               borderRadius: '4px',
               pointerEvents: 'none',
             }}
