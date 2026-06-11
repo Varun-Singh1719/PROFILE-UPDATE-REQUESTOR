@@ -197,28 +197,38 @@ const WorkstationSeat = ({
             centred on the chair body (≈69% down the silhouette viewBox), not
             on the geometric centre of the bounding box, so it sits squarely
             inside the visible chair area rather than floating over the
-            backrest connector. */}
-        {seat.label && (
-          <div
-            style={{
-              position: 'absolute',
-              top: '69%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              fontSize: Math.max(5, size * 0.25 + 2) + 'px',
-              fontWeight: 900,
-              color: isPending ? '#FFFFFF' : '#000000',
-              pointerEvents: 'none',
-              whiteSpace: 'nowrap',
-              textShadow: isPending
-                ? '0 0 2px #000000, 0 0 2px #000000'
-                : '0 0 2px #ffffff, 0 0 2px #ffffff',
-              zIndex: 10,
-            }}
-          >
-            {seat.label}
-          </div>
-        )}
+            backrest connector.
+
+            Font size auto-shrinks for 3+ character labels (e.g. H22, H24) so
+            they fit inside the chair body width instead of spilling over the
+            outline. */}
+        {seat.label && (() => {
+          const labelLen = String(seat.label).length;
+          const fontSize = labelLen >= 3
+            ? Math.max(3.5, size * 0.18)
+            : Math.max(4, size * 0.22);
+          return (
+            <div
+              style={{
+                position: 'absolute',
+                top: '69%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                fontSize: fontSize + 'px',
+                fontWeight: 900,
+                color: isPending ? '#FFFFFF' : '#000000',
+                pointerEvents: 'none',
+                whiteSpace: 'nowrap',
+                textShadow: isPending
+                  ? '0 0 2px #000000, 0 0 2px #000000'
+                  : '0 0 2px #ffffff, 0 0 2px #ffffff',
+                zIndex: 10,
+              }}
+            >
+              {seat.label}
+            </div>
+          );
+        })()}
         {/* Search highlight ring */}
         {searchHighlight && (
           <div
