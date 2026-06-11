@@ -134,78 +134,63 @@ const WorkstationSeat = ({
         }}
       >
         {/* ----------------------------------------------------------------
-            Pending Approval — render a solid black filled rectangle covering
-            the entire seat bounding box (not the chair silhouette), so the
-            "locked / pending" state is unmistakable on the floor map and the
-            white workstation label sits on a fully black background.
-            For every other state we render the regular two-layer silhouette
-            (black outline + colored fill) so the seat keeps its chair shape.
+            All seat states render the same chair silhouette so the on-floor
+            footprint stays identical to the Floor Layout view.
+              • Outer layer: black silhouette at scale 1.0 (the outline rim)
+              • Inner layer: fill-coloured silhouette at scale 0.86
+            For Pending Approval the fill is pure black, so the entire chair
+            silhouette appears solid black with the workstation label in white.
         ---------------------------------------------------------------- */}
-        {isPending ? (
-          <div
-            aria-hidden
-            style={{
-              position: 'absolute',
-              inset: 0,
-              backgroundColor: '#000000',
-              borderRadius: Math.max(1, size * 0.08) + 'px',
-              border: '1.5px solid #000000',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
-            }}
-          />
-        ) : (
-          <>
-            {/* Black outline silhouette — kept at the exact same size as the
-                calibrated <img> in Seat.jsx so the on-floor footprint matches
-                the Floor Layout view 1:1. The inner fill layer (below) is
-                shrunk slightly so this black silhouette shows through as a rim. */}
-            <div
-              aria-hidden
-              style={{
-                position: 'absolute',
-                inset: 0,
-                backgroundColor: '#000',
-                WebkitMaskImage: `url(${SEAT_PNG})`,
-                WebkitMaskRepeat: 'no-repeat',
-                WebkitMaskSize: 'contain',
-                WebkitMaskPosition: 'center',
-                maskImage: `url(${SEAT_PNG})`,
-                maskRepeat: 'no-repeat',
-                maskSize: 'contain',
-                maskPosition: 'center',
-                // Outer glow for selected / search-highlighted seats sits on
-                // the outline layer so it surrounds the entire seat shape.
-                filter: [
-                  isSelected ? 'drop-shadow(0 0 4px rgba(34,197,94,0.8))' : '',
-                  searchHighlight ? 'drop-shadow(0 0 5px #2563eb)' : '',
-                ].filter(Boolean).join(' '),
-              }}
-            />
-            {/* Coloured fill silhouette — shrunk to ~0.86 so the black outline
-                below peeks around it as a crisp rim. The overall visible
-                footprint stays at `size × size`, matching calibration exactly. */}
-            <div
-              aria-hidden
-              style={{
-                position: 'absolute',
-                inset: 0,
-                backgroundColor: fill,
-                transform: 'scale(0.86)',
-                transformOrigin: 'center',
-                WebkitMaskImage: `url(${SEAT_PNG})`,
-                WebkitMaskRepeat: 'no-repeat',
-                WebkitMaskSize: 'contain',
-                WebkitMaskPosition: 'center',
-                maskImage: `url(${SEAT_PNG})`,
-                maskRepeat: 'no-repeat',
-                maskSize: 'contain',
-                maskPosition: 'center',
-              }}
-            />
-          </>
-        )}
-        {/* Seat label — black on light fills; white on the solid black
-            "pending" rectangle so the workstation number stays readable. */}
+        {/* Black outline silhouette — kept at the exact same size as the
+            calibrated <img> in Seat.jsx so the on-floor footprint matches the
+            Floor Layout view 1:1. */}
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundColor: '#000',
+            WebkitMaskImage: `url(${SEAT_PNG})`,
+            WebkitMaskRepeat: 'no-repeat',
+            WebkitMaskSize: 'contain',
+            WebkitMaskPosition: 'center',
+            maskImage: `url(${SEAT_PNG})`,
+            maskRepeat: 'no-repeat',
+            maskSize: 'contain',
+            maskPosition: 'center',
+            // Outer glow for selected / search-highlighted seats sits on the
+            // outline layer so it surrounds the entire seat shape.
+            filter: [
+              isSelected ? 'drop-shadow(0 0 4px rgba(34,197,94,0.8))' : '',
+              searchHighlight ? 'drop-shadow(0 0 5px #2563eb)' : '',
+            ].filter(Boolean).join(' '),
+          }}
+        />
+        {/* Coloured fill silhouette — shrunk to ~0.86 so the black outline
+            below peeks around it as a crisp rim. The overall visible
+            footprint stays at `size × size`, matching calibration exactly.
+            For pending state the fill is pure black so the whole chair
+            silhouette ends up solid black. */}
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundColor: isPending ? '#000000' : fill,
+            transform: 'scale(0.86)',
+            transformOrigin: 'center',
+            WebkitMaskImage: `url(${SEAT_PNG})`,
+            WebkitMaskRepeat: 'no-repeat',
+            WebkitMaskSize: 'contain',
+            WebkitMaskPosition: 'center',
+            maskImage: `url(${SEAT_PNG})`,
+            maskRepeat: 'no-repeat',
+            maskSize: 'contain',
+            maskPosition: 'center',
+          }}
+        />
+        {/* Seat label — black on light fills; white on the black "pending"
+            silhouette so the workstation number stays readable. */}
         {seat.label && (
           <div
             style={{
@@ -219,7 +204,7 @@ const WorkstationSeat = ({
               pointerEvents: 'none',
               whiteSpace: 'nowrap',
               textShadow: isPending
-                ? 'none'
+                ? '0 0 2px #000000, 0 0 2px #000000'
                 : '0 0 2px #ffffff, 0 0 2px #ffffff',
               zIndex: 10,
             }}
