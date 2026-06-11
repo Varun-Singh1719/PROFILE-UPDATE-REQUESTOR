@@ -9,6 +9,7 @@ import {
   Search, Menu, X, CalendarClock, ClipboardList,
   Map, Crosshair, BookUser,
 } from "lucide-react";
+import AddTaskIcon from "./icons/AddTaskIcon";
 
 // --------------------------------------------------------------------------
 // Navigation config (single source of truth)
@@ -29,7 +30,7 @@ const NAV_CONFIG = [
       { to: "/workspace-manager/workstation-booking", label: "Workstation Booking", icon: Armchair, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
       { to: "/workspace-manager/request-workstation", label: "Request Workstation", icon: ClipboardList, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
       { to: "/workspace-manager/meeting-room-booking", label: "Meeting Room Booking", icon: CalendarClock, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
-      { to: "/workspace-manager/pending-approvals", label: "Pending Approvals", icon: Shield, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
+      { to: "/workspace-manager/pending-approvals", label: "Pending Approvals", icon: AddTaskIcon, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
       { to: "/workspace-manager/bookings",     label: "Bookings",          icon: ClipboardList, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
       { to: "/workspace-manager/floor-plans",  label: "Floor Calibration", icon: Crosshair,   perm: { module: "desk_booking", feature: "seat_request", action: "edit" } },
     ],
