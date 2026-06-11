@@ -32,6 +32,7 @@ from routers import dashboard as _dashboard  # noqa: F401
 from routers import floor_plans as _floor_plans  # noqa: F401
 from routers import room_bookings as _room_bookings  # noqa: F401
 from routers import workstation_bookings as _workstation_bookings  # noqa: F401
+from routers import workstation_requests as _workstation_requests  # noqa: F401
 from routers import bookings as _bookings  # noqa: F401
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -76,6 +77,14 @@ async def startup():
     await db.workstation_bookings.create_index([("employee.id", 1), ("date", 1), ("cancelled", 1)])
     await db.workstation_bookings.create_index([("seat_id", 1), ("date", 1), ("cancelled", 1)])
     await db.workstation_bookings.create_index([("series_id", 1)])
+    # Workstation Requests (approval-based allocation)
+    await db.workstation_requests.create_index("id", unique=True)
+    await db.workstation_requests.create_index("seq_no", unique=True, sparse=True)
+    await db.workstation_requests.create_index([("plan_id", 1), ("date", 1), ("status", 1)])
+    await db.workstation_requests.create_index([("seat_id", 1), ("date", 1), ("status", 1)])
+    await db.workstation_requests.create_index([("employee.id", 1), ("date", 1), ("status", 1)])
+    await db.workstation_requests.create_index([("status", 1), ("requested_on", -1)])
+    await db.workstation_requests.create_index([("group_id", 1)])
     init_storage()
 
     # Backfill seq_no on existing bookings (idempotent, one-shot)

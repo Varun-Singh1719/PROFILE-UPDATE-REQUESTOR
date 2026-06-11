@@ -262,6 +262,11 @@ async def workstation_availability(
     booked_seat_ids = sorted({b["seat_id"] for b in bookings})
     booked_employee_ids = sorted({(b.get("employee") or {}).get("id") for b in bookings if (b.get("employee") or {}).get("id")})
 
+    # Cross-module: seats locked by pending workstation requests
+    from routers.workstation_requests import pending_seat_ids_for, pending_employee_ids_for  # type: ignore
+    pending_seat_ids = await pending_seat_ids_for(plan_id, date)
+    pending_employee_ids = await pending_employee_ids_for(date, plan_id)
+
     return {
         "plan": {
             "id": plan["id"],
@@ -273,6 +278,8 @@ async def workstation_availability(
         "bookings": bookings,
         "booked_seat_ids": booked_seat_ids,
         "booked_employee_ids": booked_employee_ids,
+        "pending_seat_ids": pending_seat_ids,
+        "pending_employee_ids": pending_employee_ids,
     }
 
 
@@ -437,6 +444,31 @@ async def create_workstation_booking(
                 "message": f"{(emp_conflict.get('employee') or {}).get('name')} already has a booking on {emp_conflict['date']}",
                 "conflict": emp_conflict,
             })
+
+    # ---- Cross-module: refuse if any seat is locked by a pending workstation request
+    from routers.workstation_requests import ACTIVE_PENDING_STATUSES  # type: ignore
+    pending_seat = await db.workstation_requests.find_one(
+        {"plan_id": payload.plan_id, "seat_id": {"$in": seat_ids},
+         "date": {"$in": iso_dates}, "status": {"$in": ACTIVE_PENDING_STATUSES}},
+        {"_id": 0, "seat_id": 1, "seat_label": 1, "date": 1, "employee": 1, "requested_by": 1},
+    )
+    if pending_seat:
+        raise HTTPException(409, {
+            "code": "WORKSTATION_PENDING",
+            "message": f"Workstation {pending_seat['seat_label']} is locked by a pending request on {pending_seat['date']}",
+            "conflict": pending_seat,
+        })
+    pending_emp = await db.workstation_requests.find_one(
+        {"employee.id": {"$in": all_emp_ids}, "date": {"$in": iso_dates},
+         "status": {"$in": ACTIVE_PENDING_STATUSES}},
+        {"_id": 0, "employee": 1, "date": 1, "seat_label": 1},
+    )
+    if pending_emp:
+        raise HTTPException(409, {
+            "code": "EMPLOYEE_PENDING",
+            "message": f"{(pending_emp.get('employee') or {}).get('name')} has a pending workstation request on {pending_emp['date']}",
+            "conflict": pending_emp,
+        })
 
     # ---- Insert all bookings (date × seat combinations)
     now = now_iso()

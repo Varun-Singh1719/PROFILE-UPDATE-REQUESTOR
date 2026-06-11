@@ -402,6 +402,65 @@ DEFAULT_TEMPLATES = [
             "<p>— Infollion ProfiX</p>"
         ),
     },
+    {
+        # Sent when a workstation **request** is submitted (status = Pending Approval).
+        # Goes to the approver(s). Variables: {{name}} (approver), {{requested_by}},
+        # {{requested_on}}, {{requested_for_date}}, {{plan_name}}, {{seat_labels}}.
+        "kind": "workstation_requested",
+        "name": "Workstation requested — pending approval",
+        "category": "notification",
+        "subject": "Workstation request pending approval",
+        "body": (
+            "<p>Hi {{name}},</p>"
+            "<p>A workstation request is waiting for your approval.</p>"
+            "<ul>"
+            "<li><b>Requested by:</b> {{requested_by}}</li>"
+            "<li><b>Requested on:</b> {{requested_on}}</li>"
+            "<li><b>For date:</b> {{requested_for_date}}</li>"
+            "<li><b>Floor plan:</b> {{plan_name}}</li>"
+            "<li><b>Workstation(s):</b> {{seat_labels}}</li>"
+            "</ul>"
+            "<p>Open <a href=\"{{approvals_url}}\">Pending Approvals</a> to approve or decline.</p>"
+            "<p>— Infollion Workspace Manager</p>"
+        ),
+    },
+    {
+        # Sent to the requester when their workstation request is approved.
+        "kind": "workstation_request_approved",
+        "name": "Workstation request approved",
+        "category": "notification",
+        "subject": "Your workstation request is approved",
+        "body": (
+            "<p>Hi {{name}},</p>"
+            "<p>Your workstation request has been <strong>approved</strong> and a booking has been created.</p>"
+            "<ul>"
+            "<li><b>Floor plan:</b> {{plan_name}}</li>"
+            "<li><b>Workstation(s):</b> {{seat_labels}}</li>"
+            "<li><b>Date:</b> {{requested_for_date}}</li>"
+            "<li><b>Approved by:</b> {{approved_by}}</li>"
+            "</ul>"
+            "<p>— Infollion Workspace Manager</p>"
+        ),
+    },
+    {
+        # Sent to the requester when their workstation request is declined.
+        "kind": "workstation_request_declined",
+        "name": "Workstation request declined",
+        "category": "notification",
+        "subject": "Your workstation request was declined",
+        "body": (
+            "<p>Hi {{name}},</p>"
+            "<p>Unfortunately your workstation request has been <strong>declined</strong>.</p>"
+            "<ul>"
+            "<li><b>Floor plan:</b> {{plan_name}}</li>"
+            "<li><b>Workstation(s):</b> {{seat_labels}}</li>"
+            "<li><b>Date:</b> {{requested_for_date}}</li>"
+            "<li><b>Declined by:</b> {{declined_by}}</li>"
+            "</ul>"
+            "<p>You can submit a new request for a different workstation or date.</p>"
+            "<p>— Infollion Workspace Manager</p>"
+        ),
+    },
 ]
 
 # ---------- Team color palette ----------

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import WorkstationSeat from './WorkstationSeat';
@@ -18,26 +18,35 @@ pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/$
  * pdfUrl              — Live floor plan PDF
  * seats               — [{id, label, x, y, size, rotation}] from floor plan version
  * bookingsBySeat      — map seat_id -> booking doc (active bookings on the chosen date)
+ * requestsBySeat      — map seat_id -> pending workstation request doc (renders seat as black)
  * selectedSeatIds     — currently selected seats (mirrors the form's MultiSelect)
  * onToggleSeat(id)    — flips selection of a seat (only valid for available seats)
  * onOpenBookingDetail(seat, booking)  — invoked when an occupied seat is clicked
+ * onOpenRequestDetail(seat, request)  — invoked when a pending seat is clicked
  * loading             — show skeleton when data is being fetched
  * disabled            — when true, all click handlers are no-ops
+ * centerOnSeatId      — when set, the map pans + zooms in on this seat with a brief
+ *                       highlight pulse (used by Pending Approvals card → focus seat).
  */
 const WorkstationFloorMap = ({
   pdfUrl,
   seats = [],
   bookingsBySeat = {},
+  requestsBySeat = {},
   selectedSeatIds = [],
   onToggleSeat,
   onOpenBookingDetail,
+  onOpenRequestDetail,
   loading = false,
   disabled = false,
+  centerOnSeatId = null,
 }) => {
   const [pageWidth] = useState(1200);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [pdfReady, setPdfReady] = useState(false);
+  const [focusFlashSeatId, setFocusFlashSeatId] = useState(null);
+  const transformRef = useRef(null);
 
   // Debounce search input (300ms)
   useEffect(() => {
@@ -50,9 +59,11 @@ const WorkstationFloorMap = ({
     const selectedSet = new Set(selectedSeatIds);
     return seats.map((s) => {
       const booking = bookingsBySeat[s.id];
+      const request = requestsBySeat[s.id];
       let status = 'available';
       let teamColor;
       if (selectedSet.has(s.id)) status = 'selected';
+      else if (request) status = 'pending';
       else if (booking) {
         if (booking.team_id && booking.team_color) { status = 'team'; teamColor = booking.team_color; }
         else status = 'occupied';
@@ -60,11 +71,34 @@ const WorkstationFloorMap = ({
       const isMatch = debouncedSearch
         ? ((s.label || '').toLowerCase().includes(debouncedSearch) || s.id.toLowerCase().includes(debouncedSearch))
         : false;
-      return { ...s, _status: status, _teamColor: teamColor, _booking: booking, _match: isMatch };
+      const isFocusFlash = focusFlashSeatId === s.id;
+      return { ...s, _status: status, _teamColor: teamColor, _booking: booking, _request: request, _match: isMatch || isFocusFlash };
     });
-  }, [seats, bookingsBySeat, selectedSeatIds, debouncedSearch]);
+  }, [seats, bookingsBySeat, requestsBySeat, selectedSeatIds, debouncedSearch, focusFlashSeatId]);
 
   const matchCount = enrichedSeats.filter((s) => s._match).length;
+
+  // Pan + zoom to a specific seat when `centerOnSeatId` changes. Used by the
+  // Pending Approvals page — clicking a card flies the map to that workstation.
+  useEffect(() => {
+    if (!centerOnSeatId || !pdfReady) return;
+    // Defer until next frame so the seat overlay is in the DOM.
+    const id = requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-testid="ws-seat-${centerOnSeatId}"]`);
+      if (el && transformRef.current && transformRef.current.zoomToElement) {
+        try {
+          transformRef.current.zoomToElement(el, 2.2, 450, 'easeOut');
+        } catch {
+          /* ignore — library version safety */
+        }
+      }
+      // Add a brief blue search-style highlight pulse for ~2s
+      setFocusFlashSeatId(centerOnSeatId);
+      const t = setTimeout(() => setFocusFlashSeatId(null), 2200);
+      return () => clearTimeout(t);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [centerOnSeatId, pdfReady]);
 
   return (
     <div className="w-full h-full bg-gray-100 relative overflow-hidden rounded-lg">
@@ -79,6 +113,7 @@ const WorkstationFloorMap = ({
       )}
 
       <TransformWrapper
+        ref={transformRef}
         initialScale={1}
         minScale={0.5}
         maxScale={4}
@@ -130,6 +165,10 @@ const WorkstationFloorMap = ({
                   <div className="flex items-center gap-2">
                     <div className="w-4 h-4 rounded-sm bg-gray-400" />
                     <span>Occupied</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded-sm bg-[#111111]" />
+                    <span>Pending Approval</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-4 h-4 rounded-sm" style={{ background: 'linear-gradient(45deg, #6366F1 50%, #F59E0B 50%)' }} />
@@ -192,10 +231,17 @@ const WorkstationFloorMap = ({
                           status={seat._status}
                           teamColor={seat._teamColor}
                           booking={seat._booking}
+                          request={seat._request}
                           isClickable={!disabled}
                           searchHighlight={seat._match}
                           onClick={onToggleSeat}
-                          onOccupiedClick={onOpenBookingDetail}
+                          onOccupiedClick={(s, info) => {
+                            if (seat._status === 'pending') {
+                              if (onOpenRequestDetail) onOpenRequestDetail(s, info);
+                            } else if (onOpenBookingDetail) {
+                              onOpenBookingDetail(s, info);
+                            }
+                          }}
                         />
                       ))}
                     </div>

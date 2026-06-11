@@ -6,8 +6,9 @@ import { createPortal } from 'react-dom';
  *
  * Color rules (spec):
  *   White  — Available
- *   Orange — Selected
+ *   Green  — Selected
  *   Grey   — Occupied / Not available
+ *   Black  — Pending Approval (locked by a workstation request)
  *   Team color (from teams table) — Team-assigned (when occupied as part of a team)
  *
  * Rendering trick: we use the same workstation PNG that calibration uses, but
@@ -20,13 +21,15 @@ const COLOR = {
   available: "#FFFFFF",
   selected:  "#22C55E", // green — used as the "selected" indicator per UX update
   occupied:  "#9CA3AF", // grey-400
+  pending:   "#111111", // near-black — locked by a pending workstation request
 };
 
 const WorkstationSeat = ({
   seat,
-  status = "available",   // 'available' | 'selected' | 'occupied' | 'team'
+  status = "available",   // 'available' | 'selected' | 'occupied' | 'team' | 'pending'
   teamColor,              // hex, only when status === 'team'
   booking,                // optional booking object for the tooltip (when occupied/team)
+  request,                // optional request object for the tooltip (when pending)
   onClick,
   onOccupiedClick,
   isClickable = true,
@@ -38,6 +41,7 @@ const WorkstationSeat = ({
     ? (teamColor || COLOR.occupied)
     : COLOR[status] || COLOR.available;
   const isOccupied = status === "occupied" || status === "team";
+  const isPending = status === "pending";
   const isSelected = status === "selected";
 
   // -----------------------------------------------------------------
@@ -88,11 +92,16 @@ const WorkstationSeat = ({
   const handleClick = (e) => {
     e.stopPropagation();
     if (!isClickable) return;
+    if (isPending && onOccupiedClick) {
+      // Pending seats are locked but clicking shows details (passing request as 2nd arg)
+      onOccupiedClick(seat, request || booking);
+      return;
+    }
     if (isOccupied && onOccupiedClick) {
       onOccupiedClick(seat, booking);
       return;
     }
-    if (!isOccupied && onClick) onClick(seat.id);
+    if (!isOccupied && !isPending && onClick) onClick(seat.id);
   };
 
   return (
@@ -103,7 +112,7 @@ const WorkstationSeat = ({
         left: `${seat.x}%`,
         top: `${seat.y}%`,
         transform: 'translate(-50%, -50%)',
-        cursor: isClickable ? (isOccupied ? 'help' : 'pointer') : 'not-allowed',
+        cursor: isClickable ? ((isOccupied || isPending) ? 'help' : 'pointer') : 'not-allowed',
         zIndex: hovered ? 50 : 10,
       }}
       onClick={handleClick}
@@ -171,7 +180,8 @@ const WorkstationSeat = ({
             maskPosition: 'center',
           }}
         />
-        {/* Seat label — always black, regardless of fill colour */}
+        {/* Seat label — black by default; switches to white on the black
+            "pending" silhouette so the label stays readable. */}
         {seat.label && (
           <div
             style={{
@@ -181,10 +191,12 @@ const WorkstationSeat = ({
               transform: 'translate(-50%, -50%)',
               fontSize: Math.max(3, size * 0.25) + 'px',
               fontWeight: 'bold',
-              color: '#000000',
+              color: isPending ? '#FFFFFF' : '#000000',
               pointerEvents: 'none',
               whiteSpace: 'nowrap',
-              textShadow: '0 0 2px #ffffff, 0 0 2px #ffffff',
+              textShadow: isPending
+                ? '0 0 2px #000000, 0 0 2px #000000'
+                : '0 0 2px #ffffff, 0 0 2px #ffffff',
               zIndex: 10,
             }}
           >
@@ -235,7 +247,17 @@ const WorkstationSeat = ({
         >
           <div className="relative bg-gray-900 text-white text-[11px] rounded-md px-2 py-1.5 whitespace-nowrap shadow-lg">
             <div className="font-semibold">Workstation {seat.label}</div>
-            {isOccupied && booking ? (
+            {isPending && request ? (
+              <>
+                <div>⏳ <span className="font-semibold">Pending Approval</span></div>
+                <div>👤 {(request.employee || {}).name || '—'}</div>
+                {request.team_name && <div>👥 {request.team_name}</div>}
+                <div className="opacity-80">📅 {request.date}</div>
+                <div className="opacity-60 italic text-[10px] mt-0.5">
+                  Requested by {(request.requested_by || {}).name || '—'}
+                </div>
+              </>
+            ) : isOccupied && booking ? (
               <>
                 <div>👤 {(booking.employee || {}).name || '—'}</div>
                 {booking.team_name && <div>👥 {booking.team_name}</div>}
@@ -243,7 +265,9 @@ const WorkstationSeat = ({
                 <div className="opacity-60 italic text-[10px] mt-0.5">Click for details</div>
               </>
             ) : (
-              <div className="opacity-80">{isSelected ? 'Selected' : 'Available'}</div>
+              <div className="opacity-80">
+                {isPending ? 'Pending Approval' : isSelected ? 'Selected' : 'Available'}
+              </div>
             )}
             <div className="absolute left-1/2 -translate-x-1/2 -top-1 w-2 h-2 bg-gray-900 rotate-45" />
           </div>

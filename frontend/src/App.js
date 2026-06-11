@@ -26,6 +26,8 @@ import SeatCalibrationPage from "./pages/SeatCalibrationPage";
 import FloorPlansListPage from "./pages/FloorPlansListPage";
 import MeetingRoomBookingPage from "./pages/MeetingRoomBookingPage";
 import WorkstationBookingPage from "./pages/WorkstationBookingPage";
+import RequestWorkstationPage from "./pages/RequestWorkstationPage";
+import PendingApprovalsPage from "./pages/PendingApprovalsPage";
 import BookingsPage from "./pages/BookingsPage";
 import { Loader2 } from "lucide-react";
 
@@ -97,6 +99,8 @@ function App() {
             <Route path="/workspace-manager/calibration" element={<Navigate to="/workspace-manager/floor-plans" replace />} />
             <Route path="/workspace-manager/meeting-room-booking" element={<ProtectedRoute roles={ADMIN_ROLES}><MeetingRoomBookingPage /></ProtectedRoute>} />
             <Route path="/workspace-manager/workstation-booking" element={<ProtectedRoute roles={ADMIN_ROLES}><WorkstationBookingPage /></ProtectedRoute>} />
+            <Route path="/workspace-manager/request-workstation" element={<ProtectedRoute roles={ADMIN_ROLES}><RequestWorkstationPage /></ProtectedRoute>} />
+            <Route path="/workspace-manager/pending-approvals" element={<ProtectedRoute roles={ADMIN_ROLES}><PendingApprovalsPage /></ProtectedRoute>} />
             <Route path="/workspace-manager/bookings" element={<ProtectedRoute roles={ADMIN_ROLES}><BookingsPage /></ProtectedRoute>} />
             
             {/* Legacy redirect */}

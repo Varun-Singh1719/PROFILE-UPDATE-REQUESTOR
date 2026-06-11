@@ -88,7 +88,19 @@ const WEEK_DAYS = [
 ];
 
 // ============================================================ Component
-export default function WorkstationBookingPage() {
+//
+// `mode` decides whether this page creates a real booking or a request that
+// requires approval. Defaults to "booking" so existing routes keep working.
+//   • mode="booking"  → POSTs /workstation-bookings,  saves directly
+//   • mode="request"  → POSTs /workstation-requests,  goes to Pending Approval
+// In "request" mode the Recurring section is hidden (single-date requests only)
+// and the page title, breadcrumb and submit button are re-labeled.
+export default function WorkstationBookingPage({ mode = "booking" } = {}) {
+  const isRequestMode = mode === "request";
+  const apiBase = isRequestMode ? "/workstation-requests" : "/workstation-bookings";
+  const pageTitle = isRequestMode ? "Request Workstation" : "Workstation Booking";
+  const submitLabel = isRequestMode ? "Submit Request" : "Save";
+  const submitInProgressLabel = isRequestMode ? "Submitting…" : "Saving…";
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -125,7 +137,7 @@ export default function WorkstationBookingPage() {
   const loadPlans = useCallback(async () => {
     setPlanLoading(true);
     try {
-      const res = await api.get("/workstation-bookings/floor-plans");
+      const res = await api.get(`${apiBase}/floor-plans`);
       const plans = res.data || [];
       setLivePlans(plans);
       // Pick the first plan unless URL specifies one (deep-link friendly)
@@ -161,7 +173,7 @@ export default function WorkstationBookingPage() {
     if (!planId || !isoDate) return;
     setAvailLoading(true);
     try {
-      const res = await api.get(`/workstation-bookings/availability`, { params: { plan_id: planId, date: isoDate } });
+      const res = await api.get(`${apiBase}/availability`, { params: { plan_id: planId, date: isoDate } });
       setAvailability(res.data);
     } catch (e) {
       toast.error(formatApiError(e?.response?.data?.detail) || "Failed to load availability");
@@ -175,7 +187,7 @@ export default function WorkstationBookingPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await api.get("/workstation-bookings/floor-plans");
+        const res = await api.get(`${apiBase}/floor-plans`);
         if (cancelled) return;
         const plans = res.data || [];
         setLivePlans(plans);
@@ -234,7 +246,7 @@ export default function WorkstationBookingPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await api.get(`/workstation-bookings/availability`, { params: { plan_id: selectedPlanId, date } });
+        const res = await api.get(`${apiBase}/availability`, { params: { plan_id: selectedPlanId, date } });
         if (!cancelled) setAvailability(res.data);
       } catch (e) {
         if (!cancelled) toast.error(formatApiError(e?.response?.data?.detail) || "Failed to load availability");
@@ -251,17 +263,29 @@ export default function WorkstationBookingPage() {
     return m;
   }, [availability]);
 
+  // Map seat_id -> pending workstation request (renders that seat as black on
+  // the floor map and excludes it from the available-seats dropdown).
+  const requestsBySeat = useMemo(() => {
+    const m = {};
+    for (const r of (availability?.pending_requests || [])) m[r.seat_id] = r;
+    return m;
+  }, [availability]);
+
   const allSeats = availability?.seats || [];
 
-  // Available seats — hide booked workstations for the selected date
+  // Available seats — hide booked AND pending workstations for the selected date
   const availableSeatOptions = useMemo(() => {
     return allSeats
-      .filter((s) => !bookingsBySeat[s.id])
+      .filter((s) => !bookingsBySeat[s.id] && !requestsBySeat[s.id])
       .map((s) => ({ value: s.id, label: s.label || s.id, sublabel: "" }));
-  }, [allSeats, bookingsBySeat]);
+  }, [allSeats, bookingsBySeat, requestsBySeat]);
 
-  // Active employees + not already booked on this date
-  const bookedEmpIds = useMemo(() => new Set(availability?.booked_employee_ids || []), [availability]);
+  // Active employees + not already booked or with a pending request on this date
+  const bookedEmpIds = useMemo(() => {
+    const ids = new Set(availability?.booked_employee_ids || []);
+    for (const eid of (availability?.pending_employee_ids || [])) ids.add(eid);
+    return ids;
+  }, [availability]);
   const availableEmployees = useMemo(
     () => employees.filter((e) => !bookedEmpIds.has(e.id)),
     [employees, bookedEmpIds],
@@ -330,7 +354,9 @@ export default function WorkstationBookingPage() {
 
   const handleSave = async () => {
     if (!canEdit) {
-      toast.error("Only Super Admin can create workstation bookings");
+      toast.error(isRequestMode
+        ? "Only Super Admin can submit workstation requests"
+        : "Only Super Admin can create workstation bookings");
       return;
     }
     const err = validate();
@@ -340,8 +366,11 @@ export default function WorkstationBookingPage() {
       plan_id: selectedPlanId,
       date,
       seat_ids: selectedSeatIds,
-      recurring: recurringOn ? { end_date: recurringEnd, days: recurringDays } : null,
     };
+    // Request mode doesn't support recurring — single date only.
+    if (!isRequestMode) {
+      payload.recurring = recurringOn ? { end_date: recurringEnd, days: recurringDays } : null;
+    }
     if (isSingle) {
       payload.employee_id = employeeId;
     } else {
@@ -361,14 +390,19 @@ export default function WorkstationBookingPage() {
 
     setSaving(true);
     try {
-      const res = await api.post("/workstation-bookings", payload);
-      toast.success(`Booked ${res.data?.created || 0} workstation${(res.data?.created || 0) === 1 ? "" : "s"}`);
+      const res = await api.post(apiBase, payload);
+      const count = res.data?.created || 0;
+      if (isRequestMode) {
+        toast.success(`Submitted ${count} workstation request${count === 1 ? "" : "s"} — pending approval`);
+      } else {
+        toast.success(`Booked ${count} workstation${count === 1 ? "" : "s"}`);
+      }
       resetForm();
       await loadAvailability(selectedPlanId, date);
     } catch (e) {
       const detail = e?.response?.data?.detail;
       const msg = typeof detail === "object" && detail?.message ? detail.message : formatApiError(detail);
-      toast.error(msg || "Failed to create booking");
+      toast.error(msg || (isRequestMode ? "Failed to submit request" : "Failed to create booking"));
     } finally {
       setSaving(false);
     }
@@ -380,7 +414,7 @@ export default function WorkstationBookingPage() {
 
   return (
     <Layout
-      breadcrumbs={[{ label: "Workspace Manager" }, { label: "Workstation Booking" }]}
+      breadcrumbs={[{ label: "Workspace Manager" }, { label: pageTitle }]}
       fullBleed
       contentClassName="bg-gray-50"
     >
@@ -392,7 +426,7 @@ export default function WorkstationBookingPage() {
               <Armchair className="text-[#ec9324]" size={20} />
             </div>
             <div>
-              <h1 className="text-lg font-semibold text-gray-900">Workstation Booking</h1>
+              <h1 className="text-lg font-semibold text-gray-900">{pageTitle}</h1>
               <p className="text-xs text-gray-500">Full-day seat booking on the Live floor layout · IST</p>
             </div>
           </div>
@@ -462,6 +496,7 @@ export default function WorkstationBookingPage() {
                   pdfUrl={availability.plan.pdfUrl}
                   seats={allSeats}
                   bookingsBySeat={bookingsBySeat}
+                  requestsBySeat={requestsBySeat}
                   selectedSeatIds={selectedSeatIds}
                   onToggleSeat={toggleSeat}
                   onOpenBookingDetail={openBookingDetail}
@@ -479,7 +514,7 @@ export default function WorkstationBookingPage() {
             <div ref={formRef} className="lg:w-1/4 w-full lg:max-w-[420px] flex flex-col bg-white">
               {!canEdit && (
                 <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 flex items-center gap-2 text-xs text-amber-800">
-                  <ShieldAlert size={14} /> Only Super Admin can create or modify workstation bookings.
+                  <ShieldAlert size={14} /> Only Super Admin can {isRequestMode ? "submit workstation requests" : "create or modify workstation bookings"}.
                 </div>
               )}
 
@@ -618,7 +653,8 @@ export default function WorkstationBookingPage() {
                     />
                   </div>
 
-                  {/* Recurring */}
+                  {/* Recurring (booking mode only — requests are single-date) */}
+                  {!isRequestMode && (
                   <div className="border border-gray-200 rounded-md p-3 space-y-2 bg-gray-50">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-semibold text-gray-700 flex items-center gap-1">
@@ -677,12 +713,17 @@ export default function WorkstationBookingPage() {
                       </div>
                     )}
                   </div>
+                  )}
 
                   {/* Summary line */}
                   <div className="text-[11px] text-gray-500 bg-blue-50 border border-blue-100 rounded p-2">
                     {seatCount === 0 && "Click a workstation on the map (or use the dropdown) to start."}
-                    {isSingle && employeeId && `Booking 1 workstation for ${employees.find(e => e.id === employeeId)?.name || "employee"} on ${fmtDate(date)}.`}
-                    {isMulti && teamId && `Booking ${seatCount} workstations for team "${selectedTeam?.name}" on ${fmtDate(date)} (${allocationMode}).`}
+                    {isSingle && employeeId && (isRequestMode
+                      ? `Requesting 1 workstation for ${employees.find(e => e.id === employeeId)?.name || "employee"} on ${fmtDate(date)}.`
+                      : `Booking 1 workstation for ${employees.find(e => e.id === employeeId)?.name || "employee"} on ${fmtDate(date)}.`)}
+                    {isMulti && teamId && (isRequestMode
+                      ? `Requesting ${seatCount} workstations for team "${selectedTeam?.name}" on ${fmtDate(date)} (${allocationMode}).`
+                      : `Booking ${seatCount} workstations for team "${selectedTeam?.name}" on ${fmtDate(date)} (${allocationMode}).`)}
                   </div>
 
                   {/* Actions */}
@@ -693,7 +734,7 @@ export default function WorkstationBookingPage() {
                       className="flex-1 bg-[#ec9324] hover:bg-[#d8821a] text-white"
                       data-testid="ws-save-button"
                     >
-                      {saving ? <><Loader2 className="animate-spin mr-2" size={14}/>Saving…</> : "Save"}
+                      {saving ? <><Loader2 className="animate-spin mr-2" size={14}/>{submitInProgressLabel}</> : submitLabel}
                     </Button>
                     <Button
                       variant="outline"
