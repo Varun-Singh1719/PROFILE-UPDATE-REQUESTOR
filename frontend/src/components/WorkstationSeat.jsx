@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useRef, useState, useLayoutEffect, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 
 /**
  * Color-coded workstation seat used by the Workstation Booking floor map.
@@ -39,6 +40,51 @@ const WorkstationSeat = ({
   const isOccupied = status === "occupied" || status === "team";
   const isSelected = status === "selected";
 
+  // -----------------------------------------------------------------
+  // Hover tooltip — rendered via a portal into document.body so it
+  // (a) sits on top of every other seat regardless of stacking order
+  // (b) keeps a constant on-screen size, immune to the floor-map zoom.
+  // -----------------------------------------------------------------
+  const seatRef = useRef(null);
+  const [hovered, setHovered] = useState(false);
+  const [tipPos, setTipPos] = useState(null);
+
+  const updateTipPos = useCallback(() => {
+    const el = seatRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setTipPos({
+      left: r.left + r.width / 2,
+      top: r.bottom + 8,
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!hovered) return;
+    updateTipPos();
+    const handler = () => updateTipPos();
+    window.addEventListener('scroll', handler, true);
+    window.addEventListener('resize', handler);
+    // The zoom-pan-pinch container animates transforms, so re-measure on rAF
+    // for a couple of frames to stay in sync if a zoom is in progress.
+    let raf = 0;
+    let ticks = 0;
+    const loop = () => {
+      updateTipPos();
+      ticks += 1;
+      if (ticks < 8) raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => {
+      window.removeEventListener('scroll', handler, true);
+      window.removeEventListener('resize', handler);
+      cancelAnimationFrame(raf);
+    };
+  }, [hovered, updateTipPos]);
+
+  // Hide tooltip if the seat unmounts while hovered
+  useEffect(() => () => setHovered(false), []);
+
   const handleClick = (e) => {
     e.stopPropagation();
     if (!isClickable) return;
@@ -51,15 +97,18 @@ const WorkstationSeat = ({
 
   return (
     <div
-      className="absolute group"
+      ref={seatRef}
+      className="absolute"
       style={{
         left: `${seat.x}%`,
         top: `${seat.y}%`,
         transform: 'translate(-50%, -50%)',
         cursor: isClickable ? (isOccupied ? 'help' : 'pointer') : 'not-allowed',
-        zIndex: 10,
+        zIndex: hovered ? 50 : 10,
       }}
       onClick={handleClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       data-testid={`ws-seat-${seat.id}`}
       data-status={status}
     >
@@ -166,26 +215,38 @@ const WorkstationSeat = ({
         )}
       </div>
 
-      {/* Hover tooltip — Workstation X + employee/team/date when occupied */}
-      <div
-        className="absolute left-1/2 -translate-x-1/2 top-full mt-2
-                   opacity-0 group-hover:opacity-100 transition-opacity
-                   bg-gray-900 text-white text-[11px] rounded-md px-2 py-1.5
-                   whitespace-nowrap pointer-events-none z-50 shadow-lg"
-      >
-        <div className="font-semibold">Workstation {seat.label}</div>
-        {isOccupied && booking ? (
-          <>
-            <div>👤 {(booking.employee || {}).name || '—'}</div>
-            {booking.team_name && <div>👥 {booking.team_name}</div>}
-            <div className="opacity-80">📅 {booking.date}</div>
-            <div className="opacity-60 italic text-[10px] mt-0.5">Click for details</div>
-          </>
-        ) : (
-          <div className="opacity-80">{isSelected ? 'Selected' : 'Available'}</div>
-        )}
-        <div className="absolute left-1/2 -translate-x-1/2 -top-1 w-2 h-2 bg-gray-900 rotate-45" />
-      </div>
+      {/* Hover tooltip — Workstation X + employee/team/date when occupied.
+          Rendered via a portal to document.body so it sits above every other
+          seat (no z-index battles inside the transformed map) and keeps a
+          constant on-screen size regardless of the floor-map zoom level. */}
+      {hovered && tipPos && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            left: tipPos.left,
+            top: tipPos.top,
+            transform: 'translateX(-50%)',
+            zIndex: 9999,
+            pointerEvents: 'none',
+          }}
+        >
+          <div className="relative bg-gray-900 text-white text-[11px] rounded-md px-2 py-1.5 whitespace-nowrap shadow-lg">
+            <div className="font-semibold">Workstation {seat.label}</div>
+            {isOccupied && booking ? (
+              <>
+                <div>👤 {(booking.employee || {}).name || '—'}</div>
+                {booking.team_name && <div>👥 {booking.team_name}</div>}
+                <div className="opacity-80">📅 {booking.date}</div>
+                <div className="opacity-60 italic text-[10px] mt-0.5">Click for details</div>
+              </>
+            ) : (
+              <div className="opacity-80">{isSelected ? 'Selected' : 'Available'}</div>
+            )}
+            <div className="absolute left-1/2 -translate-x-1/2 -top-1 w-2 h-2 bg-gray-900 rotate-45" />
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };
