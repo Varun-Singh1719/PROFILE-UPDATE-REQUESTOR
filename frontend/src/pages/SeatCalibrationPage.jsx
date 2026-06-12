@@ -127,6 +127,50 @@ export default function SeatCalibrationPage() {
   const [mouseCoords, setMouseCoords] = useState({ x: 0, y: 0 });
   const [currentZoom, setCurrentZoom] = useState(1);
 
+  // -----------------------------------------------------------------------
+  // Dynamic PDF render resolution
+  //
+  // The PDF is rasterised to a <canvas> whose pixel buffer is
+  //     width  (CSS px)   ×   devicePixelRatio   →   canvas backing pixels
+  //
+  // When the user zooms in via CSS transform (TransformWrapper), the canvas
+  // is stretched: at maxScale=4 on a Retina (window.devicePixelRatio=2)
+  // screen the browser needs 1200·4·2 = 9600 backing pixels to stay sharp.
+  //
+  // To avoid blur at high zoom we re-rasterise the PDF at a higher
+  // devicePixelRatio whenever the user zooms in beyond a bucket boundary.
+  // Re-rasterisation is debounced so it only fires after the zoom settles,
+  // and we never DECREASE the DPR — once we've spent the time to make a
+  // high-res render we keep it cached for the rest of the session.
+  //
+  // Buckets are powers/multiples of 2 so the canvas pixel count grows
+  // predictably (memory: ~4 bytes × width² × ratio²).
+  // -----------------------------------------------------------------------
+  const [pdfRenderDpr, setPdfRenderDpr] = useState(6); // starting baseline (sharper than the old hard-coded 4)
+  const dprBumpTimerRef = useRef(null);
+
+  useEffect(() => {
+    // What DPR do we need so the canvas backing is at least 1:1 with the
+    // physical screen pixels at this zoom level (plus a 25% safety margin)?
+    const screenDpr =
+      (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+    const need = Math.max(1, currentZoom) * screenDpr * 1.25;
+    let bucket;
+    if (need <= 4) bucket = 4;
+    else if (need <= 6) bucket = 6;
+    else if (need <= 8) bucket = 8;
+    else bucket = 10;
+
+    // Debounce: wait for the user to stop zooming before re-rasterising.
+    if (dprBumpTimerRef.current) clearTimeout(dprBumpTimerRef.current);
+    dprBumpTimerRef.current = setTimeout(() => {
+      setPdfRenderDpr((prev) => (bucket > prev ? bucket : prev));
+    }, 350);
+    return () => {
+      if (dprBumpTimerRef.current) clearTimeout(dprBumpTimerRef.current);
+    };
+  }, [currentZoom]);
+
   // ---- Floor Calibration mode (workstation seats vs meeting rooms)
   const [calibMode, setCalibMode] = useState('workstation'); // 'workstation' | 'room'
   const [roomTool, setRoomTool] = useState('select');        // 'draw' | 'select' | 'delete'
@@ -1434,9 +1478,15 @@ export default function SeatCalibrationPage() {
                 >
                   <Document file={resolvePdfUrl(pdfUrl)}>
                     <Page
+                      // `key` on the canvas-render DPR forces react-pdf to
+                      // re-rasterise the page when the bucket changes — this
+                      // is what keeps the floor plan sharp as the user zooms
+                      // in. Without the `key`, react-pdf caches the canvas
+                      // and the new devicePixelRatio is ignored.
+                      key={`pdfpage-dpr-${pdfRenderDpr}`}
                       pageNumber={1}
                       width={pageWidth}
-                      devicePixelRatio={4}
+                      devicePixelRatio={pdfRenderDpr}
                       renderMode="canvas"
                       renderTextLayer={false}
                       renderAnnotationLayer={false}
