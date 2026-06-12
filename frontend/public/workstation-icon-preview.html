@@ -268,6 +268,96 @@
             '</g>' +
           '</svg>'
       },
+      {
+        id: 7,
+        name: "Ultra-minimal dot",
+        tag: "new",
+        desc: "Just a centered dot inside the cell. The most extreme subtle direction — the grid + colors do all the work, the icon is barely there.",
+        svg:
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+            '<circle cx="50" cy="50" r="22" fill="#000"/>' +
+          '</svg>'
+      },
+      {
+        id: 8,
+        name: "Rounded tile",
+        tag: "new",
+        desc: "A soft rounded square that fills the cell — like a Notion / Linear-style status tile. Reads as “a seat slot”, not a chair drawing.",
+        svg:
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+            '<rect x="10" y="10" width="80" height="80" rx="18" fill="#000"/>' +
+            // tiny notch at top to indicate "facing direction"
+            '<rect x="42" y="6"  width="16" height="10" rx="3" fill="#000"/>' +
+          '</svg>'
+      },
+      {
+        id: 9,
+        name: "Laptop (top-down)",
+        tag: "new",
+        desc: "Open-laptop shape from above: hinge + screen + keyboard. Modern, “work-from-anywhere” feel — good for hybrid offices.",
+        svg:
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+            '<g fill="#000">' +
+              // screen half
+              '<rect x="20" y="14" width="60" height="32" rx="3"/>' +
+              // hinge gap (white) is implied; below is keyboard half
+              '<rect x="16" y="50" width="68" height="38" rx="4"/>' +
+              // trackpad cutout (subtle, in white)
+              '<rect x="42" y="74" width="16" height="6"  rx="1.5" fill="#fff"/>' +
+            '</g>' +
+          '</svg>'
+      },
+      {
+        id: 10,
+        name: "Ergonomic chair (detailed)",
+        tag: "new",
+        desc: "Headrest + backrest + seat, with thin armrests — like a top-down ergonomic chair. More illustrative; works best at larger zoom levels.",
+        svg:
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+            '<g fill="#000">' +
+              // headrest (smaller pill at top)
+              '<rect x="38" y="6"  width="24" height="10" rx="5"/>' +
+              // backrest (wider pill)
+              '<rect x="22" y="20" width="56" height="14" rx="6"/>' +
+              // thin armrests
+              '<rect x="14" y="40" width="6"  height="34" rx="3"/>' +
+              '<rect x="80" y="40" width="6"  height="34" rx="3"/>' +
+              // seat (rounded square)
+              '<rect x="24" y="40" width="52" height="50" rx="12"/>' +
+            '</g>' +
+          '</svg>'
+      },
+      {
+        id: 11,
+        name: "Hex pod",
+        tag: "new",
+        desc: "Hexagonal pod with a small monitor strip. Distinctive shape — useful if you ever introduce different cell types (focus pods vs. team desks).",
+        svg:
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+            '<g fill="#000">' +
+              '<path d="M 50 8 L 86 28 L 86 72 L 50 92 L 14 72 L 14 28 Z"/>' +
+              // monitor strip (negative)
+              '<rect x="38" y="22" width="24" height="6" rx="1.5" fill="#fff"/>' +
+            '</g>' +
+          '</svg>'
+      },
+      {
+        id: 12,
+        name: "Person at desk (avatar)",
+        tag: "new",
+        desc: "A round “head” over a desk slab — humanises the floor map. Great signal for occupied/team seats, neutral for empty ones.",
+        svg:
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+            '<g fill="#000">' +
+              // head
+              '<circle cx="50" cy="34" r="18"/>' +
+              // shoulders/body (subtle arc)
+              '<path d="M 22 60 Q 50 50 78 60 L 78 70 L 22 70 Z"/>' +
+              // desk
+              '<rect x="14" y="74" width="72" height="14" rx="3"/>' +
+            '</g>' +
+          '</svg>'
+      },
     ];
 
     const STATES = [
