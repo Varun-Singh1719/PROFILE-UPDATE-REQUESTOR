@@ -651,6 +651,12 @@ class EmailTemplateIn(BaseModel):
     subject: str
     body: str  # HTML or plaintext
     status: Literal["Active", "Inactive"] = "Active"
+    # Sender / recipient routing — stored as strings (may be literal email
+    # addresses OR placeholders like "{{requester_email}}" resolved at
+    # send-time by the dispatcher). Default to "TBD" which means "not wired up
+    # yet — admin must configure before the template will actually send".
+    from_email: Optional[str] = "TBD"
+    to_email: Optional[str] = "TBD"
 
 class EmailTemplateUpdate(BaseModel):
     name: Optional[str] = None
@@ -659,6 +665,8 @@ class EmailTemplateUpdate(BaseModel):
     subject: Optional[str] = None
     body: Optional[str] = None
     status: Optional[Literal["Active", "Inactive"]] = None
+    from_email: Optional[str] = None
+    to_email: Optional[str] = None
 
 # Permission Rules v2 (legacy)
 class PermRuleIn(BaseModel):
