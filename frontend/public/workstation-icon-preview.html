@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Workstation Icon — Suggestions</title>
+  <style>
+    :root {
+      --bg: #f7f8fa;
+      --card: #ffffff;
+      --border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --available: #ffffff;
+      --selected:  #22c55e;
+      --occupied:  #9ca3af;
+      --pending:   #111111;
+      --grid: #fb923c; /* orange grid like calibration screen */
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 32px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+    }
+    h1 { margin: 0 0 6px; font-size: 22px; }
+    p.lede { margin: 0 0 28px; color: var(--muted); max-width: 760px; line-height: 1.5; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 18px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .card h3 {
+      margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px;
+    }
+    .badge {
+      font-size: 11px; padding: 2px 8px; border-radius: 999px;
+      background: #eef2ff; color: #4338ca; font-weight: 600;
+    }
+    .badge.current { background: #fef3c7; color: #92400e; }
+    .badge.new     { background: #dcfce7; color: #166534; }
+    .desc { font-size: 12px; color: var(--muted); line-height: 1.5; min-height: 36px; }
+
+    /* The mini "floor map" preview — replicates the calibration screen look */
+    .demo {
+      background:
+        linear-gradient(var(--grid) 1px, transparent 1px) 0 0/40px 40px,
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0/40px 40px,
+        #fff;
+      border: 1.5px solid var(--grid);
+      border-radius: 6px;
+      padding: 14px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      align-items: center;
+      justify-items: center;
+    }
+    /* Each "seat" is the mask container, 1:1 box around the icon */
+    .seat {
+      width: 46px; height: 46px;
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
+    }
+    .seat .icon {
+      width: 100%; height: 100%;
+      -webkit-mask-repeat: no-repeat;
+      mask-repeat: no-repeat;
+      -webkit-mask-position: center;
+      mask-position: center;
+      -webkit-mask-size: contain;
+      mask-size: contain;
+    }
+    /* selection ring (matches the green-square ring in the screenshot) */
+    .seat.selected::before {
+      content: "";
+      position: absolute; inset: -4px;
+      border: 3px solid #22c55e;
+      border-radius: 8px;
+      pointer-events: none;
+    }
+    .seat .label {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px; font-weight: 700; color: rgba(0,0,0,.55);
+      pointer-events: none;
+    }
+    /* color variants — use color so mask-image picks it up */
+    .v-available .icon { background: var(--available); /* white needs outline */ filter: drop-shadow(0 0 0.5px #111) drop-shadow(0 0 0.5px #111); }
+    .v-selected  { color: var(--selected); }
+    .v-selected  .icon { background: var(--selected); }
+    .v-occupied  .icon { background: var(--occupied); }
+    .v-pending   .icon { background: var(--pending); }
+
+    /* legend */
+    .legend {
+      display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; color: var(--muted);
+    }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .sw { width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--border); }
+
+    .toolbar {
+      display: flex; gap: 8px; margin-bottom: 18px; align-items: center; flex-wrap: wrap;
+    }
+    .toolbar button {
+      font: inherit; font-size: 12px;
+      padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border);
+      background: #fff; cursor: pointer;
+    }
+    .toolbar button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  </style>
+</head>
+<body>
+  <h1>Workstation icon — alternative suggestions</h1>
+  <p class="lede">
+    The current icon (Option 0) is a solid silhouette where the long armrests and
+    chunky chair body dominate the cell. Below are 6 cleaner, more subtle designs
+    that still read as “a workstation” at small zoom levels on the floor map.
+    Each card previews the icon in the four real states the calibration screen uses.
+  </p>
+
+  <div class="toolbar">
+    <strong style="margin-right:8px;font-size:12px;">Preview state:</strong>
+    <button data-state="all" class="active">All four</button>
+    <button data-state="available">Available (white)</button>
+    <button data-state="selected">Selected (green)</button>
+    <button data-state="occupied">Occupied (grey)</button>
+    <button data-state="pending">Pending (black)</button>
+  </div>
+
+  <div id="grid" class="grid"></div>
+
+  <script>
+    /* ------------------------------------------------------------------ */
+    /* Icon library — each entry returns raw SVG markup for a top-down    */
+    /* workstation silhouette. Designed to be used as a CSS mask-image    */
+    /* (single solid fill), exactly like the current implementation.      */
+    /* ------------------------------------------------------------------ */
+
+    const ICONS = [
+      {
+        id: 0,
+        name: "Current (for comparison)",
+        tag: "current",
+        desc: "Solid silhouette with tall armrests and chunky chair body — visually noisy on dense layouts.",
+        svg:
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 130">' +
+            '<g fill="#000">' +
+              '<rect x="30" y="2" width="40" height="14" rx="2.5"/>' +
+              '<rect x="8" y="17" width="84" height="22" rx="3"/>' +
+              '<rect x="40" y="41" width="20" height="8" rx="2"/>' +
+              '<rect x="12" y="50" width="9" height="48" rx="3"/>' +
+              '<rect x="79" y="50" width="9" height="48" rx="3"/>' +
+              '<path d="M 22 54 L 78 54 Q 82 54 82 58 L 82 110 Q 82 126 60 126 L 40 126 Q 18 126 18 110 L 18 58 Q 18 54 22 54 Z"/>' +
+            '</g>' +
+          '</svg>'
+      },
+      {
+        id: 1,
+        name: "Minimal Desk + Chair",
+        tag: "new",
+        desc: "Slim desk slab + a compact rounded chair underneath. Removes the dominating armrests — much calmer at small sizes.",
+        svg:
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+            '<g fill="#000">' +
+              // monitor (small bar)
+              '<rect x="38" y="6"  width="24" height="6"  rx="2"/>' +
+              // desk
+              '<rect x="14" y="14" width="72" height="14" rx="3"/>' +
+              // chair body (rounded square)
+              '<rect x="28" y="36" width="44" height="50" rx="14"/>' +
+            '</g>' +
+          '</svg>'
+      },
+      {
+        id: 2,
+        name: "Office Chair (top-down)",
+        tag: "new",
+        desc: "Realistic top-down office chair — round seat + arc backrest. Reads instantly as a seat without any desk noise.",
+        svg:
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+            '<g fill="#000">' +
+              // backrest arc (thick chord)
+              '<path d="M 18 30 Q 50 8 82 30 L 76 38 Q 50 22 24 38 Z"/>' +
+              // armrests (tiny stubs)
+              '<rect x="14" y="46" width="6" height="22" rx="3"/>' +
+              '<rect x="80" y="46" width="6" height="22" rx="3"/>' +
+              // round seat
+              '<circle cx="50" cy="62" r="24"/>' +
+            '</g>' +
+          '</svg>'
+      },
+      {
+        id: 3,
+        name: "Monitor-first (subtle)",
+        tag: "new",
+        desc: "Lead with the monitor; hint the desk and chair as quieter shapes below. Most ‘icon-like’ and the most subtle of the set.",
+        svg:
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+            '<g fill="#000">' +
+              // monitor body
+              '<rect x="26" y="6"  width="48" height="30" rx="4"/>' +
+              // monitor stand
+              '<rect x="46" y="36" width="8"  height="6"/>' +
+              '<rect x="34" y="42" width="32" height="4"  rx="1.5"/>' +
+              // chair hint (half-circle peeking out)
+              '<path d="M 28 64 Q 50 92 72 64 Z"/>' +
+            '</g>' +
+          '</svg>'
+      },
+      {
+        id: 4,
+        name: "Pod (single fluid form)",
+        tag: "new",
+        desc: "Desk and chair merge into one squircle — a “workstation pod”. Very clean, scales beautifully on dense floor plans.",
+        svg:
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+            '<g fill="#000">' +
+              // single rounded pod
+              '<path d="M 22 14 Q 22 8 28 8 L 72 8 Q 78 8 78 14 L 78 28 Q 86 32 86 50 Q 86 86 50 86 Q 14 86 14 50 Q 14 32 22 28 Z"/>' +
+              // negative-space monitor strip (cut by white)
+              '<rect x="38" y="14" width="24" height="6" rx="1.5" fill="#fff"/>' +
+            '</g>' +
+          '</svg>'
+      },
+      {
+        id: 5,
+        name: "Outline + soft fill",
+        tag: "new",
+        desc: "Thin outline silhouette (rendered as a solid mask). Lightest visual weight — calibration grid stays the hero of the screen.",
+        svg:
+          // Note: for mask-image usage we still output a solid shape, but with
+          // an "outline" appearance by using a ring path (outer minus inner).
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+            '<g fill="#000" fill-rule="evenodd">' +
+              // desk ring
+              '<path d="M 14 14 H 86 V 30 H 14 Z M 17 17 H 83 V 27 H 17 Z"/>' +
+              // monitor strip on desk
+              '<rect x="42" y="19" width="16" height="6" rx="1"/>' +
+              // chair ring (rounded square)
+              '<path d="M 26 38 H 74 Q 78 38 78 42 V 82 Q 78 90 70 90 H 30 Q 22 90 22 82 V 42 Q 22 38 26 38 Z M 29 41 H 71 Q 75 41 75 45 V 80 Q 75 87 68 87 H 32 Q 25 87 25 80 V 45 Q 25 41 29 41 Z"/>' +
+            '</g>' +
+          '</svg>'
+      },
+      {
+        id: 6,
+        name: "Geometric flat",
+        tag: "new",
+        desc: "Trapezoidal desk + circular chair — modern, flat, design-system friendly. Pairs well with the orange grid aesthetic.",
+        svg:
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+            '<g fill="#000">' +
+              // trapezoid desk
+              '<path d="M 18 14 L 82 14 L 76 30 L 24 30 Z"/>' +
+              // tiny monitor on top edge
+              '<rect x="42" y="8" width="16" height="6" rx="1.5"/>' +
+              // round chair
+              '<circle cx="50" cy="62" r="26"/>' +
+            '</g>' +
+          '</svg>'
+      },
+    ];
+
+    const STATES = [
+      { key: 'available', label: 'A1', cls: 'v-available' },
+      { key: 'selected',  label: 'A2', cls: 'v-selected'  },
+      { key: 'occupied',  label: 'A3', cls: 'v-occupied'  },
+      { key: 'pending',   label: 'A4', cls: 'v-pending'   },
+    ];
+
+    function maskUrl(svg) {
+      return 'url("data:image/svg+xml;utf8,' + encodeURIComponent(svg) + '")';
+    }
+
+    function buildCard(icon) {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <h3>
+          <span class="badge ${icon.tag}">${icon.tag === 'current' ? 'CURRENT' : 'NEW'}</span>
+          Option ${icon.id}. ${icon.name}
+        </h3>
+        <div class="desc">${icon.desc}</div>
+        <div class="demo" data-demo>
+          ${STATES.map(s => `
+            <div class="seat ${s.cls} ${s.key === 'selected' ? 'selected' : ''}" data-state="${s.key}">
+              <div class="icon"></div>
+              <div class="label">${s.label}</div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="legend">
+          <span><span class="sw" style="background:#fff"></span>Available</span>
+          <span><span class="sw" style="background:#22c55e;border-color:#22c55e"></span>Selected</span>
+          <span><span class="sw" style="background:#9ca3af;border-color:#9ca3af"></span>Occupied</span>
+          <span><span class="sw" style="background:#111;border-color:#111"></span>Pending</span>
+        </div>
+      `;
+      // apply mask url to each icon in this card
+      const url = maskUrl(icon.svg);
+      card.querySelectorAll('.icon').forEach(el => {
+        el.style.webkitMaskImage = url;
+        el.style.maskImage = url;
+      });
+      return card;
+    }
+
+    const grid = document.getElementById('grid');
+    ICONS.forEach(ic => grid.appendChild(buildCard(ic)));
+
+    // Toolbar state filter
+    document.querySelectorAll('.toolbar button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.toolbar button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const want = btn.dataset.state;
+        document.querySelectorAll('[data-demo] .seat').forEach(seat => {
+          seat.style.display = (want === 'all' || seat.dataset.state === want) ? '' : 'none';
+        });
+      });
+    });
+  </script>
+</body>
+</html>
