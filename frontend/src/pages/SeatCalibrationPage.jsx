@@ -17,38 +17,69 @@ import Layout from '../components/Layout';
 import PublishDialog from '../components/calibration/PublishDialog';
 import VersionHistoryPanel from '../components/calibration/VersionHistoryPanel';
 import AuditLogPanel from '../components/calibration/AuditLogPanel';
+import {
+  WorkstationIconSVG,
+  WORKSTATION_SEAT_CENTER,
+} from '../components/icons/workstationSilhouette';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
 // ---------------------------------------------------------------- Seat icon
-const SeatIcon = ({ size = 10, label, rotation = 0, isSelected = false, isLocked = false, isOverlap = false, isDup = false }) => (
-  <div style={{ width: size, height: size, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: `rotate(${rotation}deg)` }}>
-    <img
-      src="https://customer-assets.emergentagent.com/job_workspace-manager-19/artifacts/96yixbn4_pngegg.png"
-      alt="seat"
-      style={{
-        width: '100%', height: '100%', objectFit: 'contain',
-        filter: isSelected ? 'drop-shadow(0 0 4px #00FF00)' :
-                isDup ? 'drop-shadow(0 0 4px #ef4444)' :
-                isOverlap ? 'drop-shadow(0 0 4px #f59e0b)' : 'none',
-      }}
-    />
-    {label && (
-      <div style={{
-        position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-        fontSize: Math.max(3, size * 0.25) + 'px', fontWeight: 'bold', color: '#000',
-        pointerEvents: 'none', whiteSpace: 'nowrap',
-        textShadow: '0 0 3px white, 0 0 3px white, 0 0 3px white', zIndex: 10
-      }}>{label}</div>
-    )}
-    {isLocked && (
-      <Lock size={Math.max(6, size * 0.4)} style={{ position: 'absolute', top: -size * 0.15, right: -size * 0.15, color: '#475569', background: 'white', borderRadius: '50%', padding: 1 }} />
-    )}
-    {isSelected && <div style={{ position: 'absolute', inset: -2, border: '2px solid #00FF00', borderRadius: '4px', pointerEvents: 'none' }} />}
-    {isDup && <div style={{ position: 'absolute', inset: -2, border: '2px dashed #ef4444', borderRadius: '4px', pointerEvents: 'none' }} />}
-    {isOverlap && !isDup && <div style={{ position: 'absolute', inset: -2, border: '2px dashed #f59e0b', borderRadius: '4px', pointerEvents: 'none' }} />}
-  </div>
-);
+// Top-down office-chair silhouette (Option 2) rendered inline so we can use
+// a true black stroke around a white fill — required so unmapped /
+// "available" seats stay visible on the white floor-plan background.
+// The workstation label (A1 / E5 / F2 / …) is anchored to the center of the
+// round seat (see WORKSTATION_SEAT_CENTER) rather than the bounding box.
+const SeatIcon = ({ size = 10, label, rotation = 0, isSelected = false, isLocked = false, isOverlap = false, isDup = false }) => {
+  const glow = isSelected ? 'drop-shadow(0 0 4px #00FF00)' :
+               isDup      ? 'drop-shadow(0 0 4px #ef4444)' :
+               isOverlap  ? 'drop-shadow(0 0 4px #f59e0b)' : 'none';
+
+  // The selection ring uses green, so when selected we also tint the chair
+  // body green so the whole symbol reads as "selected" at a glance.
+  const fill   = isSelected ? '#22C55E' : '#FFFFFF';
+  const stroke = '#000000';
+
+  // Label font size: scale with the icon, but auto-shrink for 3+ char labels
+  // (e.g. "H22") so they still fit inside the round seat instead of spilling
+  // over the outline.
+  const labelLen = label ? String(label).length : 0;
+  const fontSize = labelLen >= 3
+    ? Math.max(3.5, size * 0.22)
+    : Math.max(4, size * 0.28);
+
+  return (
+    <div style={{ width: size, height: size, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: `rotate(${rotation}deg)` }}>
+      <WorkstationIconSVG
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={4}
+        style={{ width: '100%', height: '100%', filter: glow }}
+      />
+      {label && (
+        <div style={{
+          position: 'absolute',
+          top:  `${WORKSTATION_SEAT_CENTER.y}%`,
+          left: `${WORKSTATION_SEAT_CENTER.x}%`,
+          transform: `translate(-50%, -50%) rotate(${-rotation}deg)`,
+          fontSize: fontSize + 'px',
+          fontWeight: 900,
+          color: '#000',
+          pointerEvents: 'none',
+          whiteSpace: 'nowrap',
+          letterSpacing: '0.02em',
+          zIndex: 10,
+        }}>{label}</div>
+      )}
+      {isLocked && (
+        <Lock size={Math.max(6, size * 0.4)} style={{ position: 'absolute', top: -size * 0.15, right: -size * 0.15, color: '#475569', background: 'white', borderRadius: '50%', padding: 1 }} />
+      )}
+      {isSelected && <div style={{ position: 'absolute', inset: -2, border: '2px solid #00FF00', borderRadius: '4px', pointerEvents: 'none' }} />}
+      {isDup && <div style={{ position: 'absolute', inset: -2, border: '2px dashed #ef4444', borderRadius: '4px', pointerEvents: 'none' }} />}
+      {isOverlap && !isDup && <div style={{ position: 'absolute', inset: -2, border: '2px dashed #f59e0b', borderRadius: '4px', pointerEvents: 'none' }} />}
+    </div>
+  );
+};
 
 const ZOOM_LEVELS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
 const GRID_SIZES = [0, 1, 2, 5, 10, 20];  // 0 = off

@@ -1,32 +1,49 @@
 import React from 'react';
-import { WORKSTATION_MASK_URL } from './icons/workstationSilhouette';
+import {
+  WorkstationIconSVG,
+  WORKSTATION_SEAT_CENTER,
+} from './icons/workstationSilhouette';
 
-// Use the shared solid top-down workstation silhouette so the Floor Layout /
-// Calibration view stays visually identical to the Booking / Request views.
-const SEAT_PNG = WORKSTATION_MASK_URL;
-
+/**
+ * Floor-layout view seat. Uses the shared top-down office-chair silhouette
+ * so this view stays visually identical to the calibration screen.
+ *
+ * Color rules (inline SVG fill/stroke):
+ *   Available  →  white fill + black outline   (visible on white floor plan)
+ *   Selected   →  green fill + black outline   + green selection ring
+ *   Occupied   →  grey  fill + black outline   (slightly dimmed)
+ *
+ * The label sits on the center of the round seat (not the geometric centre
+ * of the bounding box) and is rendered bold.
+ */
 const Seat = ({ seat, onClick, isClickable, debugMode = false, isSelected = false, isOccupied = false }) => {
   const handleClick = () => {
     if (isClickable && onClick) onClick(seat.id);
   };
 
-  const size = seat.size || 10; // px at unscaled zoom, scales with TransformWrapper
+  const size = seat.size || 10;
   const rotation = seat.rotation || 0;
 
-  // State styling — brand tokens
-  // Selected → green glow (#15B867), Occupied → grey overlay (#b2b2b2), Available → orange tint accent
-  const glow = isSelected
-    ? 'drop-shadow(0 0 4px #15B867)'
-    : isOccupied
-      ? 'drop-shadow(0 0 3px #b2b2b2)'
-      : 'none';
+  // Fill & glow per state
+  const fill =
+    isSelected ? '#22C55E' :
+    isOccupied ? '#B2B2B2' : '#FFFFFF';
+  const glow =
+    isSelected ? 'drop-shadow(0 0 4px #15B867)' :
+    isOccupied ? 'drop-shadow(0 0 3px #b2b2b2)' : 'none';
+
+  // Label font size — auto-shrink for 3+ chars
+  const labelLen = seat.label ? String(seat.label).length : 0;
+  const fontSize = labelLen >= 3
+    ? Math.max(3.5, size * 0.22)
+    : Math.max(4, size * 0.28);
 
   return (
     <div
       className="absolute group"
       style={{
         left: `${seat.x}%`,
-        top: `${seat.y}%`,
+        top:  `${seat.y}%`,
         transform: 'translate(-50%, -50%)',
         cursor: isClickable ? 'pointer' : 'not-allowed',
         zIndex: 10,
@@ -45,32 +62,31 @@ const Seat = ({ seat, onClick, isClickable, debugMode = false, isSelected = fals
           transition: 'transform .15s ease',
         }}
       >
-        <img
-          src={SEAT_PNG}
-          alt="seat"
-          draggable={false}
+        <WorkstationIconSVG
+          fill={fill}
+          stroke="#000000"
+          strokeWidth={4}
           style={{
             width: '100%',
             height: '100%',
-            objectFit: 'contain',
             filter: glow,
-            opacity: isOccupied ? 0.55 : 1,
+            opacity: isOccupied ? 0.8 : 1,
           }}
         />
-        {/* Seat label centered on top of the icon */}
+        {/* Workstation label — centred on the round seat (not the bbox) */}
         {seat.label && (
           <div
             style={{
               position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              fontSize: Math.max(3, size * 0.25) + 'px',
-              fontWeight: 'bold',
+              top:  `${WORKSTATION_SEAT_CENTER.y}%`,
+              left: `${WORKSTATION_SEAT_CENTER.x}%`,
+              transform: `translate(-50%, -50%) rotate(${-rotation}deg)`,
+              fontSize: fontSize + 'px',
+              fontWeight: 900,
               color: '#000',
               pointerEvents: 'none',
               whiteSpace: 'nowrap',
-              textShadow: '0 0 3px white, 0 0 3px white, 0 0 3px white',
+              letterSpacing: '0.02em',
               zIndex: 10,
             }}
           >

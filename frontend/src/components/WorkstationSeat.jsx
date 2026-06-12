@@ -1,24 +1,26 @@
 import React, { useRef, useState, useLayoutEffect, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { WORKSTATION_MASK_URL } from './icons/workstationSilhouette';
+import {
+  WorkstationIconSVG,
+  WORKSTATION_SEAT_CENTER,
+} from './icons/workstationSilhouette';
 
 /**
  * Color-coded workstation seat used by the Workstation Booking floor map.
  *
  * Color rules (spec):
- *   White  — Available
+ *   White  — Available           (white fill + visible BLACK outline)
  *   Green  — Selected
  *   Grey   — Occupied / Not available
  *   Black  — Pending Approval (locked by a workstation request)
  *   Team color (from teams table) — Team-assigned (when occupied as part of a team)
  *
- * Rendering trick: we render a single SOLID top-down workstation silhouette
- * (see `icons/workstationSilhouette.js`) as a CSS `mask-image`. Because the
- * silhouette is fully filled (not just an outline), the whole workstation
- * shape can be tinted to any color we want — including pure black for the
- * Pending Approval state.
+ * Rendering: a single inline SVG (top-down office chair) where `fill` is the
+ * status color and `stroke` is black. Doing it inline (instead of via a CSS
+ * mask) is what lets the Available state stay clearly visible on the white
+ * floor-plan background — the black stroke draws a crisp rim around the
+ * white fill.
  */
-const SEAT_PNG = WORKSTATION_MASK_URL;
 
 const COLOR = {
   available: "#FFFFFF",
@@ -137,88 +139,56 @@ const WorkstationSeat = ({
         }}
       >
         {/* ----------------------------------------------------------------
-            All seat states render the same chair silhouette so the on-floor
-            footprint stays identical to the Floor Layout view.
-              • Outer layer: black silhouette at scale 1.0 (the outline rim)
-              • Inner layer: fill-coloured silhouette at scale 0.86
-            For Pending Approval the fill is pure black, so the entire chair
-            silhouette appears solid black with the workstation label in white.
+            Single inline SVG (top-down office chair) — `fill` is the state
+            color and `stroke` is always black. The black stroke is what
+            keeps the "Available" (white) state clearly visible against the
+            white floor-plan background. The "Pending" state uses a
+            near-black fill so the whole symbol reads as solid black with
+            the label drawn in white on top.
         ---------------------------------------------------------------- */}
-        {/* Black outline silhouette — kept at the exact same size as the
-            calibrated <img> in Seat.jsx so the on-floor footprint matches the
-            Floor Layout view 1:1. */}
-        <div
-          aria-hidden
+        <WorkstationIconSVG
+          fill={isPending ? '#000000' : fill}
+          stroke="#000000"
+          strokeWidth={4}
           style={{
             position: 'absolute',
             inset: 0,
-            backgroundColor: '#000',
-            WebkitMaskImage: `url(${SEAT_PNG})`,
-            WebkitMaskRepeat: 'no-repeat',
-            WebkitMaskSize: 'contain',
-            WebkitMaskPosition: 'center',
-            maskImage: `url(${SEAT_PNG})`,
-            maskRepeat: 'no-repeat',
-            maskSize: 'contain',
-            maskPosition: 'center',
-            // Outer glow for selected / search-highlighted seats sits on the
-            // outline layer so it surrounds the entire seat shape.
+            width: '100%',
+            height: '100%',
+            // Glow around the whole silhouette for selected / searched seats.
             filter: [
               isSelected ? 'drop-shadow(0 0 4px rgba(34,197,94,0.8))' : '',
               searchHighlight ? 'drop-shadow(0 0 5px #2563eb)' : '',
-            ].filter(Boolean).join(' '),
-          }}
-        />
-        {/* Coloured fill silhouette — shrunk to ~0.86 so the black outline
-            below peeks around it as a crisp rim. The overall visible
-            footprint stays at `size × size`, matching calibration exactly.
-            For pending state the fill is pure black so the whole chair
-            silhouette ends up solid black. */}
-        <div
-          aria-hidden
-          style={{
-            position: 'absolute',
-            inset: 0,
-            backgroundColor: isPending ? '#000000' : fill,
-            transform: 'scale(0.86)',
-            transformOrigin: 'center',
-            WebkitMaskImage: `url(${SEAT_PNG})`,
-            WebkitMaskRepeat: 'no-repeat',
-            WebkitMaskSize: 'contain',
-            WebkitMaskPosition: 'center',
-            maskImage: `url(${SEAT_PNG})`,
-            maskRepeat: 'no-repeat',
-            maskSize: 'contain',
-            maskPosition: 'center',
+            ].filter(Boolean).join(' ') || undefined,
           }}
         />
         {/* Seat label — black on light fills; white on the black "pending"
-            silhouette so the workstation number stays readable. The label is
-            centred on the chair body (≈69% down the silhouette viewBox), not
-            on the geometric centre of the bounding box, so it sits squarely
-            inside the visible chair area rather than floating over the
-            backrest connector.
+            silhouette so the workstation number stays readable. The label
+            is centred on the round seat (cx=50, cy=62 in the SVG viewBox),
+            NOT on the geometric centre of the bounding box, so it sits
+            squarely inside the visible seat circle.
 
-            Font size auto-shrinks for 3+ character labels (e.g. H22, H24) so
-            they fit inside the chair body width instead of spilling over the
+            Font size auto-shrinks for 3+ character labels (e.g. H22, H24)
+            so they fit inside the seat width instead of spilling over the
             outline. */}
         {seat.label && (() => {
           const labelLen = String(seat.label).length;
           const fontSize = labelLen >= 3
-            ? Math.max(3.5, size * 0.18)
-            : Math.max(4, size * 0.22);
+            ? Math.max(3.5, size * 0.22)
+            : Math.max(4, size * 0.28);
           return (
             <div
               style={{
                 position: 'absolute',
-                top: '69%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
+                top:  `${WORKSTATION_SEAT_CENTER.y}%`,
+                left: `${WORKSTATION_SEAT_CENTER.x}%`,
+                transform: `translate(-50%, -50%) rotate(${-rotation}deg)`,
                 fontSize: fontSize + 'px',
                 fontWeight: 900,
                 color: isPending ? '#FFFFFF' : '#000000',
                 pointerEvents: 'none',
                 whiteSpace: 'nowrap',
+                letterSpacing: '0.02em',
                 textShadow: isPending
                   ? '0 0 2px #000000, 0 0 2px #000000'
                   : '0 0 2px #ffffff, 0 0 2px #ffffff',
