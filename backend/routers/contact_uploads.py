@@ -270,17 +270,20 @@ async def bulk_upload_contacts(
         elif not doj_iso:
             row_errors.append("Date of Joining must be YYYY-MM-DD")
 
-        # Uniqueness checks
+        # Uniqueness checks — check in-file dup BEFORE system-exists so the
+        # user gets the more accurate reason when two rows in the same file
+        # collide (otherwise the first row inserts, then the second sees
+        # "already exists in system").
         if email:
-            if email in existing_emails:
-                row_errors.append("Email already exists in system")
-            elif email in seen_emails:
+            if email in seen_emails:
                 row_errors.append("Duplicate Email in upload file")
+            elif email in existing_emails:
+                row_errors.append("Email already exists in system")
         if emp_id:
-            if emp_id in existing_emp_ids:
-                row_errors.append("Employee Code already exists in system")
-            elif emp_id in seen_emp_ids:
+            if emp_id in seen_emp_ids:
                 row_errors.append("Duplicate Employee Code in upload file")
+            elif emp_id in existing_emp_ids:
+                row_errors.append("Employee Code already exists in system")
 
         # Manager Email lookup (only if no other blocking error so far)
         team_to_attach: Optional[dict] = None
