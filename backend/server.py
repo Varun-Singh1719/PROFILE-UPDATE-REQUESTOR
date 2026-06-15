@@ -21,6 +21,11 @@ from core import (
 # Register all routes by importing each router module (side-effect on api_router).
 from routers import auth as _auth  # noqa: F401
 from routers import notifications_email as _notif  # noqa: F401
+# NOTE: contact_uploads MUST be imported BEFORE contacts because contacts.py
+# registers a dynamic `GET /contacts/{contact_id}` route that would otherwise
+# shadow the static `/contacts/sample-template` and `/contacts/upload-history`
+# endpoints (FastAPI matches routes in declaration order).
+from routers import contact_uploads as _contact_uploads  # noqa: F401
 from routers import contacts as _contacts  # noqa: F401
 from routers import teams as _teams  # noqa: F401
 from routers import permissions as _permissions  # noqa: F401
@@ -68,6 +73,8 @@ async def startup():
     await db.password_reset_tokens.create_index("token_hash")
     await db.notifications_outbox.create_index([("created_at", -1)])
     await db.email_templates.create_index("kind")
+    await db.contact_uploads.create_index([("uploaded_at", -1)])
+    await db.contact_uploads.create_index("id", unique=True)
     await db.room_bookings.create_index("seq_no", unique=True, sparse=True)
     await db.room_bookings.create_index([("start_at", 1)])
     await db.room_bookings.create_index([("organizer.id", 1)])

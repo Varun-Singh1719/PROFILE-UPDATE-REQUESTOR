@@ -15,7 +15,7 @@ import {
 } from "../components/ui/dropdown-menu";
 import MultiSelect from "../components/MultiSelect";
 import notify from "../lib/notify";
-import { Search, UserPlus, Pencil, Eye, EyeOff, Copy, RefreshCw, KeyRound, X, Mail, Phone, Calendar, IdCard, Briefcase, UsersRound, Download, ChevronLeft, ChevronRight, MoreHorizontal, ShieldCheck } from "lucide-react";
+import { Search, UserPlus, Pencil, Eye, EyeOff, Copy, RefreshCw, KeyRound, X, Mail, Phone, Calendar, IdCard, Briefcase, UsersRound, Download, ChevronLeft, ChevronRight, MoreHorizontal, ShieldCheck, Upload, FileSpreadsheet, History, CheckCircle2, AlertTriangle, FileDown, Loader2 } from "lucide-react";
 
 function fmt(iso) { if (!iso) return "Never"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
 
@@ -209,6 +209,370 @@ function EmployeeDetailModal({ contact, open, onClose }) {
   );
 }
 
+// ---------- Bulk Upload Modal ----------
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function authedFetch(path, opts = {}) {
+  const token = localStorage.getItem("access_token") || "";
+  return fetch(`${API}${path}`, {
+    ...opts,
+    headers: {
+      ...(opts.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    credentials: "include",
+  });
+}
+
+function BulkUploadModal({ open, onClose, onComplete }) {
+  const [file, setFile] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [result, setResult] = useState(null);
+
+  const reset = () => { setFile(null); setProgress(0); setResult(null); setUploading(false); };
+
+  const close = () => { reset(); onClose(); };
+
+  const pickFile = (f) => {
+    if (!f) return;
+    if (!f.name.toLowerCase().endsWith(".xlsx")) {
+      notify.error("Only .xlsx files are supported");
+      return;
+    }
+    setFile(f);
+    setResult(null);
+  };
+
+  const onDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer.files?.[0];
+    pickFile(f);
+  };
+
+  const downloadTemplate = async () => {
+    try {
+      const r = await authedFetch("/contacts/sample-template");
+      if (!r.ok) { notify.error("Could not download template"); return; }
+      const blob = await r.blob();
+      downloadBlob(blob, "employees_upload_template.xlsx");
+    } catch (e) { notify.error("Could not download template"); }
+  };
+
+  const startUpload = () => {
+    if (!file) return;
+    setUploading(true);
+    setProgress(0);
+    const xhr = new XMLHttpRequest();
+    const token = localStorage.getItem("access_token") || "";
+    xhr.open("POST", `${API}/contacts/bulk-upload`);
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.withCredentials = true;
+    xhr.upload.onprogress = (ev) => {
+      if (ev.lengthComputable) setProgress(Math.round((ev.loaded / ev.total) * 100));
+    };
+    xhr.onload = () => {
+      setUploading(false);
+      setProgress(100);
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          setResult(data);
+          notify.success(`Upload complete — ${data.success} succeeded, ${data.failed} failed`);
+          onComplete?.();
+        } else {
+          notify.error(data?.detail || "Upload failed");
+        }
+      } catch {
+        notify.error("Upload failed");
+      }
+    };
+    xhr.onerror = () => { setUploading(false); notify.error("Network error during upload"); };
+    const fd = new FormData();
+    fd.append("file", file);
+    xhr.send(fd);
+  };
+
+  const downloadErrorReport = async () => {
+    if (!result?.upload_id) return;
+    try {
+      const r = await authedFetch(`/contacts/upload-history/${result.upload_id}/error-report.xlsx`);
+      if (!r.ok) { notify.error("Could not download error report"); return; }
+      const blob = await r.blob();
+      downloadBlob(blob, `error_report_${result.filename || "upload"}.xlsx`);
+    } catch (e) { notify.error("Could not download error report"); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && close()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Upload size={18} className="text-[#ec9324]"/> Upload Employees (.xlsx)
+          </DialogTitle>
+          <DialogDescription>
+            Bulk-add employees from an Excel file. Download the sample template to see the required columns.
+          </DialogDescription>
+        </DialogHeader>
+
+        {!result && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <Button
+                type="button" variant="outline" onClick={downloadTemplate}
+                className="border-[#ec9324] text-[#ec9324] hover:bg-[#ec9324]/10"
+                data-testid="download-sample-template-btn"
+              >
+                <FileSpreadsheet size={14} className="mr-2"/> Download Sample Template
+              </Button>
+              <span className="text-xs text-gray-500">Only <b>.xlsx</b> files · Max ~5000 rows recommended</span>
+            </div>
+
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={onDrop}
+              onClick={() => document.getElementById("bulk-upload-input")?.click()}
+              className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
+                dragOver ? "border-[#ec9324] bg-[#ec9324]/5" : "border-gray-300 hover:border-[#ec9324]"
+              }`}
+              data-testid="upload-dropzone"
+            >
+              <Upload size={32} className="mx-auto text-gray-400 mb-2"/>
+              <div className="text-sm font-medium text-gray-700">
+                {file ? file.name : "Drag & drop your .xlsx file here"}
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                {file ? `${(file.size / 1024).toFixed(1)} KB` : "or click to browse"}
+              </div>
+              <input
+                id="bulk-upload-input" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                className="hidden" onChange={(e) => pickFile(e.target.files?.[0])}
+                data-testid="upload-file-input"
+              />
+            </div>
+
+            {uploading && (
+              <div data-testid="upload-progress" className="space-y-1">
+                <div className="flex justify-between text-xs text-gray-600">
+                  <span>Uploading…</span><span>{progress}%</span>
+                </div>
+                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-[#ec9324] transition-all" style={{ width: `${progress}%` }}/>
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={close} disabled={uploading}>Cancel</Button>
+              <Button
+                onClick={startUpload}
+                disabled={!file || uploading}
+                className="bg-[#ec9324] hover:bg-[#d4811f] text-white"
+                data-testid="start-upload-btn"
+              >
+                {uploading ? (<><Loader2 size={14} className="mr-2 animate-spin"/>Uploading…</>) : (<><Upload size={14} className="mr-2"/>Upload</>)}
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+
+        {result && (
+          <div className="space-y-4" data-testid="upload-result">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-gray-900" data-testid="upload-total">{result.total}</div>
+                <div className="text-xs text-gray-500 uppercase tracking-wider">Total</div>
+              </div>
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-green-700 flex items-center justify-center gap-1" data-testid="upload-success">
+                  <CheckCircle2 size={20}/> {result.success}
+                </div>
+                <div className="text-xs text-green-600 uppercase tracking-wider">Success</div>
+              </div>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-red-700 flex items-center justify-center gap-1" data-testid="upload-failed">
+                  <AlertTriangle size={20}/> {result.failed}
+                </div>
+                <div className="text-xs text-red-600 uppercase tracking-wider">Failed</div>
+              </div>
+            </div>
+
+            <div className="text-xs text-gray-500">
+              Status: <span className="font-medium text-gray-700">{result.status}</span> · File: <span className="font-mono">{result.filename}</span>
+            </div>
+
+            {result.failed > 0 && (
+              <>
+                <div className="border border-red-100 rounded-lg overflow-hidden">
+                  <div className="bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 flex items-center justify-between">
+                    <span>Error preview ({Math.min(result.errors.length, 10)} of {result.failed})</span>
+                    {result.has_more_errors && <span className="text-red-600">Download full report below</span>}
+                  </div>
+                  <div className="max-h-48 overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-50 text-gray-600">
+                        <tr>
+                          <th className="px-2 py-1 text-left">Row</th>
+                          <th className="px-2 py-1 text-left">Email</th>
+                          <th className="px-2 py-1 text-left">Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(result.errors || []).slice(0, 10).map((e, i) => (
+                          <tr key={i} className="border-t border-gray-100">
+                            <td className="px-2 py-1 text-gray-600 font-mono">{e.row}</td>
+                            <td className="px-2 py-1 text-gray-700">{e.email || "—"}</td>
+                            <td className="px-2 py-1 text-red-700">{e.reason}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <Button
+                  variant="outline" onClick={downloadErrorReport}
+                  className="border-red-300 text-red-700 hover:bg-red-50 w-full"
+                  data-testid="download-error-report-btn"
+                >
+                  <FileDown size={14} className="mr-2"/> Download Error Report (.xlsx)
+                </Button>
+              </>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={reset} data-testid="upload-another-btn">Upload Another</Button>
+              <Button onClick={close} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="close-upload-result-btn">Done</Button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------- Upload History Modal ----------
+function UploadHistoryModal({ open, onClose }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [total, setTotal] = useState(0);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await api.get("/contacts/upload-history", { params: { page_size: 50 } });
+      setItems(r.data.items || []);
+      setTotal(r.data.total || 0);
+    } catch (e) { notify.error("Could not load upload history"); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { if (open) load(); /* eslint-disable-next-line */ }, [open]);
+
+  const downloadErrorReport = async (id, filename) => {
+    try {
+      const r = await authedFetch(`/contacts/upload-history/${id}/error-report.xlsx`);
+      if (!r.ok) { notify.error("Could not download error report"); return; }
+      const blob = await r.blob();
+      downloadBlob(blob, `error_report_${(filename || "upload").replace(/\.xlsx$/i, "")}.xlsx`);
+    } catch (e) { notify.error("Could not download error report"); }
+  };
+
+  const statusPill = (s) => {
+    const map = {
+      Completed: "bg-green-100 text-green-700 border-green-200",
+      Partial: "bg-amber-100 text-amber-700 border-amber-200",
+      Failed: "bg-red-100 text-red-700 border-red-200",
+      Empty: "bg-gray-100 text-gray-600 border-gray-200",
+    };
+    return <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold border ${map[s] || map.Empty}`}>{s}</span>;
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <History size={18} className="text-[#ec9324]"/> Upload History
+          </DialogTitle>
+          <DialogDescription>
+            Past bulk-upload sessions. Click an error count to download the per-row error report.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          <div className="max-h-[55vh] overflow-y-auto">
+            <table className="w-full text-sm" data-testid="upload-history-table">
+              <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200 sticky top-0">
+                <tr>
+                  <th className="px-3 py-2 text-left">File</th>
+                  <th className="px-3 py-2 text-left">Uploaded By</th>
+                  <th className="px-3 py-2 text-left">When</th>
+                  <th className="px-3 py-2 text-right">Total</th>
+                  <th className="px-3 py-2 text-right">Success</th>
+                  <th className="px-3 py-2 text-right">Failed</th>
+                  <th className="px-3 py-2 text-left">Status</th>
+                  <th className="px-3 py-2 text-right">Errors</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && (
+                  <tr><td colSpan={8} className="text-center py-8 text-gray-400">
+                    <Loader2 size={18} className="inline animate-spin mr-2"/> Loading…
+                  </td></tr>
+                )}
+                {!loading && items.length === 0 && (
+                  <tr><td colSpan={8} className="text-center py-8 text-gray-400">No uploads yet</td></tr>
+                )}
+                {!loading && items.map((u) => (
+                  <tr key={u.id} className="border-b border-gray-100 hover:bg-gray-50/80" data-testid={`upload-row-${u.id}`}>
+                    <td className="px-3 py-2 font-mono text-xs text-gray-700">{u.filename}</td>
+                    <td className="px-3 py-2 text-gray-700">{u.uploaded_by?.name || "—"}</td>
+                    <td className="px-3 py-2 text-gray-500 text-xs">{fmt(u.uploaded_at)}</td>
+                    <td className="px-3 py-2 text-right text-gray-700">{u.total_rows}</td>
+                    <td className="px-3 py-2 text-right text-green-700 font-medium">{u.success_count}</td>
+                    <td className="px-3 py-2 text-right text-red-700 font-medium">{u.failed_count}</td>
+                    <td className="px-3 py-2">{statusPill(u.status)}</td>
+                    <td className="px-3 py-2 text-right">
+                      {u.failed_count > 0 ? (
+                        <Button
+                          size="sm" variant="outline"
+                          onClick={() => downloadErrorReport(u.id, u.filename)}
+                          className="border-red-300 text-red-700 hover:bg-red-50 h-7"
+                          data-testid={`download-error-${u.id}`}
+                        >
+                          <FileDown size={12} className="mr-1"/> Report
+                        </Button>
+                      ) : <span className="text-gray-300 text-xs">—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="text-xs text-gray-500">{total} upload{total === 1 ? "" : "s"} total</div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
+
 function GeneratedPasswordModal({ password, email, onClose }) {
   const copy = async () => {
     try { await navigator.clipboard.writeText(password); notify.success("Password copied"); }
@@ -261,6 +625,8 @@ export default function ContactListPage() {
   const [detailContact, setDetailContact] = useState(null);
   const [generated, setGenerated] = useState(null); // {password, email}
   const [permissionSets, setPermissionSets] = useState([]);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -451,6 +817,12 @@ export default function ContactListPage() {
           )}
           <Button variant="outline" onClick={exportCsv} data-testid="export-csv-btn" className="border-gray-300">
             <Download size={14} className="mr-2"/> Export CSV
+          </Button>
+          <Button variant="outline" onClick={() => setHistoryOpen(true)} data-testid="upload-history-btn" className="border-gray-300">
+            <History size={14} className="mr-2"/> Upload History
+          </Button>
+          <Button variant="outline" onClick={() => setUploadOpen(true)} data-testid="open-bulk-upload-btn" className="border-[#ec9324] text-[#ec9324] hover:bg-[#ec9324]/10">
+            <Upload size={14} className="mr-2"/> Upload Employees
           </Button>
           <Button onClick={openCreate} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="add-contact-btn">
             <UserPlus size={16} className="mr-2"/> Add Employee
@@ -737,6 +1109,12 @@ export default function ContactListPage() {
       </div>
 
       <EmployeeDetailModal contact={detailContact} open={!!detailContact} onClose={() => setDetailContact(null)} />
+      <BulkUploadModal
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        onComplete={() => load()}
+      />
+      <UploadHistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)} />
       {generated && (
         <GeneratedPasswordModal
           password={generated.password}
