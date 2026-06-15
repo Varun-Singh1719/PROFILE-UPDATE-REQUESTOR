@@ -1,5 +1,6 @@
-"""Auth: login, google session, logout, me, forgot/reset password."""
+"""Auth: login, google session, logout, me, change/forgot/reset password."""
 import os
+import re
 import uuid
 import logging
 import secrets
@@ -7,6 +8,7 @@ from datetime import datetime, timezone, timedelta
 
 import requests
 from fastapi import Depends, HTTPException, Response
+from pydantic import BaseModel
 
 from core import (
     api_router, db, log_audit, now_iso, hash_password, verify_password,
@@ -17,6 +19,29 @@ from core import (
 from notifications import send_email, render_forgot_password_email
 
 logger = logging.getLogger(__name__)
+
+# Password policy — mirror this on the frontend strength meter.
+# Min 8 chars, with at least one uppercase, lowercase, digit, special character.
+PASSWORD_SPECIAL_RE = re.compile(r"[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>/?`~]")
+
+def validate_password_policy(pw: str) -> str | None:
+    """Return an error string if `pw` fails the policy, else None."""
+    if not pw or len(pw) < 8:
+        return "Password must be at least 8 characters"
+    if not re.search(r"[A-Z]", pw):
+        return "Password must contain at least one uppercase letter"
+    if not re.search(r"[a-z]", pw):
+        return "Password must contain at least one lowercase letter"
+    if not re.search(r"\d", pw):
+        return "Password must contain at least one digit"
+    if not PASSWORD_SPECIAL_RE.search(pw):
+        return "Password must contain at least one special character"
+    return None
+
+
+class ChangePasswordIn(BaseModel):
+    old_password: str
+    new_password: str
 
 
 @api_router.post("/auth/login")
@@ -145,6 +170,7 @@ async def reset_password(body: ResetPasswordIn):
     await db.contacts.update_one({"id": user["id"]}, {"$set": {
         "password_hash": hash_password(body.new_password),
         "password_encrypted": encrypt_password(body.new_password),
+        "password_changed_at": now_iso(),
     }})
     await db.password_reset_tokens.update_one({"id": rec["id"]}, {"$set": {"used": True, "used_at": now_iso()}})
     await log_audit(
@@ -152,3 +178,48 @@ async def reset_password(body: ResetPasswordIn):
         detail=f"{user.get('email')} reset their password via link", severity="warning",
     )
     return {"ok": True}
+
+
+@api_router.post("/auth/change-password")
+async def change_password(body: ChangePasswordIn, user: dict = Depends(get_current_user)):
+    """Authenticated password change.
+
+    Validation order (fail-fast):
+      1. Old password must match the stored hash.
+      2. New password must satisfy the system policy (8+ chars / upper / lower / digit / special).
+      3. New password must differ from old password (no reuse of current).
+
+    On success: updates password_hash + password_encrypted + password_changed_at,
+    records an audit event, and returns 200.
+    """
+    # Look up the live user with password fields (current_user has them stripped).
+    record = await db.contacts.find_one({"id": user["id"]})
+    if not record:
+        raise HTTPException(404, "User not found")
+    if record.get("status") != "Active":
+        raise HTTPException(403, "Account is inactive")
+
+    # 1. Verify old password
+    if not verify_password(body.old_password, record.get("password_hash", "")):
+        raise HTTPException(400, "Old password is incorrect")
+
+    # 2. Policy
+    err = validate_password_policy(body.new_password)
+    if err:
+        raise HTTPException(400, err)
+
+    # 3. Reject reuse of current password
+    if verify_password(body.new_password, record.get("password_hash", "")):
+        raise HTTPException(400, "New password must be different from the current password")
+
+    now = now_iso()
+    await db.contacts.update_one({"id": user["id"]}, {"$set": {
+        "password_hash": hash_password(body.new_password),
+        "password_encrypted": encrypt_password(body.new_password),
+        "password_changed_at": now,
+    }})
+    await log_audit(
+        actor=user, action="auth.change_password", resource="auth", resource_id=user["id"],
+        detail=f"{user.get('email')} changed their password", severity="warning",
+    )
+    return {"ok": True, "password_changed_at": now}

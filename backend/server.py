@@ -27,6 +27,7 @@ from routers import notifications_email as _notif  # noqa: F401
 # endpoints (FastAPI matches routes in declaration order).
 from routers import contact_uploads as _contact_uploads  # noqa: F401
 from routers import contacts as _contacts  # noqa: F401
+from routers import profile as _profile  # noqa: F401
 from routers import teams as _teams  # noqa: F401
 from routers import permissions as _permissions  # noqa: F401
 from routers import permission_sets as _psets  # noqa: F401

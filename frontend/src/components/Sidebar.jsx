@@ -238,7 +238,7 @@ function SearchPalette({ open, onClose, items }) {
 // SIDEBAR — single component, handles desktop + mobile
 // --------------------------------------------------------------------------
 export default function Sidebar() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { can } = usePermissions();
   const navigate = useNavigate();
   const location = useLocation();
@@ -290,7 +290,7 @@ export default function Sidebar() {
     });
   }, []);
 
-  const handleLogout = async () => { await logout(); navigate("/login"); };
+  const handleLogout = async () => { navigate("/login"); }; // legacy — logout now lives in TopBar
   const onNavigateMobile = () => setMobileOpen(false);
 
   const flatItems = useMemo(() => flattenForSearch(NAV_CONFIG).filter(it =>
@@ -315,7 +315,6 @@ export default function Sidebar() {
             <aside className="relative w-64 bg-white h-full flex flex-col shadow-2xl">
               <SidebarHeader collapsed={false} user={user} onToggle={() => setMobileOpen(false)} mobile onSearch={() => setSearchOpen(true)}/>
               <SidebarNav collapsed={false} currentPath={location.pathname} can={can} isSuperAdmin={isSuperAdmin} onNavigate={onNavigateMobile}/>
-              <SidebarFooter collapsed={false} user={user} onLogout={handleLogout}/>
             </aside>
           </div>
         )}
@@ -333,7 +332,6 @@ export default function Sidebar() {
       >
         <SidebarHeader collapsed={collapsed} user={user} onToggle={toggle} onSearch={() => setSearchOpen(true)}/>
         <SidebarNav collapsed={collapsed} currentPath={location.pathname} can={can} isSuperAdmin={isSuperAdmin}/>
-        <SidebarFooter collapsed={collapsed} user={user} onLogout={handleLogout}/>
       </aside>
       <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} items={flatItems}/>
     </>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Sidebar from "./Sidebar";
+import TopBar from "./TopBar";
 import Breadcrumbs from "./Breadcrumbs";
 
 /**
@@ -9,12 +10,13 @@ import Breadcrumbs from "./Breadcrumbs";
  *   breadcrumbs?: [{label, to?}]   — shown at top of content area
  *   fullBleed?: bool                — remove the centered max-w wrapper (for canvas-heavy pages)
  *   contentClassName?: string       — escape hatch for full-screen pages
+ *   hideTopBar?: bool               — for screens that need a full-height canvas
  *
  * The Sidebar is fixed-position; we add a left margin equal to its current width
  * so the content never gets covered. We detect sidebar width via a CSS attribute
  * that the Sidebar component sets (data-collapsed).
  */
-export default function Layout({ children, breadcrumbs, fullBleed = false, contentClassName = "" }) {
+export default function Layout({ children, breadcrumbs, fullBleed = false, contentClassName = "", hideTopBar = false }) {
   const [sidebarOffset, setSidebarOffset] = useState(0);
 
   useEffect(() => {
@@ -41,6 +43,7 @@ export default function Layout({ children, breadcrumbs, fullBleed = false, conte
         className="flex-1 overflow-x-hidden transition-[margin] duration-200"
         style={{ marginLeft: sidebarOffset }}
       >
+        {!hideTopBar && <TopBar />}
         {fullBleed ? (
           <div className={contentClassName}>
             {breadcrumbs && (

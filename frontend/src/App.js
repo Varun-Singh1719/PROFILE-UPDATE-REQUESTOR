@@ -29,6 +29,7 @@ import WorkstationBookingPage from "./pages/WorkstationBookingPage";
 import RequestWorkstationPage from "./pages/RequestWorkstationPage";
 import PendingApprovalsPage from "./pages/PendingApprovalsPage";
 import BookingsPage from "./pages/BookingsPage";
+import ProfilePage from "./pages/ProfilePage";
 import { Loader2 } from "lucide-react";
 
 // v3 role model — every authenticated user (Super Admin or Admin) lands at /admin.
@@ -73,6 +74,7 @@ function App() {
 
             {/* Unified admin shell — Super Admin + Admin */}
             <Route path="/admin" element={<ProtectedRoute roles={ADMIN_ROLES}><AdminDashboard /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute roles={ADMIN_ROLES}><ProfilePage /></ProtectedRoute>} />
             <Route path="/admin/open-tickets" element={<ProtectedRoute roles={ADMIN_ROLES}>
               <TicketListPage scope="all" title="All Requests" basePath="/admin/tickets" />
             </ProtectedRoute>} />
