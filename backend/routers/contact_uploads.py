@@ -1,31 +1,24 @@
 """Bulk upload (Excel .xlsx) for Employees / Contacts.
 
 Endpoints:
-  GET  /api/contacts/sample-template            — download .xlsx template w/ headers + 2 sample rows
-  POST /api/contacts/bulk-upload                — accept .xlsx, validate, partial-insert, return summary
-  GET  /api/contacts/upload-history             — list past upload sessions (paginated)
-  GET  /api/contacts/upload-history/{id}        — full upload session (with embedded errors)
+  GET  /api/contacts/sample-template                — download .xlsx template (6 cols + 2 sample rows)
+  POST /api/contacts/bulk-upload                    — accept .xlsx, validate, partial-insert, return summary
+  GET  /api/contacts/upload-history                 — list past upload sessions (paginated)
+  GET  /api/contacts/upload-history/{id}            — full upload session (with embedded errors)
   GET  /api/contacts/upload-history/{id}/error-report.xlsx — download per-row error report
 
-Design notes:
-  * Partial processing: valid rows are inserted row-by-row; invalid rows are
-    captured into the upload session document so they can be downloaded as an
-    error report. The DB does NOT rollback if some rows fail.
-  * Manager Email → resolves to a Team where that email's contact is one of
-    the team's `manager_ids`. The newly created employee is added to that
-    team's `member_ids`. If multiple teams match, the first one wins.
-  * Per-row notifications reuse the existing `new_employee` email template
-    via `send_email` (so admins can toggle the template Inactive to suppress).
-  * Errors collection embedded inside the upload doc; capped at 5000 rows.
+Schema (6 columns; all required except Phone):
+  Name, Email, Phone, DOJ (MM-DD-YYYY), Employee ID, Role
 """
 from __future__ import annotations
 
 import io
 import os
+import re
 import uuid
 import logging
 from datetime import datetime, timezone, date
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, Any, List
 
 from fastapi import Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
@@ -41,31 +34,25 @@ from notifications import send_email, render_new_employee_email
 
 logger = logging.getLogger(__name__)
 
-# Canonical template column order. The first 5 are mandatory.
-TEMPLATE_HEADERS = [
-    "Employee Name",
-    "Email Address",
-    "Employee Code",
-    "Role",
-    "Date of Joining",
-    "Department",
-    "Designation",
-    "Manager Email",
-    "Location",
-]
-REQUIRED_HEADERS = {"Employee Name", "Email Address", "Employee Code", "Role", "Date of Joining"}
+# Canonical template column order. Phone is the only optional column.
+TEMPLATE_HEADERS = ["Name", "Email", "Phone", "DOJ", "Employee ID", "Role"]
+REQUIRED_HEADERS = {"Name", "Email", "DOJ", "Employee ID", "Role"}
 VALID_ROLES = {"Super Admin", "Admin"}
 
+# Simple email validator — RFC-compliant enough for HR data.
+EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
+
 SAMPLE_ROWS = [
-    ["Aarav Sharma", "aarav.sharma@example.com", "EMP-1001", "Admin", "2025-04-01",
-     "Engineering", "Software Engineer", "manager@ticketing.com", "Bangalore"],
-    ["Priya Iyer", "priya.iyer@example.com", "EMP-1002", "Admin", "2025-05-15",
-     "Human Resources", "HR Executive", "", "Mumbai"],
+    ["John Smith",    "john.smith@company.com",    "9876543210", "01-15-2026", "EMP001", "Admin"],
+    ["Sarah Johnson", "sarah.johnson@company.com", "9876543211", "02-01-2026", "EMP002", "Admin"],
 ]
 
 
-def _normalize_doj(raw) -> Optional[str]:
-    """Accept Excel date cells / strings; return ISO YYYY-MM-DD or None on failure."""
+def _normalize_doj_mmddyyyy(raw) -> Optional[str]:
+    """Parse the DOJ cell. Accepts MM-DD-YYYY string, Excel date cell, or
+    common variants. Returns ISO YYYY-MM-DD (the canonical form used in DB)
+    or None on failure.
+    """
     if raw is None or raw == "":
         return None
     if isinstance(raw, datetime):
@@ -73,7 +60,8 @@ def _normalize_doj(raw) -> Optional[str]:
     if isinstance(raw, date):
         return raw.isoformat()
     s = str(raw).strip()
-    for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%m/%d/%Y", "%Y/%m/%d"):
+    # Primary expected format: MM-DD-YYYY
+    for fmt in ("%m-%d-%Y", "%m/%d/%Y", "%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d"):
         try:
             return datetime.strptime(s, fmt).date().isoformat()
         except ValueError:
@@ -85,9 +73,9 @@ def _cell_text(v) -> str:
     if v is None:
         return ""
     if isinstance(v, datetime):
-        return v.date().isoformat()
+        return v.strftime("%m-%d-%Y")
     if isinstance(v, date):
-        return v.isoformat()
+        return v.strftime("%m-%d-%Y")
     return str(v).strip()
 
 
@@ -103,47 +91,42 @@ async def download_sample_template(user=Depends(require_role("Super Admin"))):
     header_fill = PatternFill("solid", fgColor="EC9324")
     thin = Side(border_style="thin", color="D1D5DB")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
-    center = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    left_align = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
     for col_idx, h in enumerate(TEMPLATE_HEADERS, start=1):
         c = ws.cell(row=1, column=col_idx, value=h)
         c.font = header_font
         c.fill = header_fill
-        c.alignment = center
+        c.alignment = left_align
         c.border = border
     for row_idx, row in enumerate(SAMPLE_ROWS, start=2):
         for col_idx, val in enumerate(row, start=1):
             ws.cell(row=row_idx, column=col_idx, value=val)
 
-    # Column widths
-    widths = [22, 30, 16, 14, 16, 22, 22, 28, 18]
+    widths = [22, 32, 14, 14, 14, 12]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
     ws.freeze_panes = "A2"
 
-    # Notes sheet — explains required vs optional + role/doj formats.
+    # Instructions sheet — explains required vs optional + role/doj formats.
     notes = wb.create_sheet("Instructions")
     notes_lines = [
         ("Field", "Required?", "Notes"),
-        ("Employee Name", "Yes", "Full name of the employee."),
-        ("Email Address", "Yes", "Unique. Will be the login email."),
-        ("Employee Code", "Yes", "Unique. Internal HR / payroll code (e.g. EMP-1001)."),
+        ("Name", "Yes", "Full name of the employee."),
+        ("Email", "Yes", "Unique. Will be the login email. Standard email format."),
+        ("Phone", "No", "Contact number — digits only."),
+        ("DOJ", "Yes", "Date of Joining. Format: MM-DD-YYYY (e.g. 01-15-2026). Excel date cells are also accepted."),
+        ("Employee ID", "Yes", "Unique. Internal HR / payroll code (e.g. EMP001)."),
         ("Role", "Yes", "One of: Super Admin, Admin."),
-        ("Date of Joining", "Yes", "Format: YYYY-MM-DD (Excel date cells also accepted)."),
-        ("Department", "No", "Free text — e.g. Engineering, HR."),
-        ("Designation", "No", "Free text — e.g. Software Engineer."),
-        ("Manager Email", "No", "If supplied, must match an existing employee who is a Team Manager. The new employee will be added to that team."),
-        ("Location", "No", "Free text — e.g. Bangalore."),
         ("", "", ""),
-        ("System-generated fields", "", "Do NOT include — handled automatically: Employee ID, Internal Record ID, Created Date, Created By, Last Updated Date, Password."),
+        ("System-generated fields", "", "Do NOT include — handled automatically: Internal Record ID, Created Date, Created By, Last Updated Date, Password. Permission Set is assigned later via the Edit Employee screen."),
     ]
     for r_idx, row in enumerate(notes_lines, start=1):
         for c_idx, val in enumerate(row, start=1):
             cell = notes.cell(row=r_idx, column=c_idx, value=val)
             if r_idx == 1:
-                cell.font = Font(bold=True)
-                cell.fill = header_fill
                 cell.font = Font(bold=True, color="FFFFFF")
+                cell.fill = header_fill
     notes.column_dimensions["A"].width = 22
     notes.column_dimensions["B"].width = 12
     notes.column_dimensions["C"].width = 80
@@ -160,19 +143,6 @@ async def download_sample_template(user=Depends(require_role("Super Admin"))):
 
 
 # ---------- Bulk upload ----------
-
-async def _resolve_manager_team(manager_email: str) -> Optional[dict]:
-    """Find a team whose manager_ids contains a contact with the given email.
-    Returns the team doc or None.
-    """
-    if not manager_email:
-        return None
-    mgr = await db.contacts.find_one({"email": manager_email.lower().strip()}, {"_id": 0, "id": 1})
-    if not mgr:
-        return None
-    team = await db.teams.find_one({"manager_ids": mgr["id"]}, {"_id": 0})
-    return team
-
 
 def _row_to_dict(headers: List[str], row: tuple) -> Dict[str, Any]:
     out: Dict[str, Any] = {}
@@ -206,7 +176,6 @@ async def bulk_upload_contacts(
     except StopIteration:
         raise HTTPException(400, "File is empty")
 
-    # Normalize headers (strip whitespace, ignore trailing Nones)
     headers = [(_cell_text(h)) for h in header_row]
     while headers and not headers[-1]:
         headers.pop()
@@ -215,9 +184,9 @@ async def bulk_upload_contacts(
     if missing:
         raise HTTPException(400, f"Missing required column(s): {', '.join(sorted(missing))}")
 
-    # Pre-load existing emails + emp_ids to validate uniqueness in-bulk.
-    existing_emails = set()
-    existing_emp_ids = set()
+    # Pre-load existing emails + emp_ids for uniqueness check.
+    existing_emails: set = set()
+    existing_emp_ids: set = set()
     async for c in db.contacts.find({}, {"_id": 0, "email": 1, "emp_id": 1}):
         if c.get("email"):
             existing_emails.add(c["email"].lower())
@@ -231,9 +200,6 @@ async def bulk_upload_contacts(
     errors: List[Dict[str, Any]] = []
     total = 0
 
-    # Manager team cache: email -> team doc (or None)
-    mgr_cache: Dict[str, Optional[dict]] = {}
-
     for excel_row_num, row in enumerate(rows_iter, start=2):  # row 1 = header
         # Skip fully empty rows
         if not row or all((v is None or _cell_text(v) == "") for v in row):
@@ -241,39 +207,36 @@ async def bulk_upload_contacts(
         total += 1
         d = _row_to_dict(headers, row)
 
-        name = _cell_text(d.get("Employee Name"))
-        email = _cell_text(d.get("Email Address")).lower()
-        emp_id = _cell_text(d.get("Employee Code"))
+        name = _cell_text(d.get("Name"))
+        email = _cell_text(d.get("Email")).lower()
+        phone = _cell_text(d.get("Phone"))
+        doj_raw = d.get("DOJ")
+        emp_id = _cell_text(d.get("Employee ID"))
         role = _cell_text(d.get("Role"))
-        doj_raw = d.get("Date of Joining")
-        department = _cell_text(d.get("Department")) or None
-        designation = _cell_text(d.get("Designation")) or None
-        manager_email = _cell_text(d.get("Manager Email")).lower() or None
-        location = _cell_text(d.get("Location")) or None
 
         row_errors: List[str] = []
+        # Mandatory field validation
         if not name:
-            row_errors.append("Employee Name is required")
+            row_errors.append("Name is required")
         if not email:
-            row_errors.append("Email Address is required")
-        elif "@" not in email:
-            row_errors.append("Email Address looks invalid")
+            row_errors.append("Email is required")
+        elif not EMAIL_RE.match(email):
+            row_errors.append("Email format is invalid")
         if not emp_id:
-            row_errors.append("Employee Code is required")
+            row_errors.append("Employee ID is required")
         if not role:
             row_errors.append("Role is required")
         elif role not in VALID_ROLES:
             row_errors.append(f"Role must be one of: {', '.join(sorted(VALID_ROLES))}")
-        doj_iso = _normalize_doj(doj_raw)
+        # DOJ
+        doj_iso = _normalize_doj_mmddyyyy(doj_raw)
         if doj_raw in (None, ""):
-            row_errors.append("Date of Joining is required")
+            row_errors.append("DOJ is required")
         elif not doj_iso:
-            row_errors.append("Date of Joining must be YYYY-MM-DD")
+            row_errors.append("DOJ must be in MM-DD-YYYY format")
 
-        # Uniqueness checks — check in-file dup BEFORE system-exists so the
-        # user gets the more accurate reason when two rows in the same file
-        # collide (otherwise the first row inserts, then the second sees
-        # "already exists in system").
+        # Uniqueness — check in-file dup BEFORE system-exists so users see the
+        # more accurate reason when two rows in the same file collide.
         if email:
             if email in seen_emails:
                 row_errors.append("Duplicate Email in upload file")
@@ -281,27 +244,14 @@ async def bulk_upload_contacts(
                 row_errors.append("Email already exists in system")
         if emp_id:
             if emp_id in seen_emp_ids:
-                row_errors.append("Duplicate Employee Code in upload file")
+                row_errors.append("Duplicate Employee ID in upload file")
             elif emp_id in existing_emp_ids:
-                row_errors.append("Employee Code already exists in system")
-
-        # Manager Email lookup (only if no other blocking error so far)
-        team_to_attach: Optional[dict] = None
-        if manager_email and not row_errors:
-            if manager_email in mgr_cache:
-                team_to_attach = mgr_cache[manager_email]
-            else:
-                team_to_attach = await _resolve_manager_team(manager_email)
-                mgr_cache[manager_email] = team_to_attach
-            if team_to_attach is None:
-                row_errors.append("Manager Email not found among existing Team Managers")
+                row_errors.append("Employee ID already exists in system")
 
         if row_errors:
             errors.append({
                 "row": excel_row_num,
                 "name": name,
-                "email": email,
-                "emp_id": emp_id,
                 "reason": "; ".join(row_errors),
             })
             continue
@@ -317,14 +267,11 @@ async def bulk_upload_contacts(
             "id": contact_id,
             "email": email,
             "name": name,
-            "phone": "",
+            "phone": phone or "",
             "role": role,
             "emp_id": emp_id,
             "doj": doj_iso,
             "permission_set_ids": [],
-            "department": department,
-            "designation": designation,
-            "location": location,
             "status": "Active",
             "created_on": now_iso(),
             "last_login": None,
@@ -336,35 +283,21 @@ async def bulk_upload_contacts(
         except Exception as e:  # noqa: BLE001
             errors.append({
                 "row": excel_row_num,
-                "name": name, "email": email, "emp_id": emp_id,
+                "name": name,
                 "reason": f"DB insert failed: {e}",
             })
             continue
 
-        # Attach to manager's team if resolved
-        if team_to_attach:
-            try:
-                await db.teams.update_one(
-                    {"id": team_to_attach["id"]},
-                    {"$addToSet": {"member_ids": contact_id}},
-                )
-            except Exception as e:
-                logger.warning(f"Failed to attach {email} to team {team_to_attach.get('id')}: {e}")
-
-        # Track for email + summary
         success_records.append({
             "id": contact_id, "name": name, "email": email,
             "emp_id": emp_id, "password": generated_pwd,
-            "department": department, "designation": designation,
-            "role": role, "doj": doj_iso,
         })
 
         # Reserve uniqueness for subsequent rows
         existing_emails.add(email)
         existing_emp_ids.add(emp_id)
 
-    # Send notification emails (best-effort, after all rows processed so the
-    # upload returns quickly enough — still sequential for simplicity).
+    # Send notification emails (best-effort, after all rows processed).
     login_url = (os.environ.get("APP_PUBLIC_URL", "") or "") + "/login"
     for rec in success_records:
         try:
@@ -377,9 +310,7 @@ async def bulk_upload_contacts(
                 kind="new_employee", subject=subject, body=mbody,
                 related_id=rec["id"], metadata={"created_by": user.get("id"), "source": "bulk_upload"},
                 variables={"password": rec["password"], "login_url": login_url,
-                           "emp_id": rec["emp_id"], "department": rec["department"] or "",
-                           "designation": rec["designation"] or "",
-                           "date_created": now_iso()},
+                           "emp_id": rec["emp_id"], "date_created": now_iso()},
             )
         except Exception as e:
             logger.error(f"bulk_upload: new-employee email failed for {rec['email']}: {e}")
@@ -409,7 +340,6 @@ async def bulk_upload_contacts(
         "success_count": success_count,
         "failed_count": failed_count,
         "status": status,
-        # Cap embedded errors to avoid pathologically huge docs.
         "errors": errors[:5000],
         "truncated_errors": failed_count > 5000,
     }
@@ -431,7 +361,7 @@ async def bulk_upload_contacts(
         "success": success_count,
         "failed": failed_count,
         "status": status,
-        "errors": errors[:50],  # first 50 inlined for immediate display
+        "errors": errors[:50],
         "has_more_errors": failed_count > 50,
     }
 
@@ -449,7 +379,7 @@ async def list_upload_history(
     total = await db.contact_uploads.count_documents({})
     cursor = (
         db.contact_uploads
-        .find({}, {"_id": 0, "errors": 0})  # omit big errors array in list view
+        .find({}, {"_id": 0, "errors": 0})
         .sort("uploaded_at", -1)
         .skip((page - 1) * page_size)
         .limit(page_size)
@@ -477,8 +407,9 @@ async def download_error_report(upload_id: str, user=Depends(require_role("Super
     ws = wb.active
     ws.title = "Errors"
     header_font = Font(bold=True, color="FFFFFF")
-    header_fill = PatternFill("solid", fgColor="DC2626")  # red-600
-    headers = ["Row #", "Employee Name", "Email Address", "Employee Code", "Reason(s)"]
+    header_fill = PatternFill("solid", fgColor="DC2626")
+    # Per spec: only Row Number, Employee Name, Error Reason
+    headers = ["Row Number", "Employee Name", "Error Reason"]
     for i, h in enumerate(headers, start=1):
         c = ws.cell(row=1, column=i, value=h)
         c.font = header_font
@@ -486,10 +417,8 @@ async def download_error_report(upload_id: str, user=Depends(require_role("Super
     for r_idx, e in enumerate(errors, start=2):
         ws.cell(row=r_idx, column=1, value=e.get("row"))
         ws.cell(row=r_idx, column=2, value=e.get("name") or "")
-        ws.cell(row=r_idx, column=3, value=e.get("email") or "")
-        ws.cell(row=r_idx, column=4, value=e.get("emp_id") or "")
-        ws.cell(row=r_idx, column=5, value=e.get("reason") or "")
-    widths = [8, 24, 32, 16, 80]
+        ws.cell(row=r_idx, column=3, value=e.get("reason") or "")
+    widths = [12, 28, 80]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
     ws.freeze_panes = "A2"

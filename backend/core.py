@@ -568,10 +568,6 @@ class ContactCreate(BaseModel):
     emp_id: str
     doj: str  # YYYY-MM-DD — mandatory
     permission_set_ids: Optional[List[str]] = None
-    # Optional HR fields (introduced for bulk upload — Feb 2026)
-    department: Optional[str] = None
-    designation: Optional[str] = None
-    location: Optional[str] = None
 
 class ContactUpdate(BaseModel):
     name: Optional[str] = None
@@ -581,9 +577,6 @@ class ContactUpdate(BaseModel):
     emp_id: Optional[str] = None
     doj: Optional[str] = None
     permission_set_ids: Optional[List[str]] = None
-    department: Optional[str] = None
-    designation: Optional[str] = None
-    location: Optional[str] = None
 
 class TeamCreate(BaseModel):
     name: str

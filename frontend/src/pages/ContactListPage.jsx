@@ -13,6 +13,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator
 } from "../components/ui/dropdown-menu";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "../components/ui/tooltip";
 import MultiSelect from "../components/MultiSelect";
 import notify from "../lib/notify";
 import { Search, UserPlus, Pencil, Eye, EyeOff, Copy, RefreshCw, KeyRound, X, Mail, Phone, Calendar, IdCard, Briefcase, UsersRound, Download, ChevronLeft, ChevronRight, MoreHorizontal, ShieldCheck, Upload, FileSpreadsheet, History, CheckCircle2, AlertTriangle, FileDown, Loader2 } from "lucide-react";
@@ -435,7 +436,7 @@ function BulkUploadModal({ open, onClose, onComplete }) {
                       <thead className="bg-gray-50 text-gray-600">
                         <tr>
                           <th className="px-2 py-1 text-left">Row</th>
-                          <th className="px-2 py-1 text-left">Email</th>
+                          <th className="px-2 py-1 text-left">Name</th>
                           <th className="px-2 py-1 text-left">Reason</th>
                         </tr>
                       </thead>
@@ -443,7 +444,7 @@ function BulkUploadModal({ open, onClose, onComplete }) {
                         {(result.errors || []).slice(0, 10).map((e, i) => (
                           <tr key={i} className="border-t border-gray-100">
                             <td className="px-2 py-1 text-gray-600 font-mono">{e.row}</td>
-                            <td className="px-2 py-1 text-gray-700">{e.email || "—"}</td>
+                            <td className="px-2 py-1 text-gray-700">{e.name || "—"}</td>
                             <td className="px-2 py-1 text-red-700">{e.reason}</td>
                           </tr>
                         ))}
@@ -827,15 +828,44 @@ export default function ContactListPage() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <Button variant="outline" onClick={exportCsv} data-testid="export-csv-btn" className="border-gray-300">
-            <Download size={14} className="mr-2"/> Export CSV
-          </Button>
-          <Button variant="outline" onClick={() => setHistoryOpen(true)} data-testid="upload-history-btn" className="border-gray-300">
-            <History size={14} className="mr-2"/> Upload History
-          </Button>
-          <Button variant="outline" onClick={() => setUploadOpen(true)} data-testid="open-bulk-upload-btn" className="border-[#ec9324] text-[#ec9324] hover:bg-[#ec9324]/10">
-            <Upload size={14} className="mr-2"/> Upload Employees
-          </Button>
+          <TooltipProvider delayDuration={150}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline" onClick={exportCsv} data-testid="export-csv-btn"
+                  size="icon" className="h-9 w-9 border-gray-300"
+                  aria-label="Export CSV"
+                >
+                  <Download size={16}/>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Export CSV</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline" onClick={() => setHistoryOpen(true)} data-testid="upload-history-btn"
+                  size="icon" className="h-9 w-9 border-gray-300"
+                  aria-label="Upload History"
+                >
+                  <History size={16}/>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Upload History</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline" onClick={() => setUploadOpen(true)} data-testid="open-bulk-upload-btn"
+                  size="icon" className="h-9 w-9 border-[#ec9324] text-[#ec9324] hover:bg-[#ec9324]/10"
+                  aria-label="Upload Employees"
+                >
+                  <Upload size={16}/>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Upload Employees</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <Button onClick={openCreate} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="add-contact-btn">
             <UserPlus size={16} className="mr-2"/> Add Employee
           </Button>
