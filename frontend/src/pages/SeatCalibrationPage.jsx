@@ -110,6 +110,18 @@ export default function SeatCalibrationPage() {
   const { planId } = useParams();
   const navigate = useNavigate();
 
+  // ----------------------------------------------------------- View-only mode
+  // When the URL contains `?view=1` we render this page as a READ-ONLY viewer
+  // of the published floor plan: the PDF, seat markings, room boundaries and
+  // labels are visible, but every editing affordance (toolbar, save/publish,
+  // drag handles, drawing modes, JSON import) is hidden / disabled.
+  // This is what the "View" eye icon on the Floor Plans list opens.
+  const viewOnly = (() => {
+    try {
+      return new URLSearchParams(window.location.search).get('view') === '1';
+    } catch (_) { return false; }
+  })();
+
   // ---- plan + persistence state
   const [plan, setPlan] = useState(null);            // backend doc
   const [liveSeats, setLiveSeats] = useState([]);    // baseline for diff
@@ -1087,12 +1099,16 @@ export default function SeatCalibrationPage() {
       breadcrumbs={[
         { label: "Workspace Manager" },
         { label: "Floor Plans", to: "/workspace-manager/floor-plans" },
-        { label: plan?.name || "Calibration" },
+        { label: (plan?.name || "Calibration") + (viewOnly ? " (View)" : "") },
       ]}
     >
     <div className="flex-1 flex flex-row-reverse overflow-hidden">
-      {/* ────────────────────────────── Right collapsible toolbar */}
-      {rightPanelCollapsed ? (
+      {/* ────────────────────────────── Right collapsible toolbar
+          In view-only mode the whole calibration toolbar (drawing modes,
+          save/publish, history, etc.) is hidden — the user just sees the
+          floor plan with seats, rooms, and labels overlaid. */}
+      {viewOnly ? null : (
+      rightPanelCollapsed ? (
         <button
           onClick={() => setRightPanelCollapsed(false)}
           data-testid="expand-calibration-panel"
@@ -1390,6 +1406,7 @@ export default function SeatCalibrationPage() {
           </div>
         </div>
       </div>
+      )
       )}
 
       {/* ────────────────────────────── PDF Canvas */}
@@ -1462,11 +1479,15 @@ export default function SeatCalibrationPage() {
               <TransformComponent wrapperStyle={{ width: '100%', height: '100%' }}>
                 <div
                   ref={containerRef}
-                  onMouseDown={handlePdfMouseDown}
-                  onMouseMove={handlePdfMouseMove}
-                  onMouseUp={handlePdfMouseUp}
+                  /* View-only mode: short-circuit every editing handler so the
+                     PDF can still be panned/zoomed via TransformWrapper, but
+                     no seats are placed/moved/deleted on click & drag. */
+                  onMouseDown={viewOnly ? undefined : handlePdfMouseDown}
+                  onMouseMove={viewOnly ? undefined : handlePdfMouseMove}
+                  onMouseUp={viewOnly ? undefined : handlePdfMouseUp}
                   data-testid="pdf-canvas"
                   className={`relative inline-block ${
+                    viewOnly ? 'cursor-default' :
                     calibMode === 'room' && roomTool === 'draw' ? 'cursor-crosshair' :
                     calibMode === 'room' && roomTool === 'delete' ? 'cursor-pointer' :
                     calibMode === 'room' ? 'cursor-default' :
@@ -1521,7 +1542,7 @@ export default function SeatCalibrationPage() {
                             pointerEvents: calibMode === 'room' ? 'none' : 'auto',
                             cursor: canDrag ? 'move' : (toolMode === 'select' ? 'pointer' : 'inherit'),
                           }}
-                          onMouseDown={(e) => calibMode === 'workstation' && handleSeatMouseDown(seat, e)}
+                          onMouseDown={(e) => !viewOnly && calibMode === 'workstation' && handleSeatMouseDown(seat, e)}
                           data-testid={`seat-${seat.id}`}
                         >
                           <SeatIcon
@@ -1957,7 +1978,7 @@ function MeetingRoomsLayer({
               transition: 'background 120ms, border-color 120ms',
               containerType: 'size',
             }}
-            onMouseDown={(e) => onRoomMouseDown(room, e)}
+            onMouseDown={(e) => !window.location.search.includes('view=1') && onRoomMouseDown(room, e)}
             onDoubleClick={(e) => { if (interactive) { e.stopPropagation(); onRequestRename(room.id); } }}
             onContextMenu={(e) => { if (interactive) { e.preventDefault(); onRequestRename(room.id); } }}
             onMouseEnter={(e) => {

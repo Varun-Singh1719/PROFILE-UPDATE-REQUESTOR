@@ -40,6 +40,8 @@ const WorkstationFloorMap = ({
   loading = false,
   disabled = false,
   centerOnSeatId = null,
+  rooms = [],
+  roomBookingsByRoom = {},
 }) => {
   const [pageWidth] = useState(1200);
   const [search, setSearch] = useState('');
@@ -245,6 +247,47 @@ const WorkstationFloorMap = ({
                         />
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {/* Meeting rooms overlay (rendered inside the transform so it pans/zooms with the PDF) */}
+                {pdfReady && rooms && rooms.length > 0 && (
+                  <div className="absolute inset-0 pointer-events-none" data-testid="ws-rooms-overlay">
+                    {rooms.map((r) => {
+                      const bookings = roomBookingsByRoom[r.id] || [];
+                      const hasBookings = bookings.length > 0;
+                      return (
+                        <div
+                          key={r.id}
+                          data-testid={`ws-room-${r.id}`}
+                          className="absolute"
+                          style={{
+                            left: `${r.x}%`,
+                            top: `${r.y}%`,
+                            width: `${r.w}%`,
+                            height: `${r.h}%`,
+                            border: `2px solid ${hasBookings ? '#dc2626' : '#10b981'}`,
+                            background: hasBookings ? 'rgba(220,38,38,0.10)' : 'rgba(16,185,129,0.06)',
+                            boxSizing: 'border-box',
+                            zIndex: 5,
+                          }}
+                        >
+                          <div
+                            className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[10px] font-semibold pointer-events-none select-none"
+                            style={{
+                              background: hasBookings ? 'rgba(220,38,38,0.95)' : 'rgba(16,185,129,0.95)',
+                              color: 'white',
+                              maxWidth: '90%',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {r.name}{r.capacity ? ` (${r.capacity})` : ''}{hasBookings ? ` · ${bookings.length}` : ''}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

@@ -13,6 +13,8 @@ import { Button } from "../components/ui/button";
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
 import MRBCalendarView from "../components/MRBCalendarView";
+import TimePickerOrange from "../components/ui/TimePickerOrange";
+import SelectOrange from "../components/ui/SelectOrange";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
@@ -601,18 +603,21 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
       </Field>
 
       <Field label="Meeting Room" required>
-        <select
+        {/* Custom dropdown — always opens DOWNWARD, never overlaps Date/Time
+            row below. Searchable so users with many rooms can find one fast. */}
+        <SelectOrange
           value={selectedRoomId}
-          onChange={(e) => setSelectedRoomId(e.target.value)}
+          onChange={(v) => setSelectedRoomId(v)}
           disabled={dropdownDisabled}
-          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-[#ec9324] bg-white disabled:bg-gray-100 disabled:text-gray-500"
-          data-testid="mrb-form-room"
-        >
-          <option value="">{dropdownPlaceholder}</option>
-          {rooms.map(r => (
-            <option key={r.room_id} value={r.room_id}>{r.name} · {r.plan_name}</option>
-          ))}
-        </select>
+          placeholder={dropdownPlaceholder}
+          searchable={rooms.length > 6}
+          testIdPrefix="mrb-form-room"
+          options={rooms.map((r) => ({
+            value: r.room_id,
+            label: r.name,
+            sublabel: r.plan_name,
+          }))}
+        />
         {selectedRoom && (
           <div className="mt-1.5 text-[11px] text-gray-600 inline-flex items-center gap-1.5" data-testid="mrb-form-capacity">
             <Users size={11} className="text-emerald-600"/>
@@ -634,16 +639,23 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
             data-testid="mrb-form-date"/>
         </Field>
         <Field label="Start Time">
-          <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)}
-            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-[#ec9324] mrb-orange-accent"
-            style={{ accentColor: '#ec9324' }}
-            data-testid="mrb-form-start"/>
+          {/* Custom orange-highlighted time picker (native <input type="time">
+              always uses the browser's blue selection color which cannot be
+              themed via CSS). */}
+          <TimePickerOrange
+            value={startTime}
+            onChange={setStartTime}
+            minuteStep={5}
+            testIdPrefix="mrb-form-start"
+          />
         </Field>
         <Field label="End Time">
-          <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)}
-            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-[#ec9324] mrb-orange-accent"
-            style={{ accentColor: '#ec9324' }}
-            data-testid="mrb-form-end"/>
+          <TimePickerOrange
+            value={endTime}
+            onChange={setEndTime}
+            minuteStep={5}
+            testIdPrefix="mrb-form-end"
+          />
         </Field>
       </div>
 
@@ -685,12 +697,17 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <div className="text-[10px] font-semibold text-gray-600 mb-1">Frequency</div>
-                <select value={freq} onChange={(e) => setFreq(e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:border-[#ec9324]" data-testid="mrb-form-freq">
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="fortnightly">Fortnightly</option>
-                  <option value="monthly">Monthly</option>
-                </select>
+                <SelectOrange
+                  value={freq}
+                  onChange={setFreq}
+                  testIdPrefix="mrb-form-freq"
+                  options={[
+                    { value: 'daily',       label: 'Daily' },
+                    { value: 'weekly',      label: 'Weekly' },
+                    { value: 'fortnightly', label: 'Fortnightly' },
+                    { value: 'monthly',     label: 'Monthly' },
+                  ]}
+                />
               </div>
               <div>
                 <div className="text-[10px] font-semibold text-gray-600 mb-1">End Date</div>
@@ -1027,8 +1044,19 @@ function AttendeePicker({ selected, onChange, onClose }) {
             })
           )}
         </div>
-        <div className="px-4 py-3 border-t border-gray-100 flex justify-end">
-          <Button onClick={onClose} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="mrb-picker-done">Done · {selected.length} selected</Button>
+        <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between gap-3">
+          {/* Selected count — bottom-left, parallel to Submit */}
+          <span
+            className="text-[12px] text-gray-700 font-semibold"
+            data-testid="mrb-picker-selected-count"
+          >
+            {selected.length} Selected
+          </span>
+          <Button
+            onClick={onClose}
+            className="bg-[#ec9324] hover:bg-[#d4811f] text-white"
+            data-testid="mrb-picker-done"
+          >Submit</Button>
         </div>
       </div>
     </div>

@@ -620,3 +620,136 @@ async def cancel_workstation_request(
         detail=f"Cancelled workstation request #{req.get('seq_no')}",
     )
     return {"ok": True}
+
+
+# --------------------------------------------------------------------------- #
+# Bulk approve / decline                                                      #
+# --------------------------------------------------------------------------- #
+
+class BulkRequestIds(BaseModel):
+    request_ids: List[str] = Field(..., min_length=1)
+
+
+async def _approve_one(request_id: str, actor: dict) -> dict:
+    """Approve a single request — same semantics as the single endpoint.
+    Returns {ok: bool, request_id, seat_label?, reason?}."""
+    req = await db.workstation_requests.find_one({"id": request_id}, {"_id": 0})
+    if not req:
+        return {"ok": False, "request_id": request_id, "reason": "Request not found"}
+    if req.get("status") != STATUS_PENDING:
+        return {"ok": False, "request_id": request_id, "seat_label": req.get("seat_label"),
+                "reason": f"Already {req.get('status')}"}
+    seat_clash = await db.workstation_bookings.find_one(
+        {"plan_id": req["plan_id"], "seat_id": req["seat_id"], "date": req["date"], "cancelled": False},
+        {"_id": 0, "seat_label": 1, "date": 1, "employee": 1},
+    )
+    if seat_clash:
+        return {"ok": False, "request_id": request_id, "seat_label": req.get("seat_label"),
+                "reason": f"Workstation {seat_clash.get('seat_label')} was booked by someone else"}
+    from routers.workstation_bookings import _next_seq as _booking_seq
+    now = now_iso()
+    booking = {
+        "id": str(uuid.uuid4()),
+        "seq_no": await _booking_seq(),
+        "plan_id": req["plan_id"],
+        "plan_name": req.get("plan_name"),
+        "seat_id": req["seat_id"],
+        "seat_label": req.get("seat_label"),
+        "date": req["date"],
+        "employee": req.get("employee"),
+        "team_id": req.get("team_id"),
+        "team_name": req.get("team_name"),
+        "team_color": req.get("team_color"),
+        "recurring": None,
+        "series_id": None,
+        "cancelled": False,
+        "created_at": now,
+        "updated_at": now,
+        "created_by": actor,
+        "from_request_id": req["id"],
+    }
+    await db.workstation_bookings.insert_one(booking)
+    await db.workstation_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "status": STATUS_APPROVED,
+            "decided_by": actor,
+            "decided_on": now,
+            "approved_booking_id": booking["id"],
+            "updated_at": now,
+        }},
+    )
+    return {"ok": True, "request_id": request_id, "seat_label": req.get("seat_label")}
+
+
+async def _decline_one(request_id: str, actor: dict) -> dict:
+    req = await db.workstation_requests.find_one({"id": request_id}, {"_id": 0})
+    if not req:
+        return {"ok": False, "request_id": request_id, "reason": "Request not found"}
+    if req.get("status") != STATUS_PENDING:
+        return {"ok": False, "request_id": request_id, "seat_label": req.get("seat_label"),
+                "reason": f"Already {req.get('status')}"}
+    now = now_iso()
+    await db.workstation_requests.update_one(
+        {"id": request_id},
+        {"$set": {"status": STATUS_DECLINED, "decided_by": actor, "decided_on": now, "updated_at": now}},
+    )
+    return {"ok": True, "request_id": request_id, "seat_label": req.get("seat_label")}
+
+
+@api_router.post("/workstation-requests/bulk-approve")
+async def bulk_approve_workstation_requests(
+    payload: BulkRequestIds,
+    user=Depends(require_role("Super Admin")),
+):
+    """Approve multiple requests. Successful ones are processed; failures are
+    listed in the response. Never rolls back already-approved items."""
+    actor = _actor(user)
+    results = []
+    for rid in payload.request_ids:
+        results.append(await _approve_one(rid, actor))
+    approved = [r for r in results if r["ok"]]
+    failed = [r for r in results if not r["ok"]]
+    await log_audit(
+        actor=actor, action="workstation_request.bulk_approve",
+        resource="workstation_request",
+        detail=f"Bulk approve: {len(approved)} approved, {len(failed)} failed",
+        metadata={"approved": len(approved), "failed": len(failed),
+                  "approved_ids": [r["request_id"] for r in approved],
+                  "failed_ids": [r["request_id"] for r in failed]},
+        severity="info" if not failed else "warning",
+    )
+    return {
+        "approved": len(approved),
+        "failed": len(failed),
+        "results": results,
+        "summary": f"{len(approved)} approved" + (f", {len(failed)} failed" if failed else ""),
+    }
+
+
+@api_router.post("/workstation-requests/bulk-decline")
+async def bulk_decline_workstation_requests(
+    payload: BulkRequestIds,
+    user=Depends(require_role("Super Admin")),
+):
+    actor = _actor(user)
+    results = []
+    for rid in payload.request_ids:
+        results.append(await _decline_one(rid, actor))
+    declined = [r for r in results if r["ok"]]
+    failed = [r for r in results if not r["ok"]]
+    await log_audit(
+        actor=actor, action="workstation_request.bulk_decline",
+        resource="workstation_request",
+        detail=f"Bulk decline: {len(declined)} declined, {len(failed)} failed",
+        metadata={"declined": len(declined), "failed": len(failed),
+                  "declined_ids": [r["request_id"] for r in declined],
+                  "failed_ids": [r["request_id"] for r in failed]},
+        severity="info" if not failed else "warning",
+    )
+    return {
+        "declined": len(declined),
+        "failed": len(failed),
+        "results": results,
+        "summary": f"{len(declined)} declined" + (f", {len(failed)} failed" if failed else ""),
+    }

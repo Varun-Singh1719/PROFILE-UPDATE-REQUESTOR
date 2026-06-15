@@ -20,11 +20,15 @@
  * and approved requests also appear as bookings in the Bookings module.
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, X, Loader2, Calendar, User, Clock, MapPin, RefreshCw, ShieldAlert } from "lucide-react";
+import { Check, X, Loader2, Calendar, User, Clock, MapPin, RefreshCw, ShieldAlert, CheckSquare, Square } from "lucide-react";
 import { toast } from "sonner";
 import Layout from "../components/Layout";
 import api, { formatApiError } from "../lib/api";
 import { Button } from "../components/ui/button";
+import { Checkbox } from "../components/ui/checkbox";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
+} from "../components/ui/dialog";
 import WorkstationFloorMap from "../components/WorkstationFloorMap";
 import { useAuth } from "../context/AuthContext";
 
@@ -75,6 +79,11 @@ export default function PendingApprovalsPage() {
   // Selected card → drives map pan/highlight
   const [focusRequest, setFocusRequest] = useState(null);
   const [centerSeatId, setCenterSeatId] = useState(null);
+
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkAction, setBulkAction] = useState(null); // 'approve' | 'decline' | null
+  const [bulkProcessing, setBulkProcessing] = useState(false);
 
   // ----- initial load -----
   const loadPlans = useCallback(async () => {
@@ -146,6 +155,63 @@ export default function PendingApprovalsPage() {
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availability]);
+
+  // -------- Bulk selection --------
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  };
+  const isAllSelected = requests.length > 0 && requests.every((r) => selectedIds.has(r.id));
+  const toggleSelectAll = () => {
+    if (isAllSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(requests.map((r) => r.id)));
+  };
+  // Filter out stale ids whenever the queue changes (derived, not effect)
+  const activeRequestIds = useMemo(() => new Set(requests.map((r) => r.id)), [requests]);
+  const effectiveSelectedIds = useMemo(() => {
+    const out = new Set();
+    selectedIds.forEach((id) => { if (activeRequestIds.has(id)) out.add(id); });
+    return out;
+  }, [selectedIds, activeRequestIds]);
+
+  const performBulk = async (action) => {
+    const ids = Array.from(effectiveSelectedIds);
+    if (ids.length === 0) return;
+    setBulkProcessing(true);
+    try {
+      const path = action === "approve" ? "/workstation-requests/bulk-approve" : "/workstation-requests/bulk-decline";
+      const res = await api.post(path, { request_ids: ids });
+      const okCount = res.data?.approved ?? res.data?.declined ?? 0;
+      const failCount = res.data?.failed ?? 0;
+      const verbPast = action === "approve" ? "approved" : "declined";
+      if (failCount === 0) {
+        toast.success(`${okCount} ${verbPast}`);
+      } else {
+        const reasons = (res.data?.results || []).filter((r) => !r.ok).slice(0, 3)
+          .map((r) => `${r.seat_label || r.request_id}: ${r.reason}`).join("; ");
+        toast.warning(`${okCount} ${verbPast}, ${failCount} failed${reasons ? ` — ${reasons}` : ""}`);
+      }
+      setSelectedIds(new Set());
+      setBulkAction(null);
+      await loadRequests();
+      // refresh map if needed
+      if (selectedPlanId && focusDate) {
+        try {
+          const r = await api.get(`/workstation-requests/availability`, {
+            params: { plan_id: selectedPlanId, date: focusDate },
+          });
+          setAvailability(r.data);
+        } catch { /* swallow */ }
+      }
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail) || `Bulk ${action} failed`);
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
 
   // -------- Approve / Decline actions --------
   const approve = async (req) => {
@@ -314,6 +380,46 @@ export default function PendingApprovalsPage() {
               <div className="text-sm font-semibold text-gray-700">Approval Queue</div>
               <span className="text-[11px] text-gray-500">Newest first</span>
             </div>
+
+            {/* Bulk selection toolbar */}
+            {canApprove && requests.length > 0 && (
+              <div className="px-4 py-2 border-b border-gray-200 bg-gray-50 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={toggleSelectAll}
+                  className="inline-flex items-center gap-1.5 text-[12px] text-gray-700 hover:text-[#ec9324]"
+                  data-testid="pa-select-all"
+                >
+                  {isAllSelected ? <CheckSquare size={14} className="text-[#ec9324]"/> : <Square size={14}/>}
+                  {isAllSelected ? "Unselect all" : "Select all"}
+                </button>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-gray-500" data-testid="pa-selected-count">
+                    {effectiveSelectedIds.size} selected
+                  </span>
+                  <Button
+                    size="sm"
+                    disabled={effectiveSelectedIds.size === 0 || bulkProcessing}
+                    onClick={() => setBulkAction("approve")}
+                    className="h-7 px-2 bg-green-600 hover:bg-green-700 text-white text-[11px]"
+                    data-testid="pa-bulk-approve"
+                  >
+                    <Check size={12} className="mr-1"/> Approve
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={effectiveSelectedIds.size === 0 || bulkProcessing}
+                    onClick={() => setBulkAction("decline")}
+                    className="h-7 px-2 text-red-600 border-red-200 hover:bg-red-50 text-[11px]"
+                    data-testid="pa-bulk-decline"
+                  >
+                    <X size={12} className="mr-1"/> Decline
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="flex-1 overflow-y-auto p-3 space-y-3">
               {loading ? (
                 <div className="text-center text-sm text-gray-500 py-10">
@@ -344,10 +450,22 @@ export default function PendingApprovalsPage() {
                           data-testid={`pa-card-${req.id}`}
                         >
                           <div className="flex items-center justify-between">
-                            <div className="font-semibold text-sm text-gray-900">
-                              Workstation {req.seat_label}
+                            <div className="flex items-center gap-2 min-w-0">
+                              {canApprove && (
+                                <div onClick={(e) => e.stopPropagation()}>
+                                  <Checkbox
+                                    checked={effectiveSelectedIds.has(req.id)}
+                                    onCheckedChange={() => toggleSelect(req.id)}
+                                    data-testid={`pa-select-${req.id}`}
+                                    aria-label="Select request"
+                                  />
+                                </div>
+                              )}
+                              <div className="font-semibold text-sm text-gray-900 truncate">
+                                Workstation {req.seat_label}
+                              </div>
                             </div>
-                            <span className="text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                            <span className="text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 whitespace-nowrap">
                               Pending
                             </span>
                           </div>
@@ -402,6 +520,42 @@ export default function PendingApprovalsPage() {
           </div>
         </div>
       </div>
+
+      {/* Bulk action confirmation dialog */}
+      <Dialog open={!!bulkAction} onOpenChange={(o) => !o && setBulkAction(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle data-testid="pa-bulk-confirm-title">
+              {bulkAction === "approve" ? "Approve" : "Decline"} {effectiveSelectedIds.size} request{effectiveSelectedIds.size !== 1 ? "s" : ""}?
+            </DialogTitle>
+            <DialogDescription>
+              {bulkAction === "approve"
+                ? `This will approve ${effectiveSelectedIds.size} workstation request${effectiveSelectedIds.size !== 1 ? "s" : ""} and create the corresponding booking${effectiveSelectedIds.size !== 1 ? "s" : ""}.`
+                : `This will decline ${effectiveSelectedIds.size} workstation request${effectiveSelectedIds.size !== 1 ? "s" : ""} and release the workstation${effectiveSelectedIds.size !== 1 ? "s" : ""}.`}
+              {" "}If any item can&apos;t be processed (seat already booked by someone else), the rest will still be processed and a summary will be shown.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setBulkAction(null)}
+              disabled={bulkProcessing}
+              data-testid="pa-bulk-cancel"
+            >Cancel</Button>
+            <Button
+              onClick={() => performBulk(bulkAction)}
+              disabled={bulkProcessing}
+              className={bulkAction === "approve"
+                ? "bg-green-600 hover:bg-green-700 text-white"
+                : "bg-red-600 hover:bg-red-700 text-white"}
+              data-testid="pa-bulk-confirm"
+            >
+              {bulkProcessing ? <Loader2 className="animate-spin mr-2" size={14}/> : null}
+              Confirm {bulkAction === "approve" ? "Approve" : "Decline"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

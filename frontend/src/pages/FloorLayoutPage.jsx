@@ -1,13 +1,34 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, LayoutGrid, MapPin, Clock, Loader2, X, FileText } from "lucide-react";
-import FloorMap from "../components/FloorMap";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { ArrowLeft, LayoutGrid, MapPin, Clock, Loader2, FileText, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Users, Building2 } from "lucide-react";
 import api from "../lib/api";
 import Layout from "../components/Layout";
+import WorkstationFloorMap from "../components/WorkstationFloorMap";
+
+const todayIso = () => {
+  const d = new Date();
+  const tz = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - tz).toISOString().slice(0, 10);
+};
 
 function fmt(iso) {
   if (!iso) return "—";
   try { return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }); }
   catch { return iso; }
+}
+
+function fmtDateLabel(iso) {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso + "T00:00:00");
+    return d.toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+  } catch { return iso; }
+}
+
+function fmtTime(iso) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true });
+  } catch { return iso; }
 }
 
 // ---------- Card grid (entry view) ----------
@@ -20,14 +41,10 @@ function FloorPlanCard({ plan, onOpen }) {
     >
       <div className="relative h-40 bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-100 flex items-center justify-center overflow-hidden">
         {plan.thumbnail ? (
-          <img
-            src={plan.thumbnail}
-            alt={`${plan.name} preview`}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          />
+          <img src={plan.thumbnail} alt={`${plan.name} preview`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"/>
         ) : (
           <div className="flex flex-col items-center text-gray-400">
-            <FileText size={32} />
+            <FileText size={32}/>
             <span className="text-[11px] mt-1">No preview yet</span>
           </div>
         )}
@@ -48,31 +65,107 @@ function FloorPlanCard({ plan, onOpen }) {
   );
 }
 
-// ---------- Interactive view (per plan) ----------
+// ---------- Date stepper ----------
+function DateStepper({ value, onChange }) {
+  const shift = (days) => {
+    const d = new Date(value + "T00:00:00");
+    d.setDate(d.getDate() + days);
+    const out = d.toISOString().slice(0, 10);
+    onChange(out);
+  };
+  return (
+    <div className="flex items-center gap-2" data-testid="floor-layout-date-stepper">
+      <button
+        onClick={() => shift(-1)}
+        className="p-1.5 rounded-md border border-gray-300 hover:bg-gray-50"
+        data-testid="floor-layout-prev-date"
+        aria-label="Previous day"
+      >
+        <ChevronLeft size={14}/>
+      </button>
+      <div className="relative">
+        <CalendarIcon size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-[#ec9324] pointer-events-none"/>
+        <input
+          type="date"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="pl-7 pr-2 py-1.5 text-sm border border-gray-300 rounded-md focus:border-[#ec9324] focus:ring-1 focus:ring-[#ec9324] outline-none bg-white"
+          data-testid="floor-layout-date-input"
+        />
+      </div>
+      <button
+        onClick={() => shift(1)}
+        className="p-1.5 rounded-md border border-gray-300 hover:bg-gray-50"
+        data-testid="floor-layout-next-date"
+        aria-label="Next day"
+      >
+        <ChevronRight size={14}/>
+      </button>
+      <button
+        onClick={() => onChange(todayIso())}
+        className="px-2 py-1 text-xs rounded-md border border-[#ec9324] text-[#ec9324] hover:bg-[#ec9324]/10"
+        data-testid="floor-layout-today-btn"
+      >
+        Today
+      </button>
+    </div>
+  );
+}
+
+// ---------- Interactive combined view (per plan) ----------
 function PlanInteractiveView({ plan, onBack }) {
-  const [seats, setSeats] = useState([]);
-  const [rooms, setRooms] = useState([]);
-  const [pdfUrl, setPdfUrl] = useState(null);
+  const [date, setDate] = useState(todayIso());
+  const [availability, setAvailability] = useState(null);
+  const [roomBookings, setRoomBookings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedSeats, setSelectedSeats] = useState([]);
-  const [occupiedSeats] = useState(["H7", "B2", "K3", "V1"]); // demo
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await api.get(`/floor-plans/${plan.id}`);
-        if (cancelled) return;
-        setSeats(res.data.live_seats || []);
-        setRooms(res.data.live_rooms || []);
-        setPdfUrl(res.data.pdfUrl);
-      } finally { if (!cancelled) setLoading(false); }
-    })();
-    return () => { cancelled = true; };
-  }, [plan.id]);
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Combined: workstation seats + bookings + pending requests + meeting rooms + room bookings
+      const [availRes, roomRes, planRes] = await Promise.all([
+        api.get("/workstation-requests/availability", { params: { plan_id: plan.id, date } }),
+        api.get("/room-bookings", { params: { plan_id: plan.id, date, include_past: true } }),
+        api.get(`/floor-plans/${plan.id}`),
+      ]);
+      // Combine seats/avail with rooms from plan detail
+      setAvailability({
+        ...availRes.data,
+        rooms: planRes.data.live_rooms || [],
+      });
+      setRoomBookings(roomRes.data || []);
+    } catch (e) {
+      console.error("Floor layout load failed", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [plan.id, date]);
 
-  const handleSeatSelect = (seatId) => setSelectedSeats(prev =>
-    prev.includes(seatId) ? prev.filter(id => id !== seatId) : [...prev, seatId]);
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const bookingsBySeat = useMemo(() => {
+    const m = {};
+    for (const b of (availability?.bookings || [])) m[b.seat_id] = b;
+    return m;
+  }, [availability]);
+
+  const requestsBySeat = useMemo(() => {
+    const m = {};
+    for (const r of (availability?.pending_requests || [])) m[r.seat_id] = r;
+    return m;
+  }, [availability]);
+
+  // Group room bookings by room_id
+  const roomBookingsByRoom = useMemo(() => {
+    const m = {};
+    for (const rb of roomBookings) {
+      if (!m[rb.room_id]) m[rb.room_id] = [];
+      m[rb.room_id].push(rb);
+    }
+    // Sort each room's bookings chronologically
+    Object.values(m).forEach(arr => arr.sort((a, b) => (a.start_at || "").localeCompare(b.start_at || "")));
+    return m;
+  }, [roomBookings]);
 
   const crumbs = [
     { label: "Workspace Manager" },
@@ -80,10 +173,17 @@ function PlanInteractiveView({ plan, onBack }) {
     { label: plan.name },
   ];
 
+  const stats = {
+    seats: (availability?.seats || []).length,
+    booked: (availability?.bookings || []).length,
+    pending: (availability?.pending_requests || []).length,
+    meetings: roomBookings.length,
+  };
+
   return (
     <Layout fullBleed breadcrumbs={crumbs} contentClassName="flex flex-col h-screen">
       <div className="bg-white border-b border-gray-200 px-6 py-3 flex-shrink-0">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={onBack}
@@ -96,65 +196,92 @@ function PlanInteractiveView({ plan, onBack }) {
             <LayoutGrid className="text-[#ec9324] flex-shrink-0" size={24}/>
             <div className="min-w-0">
               <h1 className="text-lg font-bold text-gray-900 truncate" data-testid="floor-layout-title">{plan.name}</h1>
-              <p className="text-xs text-gray-600 inline-flex items-center gap-1">
-                <span
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border"
-                  style={{ color: "#15B867", backgroundColor: "#15B86715", borderColor: "#15B86755" }}
-                >
-                  Live · {seats.length} seats
+              <p className="text-xs text-gray-600 inline-flex items-center gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border" style={{ color: "#15B867", backgroundColor: "#15B86715", borderColor: "#15B86755" }}>
+                  Live · {stats.seats} seats
+                </span>
+                <span className="text-gray-500" data-testid="floor-layout-stats">
+                  {stats.booked} booked · {stats.pending} pending · {stats.meetings} meeting{stats.meetings !== 1 ? "s" : ""}
                 </span>
               </p>
             </div>
           </div>
-          {selectedSeats.length > 0 && (
-            <div className="flex items-center gap-3">
-              <div className="bg-[#ec9324] text-white px-3 py-1.5 rounded-lg text-sm">
-                <span className="font-semibold">Selected:</span> <span className="font-bold">{selectedSeats.length}</span>
-              </div>
-              <button
-                onClick={() => setSelectedSeats([])}
-                data-testid="clear-selection-btn"
-                className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600 flex items-center gap-1.5"
-              ><X size={14}/> Clear</button>
+          <div className="flex items-center gap-3">
+            <DateStepper value={date} onChange={setDate}/>
+          </div>
+        </div>
+        <div className="mt-2 text-[11px] text-gray-500" data-testid="floor-layout-date-label">
+          Showing bookings for <span className="font-semibold text-gray-700">{fmtDateLabel(date)}</span>
+        </div>
+      </div>
+
+      <div className="flex-1 relative flex overflow-hidden">
+        <div className="flex-1 relative min-w-0">
+          {loading || !availability ? (
+            <div className="absolute inset-0 flex items-center justify-center text-gray-500">
+              <Loader2 className="animate-spin mr-2" size={20}/> Loading floor plan…
             </div>
+          ) : (
+            <WorkstationFloorMap
+              pdfUrl={availability.plan?.pdfUrl}
+              seats={availability.seats || []}
+              bookingsBySeat={bookingsBySeat}
+              requestsBySeat={requestsBySeat}
+              selectedSeatIds={[]}
+              onToggleSeat={() => { /* read-only */ }}
+              onOpenBookingDetail={() => { /* no detail dialog in layout view */ }}
+              onOpenRequestDetail={() => { /* no detail dialog */ }}
+              loading={false}
+              disabled={true}
+              rooms={availability.rooms || []}
+              roomBookingsByRoom={roomBookingsByRoom}
+            />
           )}
         </div>
-        {selectedSeats.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {selectedSeats.map(seatId => (
-              <div key={seatId} className="bg-green-100 text-green-800 px-2.5 py-1 rounded-full text-xs font-medium flex items-center gap-1.5">
-                {seatId}
-                <button onClick={() => handleSeatSelect(seatId)} className="hover:bg-green-200 rounded-full p-0.5"><X size={12}/></button>
+        {/* Meeting bookings side panel */}
+        <div className="w-72 border-l border-gray-200 bg-white flex-col hidden lg:flex" data-testid="floor-layout-meetings-panel">
+          <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+            <div className="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">
+              <Building2 size={14} className="text-emerald-600"/>
+              Meeting Bookings
+            </div>
+            <span className="text-[11px] text-gray-500">{roomBookings.length}</span>
+          </div>
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {roomBookings.length === 0 ? (
+              <div className="text-center text-xs text-gray-400 py-10">No meeting bookings for this day.</div>
+            ) : roomBookings.map((rb) => (
+              <div key={rb.id} className="border border-gray-200 rounded-lg p-2.5 hover:border-emerald-300 transition" data-testid={`floor-meeting-${rb.id}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-semibold text-sm text-gray-900 truncate">{rb.title}</div>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-100 whitespace-nowrap">{rb.room_name}</span>
+                </div>
+                <div className="mt-1 flex items-center gap-1.5 text-[11px] text-gray-600">
+                  <Clock size={11}/>
+                  {fmtTime(rb.start_at)} – {fmtTime(rb.end_at)}
+                </div>
+                <div className="mt-1 flex items-center gap-1.5 text-[11px] text-gray-600">
+                  <Users size={11}/>
+                  {(rb.organizer || {}).name || "—"}
+                  {rb.attendees?.length ? ` · ${rb.attendees.length} attendee${rb.attendees.length > 1 ? "s" : ""}` : ""}
+                </div>
               </div>
             ))}
           </div>
-        )}
-      </div>
-      <div className="flex-1 relative">
-        {loading ? (
-          <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-            <Loader2 className="animate-spin mr-2" size={20}/> Loading floor plan…
-          </div>
-        ) : (
-          <FloorMap
-            seats={seats}
-            rooms={rooms}
-            pdfUrl={pdfUrl}
-            occupiedSeats={occupiedSeats}
-            selectedSeats={selectedSeats}
-            onSeatSelect={handleSeatSelect}
-          />
-        )}
+        </div>
       </div>
     </Layout>
   );
 }
 
+// ---------- Meeting room overlay rendered inline by WorkstationFloorMap ----------
+// (rooms are rendered inside WorkstationFloorMap so they pan/zoom with the PDF)
+
 // ============================================================ MAIN
 export default function FloorLayoutPage() {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [active, setActive] = useState(null); // selected plan to view interactively
+  const [active, setActive] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -163,7 +290,6 @@ export default function FloorLayoutPage() {
         const res = await api.get("/floor-plans");
         if (cancelled) return;
         const all = res.data || [];
-        // Show only plans that are explicitly Live (excludes Draft + Inactive)
         const live = all.filter(p => (p.status || (p.live_version_id ? "live" : "draft")) === "live");
         setPlans(live);
       } finally {
@@ -173,7 +299,6 @@ export default function FloorLayoutPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // Sort by most recently published first
   const sortedPlans = useMemo(() => {
     return [...plans].sort((a, b) =>
       (b.last_published_at || "").localeCompare(a.last_published_at || "")
@@ -184,28 +309,18 @@ export default function FloorLayoutPage() {
     return <PlanInteractiveView plan={active} onBack={() => setActive(null)}/>;
   }
 
-  // Empty state: no Live floor calibrations published yet → show centered, prominent message
   if (!loading && sortedPlans.length === 0) {
     return (
       <Layout
         breadcrumbs={[{ label: "Workspace Manager" }, { label: "Floor Layout" }]}
         contentClassName="flex flex-col"
       >
-        <div
-          className="flex flex-col items-center justify-center text-center min-h-[70vh] px-6"
-          data-testid="floor-layout-empty-state"
-        >
-          <LayoutGrid className="text-gray-300 mb-5" size={56} aria-hidden="true" />
-          <h1
-            className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-500"
-            data-testid="floor-layout-empty-title"
-          >
+        <div className="flex flex-col items-center justify-center text-center min-h-[70vh] px-6" data-testid="floor-layout-empty-state">
+          <LayoutGrid className="text-gray-300 mb-5" size={56} aria-hidden="true"/>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-500" data-testid="floor-layout-empty-title">
             NO FLOOR LAYOUT AVAILABLE
           </h1>
-          <p
-            className="mt-3 text-sm sm:text-base text-gray-500 max-w-md"
-            data-testid="floor-layout-empty-subtitle"
-          >
+          <p className="mt-3 text-sm sm:text-base text-gray-500 max-w-md" data-testid="floor-layout-empty-subtitle">
             No active floor calibration has been published yet.
           </p>
         </div>
@@ -219,7 +334,7 @@ export default function FloorLayoutPage() {
         <LayoutGrid className="text-[#ec9324]" size={28}/>
         <div>
           <h1 className="text-2xl font-bold text-gray-900" data-testid="floor-layout-title">Floor Layout</h1>
-          <p className="text-sm text-gray-600">Select a floor plan to view its live seating arrangement.</p>
+          <p className="text-sm text-gray-600">Select a floor plan to view its live seating + meeting bookings.</p>
         </div>
       </div>
 
@@ -240,6 +355,3 @@ export default function FloorLayoutPage() {
     </Layout>
   );
 }
-
-// Fallback removed: when no Live floor plan exists, the empty-state message above
-// "NO FLOOR LAYOUT AVAILABLE" is shown instead of the legacy demo layout.

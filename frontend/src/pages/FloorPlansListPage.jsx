@@ -411,7 +411,7 @@ function PlanCard({ plan: p, onClone, onDelete, onToggleLive }) {
         {/* Icon-only action row */}
         <div className="flex items-center justify-end gap-1.5 pt-3 border-t border-gray-100">
           <Link
-            to={`/workspace-manager/floor-layout`}
+            to={`/workspace-manager/calibration/${p.id}?view=1`}
             className={`${ICON_BTN_BASE} ${
               p.status === "live"
                 ? "text-gray-600 hover:bg-gray-200 hover:text-gray-900"
