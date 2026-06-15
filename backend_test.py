@@ -11,7 +11,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 
 # Backend URL from environment
-BASE_URL = "https://precision-calibrate.preview.emergentagent.com/api"
+BASE_URL = "https://bulk-emp-upload-2.preview.emergentagent.com/api"
 
 # Test credentials
 SUPER_ADMIN_EMAIL = "admin@ticketing.com"
