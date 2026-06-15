@@ -215,8 +215,14 @@ function downloadBlob(blob, filename) {
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
+  a.rel = "noopener";
+  a.style.display = "none";
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => {
+    try { document.body.removeChild(a); } catch (e) { /* noop */ }
+    URL.revokeObjectURL(url);
+  }, 150);
 }
 
 function authedFetch(path, opts = {}) {
@@ -227,7 +233,6 @@ function authedFetch(path, opts = {}) {
       ...(opts.headers || {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    credentials: "include",
   });
 }
 
@@ -262,10 +267,17 @@ function BulkUploadModal({ open, onClose, onComplete }) {
   const downloadTemplate = async () => {
     try {
       const r = await authedFetch("/contacts/sample-template");
-      if (!r.ok) { notify.error("Could not download template"); return; }
+      if (!r.ok) {
+        let detail = `HTTP ${r.status}`;
+        try { const j = await r.json(); if (j?.detail) detail = j.detail; } catch (e) { /* not JSON */ }
+        notify.error(`Could not download template: ${detail}`);
+        return;
+      }
       const blob = await r.blob();
       downloadBlob(blob, "employees_upload_template.xlsx");
-    } catch (e) { notify.error("Could not download template"); }
+    } catch (e) {
+      notify.error(`Could not download template: ${e?.message || "network error"}`);
+    }
   };
 
   const startUpload = () => {
