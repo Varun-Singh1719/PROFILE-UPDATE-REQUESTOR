@@ -1,0 +1,129 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Premium Avatars v2</title>
+<style>
+  body{font-family:-apple-system,system-ui,sans-serif;background:#f7f7fb;padding:20px;color:#111;margin:0}
+  .style{background:#fff;border-radius:14px;padding:18px 22px;margin-bottom:18px;box-shadow:0 1px 4px rgba(0,0,0,0.05)}
+  .style h2{font-size:18px;margin:0 0 2px;display:flex;align-items:center;gap:10px}
+  .style .num{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#ec9324;color:#fff;font-size:14px;font-weight:700}
+  .style .sub{color:#666;font-size:13px;margin-bottom:14px}
+  .row{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
+  .av{width:96px;height:96px;border-radius:50%;background:#fff;overflow:hidden;box-shadow:0 0 0 1px #eee;display:flex;align-items:center;justify-content:center}
+  .av img,.av svg{width:100%;height:100%;display:block;object-fit:cover}
+  .av.padded img{padding:8px;box-sizing:border-box;background:radial-gradient(circle at 30% 30%, #ffe0c2, #f8d7da 60%, #e0c3fc 100%)}
+</style></head><body>
+
+<section class="style">
+  <h2><span class="num">A</span> Fluent 3D Emoji — premium 3D Microsoft emoji</h2>
+  <div class="sub">Real 3D rendered. Looks like iPhone Memoji. License: MIT.</div>
+  <div class="row" id="row-fluent"></div>
+</section>
+
+<section class="style">
+  <h2><span class="num">B</span> Notion-style colored gradient + initials (Linear / Vercel SaaS feel)</h2>
+  <div class="sub">No external service — pure CSS gradients with initials. Premium, minimal.</div>
+  <div class="row" id="row-grad"></div>
+</section>
+
+<section class="style">
+  <h2><span class="num">C</span> Geometric pattern blobs — abstract gradient art</h2>
+  <div class="sub">No faces — generated SVG patterns. Modern SaaS feel (like GitHub identicons but better).</div>
+  <div class="row" id="row-blob"></div>
+</section>
+
+<section class="style">
+  <h2><span class="num">D</span> Multiavatar — illustrated full-body quirky avatars</h2>
+  <div class="sub">12B unique. Hosted directly by multiavatar.com.</div>
+  <div class="row" id="row-multi"></div>
+</section>
+
+<section class="style">
+  <h2><span class="num">E</span> Pravatar — real human stock photos (LinkedIn-style)</h2>
+  <div class="sub">Real photos of real people. Use case: when you want a realistic look.</div>
+  <div class="row" id="row-real"></div>
+</section>
+
+<script>
+const NAMES=["John Smith","Sarah Johnson","Maya Khanna","Dev Kapoor","Priya Iyer","Aarav Sharma","Riya Sharma","Sara Mehta","Varun Singh","Hana Lee","Ivan Petrov","Lia Park"];
+
+// ===== A. Fluent 3D Emoji =====
+const FLUENT_OK=[
+ "Smiling face/3D/smiling_face_3d.png",
+ "Beaming face with smiling eyes/3D/beaming_face_with_smiling_eyes_3d.png",
+ "Grinning face with big eyes/3D/grinning_face_with_big_eyes_3d.png",
+ "Smiling face with heart-eyes/3D/smiling_face_with_heart-eyes_3d.png",
+ "Smiling face with halo/3D/smiling_face_with_halo_3d.png",
+ "Smiling face with sunglasses/3D/smiling_face_with_sunglasses_3d.png",
+ "Star-struck/3D/star-struck_3d.png",
+ "Face savoring food/3D/face_savoring_food_3d.png",
+ "Face with monocle/3D/face_with_monocle_3d.png",
+ "Nerd face/3D/nerd_face_3d.png",
+ "Partying face/3D/partying_face_3d.png",
+ "Smiling face with hearts/3D/smiling_face_with_hearts_3d.png",
+];
+const FLUENT_BASE="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/";
+const rf=document.getElementById("row-fluent");
+for(const p of FLUENT_OK){
+  const d=document.createElement("div");d.className="av padded";
+  const im=document.createElement("img");
+  im.src=FLUENT_BASE+encodeURI(p);
+  d.appendChild(im);rf.appendChild(d);
+}
+
+// ===== B. Gradient + initials (pure SVG, no network) =====
+function initials(n){const p=n.trim().split(/\s+/);return ((p[0]?.[0]||'')+(p[p.length-1]?.[0]||'')).toUpperCase();}
+function hash(s){let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return h;}
+const PALETTES=[
+ ["#FB923C","#F87171"],["#34D399","#0EA5E9"],["#A78BFA","#EC4899"],["#FBBF24","#EF4444"],
+ ["#60A5FA","#A78BFA"],["#F472B6","#FB923C"],["#10B981","#84CC16"],["#06B6D4","#3B82F6"],
+ ["#F59E0B","#10B981"],["#EC4899","#8B5CF6"],["#EF4444","#F59E0B"],["#3B82F6","#06B6D4"],
+];
+const rg=document.getElementById("row-grad");
+NAMES.forEach((n,i)=>{
+  const [c1,c2]=PALETTES[hash(n)%PALETTES.length];
+  const d=document.createElement("div");d.className="av";
+  d.innerHTML=`<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+   <defs><linearGradient id="g${i}" x1="0" y1="0" x2="1" y2="1">
+     <stop offset="0%" stop-color="${c1}"/><stop offset="100%" stop-color="${c2}"/></linearGradient></defs>
+   <rect width="100" height="100" fill="url(#g${i})"/>
+   <text x="50" y="58" text-anchor="middle" font-family="-apple-system,Inter,system-ui,sans-serif" font-size="38" font-weight="800" fill="white">${initials(n)}</text>
+  </svg>`;
+  rg.appendChild(d);
+});
+
+// ===== C. Geometric blobs (pure SVG, no network) =====
+const rb=document.getElementById("row-blob");
+NAMES.forEach((n,i)=>{
+  const h=hash(n);
+  const c1=`hsl(${h%360},70%,60%)`;
+  const c2=`hsl(${(h>>3)%360},70%,55%)`;
+  const c3=`hsl(${(h>>5)%360},70%,65%)`;
+  const cx1=20+(h%30), cy1=20+((h>>3)%30), cx2=70-((h>>5)%25), cy2=70-((h>>7)%25);
+  const r1=30+((h>>2)%20), r2=30+((h>>4)%20);
+  const d=document.createElement("div");d.className="av";
+  d.innerHTML=`<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="100" fill="${c1}"/>
+    <circle cx="${cx1}" cy="${cy1}" r="${r1}" fill="${c2}" opacity="0.85"/>
+    <circle cx="${cx2}" cy="${cy2}" r="${r2}" fill="${c3}" opacity="0.85"/>
+  </svg>`;
+  rb.appendChild(d);
+});
+
+// ===== D. Multiavatar =====
+const rm=document.getElementById("row-multi");
+for(const s of NAMES){
+  const d=document.createElement("div");d.className="av";
+  const im=document.createElement("img");
+  im.src=`https://multiavatar.com/${encodeURIComponent(s)}.svg`;
+  d.appendChild(im);rm.appendChild(d);
+}
+
+// ===== E. Pravatar (real photos) =====
+const rr=document.getElementById("row-real");
+NAMES.forEach((s,i)=>{
+  const d=document.createElement("div");d.className="av";
+  const im=document.createElement("img");
+  im.src=`https://i.pravatar.cc/150?img=${(i*7)%70+1}`;
+  d.appendChild(im);rr.appendChild(d);
+});
+</script>
+</body></html>
