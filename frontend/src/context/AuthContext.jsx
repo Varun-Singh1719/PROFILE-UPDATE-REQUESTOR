@@ -33,7 +33,7 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
-    try { await api.post("/auth/logout"); }
+    try { await api.post("/auth/logout", null, { loadingLabel: "Logging out…" }); }
     catch (e) { console.warn("logout API call failed (continuing local logout):", e); }
     localStorage.removeItem("access_token");
     setUser(false);

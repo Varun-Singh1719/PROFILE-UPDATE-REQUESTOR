@@ -17,6 +17,7 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "../com
 import MultiSelect from "../components/MultiSelect";
 import UserAvatar from "../components/UserAvatar";
 import notify from "../lib/notify";
+import { __busyBridge } from "../context/BusyContext";
 import { Search, UserPlus, Pencil, Eye, EyeOff, Copy, RefreshCw, KeyRound, X, Mail, Phone, Calendar, IdCard, Briefcase, UsersRound, Download, ChevronLeft, ChevronRight, MoreHorizontal, ShieldCheck, Upload, FileSpreadsheet, History, CheckCircle2, AlertTriangle, FileDown, Loader2 } from "lucide-react";
 
 function fmt(iso) { if (!iso) return "Never"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
@@ -262,6 +263,7 @@ function BulkUploadModal({ open, onClose, onComplete }) {
   };
 
   const downloadTemplate = async () => {
+    const busyToken = __busyBridge.start("Downloading template…");
     try {
       const r = await authedFetch("/contacts/sample-template");
       if (!r.ok) {
@@ -274,6 +276,8 @@ function BulkUploadModal({ open, onClose, onComplete }) {
       downloadBlob(blob, "employees_upload_template.xlsx");
     } catch (e) {
       notify.error(`Could not download template: ${e?.message || "network error"}`);
+    } finally {
+      __busyBridge.stop(busyToken);
     }
   };
 
@@ -281,17 +285,20 @@ function BulkUploadModal({ open, onClose, onComplete }) {
     if (!file) return;
     setUploading(true);
     setProgress(0);
+    // Push the overlay manually since this flow uses raw XHR (for progress).
+    const busyToken = __busyBridge.start("Uploading employees…");
     const xhr = new XMLHttpRequest();
     const token = localStorage.getItem("access_token") || "";
     xhr.open("POST", `${API}/contacts/bulk-upload`);
     if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-    xhr.withCredentials = true;
     xhr.upload.onprogress = (ev) => {
       if (ev.lengthComputable) setProgress(Math.round((ev.loaded / ev.total) * 100));
     };
+    const finish = () => { __busyBridge.stop(busyToken); };
     xhr.onload = () => {
       setUploading(false);
       setProgress(100);
+      finish();
       try {
         const data = JSON.parse(xhr.responseText);
         if (xhr.status >= 200 && xhr.status < 300) {
@@ -305,7 +312,7 @@ function BulkUploadModal({ open, onClose, onComplete }) {
         notify.error("Upload failed");
       }
     };
-    xhr.onerror = () => { setUploading(false); notify.error("Network error during upload"); };
+    xhr.onerror = () => { setUploading(false); finish(); notify.error("Network error during upload"); };
     const fd = new FormData();
     fd.append("file", file);
     xhr.send(fd);
@@ -710,10 +717,9 @@ export default function ContactListPage() {
     if (q) params.set("q", q);
     if (role !== "all") params.set("role", role);
     if (status !== "all") params.set("status", status);
-    // Use fetch to set Authorization header, then trigger a download
+    const busyToken = __busyBridge.start("Exporting CSV…");
     fetch(`${API}/contacts/export.csv?${params.toString()}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
-      credentials: "include",
     }).then(async (resp) => {
       if (!resp.ok) { notify.error("Export failed"); return; }
       const blob = await resp.blob();
@@ -723,7 +729,8 @@ export default function ContactListPage() {
       a.download = `employees_${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-    });
+    }).catch(() => notify.error("Export failed"))
+      .finally(() => __busyBridge.stop(busyToken));
   };
 
   const toggleStatus = async (c) => {

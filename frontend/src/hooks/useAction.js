@@ -47,7 +47,12 @@ export function useAction(fn, opts = {}) {
     inFlightRef.current = true;
     setLoading(true);
     const o = optsRef.current || {};
-    if (!o.skipBusy) start();
+    // Convert `what: "Save Permission Set"` → "Saving Permission Set…" for the overlay,
+    // unless an explicit `processingLabel` was provided.
+    const overlayLabel = o.processingLabel
+      || (o.what ? `${o.what}…` : null);
+    let busyToken = null;
+    if (!o.skipBusy) busyToken = start(overlayLabel);
     try {
       const result = await fnRef.current(...args);
       if (o.successMessage) {
@@ -62,7 +67,7 @@ export function useAction(fn, opts = {}) {
       throw err;
     } finally {
       if (mountedRef.current) setLoading(false);
-      if (!o.skipBusy) stop();
+      if (!o.skipBusy && busyToken != null) stop(busyToken);
       inFlightRef.current = false;
     }
   }, [start, stop]);

@@ -37,7 +37,11 @@ export default function ChangePasswordModal({ open, onClose, onSuccess }) {
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      const r = await api.post("/auth/change-password", { old_password: oldP, new_password: newP });
+      const r = await api.post(
+        "/auth/change-password",
+        { old_password: oldP, new_password: newP },
+        { loadingLabel: "Updating password…" },
+      );
       notify.success("Password updated successfully");
       onSuccess?.(r.data);
       reset();
