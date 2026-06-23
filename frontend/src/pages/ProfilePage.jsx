@@ -11,7 +11,7 @@ import { Button } from "../components/ui/button";
 import api from "../lib/api";
 import notify from "../lib/notify";
 import { useAuth } from "../context/AuthContext";
-import UserAvatar, { AVATAR_PRESETS, presetUrl, initialsFor } from "../components/UserAvatar";
+import UserAvatar, { AVATAR_PRESETS, presetUrl, initialsFor, INITIALS_PALETTES } from "../components/UserAvatar";
 import ChangePasswordModal from "../components/ChangePasswordModal";
 import {
   Camera, Upload, Trash2, KeyRound, ShieldCheck, Mail, Phone, IdCard, Calendar,
@@ -50,18 +50,40 @@ function InfoRow({ icon: Icon, label, value, testid }) {
 
 // ---------- Avatar editor ----------
 function AvatarEditor({ open, profile, onClose, onChange }) {
-  const [tab, setTab] = useState("preset"); // 'preset' | 'upload'
+  const [tab, setTab] = useState("initials"); // 'initials' | 'preset' | 'upload'
   const [uploading, setUploading] = useState(false);
   const [savingPreset, setSavingPreset] = useState(null);
+  const [savingColor, setSavingColor] = useState(null);
+
+  // Default the tab to whichever mode the user is currently in, when the
+  // dialog opens. (Re-runs each time `open` flips to true.)
+  useEffect(() => {
+    if (!open) return;
+    if (profile?.avatar_kind === "preset") setTab("preset");
+    else if (profile?.avatar_kind === "upload") setTab("upload");
+    else setTab("initials");
+    // eslint-disable-next-line
+  }, [open]);
+
+  const selectColor = async (paletteId) => {
+    setSavingColor(paletteId);
+    try {
+      await api.post("/profile/avatar/initials", { color: paletteId });
+      notify.success("Avatar color updated");
+      onChange?.({ avatar_kind: "initials", avatar_color: paletteId, avatar_preset: null, avatar_image: null });
+      onClose();
+    } catch (e) {
+      notify.error(e?.response?.data?.detail || "Could not set color");
+    } finally { setSavingColor(null); }
+  };
 
   const selectPreset = async (slug) => {
     setSavingPreset(slug);
     try {
-      const r = await api.post("/profile/avatar/preset", { preset: slug });
+      await api.post("/profile/avatar/preset", { preset: slug });
       notify.success("Avatar updated");
       onChange?.({ avatar_kind: "preset", avatar_preset: slug, avatar_image: null });
       onClose();
-      return r;
     } catch (e) {
       notify.error(e?.response?.data?.detail || "Could not set avatar");
     } finally {
@@ -116,6 +138,12 @@ function AvatarEditor({ open, profile, onClose, onChange }) {
         <div className="flex gap-1 border-b border-gray-200">
           <button
             type="button"
+            onClick={() => setTab("initials")}
+            className={`px-3 py-1.5 text-sm font-medium border-b-2 -mb-px ${tab === "initials" ? "border-[#ec9324] text-[#ec9324]" : "border-transparent text-gray-500 hover:text-gray-800"}`}
+            data-testid="avatar-tab-initials"
+          >Initials</button>
+          <button
+            type="button"
             onClick={() => setTab("preset")}
             className={`px-3 py-1.5 text-sm font-medium border-b-2 -mb-px ${tab === "preset" ? "border-[#ec9324] text-[#ec9324]" : "border-transparent text-gray-500 hover:text-gray-800"}`}
             data-testid="avatar-tab-preset"
@@ -127,6 +155,50 @@ function AvatarEditor({ open, profile, onClose, onChange }) {
             data-testid="avatar-tab-upload"
           >Upload Photo</button>
         </div>
+
+        {tab === "initials" && (
+          <div className="py-3 space-y-3" data-testid="avatar-initials-panel">
+            <div className="text-xs text-gray-600">
+              Pick a color shade for <span className="font-semibold">{initialsFor(profile?.name)}</span>:
+            </div>
+            <div className="grid grid-cols-6 gap-3" data-testid="avatar-color-grid">
+              {INITIALS_PALETTES.map((p) => {
+                const isCurrent = profile?.avatar_kind === "initials" && profile?.avatar_color === p.id;
+                const isSaving = savingColor === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => selectColor(p.id)}
+                    disabled={isSaving}
+                    data-testid={`avatar-color-${p.id}`}
+                    className={`relative rounded-full overflow-hidden ring-2 transition-all flex items-center justify-center font-extrabold text-white ${
+                      isCurrent ? "ring-[#ec9324]" : "ring-transparent hover:ring-gray-300"
+                    }`}
+                    style={{
+                      width: 56, height: 56,
+                      background: `linear-gradient(135deg, ${p.stops[0]} 0%, ${p.stops[1]} 100%)`,
+                      fontSize: 18,
+                      letterSpacing: "0.02em",
+                    }}
+                    aria-label={`Color ${p.id}`}
+                  >
+                    {initialsFor(profile?.name)}
+                    {isCurrent && (
+                      <span className="absolute inset-0 bg-black/30 flex items-center justify-center rounded-full">
+                        <Check size={18} className="text-white"/>
+                      </span>
+                    )}
+                    {isSaving && (
+                      <span className="absolute inset-0 bg-white/70 flex items-center justify-center rounded-full">
+                        <Loader2 size={18} className="animate-spin text-[#ec9324]"/>
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {tab === "preset" && (
           <div className="grid grid-cols-4 gap-3 py-3" data-testid="avatar-preset-grid">

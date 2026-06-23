@@ -42,26 +42,37 @@ export function presetUrl(slug) {
 }
 
 // ---------- Gradient + initials fallback ----------
-// 12 vivid 2-stop gradient palettes; chosen deterministically from the user's name.
-const PALETTES = [
-  ["#FB923C", "#F87171"],
-  ["#34D399", "#0EA5E9"],
-  ["#A78BFA", "#EC4899"],
-  ["#FBBF24", "#EF4444"],
-  ["#60A5FA", "#A78BFA"],
-  ["#F472B6", "#FB923C"],
-  ["#10B981", "#84CC16"],
-  ["#06B6D4", "#3B82F6"],
-  ["#F59E0B", "#10B981"],
-  ["#EC4899", "#8B5CF6"],
-  ["#EF4444", "#F59E0B"],
-  ["#3B82F6", "#06B6D4"],
+// 12 vivid 2-stop gradient palettes. Each has a stable id ("p1".."p12") so
+// users can pin their favourite from the Avatar editor.
+export const INITIALS_PALETTES = [
+  { id: "p1",  stops: ["#FB923C", "#F87171"] },
+  { id: "p2",  stops: ["#34D399", "#0EA5E9"] },
+  { id: "p3",  stops: ["#A78BFA", "#EC4899"] },
+  { id: "p4",  stops: ["#FBBF24", "#EF4444"] },
+  { id: "p5",  stops: ["#60A5FA", "#A78BFA"] },
+  { id: "p6",  stops: ["#F472B6", "#FB923C"] },
+  { id: "p7",  stops: ["#10B981", "#84CC16"] },
+  { id: "p8",  stops: ["#06B6D4", "#3B82F6"] },
+  { id: "p9",  stops: ["#F59E0B", "#10B981"] },
+  { id: "p10", stops: ["#EC4899", "#8B5CF6"] },
+  { id: "p11", stops: ["#EF4444", "#F59E0B"] },
+  { id: "p12", stops: ["#3B82F6", "#06B6D4"] },
 ];
+
+const PALETTE_BY_ID = Object.fromEntries(INITIALS_PALETTES.map((p) => [p.id, p.stops]));
 
 function hashString(s) {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
   return h;
+}
+
+export function paletteFor(user) {
+  if (user?.avatar_color && PALETTE_BY_ID[user.avatar_color]) {
+    return PALETTE_BY_ID[user.avatar_color];
+  }
+  const key = String(user?.name || user?.email || "x");
+  return INITIALS_PALETTES[hashString(key) % INITIALS_PALETTES.length].stops;
 }
 
 export function initialsFor(name) {
@@ -85,11 +96,9 @@ export default function UserAvatar({
   const px = `${size}px`;
   const fontPx = `${Math.max(11, Math.round(size * 0.4))}px`;
 
-  // Deterministic gradient from the user's name/email
-  const palette = React.useMemo(() => {
-    const key = String(user?.name || user?.email || "x");
-    return PALETTES[hashString(key) % PALETTES.length];
-  }, [user?.name, user?.email]);
+  // Deterministic gradient: explicit avatar_color wins, else hashed from name.
+  const palette = React.useMemo(() => paletteFor(user),
+    [user?.name, user?.email, user?.avatar_color]);
 
   let inner;
   if (kind === "upload" && user?.avatar_image) {

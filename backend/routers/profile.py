@@ -33,6 +33,11 @@ ALLOWED_PRESETS = {
     "star-struck", "savoring", "monocle", "nerd", "party", "hearts",
 }
 
+# Allowed initials-color palettes — must match the frontend INITIALS_PALETTES list.
+# Storing the palette id (e.g. "p1") rather than the raw hex pair keeps the
+# server free to evolve the actual gradients without re-migrating documents.
+ALLOWED_COLORS = {f"p{i}" for i in range(1, 13)}
+
 ALLOWED_IMAGE_MIMES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"}
 
 
@@ -83,11 +88,39 @@ async def get_my_profile(user: dict = Depends(get_current_user)):
         "avatar_kind": user.get("avatar_kind") or "initials",
         "avatar_preset": user.get("avatar_preset"),
         "avatar_image": user.get("avatar_image"),
+        "avatar_color": user.get("avatar_color"),
     }
 
 
 class SetPresetIn(BaseModel):
     preset: str
+
+
+class SetInitialsColorIn(BaseModel):
+    color: str  # palette id like "p1"
+
+
+@api_router.post("/profile/avatar/initials")
+async def set_avatar_initials(body: SetInitialsColorIn, user: dict = Depends(get_current_user)):
+    """Pick a specific gradient shade for the initials avatar.
+
+    Setting this also flips avatar_kind back to "initials" (so callers don't
+    have to clear preset/upload separately).
+    """
+    if body.color not in ALLOWED_COLORS:
+        raise HTTPException(400, f"Unknown initials color: {body.color}")
+    await db.contacts.update_one(
+        {"id": user["id"]},
+        {"$set": {"avatar_kind": "initials", "avatar_color": body.color},
+         "$unset": {"avatar_preset": "", "avatar_image": ""}},
+    )
+    await log_audit(
+        actor=user, action="profile.avatar_initials_color", resource="profile",
+        resource_id=user["id"],
+        detail=f"{user.get('email')} set initials avatar color to {body.color}",
+        severity="info",
+    )
+    return {"ok": True, "avatar_kind": "initials", "avatar_color": body.color}
 
 
 @api_router.post("/profile/avatar/preset")
@@ -137,6 +170,6 @@ async def clear_avatar(user: dict = Depends(get_current_user)):
     await db.contacts.update_one(
         {"id": user["id"]},
         {"$set": {"avatar_kind": "initials"},
-         "$unset": {"avatar_preset": "", "avatar_image": ""}},
+         "$unset": {"avatar_preset": "", "avatar_image": "", "avatar_color": ""}},
     )
     return {"ok": True, "avatar_kind": "initials"}
