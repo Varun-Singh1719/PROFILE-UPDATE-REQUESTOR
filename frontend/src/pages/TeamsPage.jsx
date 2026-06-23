@@ -267,10 +267,11 @@ export default function TeamsPage() {
             <DialogTitle>{editing ? "Edit Team" : "Add New Team"}</DialogTitle>
           </DialogHeader>
           <form onSubmit={submit} className="space-y-4">
-            <div className="grid grid-cols-[1fr_88px] gap-3">
+            <div className="grid grid-cols-[1fr_96px] gap-3 items-start">
               <div>
-                <Label>Team Name *</Label>
+                <Label htmlFor="team-name-input">Team Name *</Label>
                 <Input
+                  id="team-name-input"
                   required
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -279,19 +280,20 @@ export default function TeamsPage() {
                 />
               </div>
               <div>
-                <Label className="flex items-center gap-1">
-                  Initials
-                  <span className="text-[10px] font-normal text-gray-400">override</span>
-                </Label>
+                <Label htmlFor="team-initials-input">Initials</Label>
                 <Input
+                  id="team-initials-input"
                   value={form.initials}
                   onChange={(e) => setForm({ ...form, initials: sanitizeInitials(e.target.value) })}
                   placeholder={teamInitials(form.name)}
                   maxLength={2}
-                  className="uppercase tracking-widest text-center font-bold"
+                  className="uppercase"
                   data-testid="team-initials"
                   aria-label="Team initials override"
                 />
+              </div>
+              <div className="col-span-2 text-[11px] text-gray-500 -mt-2">
+                Initials default to <span className="font-semibold">{teamInitials(form.name)}</span> from the team name — leave blank to keep auto, or type 1–2 characters to override.
               </div>
             </div>
             <div>
