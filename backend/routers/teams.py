@@ -25,6 +25,14 @@ async def _next_unused_color(exclude_team_id: Optional[str] = None) -> str:
     return TEAM_COLOR_PALETTE[n % len(TEAM_COLOR_PALETTE)]
 
 
+def _normalize_initials(raw: Optional[str]) -> Optional[str]:
+    """Trim, uppercase, strip non-letters/digits, cap at 2 chars. Empty → None."""
+    if not raw:
+        return None
+    cleaned = "".join(ch for ch in str(raw).strip().upper() if ch.isalnum())[:2]
+    return cleaned or None
+
+
 @api_router.get("/teams/colors")
 async def team_colors(user=Depends(get_current_user)):
     """Return palette + which colors are already taken."""
@@ -73,6 +81,7 @@ async def create_team(body: TeamCreate, user=Depends(require_role("Super Admin")
         "manager_ids": list({*body.manager_ids}),
         "member_ids": member_ids,
         "color": color,
+        "initials": _normalize_initials(body.initials),
         "created_on": now_iso(),
         "updated_on": now_iso(),
     }
@@ -111,6 +120,8 @@ async def update_team(team_id: str, body: TeamUpdate, user=Depends(require_role(
         clash = await db.teams.find_one({"id": {"$ne": team_id}, "color": update["color"]})
         if clash:
             raise HTTPException(400, f"Colour already in use by team '{clash['name']}'. Pick a different shade.")
+    if "initials" in update:
+        update["initials"] = _normalize_initials(update["initials"])
     update["updated_on"] = now_iso()
     await db.teams.update_one({"id": team_id}, {"$set": update})
     t = await db.teams.find_one({"id": team_id}, {"_id": 0})

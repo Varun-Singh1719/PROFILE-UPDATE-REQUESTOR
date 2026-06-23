@@ -17,7 +17,10 @@ import {
   teamInitials,
 } from "../lib/teamColors";
 
-const EMPTY_FORM = { name: "", manager_ids: [], member_ids: [], color: "" };
+const EMPTY_FORM = { name: "", manager_ids: [], member_ids: [], color: "", initials: "" };
+
+// Strip to A-Z/0-9, uppercase, cap 2 chars — matches backend normaliser.
+const sanitizeInitials = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 2);
 
 export default function TeamsPage() {
   const [teams, setTeams] = useState([]);
@@ -113,6 +116,7 @@ export default function TeamsPage() {
       manager_ids: t.manager_ids || [],
       member_ids: t.member_ids || [],
       color: t.color || suggestNextPalette(usedColors),
+      initials: t.initials || "",
     });
     setOpen(true);
   };
@@ -198,7 +202,7 @@ export default function TeamsPage() {
                       data-testid={`team-swatch-${t.name}`}
                       aria-label={`Color for ${t.name}`}
                     >
-                      {teamInitials(t.name)}
+                      {t.initials || teamInitials(t.name)}
                     </div>
                   </td>
                   <td className="px-4 py-3 font-semibold text-gray-900">{t.name}</td>
@@ -263,15 +267,32 @@ export default function TeamsPage() {
             <DialogTitle>{editing ? "Edit Team" : "Add New Team"}</DialogTitle>
           </DialogHeader>
           <form onSubmit={submit} className="space-y-4">
-            <div>
-              <Label>Team Name *</Label>
-              <Input
-                required
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="e.g. ProfiX North"
-                data-testid="team-name"
-              />
+            <div className="grid grid-cols-[1fr_88px] gap-3">
+              <div>
+                <Label>Team Name *</Label>
+                <Input
+                  required
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder="e.g. ProfiX North"
+                  data-testid="team-name"
+                />
+              </div>
+              <div>
+                <Label className="flex items-center gap-1">
+                  Initials
+                  <span className="text-[10px] font-normal text-gray-400">override</span>
+                </Label>
+                <Input
+                  value={form.initials}
+                  onChange={(e) => setForm({ ...form, initials: sanitizeInitials(e.target.value) })}
+                  placeholder={teamInitials(form.name)}
+                  maxLength={2}
+                  className="uppercase tracking-widest text-center font-bold"
+                  data-testid="team-initials"
+                  aria-label="Team initials override"
+                />
+              </div>
             </div>
             <div>
               <Label>Manager(s)</Label>
@@ -334,7 +355,7 @@ export default function TeamsPage() {
                       aria-label={`Color ${p.id}${taken ? " (taken)" : ""}`}
                       aria-disabled={taken}
                     >
-                      {teamInitials(form.name)}
+                      {form.initials || teamInitials(form.name)}
                       {isCurrent && (
                         <span className="absolute inset-0 bg-black/30 flex items-center justify-center rounded-full">
                           <Check size={14} className="text-white"/>

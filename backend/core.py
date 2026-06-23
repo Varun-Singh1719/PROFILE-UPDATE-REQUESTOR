@@ -583,12 +583,14 @@ class TeamCreate(BaseModel):
     manager_ids: List[str] = []
     member_ids: List[str] = []
     color: Optional[str] = "#ec9324"
+    initials: Optional[str] = None
 
 class TeamUpdate(BaseModel):
     name: Optional[str] = None
     manager_ids: Optional[List[str]] = None
     member_ids: Optional[List[str]] = None
     color: Optional[str] = None
+    initials: Optional[str] = None
 
 class PermissionsIn(BaseModel):
     rules: List[Dict[str, Any]]
