@@ -305,7 +305,7 @@ export default function TeamsPage() {
               </Label>
               <div className="text-xs text-gray-500 mt-1 mb-2">
                 Pick a two-shade gradient for <span className="font-semibold">{form.name || "your team"}</span>.
-                Colours already used by other teams are dimmed but still selectable.
+                Colours already assigned to other teams are locked.
               </div>
               <div
                 className="grid grid-cols-10 gap-2 max-h-56 overflow-y-auto p-1 -m-1"
@@ -318,19 +318,21 @@ export default function TeamsPage() {
                     <button
                       type="button"
                       key={p.id}
-                      onClick={() => setForm({ ...form, color: p.id })}
+                      onClick={() => { if (!taken) setForm({ ...form, color: p.id }); }}
+                      disabled={taken}
                       data-testid={`team-color-${p.id}`}
-                      title={taken ? "Already used by another team — pick a different shade or override anyway" : p.id}
+                      title={taken ? "Already assigned to another team" : p.id}
                       className={`relative rounded-full overflow-hidden transition-all flex items-center justify-center font-extrabold text-white ring-2 ${
                         isCurrent ? "ring-[#ec9324] scale-110" : "ring-transparent hover:ring-gray-300"
-                      } ${taken ? "opacity-40" : ""}`}
+                      } ${taken ? "opacity-30 cursor-not-allowed grayscale" : "cursor-pointer"}`}
                       style={{
                         width: 36, height: 36,
                         background: `linear-gradient(135deg, ${p.stops[0]} 0%, ${p.stops[1]} 100%)`,
                         fontSize: 11,
                         letterSpacing: "0.02em",
                       }}
-                      aria-label={`Color ${p.id}`}
+                      aria-label={`Color ${p.id}${taken ? " (taken)" : ""}`}
+                      aria-disabled={taken}
                     >
                       {teamInitials(form.name)}
                       {isCurrent && (
@@ -338,12 +340,17 @@ export default function TeamsPage() {
                           <Check size={14} className="text-white"/>
                         </span>
                       )}
+                      {taken && (
+                        <span className="absolute inset-0 flex items-center justify-center rounded-full">
+                          <span className="block w-[70%] h-[2px] bg-white/90 rotate-45 rounded-full"/>
+                        </span>
+                      )}
                     </button>
                   );
                 })}
               </div>
               <div className="text-[11px] text-gray-500 mt-2">
-                {TEAM_PALETTES.length}+ two-shade gradients available. System auto-suggests an unused shade for new teams.
+                {TEAM_PALETTES.length}+ two-shade gradients available. A new team auto-picks the next unused shade — you can override before saving. Each colour can belong to only one team.
               </div>
             </div>
             <DialogFooter>

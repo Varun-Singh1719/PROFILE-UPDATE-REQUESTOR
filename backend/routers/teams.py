@@ -61,6 +61,12 @@ async def create_team(body: TeamCreate, user=Depends(require_role("Super Admin")
     color = body.color
     if not color:
         color = await _next_unused_color()
+    # Enforce one-team-per-colour: a colour already taken by another team
+    # cannot be re-assigned, even via direct API. (Frontend already disables
+    # such swatches; this is the defence-in-depth check.)
+    clash = await db.teams.find_one({"color": color})
+    if clash:
+        raise HTTPException(400, f"Colour already in use by team '{clash['name']}'. Pick a different shade.")
     doc = {
         "id": str(uuid.uuid4()),
         "name": body.name.strip(),
@@ -101,6 +107,10 @@ async def update_team(team_id: str, body: TeamUpdate, user=Depends(require_role(
         update["member_ids"] = member_ids
     if "manager_ids" in update:
         update["manager_ids"] = list({*update["manager_ids"]})
+    if "color" in update and update["color"]:
+        clash = await db.teams.find_one({"id": {"$ne": team_id}, "color": update["color"]})
+        if clash:
+            raise HTTPException(400, f"Colour already in use by team '{clash['name']}'. Pick a different shade.")
     update["updated_on"] = now_iso()
     await db.teams.update_one({"id": team_id}, {"$set": update})
     t = await db.teams.find_one({"id": team_id}, {"_id": 0})
