@@ -7,7 +7,8 @@ import { useAuth } from "../context/AuthContext";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { Search, Plus, RefreshCw, Download, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Plus, RefreshCw, Download } from "lucide-react";
+import Pagination from "../components/Pagination";
 import notify from "../lib/notify";
 import { StatusBadge } from "../components/Badges";
 import DateFilter, { dateFilterToParams } from "../components/DateFilter";
@@ -19,7 +20,7 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
   const [tickets, setTickets] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(50);
   const [search, setSearch] = useState("");
   const [params, setParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -323,32 +324,17 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
           numericIdOnly={isDQ}
         />
         {/* Pagination footer */}
-        <div className="flex items-center justify-between mt-3 px-4 py-3 bg-white rounded-xl shadow-soft border border-gray-100">
-          <div className="flex items-center gap-2 text-xs text-gray-500">
-            <span>Rows per page</span>
-            <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
-              <SelectTrigger className="w-20 h-8" data-testid="tickets-page-size"><SelectValue/></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="25">25</SelectItem>
-                <SelectItem value="50">50</SelectItem>
-                <SelectItem value="100">100</SelectItem>
-              </SelectContent>
-            </Select>
-            <span className="ml-2" data-testid="tickets-pagination-info">
-              {total === 0 ? "0–0 of 0" : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total}`}
-            </span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} data-testid="tickets-prev-page" className="h-8 w-8 p-0">
-              <ChevronLeft size={14}/>
-            </Button>
-            <span className="text-xs text-gray-600 px-2" data-testid="tickets-page-indicator">
-              {page} / {Math.max(1, Math.ceil(total / pageSize))}
-            </span>
-            <Button size="sm" variant="outline" disabled={page >= Math.max(1, Math.ceil(total / pageSize))} onClick={() => setPage((p) => p + 1)} data-testid="tickets-next-page" className="h-8 w-8 p-0">
-              <ChevronRight size={14}/>
-            </Button>
-          </div>
+        <div className="mt-3 bg-white rounded-xl shadow-soft border border-gray-100">
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            label="Tickets"
+            testIdPrefix="tickets-pg"
+            className="border-t-0"
+          />
         </div>
       </div>
     </Layout>

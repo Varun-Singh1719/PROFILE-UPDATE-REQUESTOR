@@ -16,6 +16,7 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "../components/ui/tooltip";
 import MultiSelect from "../components/MultiSelect";
 import UserAvatar from "../components/UserAvatar";
+import Pagination from "../components/Pagination";
 import notify from "../lib/notify";
 import { __busyBridge } from "../context/BusyContext";
 import { Search, UserPlus, Pencil, Eye, EyeOff, Copy, RefreshCw, KeyRound, X, Mail, Phone, Calendar, IdCard, Briefcase, UsersRound, Download, ChevronLeft, ChevronRight, MoreHorizontal, ShieldCheck, Upload, FileSpreadsheet, History, CheckCircle2, AlertTriangle, FileDown, Loader2 } from "lucide-react";
@@ -624,7 +625,7 @@ export default function ContactListPage() {
   const [contacts, setContacts] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(50);
   const [sortBy, setSortBy] = useState("name");
   const [sortDir, setSortDir] = useState("asc");
   const [q, setQ] = useState("");
@@ -1127,31 +1128,15 @@ export default function ContactListPage() {
           </table>
         </div>
         {/* Pagination footer */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50/50">
-          <div className="flex items-center gap-2 text-xs text-gray-500">
-            <span>Rows per page</span>
-            <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
-              <SelectTrigger className="w-20 h-8" data-testid="page-size-select"><SelectValue/></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="25">25</SelectItem>
-                <SelectItem value="50">50</SelectItem>
-                <SelectItem value="100">100</SelectItem>
-              </SelectContent>
-            </Select>
-            <span className="ml-2" data-testid="pagination-info">
-              {total === 0 ? "0–0 of 0" : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total}`}
-            </span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} data-testid="prev-page-btn" className="h-8 w-8 p-0">
-              <ChevronLeft size={14}/>
-            </Button>
-            <span className="text-xs text-gray-600 px-2" data-testid="page-indicator">{page} / {totalPages}</span>
-            <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} data-testid="next-page-btn" className="h-8 w-8 p-0">
-              <ChevronRight size={14}/>
-            </Button>
-          </div>
-        </div>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          label="Employees"
+          testIdPrefix="contacts-pg"
+        />
       </div>
 
       <EmployeeDetailModal contact={detailContact} open={!!detailContact} onClose={() => setDetailContact(null)} />
