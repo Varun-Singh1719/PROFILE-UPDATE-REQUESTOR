@@ -1,29 +1,67 @@
 /**
  * UserAvatar — reusable avatar component.
  *
- * Renders one of three sources, in priority:
- *   1. Uploaded image (base64 data URL) — when avatar_kind === "upload"
- *   2. Predefined cartoon preset (DiceBear "fun-emoji" SVG) — when avatar_kind === "preset"
- *   3. Initials from the user's name (first + last word, uppercase) — fallback
+ * Three modes (priority order):
+ *   1. Uploaded image (base64 data URL)            — avatar_kind === "upload"
+ *   2. Predefined Fluent 3D emoji preset            — avatar_kind === "preset"
+ *   3. Notion/Linear-style gradient + initials      — fallback (default)
  *
  * Props:
- *   user           — { name, avatar_kind?, avatar_preset?, avatar_image? }
+ *   user           — { name, email, avatar_kind?, avatar_preset?, avatar_image? }
  *   size           — number (px). default 40.
  *   online         — bool. show green/grey dot in lower-right.
  *   showStatusDot  — bool. default true.
- *   ringColor      — optional ring class
  */
 import React from "react";
 
-export const AVATAR_PRESETS = [
-  "memoji-1", "memoji-2", "memoji-3", "memoji-4",
-  "memoji-5", "memoji-6", "memoji-7", "memoji-8",
-  "memoji-9", "memoji-10", "memoji-11", "memoji-12",
+// ---------- Predefined cartoon avatar presets (Microsoft Fluent 3D Emoji) ----------
+// Each entry: { slug, path } where `path` is relative to the Fluent 3D CDN root.
+export const AVATAR_PRESET_DEFS = [
+  { slug: "smile",       path: "Smiling face/3D/smiling_face_3d.png" },
+  { slug: "beam",        path: "Beaming face with smiling eyes/3D/beaming_face_with_smiling_eyes_3d.png" },
+  { slug: "grin",        path: "Grinning face with big eyes/3D/grinning_face_with_big_eyes_3d.png" },
+  { slug: "heart-eyes",  path: "Smiling face with heart-eyes/3D/smiling_face_with_heart-eyes_3d.png" },
+  { slug: "halo",        path: "Smiling face with halo/3D/smiling_face_with_halo_3d.png" },
+  { slug: "sunglasses",  path: "Smiling face with sunglasses/3D/smiling_face_with_sunglasses_3d.png" },
+  { slug: "star-struck", path: "Star-struck/3D/star-struck_3d.png" },
+  { slug: "savoring",    path: "Face savoring food/3D/face_savoring_food_3d.png" },
+  { slug: "monocle",     path: "Face with monocle/3D/face_with_monocle_3d.png" },
+  { slug: "nerd",        path: "Nerd face/3D/nerd_face_3d.png" },
+  { slug: "party",       path: "Partying face/3D/partying_face_3d.png" },
+  { slug: "hearts",      path: "Smiling face with hearts/3D/smiling_face_with_hearts_3d.png" },
 ];
 
-// Public DiceBear URL — cartoon-emoji style. No API key required.
+export const AVATAR_PRESETS = AVATAR_PRESET_DEFS.map((p) => p.slug);
+
+const FLUENT_BASE = "https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/";
+
 export function presetUrl(slug) {
-  return `https://api.dicebear.com/9.x/fun-emoji/svg?seed=${encodeURIComponent(slug)}&radius=50&backgroundType=gradientLinear&backgroundColor=ffd5dc,c0aede,fec5bb,b2f7ef,d4e5ff`;
+  const entry = AVATAR_PRESET_DEFS.find((p) => p.slug === slug);
+  if (!entry) return "";
+  return FLUENT_BASE + entry.path.split("/").map(encodeURIComponent).join("/");
+}
+
+// ---------- Gradient + initials fallback ----------
+// 12 vivid 2-stop gradient palettes; chosen deterministically from the user's name.
+const PALETTES = [
+  ["#FB923C", "#F87171"],
+  ["#34D399", "#0EA5E9"],
+  ["#A78BFA", "#EC4899"],
+  ["#FBBF24", "#EF4444"],
+  ["#60A5FA", "#A78BFA"],
+  ["#F472B6", "#FB923C"],
+  ["#10B981", "#84CC16"],
+  ["#06B6D4", "#3B82F6"],
+  ["#F59E0B", "#10B981"],
+  ["#EC4899", "#8B5CF6"],
+  ["#EF4444", "#F59E0B"],
+  ["#3B82F6", "#06B6D4"],
+];
+
+function hashString(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h;
 }
 
 export function initialsFor(name) {
@@ -44,16 +82,14 @@ export default function UserAvatar({
   const kind = user?.avatar_kind || "initials";
   const initials = initialsFor(user?.name);
 
-  // Stable, name-derived hue for the initials fallback
-  const hue = React.useMemo(() => {
-    const s = String(user?.name || user?.email || "x");
-    let h = 0;
-    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-    return h % 360;
-  }, [user?.name, user?.email]);
-
   const px = `${size}px`;
   const fontPx = `${Math.max(11, Math.round(size * 0.4))}px`;
+
+  // Deterministic gradient from the user's name/email
+  const palette = React.useMemo(() => {
+    const key = String(user?.name || user?.email || "x");
+    return PALETTES[hashString(key) % PALETTES.length];
+  }, [user?.name, user?.email]);
 
   let inner;
   if (kind === "upload" && user?.avatar_image) {
@@ -66,26 +102,38 @@ export default function UserAvatar({
       />
     );
   } else if (kind === "preset" && user?.avatar_preset) {
+    // 3D Fluent emoji preset — render with a soft pastel backdrop so they
+    // pop against any background.
+    const url = presetUrl(user.avatar_preset);
     inner = (
-      <img
-        src={presetUrl(user.avatar_preset)}
-        alt={user?.name || "Avatar"}
-        className="w-full h-full object-cover"
-        draggable={false}
-      />
+      <div
+        className="w-full h-full flex items-center justify-center"
+        style={{
+          background: "radial-gradient(circle at 30% 30%, #ffe0c2, #f8d7da 60%, #e0c3fc 100%)",
+        }}
+      >
+        <img
+          src={url}
+          alt={user?.name || "Avatar"}
+          className="block"
+          style={{ width: "82%", height: "82%", objectFit: "contain" }}
+          draggable={false}
+        />
+      </div>
     );
   } else {
+    // Gradient + initials fallback
     inner = (
-      <span
-        className="w-full h-full flex items-center justify-center font-bold tracking-wide"
+      <div
+        className="w-full h-full flex items-center justify-center font-extrabold text-white"
         style={{
-          backgroundColor: `hsl(${hue}, 70%, 92%)`,
-          color: `hsl(${hue}, 60%, 32%)`,
+          background: `linear-gradient(135deg, ${palette[0]} 0%, ${palette[1]} 100%)`,
           fontSize: fontPx,
+          letterSpacing: "0.02em",
         }}
       >
         {initials}
-      </span>
+      </div>
     );
   }
 

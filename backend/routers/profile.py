@@ -26,11 +26,11 @@ logger = logging.getLogger(__name__)
 # Max uploaded avatar size — keep small since we embed base64 in the contact doc.
 MAX_AVATAR_BYTES = 2 * 1024 * 1024  # 2 MB raw
 
-# Allowed presets — must match the frontend AVATAR_PRESETS list. The slug is
-# the DiceBear seed; the UI renders the actual image via a public DiceBear URL.
+# Allowed presets — must match the frontend AVATAR_PRESET_DEFS slugs.
+# These render as 3D Fluent Microsoft emoji from a public CDN.
 ALLOWED_PRESETS = {
-    "memoji-1", "memoji-2", "memoji-3", "memoji-4", "memoji-5", "memoji-6",
-    "memoji-7", "memoji-8", "memoji-9", "memoji-10", "memoji-11", "memoji-12",
+    "smile", "beam", "grin", "heart-eyes", "halo", "sunglasses",
+    "star-struck", "savoring", "monocle", "nerd", "party", "hearts",
 }
 
 ALLOWED_IMAGE_MIMES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"}

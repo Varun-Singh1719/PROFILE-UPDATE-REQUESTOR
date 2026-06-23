@@ -142,8 +142,14 @@ function AvatarEditor({ open, profile, onClose, onChange }) {
                   className={`relative rounded-full overflow-hidden ring-2 transition-all ${
                     isCurrent ? "ring-[#ec9324]" : "ring-transparent hover:ring-gray-300"
                   }`}
+                  style={{ width: 64, height: 64 }}
                 >
-                  <img src={presetUrl(slug)} alt={slug} className="w-16 h-16 object-cover bg-gray-100"/>
+                  <div
+                    className="w-full h-full flex items-center justify-center"
+                    style={{ background: "radial-gradient(circle at 30% 30%, #ffe0c2, #f8d7da 60%, #e0c3fc 100%)" }}
+                  >
+                    <img src={presetUrl(slug)} alt={slug} className="block" style={{ width: "82%", height: "82%", objectFit: "contain" }}/>
+                  </div>
                   {isCurrent && (
                     <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
                       <Check size={20} className="text-white"/>
