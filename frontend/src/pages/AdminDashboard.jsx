@@ -6,6 +6,7 @@ import MetricCard from "../components/MetricCard";
 import RecentUpdateCard from "../components/RecentUpdateCard";
 import DateFilter, { getCurrentMonthRange, dateFilterToParams } from "../components/DateFilter";
 import { Button } from "../components/ui/button";
+import UserAvatar from "../components/UserAvatar";
 import { Ticket, AlertCircle, CheckCircle2, Loader, Users, Plus } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -64,9 +65,7 @@ export default function AdminDashboard() {
             className="text-left bg-white rounded-xl p-5 border border-gray-100 shadow-soft hover:shadow-soft-hover transition-all duration-200"
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-[#ec9324]/10 text-[#ec9324] flex items-center justify-center font-bold">
-                {m.name?.[0]?.toUpperCase()}
-              </div>
+              <UserAvatar user={m} size={40} showStatusDot={false}/>
               <div>
                 <div className="font-semibold text-gray-900">{m.name}</div>
                 <div className="text-xs text-gray-500">{m.email}</div>

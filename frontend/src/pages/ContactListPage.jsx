@@ -15,6 +15,7 @@ import {
 } from "../components/ui/dropdown-menu";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "../components/ui/tooltip";
 import MultiSelect from "../components/MultiSelect";
+import UserAvatar from "../components/UserAvatar";
 import notify from "../lib/notify";
 import { Search, UserPlus, Pencil, Eye, EyeOff, Copy, RefreshCw, KeyRound, X, Mail, Phone, Calendar, IdCard, Briefcase, UsersRound, Download, ChevronLeft, ChevronRight, MoreHorizontal, ShieldCheck, Upload, FileSpreadsheet, History, CheckCircle2, AlertTriangle, FileDown, Loader2 } from "lucide-react";
 
@@ -127,13 +128,8 @@ function EmployeeDetailModal({ contact, open, onClose }) {
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white"
-              style={{ backgroundColor: contact.team_color || "#ec9324" }}
-            >
-              {contact.name?.[0]?.toUpperCase()}
-            </div>
+          <DialogTitle className="flex items-center gap-3">
+            <UserAvatar user={contact} size={44} showStatusDot={false}/>
             <div>
               <div className="text-lg font-bold">{contact.name}</div>
               <div className="text-xs text-gray-500 font-normal">{contact.role}</div>
@@ -1056,9 +1052,10 @@ export default function ContactListPage() {
                       type="button"
                       onClick={() => setDetailContact(c)}
                       data-testid={`contact-name-${c.email}`}
-                      className="text-left hover:text-[#ec9324] hover:underline focus:outline-none focus:text-[#ec9324]"
+                      className="flex items-center gap-2.5 text-left hover:text-[#ec9324] focus:outline-none focus:text-[#ec9324] group"
                     >
-                      {c.name}
+                      <UserAvatar user={c} size={32} showStatusDot={false}/>
+                      <span className="group-hover:underline">{c.name}</span>
                     </button>
                   </td>
                   <td className="px-4 py-3 text-gray-600 font-mono text-xs">{c.emp_id || "-"}</td>
