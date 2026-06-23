@@ -9,12 +9,13 @@ import {
 } from "../components/ui/dialog";
 import notify from "../lib/notify";
 import MultiSelect from "../components/MultiSelect";
-import { Plus, Pencil, Users, Trash2, Search, Sparkles } from "lucide-react";
-
-const FALLBACK_COLORS = [
-  "#ec9324", "#22c55e", "#3b82f6", "#a855f7", "#ef4444",
-  "#06b6d4", "#eab308", "#f97316", "#14b8a6", "#64748b",
-];
+import { Plus, Pencil, Users, Trash2, Search, Sparkles, Check } from "lucide-react";
+import {
+  TEAM_PALETTES,
+  teamBackground,
+  suggestNextPalette,
+  teamInitials,
+} from "../lib/teamColors";
 
 const EMPTY_FORM = { name: "", manager_ids: [], member_ids: [], color: "" };
 
@@ -26,7 +27,7 @@ export default function TeamsPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
-  const [colorMeta, setColorMeta] = useState({ palette: FALLBACK_COLORS, used: [], suggested: "#ec9324" });
+  const [usedColors, setUsedColors] = useState([]);
 
   const loadAll = async () => {
     const [t, e, cm] = await Promise.all([
@@ -36,7 +37,7 @@ export default function TeamsPage() {
     ]);
     setTeams(t.data);
     setEmployees(e.data);
-    setColorMeta(cm.data);
+    setUsedColors(cm.data?.used || []);
   };
 
   useEffect(() => { loadAll(); }, []);
@@ -101,7 +102,7 @@ export default function TeamsPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ ...EMPTY_FORM, color: colorMeta.suggested || "" });
+    setForm({ ...EMPTY_FORM, color: suggestNextPalette(usedColors) });
     setOpen(true);
   };
 
@@ -111,7 +112,7 @@ export default function TeamsPage() {
       name: t.name,
       manager_ids: t.manager_ids || [],
       member_ids: t.member_ids || [],
-      color: t.color || "#ec9324",
+      color: t.color || suggestNextPalette(usedColors),
     });
     setOpen(true);
   };
@@ -191,7 +192,14 @@ export default function TeamsPage() {
               {filteredTeams.map((t) => (
                 <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50/80" data-testid={`team-row-${t.name}`}>
                   <td className="px-4 py-3">
-                    <div className="w-6 h-6 rounded-md border border-gray-200" style={{ backgroundColor: t.color || "#ec9324" }}></div>
+                    <div
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-white font-extrabold text-xs shadow-sm ring-1 ring-black/5"
+                      style={{ background: teamBackground(t.color), letterSpacing: "0.02em" }}
+                      data-testid={`team-swatch-${t.name}`}
+                      aria-label={`Color for ${t.name}`}
+                    >
+                      {teamInitials(t.name)}
+                    </div>
                   </td>
                   <td className="px-4 py-3 font-semibold text-gray-900">{t.name}</td>
                   <td className="px-4 py-3 text-gray-600">
@@ -288,41 +296,55 @@ export default function TeamsPage() {
             </div>
             <div>
               <Label className="flex items-center gap-1.5">
-                Colour Code
+                Team Colour
                 {!editing && (
                   <span className="inline-flex items-center gap-1 text-[10px] font-normal text-[#ec9324] bg-[#ec9324]/10 rounded px-1.5 py-0.5">
                     <Sparkles size={10}/> auto-assigned
                   </span>
                 )}
               </Label>
-              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                {(colorMeta.palette || FALLBACK_COLORS).map((c) => {
-                  const taken = colorMeta.used.includes(c) && c !== form.color;
+              <div className="text-xs text-gray-500 mt-1 mb-2">
+                Pick a two-shade gradient for <span className="font-semibold">{form.name || "your team"}</span>.
+                Colours already used by other teams are dimmed but still selectable.
+              </div>
+              <div
+                className="grid grid-cols-10 gap-2 max-h-56 overflow-y-auto p-1 -m-1"
+                data-testid="team-color-grid"
+              >
+                {TEAM_PALETTES.map((p) => {
+                  const isCurrent = form.color === p.id;
+                  const taken = usedColors.includes(p.id) && !isCurrent;
                   return (
                     <button
                       type="button"
-                      key={c}
-                      onClick={() => setForm({ ...form, color: c })}
-                      data-testid={`team-color-${c}`}
-                      title={taken ? "Already used by another team — pick a different colour or override anyway" : c}
-                      className={`relative w-7 h-7 rounded-md border-2 transition-all ${form.color === c ? "border-gray-900 scale-110" : "border-gray-200"} ${taken ? "opacity-40" : ""}`}
-                      style={{ backgroundColor: c }}
-                      aria-label={`Color ${c}`}
+                      key={p.id}
+                      onClick={() => setForm({ ...form, color: p.id })}
+                      data-testid={`team-color-${p.id}`}
+                      title={taken ? "Already used by another team — pick a different shade or override anyway" : p.id}
+                      className={`relative rounded-full overflow-hidden transition-all flex items-center justify-center font-extrabold text-white ring-2 ${
+                        isCurrent ? "ring-[#ec9324] scale-110" : "ring-transparent hover:ring-gray-300"
+                      } ${taken ? "opacity-40" : ""}`}
+                      style={{
+                        width: 36, height: 36,
+                        background: `linear-gradient(135deg, ${p.stops[0]} 0%, ${p.stops[1]} 100%)`,
+                        fontSize: 11,
+                        letterSpacing: "0.02em",
+                      }}
+                      aria-label={`Color ${p.id}`}
                     >
-                      {taken && <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold text-white">×</span>}
+                      {teamInitials(form.name)}
+                      {isCurrent && (
+                        <span className="absolute inset-0 bg-black/30 flex items-center justify-center rounded-full">
+                          <Check size={14} className="text-white"/>
+                        </span>
+                      )}
                     </button>
                   );
                 })}
-                <input
-                  type="color"
-                  value={form.color || "#ec9324"}
-                  onChange={(e) => setForm({ ...form, color: e.target.value })}
-                  data-testid="team-color-picker"
-                  className="w-9 h-9 rounded-md border border-gray-200 cursor-pointer"
-                />
-                <span className="text-xs text-gray-500 font-mono">{form.color || "auto"}</span>
               </div>
-              <div className="text-[11px] text-gray-500 mt-1">System-assigned colours are unique. Manual selection allows duplicates.</div>
+              <div className="text-[11px] text-gray-500 mt-2">
+                {TEAM_PALETTES.length}+ two-shade gradients available. System auto-suggests an unused shade for new teams.
+              </div>
             </div>
             <DialogFooter>
               <Button type="submit" disabled={loading} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="submit-team-btn">

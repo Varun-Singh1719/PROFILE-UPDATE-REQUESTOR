@@ -2,6 +2,7 @@ import React from "react";
 import Layout from "../components/Layout";
 import { useAuth } from "../context/AuthContext";
 import { Briefcase, Mail, Calendar, IdCard, UsersRound, ShieldCheck } from "lucide-react";
+import { teamBackground } from "../lib/teamColors";
 
 function InfoRow({ icon: Icon, label, value }) {
   return (
@@ -34,7 +35,7 @@ export default function EmployeeDashboard() {
           <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
             <div
               className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white text-lg"
-              style={{ backgroundColor: user.team_color || "#ec9324" }}
+              style={{ background: teamBackground(user.team_color) }}
             >
               {user.name?.[0]?.toUpperCase()}
             </div>

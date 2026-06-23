@@ -4,6 +4,7 @@ import {
   WorkstationIconSVG,
   WORKSTATION_SEAT_CENTER,
 } from './icons/workstationSilhouette';
+import { teamSolid } from '../lib/teamColors';
 
 /**
  * Color-coded workstation seat used by the Workstation Booking floor map.
@@ -43,7 +44,7 @@ const WorkstationSeat = ({
   const size = seat.size || 10;
   const rotation = seat.rotation || 0;
   const fill = status === "team"
-    ? (teamColor || COLOR.occupied)
+    ? (teamColor ? teamSolid(teamColor) : COLOR.occupied)
     : COLOR[status] || COLOR.available;
   const isOccupied = status === "occupied" || status === "team";
   const isPending = status === "pending";

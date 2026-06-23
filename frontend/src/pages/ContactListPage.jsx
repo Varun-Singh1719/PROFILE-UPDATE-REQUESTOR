@@ -20,6 +20,7 @@ import Pagination from "../components/Pagination";
 import notify from "../lib/notify";
 import { __busyBridge } from "../context/BusyContext";
 import { Search, UserPlus, Pencil, Eye, EyeOff, Copy, RefreshCw, KeyRound, X, Mail, Phone, Calendar, IdCard, Briefcase, UsersRound, Download, ChevronLeft, ChevronRight, MoreHorizontal, ShieldCheck, Upload, FileSpreadsheet, History, CheckCircle2, AlertTriangle, FileDown, Loader2 } from "lucide-react";
+import { teamBackground } from "../lib/teamColors";
 
 function fmt(iso) { if (!iso) return "Never"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
 
@@ -162,7 +163,7 @@ function EmployeeDetailModal({ contact, open, onClose }) {
               <span className="text-gray-500">Team:</span>{" "}
               {contact.team_name ? (
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: contact.team_color || "#ec9324" }} />
+                  <span className="w-2.5 h-2.5 rounded-sm" style={{ background: teamBackground(contact.team_color) }} />
                   {contact.team_name}
                 </span>
               ) : <span className="text-gray-400">No team</span>}
@@ -1071,7 +1072,7 @@ export default function ContactListPage() {
                   <td className="px-4 py-3 text-gray-600">
                     {c.team_name ? (
                       <span className="inline-flex items-center gap-1.5 text-xs">
-                        <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: c.team_color || "#ec9324" }} />
+                        <span className="w-2.5 h-2.5 rounded-sm" style={{ background: teamBackground(c.team_color) }} />
                         {c.team_name}
                       </span>
                     ) : <span className="text-gray-400 text-xs">—</span>}
