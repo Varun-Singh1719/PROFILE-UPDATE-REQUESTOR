@@ -21,7 +21,7 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Literal, Dict, Any
 from cryptography.fernet import Fernet
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
-from motor.motor_asyncio import AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from pydantic import BaseModel, EmailStr
 
 # ---------- Config ----------
@@ -37,6 +37,7 @@ fernet = Fernet(FERNET_KEY.encode()) if FERNET_KEY else None
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
+gridfs_bucket = AsyncIOMotorGridFSBucket(db, bucket_name="uploads")
 
 # ---------- App ----------
 app = FastAPI()
