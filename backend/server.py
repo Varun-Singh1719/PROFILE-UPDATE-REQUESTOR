@@ -13,7 +13,7 @@ from fastapi.responses import Response
 
 # Import core to bootstrap config / db / app / api_router.
 from core import (
-    app, api_router, db, client, init_storage,
+    app, api_router, db, client,
     now_iso, hash_password, verify_password, encrypt_password,
     DEFAULT_PRESETS, DEFAULT_TEMPLATES,
 )
@@ -93,7 +93,11 @@ async def startup():
     await db.workstation_requests.create_index([("employee.id", 1), ("date", 1), ("status", 1)])
     await db.workstation_requests.create_index([("status", 1), ("requested_on", -1)])
     await db.workstation_requests.create_index([("group_id", 1)])
-    init_storage()
+    # NOTE: do NOT call init_storage() here — it makes a blocking outbound
+    # HTTPS call (timeout=30s) that returns 400 when the storage feature
+    # isn't wired up, which adds 5–10s to every cold-start / hot-reload and
+    # widens the 502 window the ingress shows to users. The function is
+    # already lazy-invoked on the first file upload (see put_object/get_object).
 
     # Backfill seq_no on existing bookings (idempotent, one-shot)
     from routers.room_bookings import _ensure_seq_no_backfill
