@@ -390,18 +390,14 @@ export default function EmailTemplatesPage() {
   return (
     <Layout
       title="Email Templates"
-      description={`${items.length} template${items.length === 1 ? "" : "s"} — toggle status to start/stop a notification kind.${!isAdmin ? " (View + toggle only — Admin can edit)" : ""}`}
+      actions={isAdmin && (
+        <Button onClick={openCreate} className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9" data-testid="add-template-btn">
+          <Plus size={16} className="mr-2"/> New Template
+        </Button>
+      )}
     >
       <TooltipProvider delayDuration={150}>
-      <div className="flex items-center justify-end flex-wrap gap-4">
-        {isAdmin && (
-          <Button onClick={openCreate} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="add-template-btn">
-            <Plus size={16} className="mr-2"/> New Template
-          </Button>
-        )}
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-3 items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100">
+      <div className="flex flex-wrap gap-3 items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100">
         <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
           <Input placeholder="Search by name, kind or subject…" className="pl-9" value={q} onChange={(e) => setQ(e.target.value)} data-testid="template-search"/>

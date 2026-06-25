@@ -155,14 +155,19 @@ export default function TeamsPage() {
   };
 
   return (
-    <Layout title="Teams" description="Organize employees into teams with managers and members.">
-      <div className="flex items-center justify-end flex-wrap gap-4">
-        <Button onClick={openCreate} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="add-team-btn">
+    <Layout
+      title="Teams"
+      actions={
+        <Button
+          onClick={openCreate}
+          className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9"
+          data-testid="add-team-btn"
+        >
           <Plus size={16} className="mr-2" /> Add New Team
         </Button>
-      </div>
-
-      <div className="mt-4 bg-white p-4 rounded-xl shadow-soft border border-gray-100">
+      }
+    >
+      <div className="bg-white p-4 rounded-xl shadow-soft border border-gray-100">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
           <Input

@@ -202,18 +202,19 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
   const selectable = isDQ || isAdmin;
 
   return (
-    <Layout title={title} description={`${total} request${total === 1 ? "" : "s"}`}>
-      <div className="flex items-center justify-end flex-wrap gap-4">
-        <div className="flex gap-2">
+    <Layout
+      title={title}
+      actions={
+        <div className="flex gap-2 items-center">
           {selected.length > 0 && isDQ && (
             <>
               <Button onClick={bulkAssignSelf} data-testid="bulk-assign-me-btn"
-                className="bg-[#ec9324] hover:bg-[#d4811f] text-white">
+                className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9">
                 Assign Selected to Me ({selected.length})
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" data-testid="bulk-status-btn">
+                  <Button variant="outline" data-testid="bulk-status-btn" className="h-9">
                     Update Status ({selected.length})
                   </Button>
                 </DropdownMenuTrigger>
@@ -228,7 +229,7 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
             <>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button data-testid="bulk-assign-btn" className="bg-[#ec9324] hover:bg-[#d4811f] text-white">
+                  <Button data-testid="bulk-assign-btn" className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9">
                     Assign Selected ({selected.length})
                   </Button>
                 </DropdownMenuTrigger>
@@ -238,7 +239,7 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
               </DropdownMenu>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" data-testid="bulk-status-btn">
+                  <Button variant="outline" data-testid="bulk-status-btn" className="h-9">
                     Update Status ({selected.length})
                   </Button>
                 </DropdownMenuTrigger>
@@ -250,20 +251,22 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
               </DropdownMenu>
             </>
           )}
-          <Button variant="outline" onClick={load} data-testid="refresh-btn"><RefreshCw size={16}/></Button>
-          <Button variant="outline" onClick={exportCsv} data-testid="export-tickets-csv" className="border-gray-300">
-            <Download size={14} className="mr-2"/> Export CSV
+          <Button variant="outline" onClick={load} data-testid="refresh-btn" size="icon" className="h-9 w-9" title="Refresh" aria-label="Refresh">
+            <RefreshCw size={16}/>
+          </Button>
+          <Button variant="outline" onClick={exportCsv} data-testid="export-tickets-csv" size="icon" className="h-9 w-9 border-gray-300" title="Export CSV" aria-label="Export CSV">
+            <Download size={16}/>
           </Button>
           {(isRA || isAdmin) && (
             <Button onClick={() => navigate(isAdmin ? "/admin/create" : "/ra/create")} data-testid="create-new-ticket-btn"
-              className="bg-[#ec9324] hover:bg-[#d4811f] text-white">
+              className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9">
               <Plus size={16} className="mr-1"/> New Request
             </Button>
           )}
         </div>
-      </div>
-
-      <div className="mt-6 flex flex-wrap gap-3 items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100">
+      }
+    >
+      <div className="flex flex-wrap gap-3 items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100">
         <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
           <Input placeholder="Search by Request ID, Subject..." data-testid="search-input"

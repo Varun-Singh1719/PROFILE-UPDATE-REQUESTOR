@@ -59,15 +59,21 @@ export default function NotificationsOutboxPage() {
   return (
     <Layout
       title="Notifications Outbox"
-      description={`Audit of every email the system would have sent. Provider: ${items[0]?.provider || "outbox"}`}
-    >
-      <div className="flex items-center justify-end flex-wrap gap-4">
-        <Button variant="outline" onClick={load} data-testid="refresh-outbox-btn">
-          <RefreshCw size={14} className="mr-2"/> Refresh
+      actions={
+        <Button
+          variant="outline"
+          onClick={load}
+          data-testid="refresh-outbox-btn"
+          size="icon"
+          className="h-9 w-9"
+          title="Refresh"
+          aria-label="Refresh"
+        >
+          <RefreshCw size={16}/>
         </Button>
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-3 items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100">
+      }
+    >
+      <div className="flex flex-wrap gap-3 items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100">
         <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
           <Input placeholder="Search recipient or subject…" className="pl-9" value={q} onChange={(e) => setQ(e.target.value)} data-testid="outbox-search"/>

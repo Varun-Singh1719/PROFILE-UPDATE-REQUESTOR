@@ -809,9 +809,7 @@ export default function ContactListPage() {
   return (
     <Layout
       title="Employee List"
-      description={`${total} employee${total === 1 ? "" : "s"}${anySelected ? ` • ${selected.length} selected` : ""}`}
-    >
-      <div className="flex items-center justify-end flex-wrap gap-4">
+      actions={
         <div className="flex items-center gap-2">
           {anySelected && (
             <DropdownMenu>
@@ -867,11 +865,12 @@ export default function ContactListPage() {
               <TooltipContent>Upload Employees</TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          <Button onClick={openCreate} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="add-contact-btn">
+          <Button onClick={openCreate} className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9" data-testid="add-contact-btn">
             <UserPlus size={16} className="mr-2"/> Add Employee
           </Button>
         </div>
-      </div>
+      }
+    >
 
       <Dialog open={bulkRoleOpen} onOpenChange={setBulkRoleOpen}>
         <DialogContent className="max-w-sm">

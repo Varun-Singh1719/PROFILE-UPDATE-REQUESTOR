@@ -22,10 +22,7 @@ export default function EmployeeDashboard() {
   const { user } = useAuth();
   if (!user) return null;
   return (
-    <Layout
-      title={`Welcome, ${user.name?.split(" ")[0] || ""}`}
-      description="Your access to modules is permission-driven. Reach out to your admin if a feature is missing from the sidebar."
-    >
+    <Layout title={`Welcome, ${user.name?.split(" ")[0] || ""}`}>
       <div className="max-w-3xl">
         <div className="bg-white rounded-xl shadow-soft border border-gray-100 p-6">
           <div className="flex items-center gap-3 pb-4 border-b border-gray-100">

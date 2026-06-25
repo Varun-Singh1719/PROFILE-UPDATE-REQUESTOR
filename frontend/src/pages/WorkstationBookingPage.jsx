@@ -415,21 +415,30 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
   return (
     <Layout
       title={pageTitle}
-      description="Full-day seat booking on the Live floor layout · IST"
       breadcrumbs={[{ label: "Workspace Manager" }, { label: pageTitle }]}
       fullBleed
       contentClassName="bg-gray-50"
+      actions={
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-9 w-9"
+          onClick={() => loadAvailability(selectedPlanId, date)}
+          disabled={availLoading || !selectedPlanId}
+          title="Refresh availability"
+          aria-label="Refresh availability"
+        >
+          <RefreshCw size={16} className={availLoading ? "animate-spin" : ""} />
+        </Button>
+      }
     >
       <div className="flex flex-col h-[calc(100vh-4rem)] min-h-[560px]">
         {/* ============================== Header ============================== */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 lg:px-6 py-3 border-b bg-white">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#ec9324]/10 flex items-center justify-center">
-              <Armchair className="text-[#ec9324]" size={20} />
+            <div className="w-9 h-9 rounded-lg bg-[#ec9324]/10 flex items-center justify-center">
+              <Armchair className="text-[#ec9324]" size={18} />
             </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
             {livePlans.length > 1 && (
               <div className="flex items-center gap-2">
                 <label className="text-xs font-medium text-gray-600">Floor Plan</label>
@@ -445,6 +454,9 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                 </select>
               </div>
             )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
               <label className="text-xs font-medium text-gray-600">Booking Date</label>
               <div className="relative">
@@ -465,16 +477,6 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                 data-testid="ws-date-today"
               >Today</Button>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8"
-              onClick={() => loadAvailability(selectedPlanId, date)}
-              disabled={availLoading || !selectedPlanId}
-              title="Refresh availability"
-            >
-              <RefreshCw size={14} className={availLoading ? "animate-spin" : ""} />
-            </Button>
           </div>
         </div>
 

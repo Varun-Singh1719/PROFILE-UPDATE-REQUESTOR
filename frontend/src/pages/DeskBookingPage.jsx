@@ -26,14 +26,15 @@ const FEATURES = [
 
 export default function DeskBookingPage() {
   return (
-    <Layout title="Desk Booking" description="Smart seat allocation for hybrid teams.">
-      <div className="flex items-center justify-end flex-wrap gap-4">
+    <Layout
+      title="Desk Booking"
+      actions={
         <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1 text-xs font-semibold">
           <Sparkles size={12}/> Coming Soon
         </span>
-      </div>
-
-      <div className="mt-4 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-8 text-white relative overflow-hidden">
+      }
+    >
+      <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-8 text-white relative overflow-hidden">
         <div className="absolute -right-12 -top-12 w-56 h-56 rounded-full bg-white/10"></div>
         <div className="absolute -right-8 -bottom-16 w-72 h-72 rounded-full bg-white/5"></div>
         <div className="relative">

@@ -8,7 +8,7 @@ import Breadcrumbs from "./Breadcrumbs";
  *
  * Props:
  *   title?: string                  — page title rendered in the sticky top bar
- *   description?: string            — short subtitle rendered next to the title
+ *   actions?: ReactNode             — action buttons rendered in the top bar, just before the user dropdown
  *   breadcrumbs?: [{label, to?}]    — shown at top of content area
  *   fullBleed?: bool                — remove the centered max-w wrapper (for canvas-heavy pages)
  *   contentClassName?: string       — escape hatch for full-screen pages
@@ -21,7 +21,7 @@ import Breadcrumbs from "./Breadcrumbs";
 export default function Layout({
   children,
   title,
-  description,
+  actions,
   breadcrumbs,
   fullBleed = false,
   contentClassName = "",
@@ -53,7 +53,7 @@ export default function Layout({
         className="flex-1 overflow-x-hidden transition-[margin] duration-200"
         style={{ marginLeft: sidebarOffset }}
       >
-        {!hideTopBar && <TopBar title={title} description={description} />}
+        {!hideTopBar && <TopBar title={title} actions={actions} />}
         {fullBleed ? (
           <div className={contentClassName}>
             {breadcrumbs && (

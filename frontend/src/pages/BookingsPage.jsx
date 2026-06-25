@@ -295,50 +295,50 @@ export default function BookingsPage() {
   };
 
   return (
-    <Layout title="Bookings" description={loading ? "" : `${total} total`}>
-      <div className="h-full flex flex-col bg-gray-50">
-        {/* HEADER */}
-        <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <ClipboardList className="text-[#ec9324] flex-shrink-0" size={22} />
-          </div>
-          <div className="flex items-center gap-2">
-            {/* Export */}
-            <div className="relative" ref={exportMenuRef}>
-              <Button
-                variant="outline" size="sm"
-                onClick={() => setExportOpen(o => !o)}
-                data-testid="bookings-export-btn"
-                className="text-xs h-8"
-              ><Download size={14} className="mr-1"/> Export <ChevronDown size={12} className="ml-1"/></Button>
-              {exportOpen && (
-                <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-md shadow-lg z-30 py-1 text-xs" data-testid="bookings-export-menu">
-                  <button onClick={() => downloadExport("csv")} className="w-full text-left px-3 py-1.5 hover:bg-gray-50" data-testid="bookings-export-csv">CSV (all filtered)</button>
-                  <button onClick={() => downloadExport("xlsx")} className="w-full text-left px-3 py-1.5 hover:bg-gray-50" data-testid="bookings-export-xlsx">Excel (all filtered)</button>
-                  {selected.size > 0 && (
-                    <>
-                      <div className="border-t border-gray-100 my-1"/>
-                      <button onClick={() => downloadExport("csv", true)} className="w-full text-left px-3 py-1.5 hover:bg-gray-50" data-testid="bookings-export-selected-csv">CSV (selected {selected.size})</button>
-                      <button onClick={() => downloadExport("xlsx", true)} className="w-full text-left px-3 py-1.5 hover:bg-gray-50" data-testid="bookings-export-selected-xlsx">Excel (selected {selected.size})</button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-            {/* Refresh */}
+    <Layout
+      title="Bookings"
+      actions={
+        <>
+          {/* Export */}
+          <div className="relative" ref={exportMenuRef}>
             <Button
-              variant="outline" size="sm"
-              onClick={() => refreshNow()}
-              disabled={refreshing}
-              data-testid="bookings-refresh-btn"
-              className="text-xs h-8"
-            >
-              <RefreshCw size={14} className={`mr-1 ${refreshing ? "animate-spin" : ""}`}/>
-              Refresh
-            </Button>
+              variant="outline" size="icon"
+              onClick={() => setExportOpen(o => !o)}
+              data-testid="bookings-export-btn"
+              className="h-9 w-9"
+              title="Export"
+              aria-label="Export"
+            ><Download size={16}/></Button>
+            {exportOpen && (
+              <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-md shadow-lg z-30 py-1 text-xs" data-testid="bookings-export-menu">
+                <button onClick={() => downloadExport("csv")} className="w-full text-left px-3 py-1.5 hover:bg-gray-50" data-testid="bookings-export-csv">CSV (all filtered)</button>
+                <button onClick={() => downloadExport("xlsx")} className="w-full text-left px-3 py-1.5 hover:bg-gray-50" data-testid="bookings-export-xlsx">Excel (all filtered)</button>
+                {selected.size > 0 && (
+                  <>
+                    <div className="border-t border-gray-100 my-1"/>
+                    <button onClick={() => downloadExport("csv", true)} className="w-full text-left px-3 py-1.5 hover:bg-gray-50" data-testid="bookings-export-selected-csv">CSV (selected {selected.size})</button>
+                    <button onClick={() => downloadExport("xlsx", true)} className="w-full text-left px-3 py-1.5 hover:bg-gray-50" data-testid="bookings-export-selected-xlsx">Excel (selected {selected.size})</button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
-        </div>
-
+          {/* Refresh */}
+          <Button
+            variant="outline" size="icon"
+            onClick={() => refreshNow()}
+            disabled={refreshing}
+            data-testid="bookings-refresh-btn"
+            className="h-9 w-9"
+            title="Refresh"
+            aria-label="Refresh"
+          >
+            <RefreshCw size={16} className={refreshing ? "animate-spin" : ""}/>
+          </Button>
+        </>
+      }
+    >
+      <div className="h-full flex flex-col bg-gray-50">
         {/* FILTERS */}
         <div className="bg-white border-b border-gray-200 px-6 py-3" data-testid="bookings-filters">
           <div className="grid grid-cols-12 gap-3">

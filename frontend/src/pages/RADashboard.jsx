@@ -23,21 +23,22 @@ export default function RADashboard() {
   const goto = (status) => navigate(`/ra/tickets${status ? `?status=${encodeURIComponent(status)}` : ""}`);
 
   return (
-    <Layout title="Dashboard" description="Your request activity at a glance.">
-      <div className="flex items-start justify-end flex-wrap gap-4">
-        <div className="flex items-center gap-2">
+    <Layout
+      title="Dashboard"
+      actions={
+        <>
           <DateFilter value={dateFilter} onChange={setDateFilter} />
           <Button
             onClick={() => navigate("/ra/create")}
             data-testid="create-new-ticket-btn"
-            className="bg-[#ec9324] hover:bg-[#d4811f] text-white shadow-sm"
+            className="bg-[#ec9324] hover:bg-[#d4811f] text-white shadow-sm h-9"
           >
             <Plus size={16} className="mr-1.5" /> New Request
           </Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-4">
+        </>
+      }
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard label="Total Requests" value={stats.total} icon={Ticket} onClick={() => goto()} />
         <MetricCard label="Open" value={stats.open} color="#ec9324" icon={AlertCircle} onClick={() => goto("Open")} />
         <MetricCard label="In Progress" value={stats.in_progress} color="#22c55e" icon={Loader} onClick={() => goto("In Progress")} />

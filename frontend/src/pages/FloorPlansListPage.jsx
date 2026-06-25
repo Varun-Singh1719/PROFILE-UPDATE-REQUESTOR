@@ -129,18 +129,17 @@ export default function FloorPlansListPage() {
   return (
     <Layout
       title="Floor Plans"
-      description="Manage all calibrated floor maps. Multiple plans can be Live at the same time."
       breadcrumbs={[{ label: "Workspace Manager" }, { label: "Floor Plans" }]}
+      actions={
+        <button
+          onClick={() => { setCreateName(""); setShowCreate(true); }}
+          data-testid="new-floor-plan-btn"
+          className="px-4 h-9 bg-[#ec9324] hover:bg-[#d6831f] text-white rounded-md flex items-center gap-2 font-semibold shadow-sm transition-colors"
+        >
+          <Plus size={16} /> New Floor Plan
+        </button>
+      }
     >
-      <div className="flex items-center justify-end mb-4">
-          <button
-            onClick={() => { setCreateName(""); setShowCreate(true); }}
-            data-testid="new-floor-plan-btn"
-            className="px-4 py-2 bg-[#ec9324] hover:bg-[#d6831f] text-white rounded-lg flex items-center gap-2 font-semibold shadow-sm transition-colors"
-          >
-            <Plus size={16} /> New Floor Plan
-          </button>
-        </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-20 text-gray-500"><Loader2 className="animate-spin mr-2" /> Loading…</div>

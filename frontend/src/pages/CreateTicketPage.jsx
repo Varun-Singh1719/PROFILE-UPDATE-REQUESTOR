@@ -83,7 +83,7 @@ export default function CreateTicketPage() {
   };
 
   return (
-    <Layout title="Create New Request" description="Provide request details below.">
+    <Layout title="Create New Request">
       <form onSubmit={submit} className="max-w-2xl space-y-5 bg-white p-6 rounded-xl shadow-soft border border-gray-100">
         <div>
           <Label htmlFor="subject">Subject *</Label>

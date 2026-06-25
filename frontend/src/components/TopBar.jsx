@@ -21,7 +21,7 @@ import ChangePasswordModal from "./ChangePasswordModal";
 import LogoutConfirmModal from "./LogoutConfirmModal";
 import { ChevronDown, User as UserIcon, KeyRound, LogOut } from "lucide-react";
 
-export default function TopBar({ title, description }) {
+export default function TopBar({ title, actions }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [cpOpen, setCpOpen] = useState(false);
@@ -41,8 +41,8 @@ export default function TopBar({ title, description }) {
         className="sticky top-0 z-20 h-14 bg-white/95 backdrop-blur border-b border-gray-200 flex items-center px-4 gap-3"
         data-testid="app-topbar"
       >
-        {/* Page title slot — set via <Layout title="..." description="..."/> */}
-        <div className="flex-1 min-w-0 flex items-baseline gap-3 overflow-hidden">
+        {/* Page title slot — set via <Layout title="..."/> */}
+        <div className="flex-1 min-w-0 flex items-center gap-3 overflow-hidden">
           {title && (
             <h1
               className="text-xl font-bold text-gray-900 tracking-tight truncate leading-none"
@@ -52,16 +52,17 @@ export default function TopBar({ title, description }) {
               {title}
             </h1>
           )}
-          {description && (
-            <p
-              className="hidden md:block text-xs text-gray-500 truncate"
-              data-testid="topbar-page-description"
-              title={description}
-            >
-              {description}
-            </p>
-          )}
         </div>
+
+        {/* Page action buttons — set via <Layout actions={...}/> */}
+        {actions && (
+          <div
+            className="flex items-center gap-1.5 pr-2 mr-1 border-r border-gray-200"
+            data-testid="topbar-actions"
+          >
+            {actions}
+          </div>
+        )}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

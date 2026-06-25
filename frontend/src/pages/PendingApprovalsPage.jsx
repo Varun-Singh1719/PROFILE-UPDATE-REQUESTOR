@@ -289,41 +289,41 @@ export default function PendingApprovalsPage() {
   return (
     <Layout
       title="Pending Approvals"
-      description={`${pendingCount} pending`}
       breadcrumbs={[{ label: "Workspace Manager" }, { label: "Pending Approvals" }]}
       fullBleed
       contentClassName="bg-gray-50"
+      actions={
+        <>
+          {plans.length > 1 && (
+            <select
+              value={selectedPlanId}
+              onChange={(e) => setSelectedPlanId(e.target.value)}
+              className="text-sm rounded-md border border-gray-300 px-2 h-9 bg-white"
+              data-testid="pa-plan-selector"
+            >
+              {plans.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          )}
+          <button
+            onClick={loadRequests}
+            className="h-9 w-9 inline-flex items-center justify-center rounded-md border border-gray-200 hover:bg-gray-50"
+            title="Refresh"
+            aria-label="Refresh"
+            data-testid="pa-refresh"
+          >
+            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+          </button>
+        </>
+      }
     >
       <div className="flex flex-col h-[calc(100vh-4rem)] min-h-[560px]">
         {/* Header */}
-        <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-              {pendingCount} pending
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            {plans.length > 1 && (
-              <select
-                value={selectedPlanId}
-                onChange={(e) => setSelectedPlanId(e.target.value)}
-                className="text-sm rounded-md border border-gray-300 px-2 py-1.5 bg-white"
-                data-testid="pa-plan-selector"
-              >
-                {plans.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            )}
-            <button
-              onClick={loadRequests}
-              className="p-1.5 rounded-md border border-gray-200 hover:bg-gray-50"
-              title="Refresh"
-              data-testid="pa-refresh"
-            >
-              <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-            </button>
-          </div>
+        <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center">
+          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+            {pendingCount} pending
+          </span>
         </div>
 
         {!canApprove && (

@@ -347,6 +347,18 @@ export default function MeetingRoomBookingPage() {
       fullBleed
       breadcrumbs={[{ label: "Workspace Manager" }, { label: "Meeting Room Booking" }]}
       contentClassName="h-screen flex flex-col"
+      actions={
+        viewMode === "calendar" ? null : (
+          <Button
+            onClick={openBookingForm}
+            data-testid="mrb-book-meeting-room-btn"
+            className="bg-[#ec9324] hover:bg-[#d4811f] text-white shadow-sm flex-shrink-0 h-9"
+          >
+            <Plus size={16} className="mr-1.5" />
+            Book Meeting Room
+          </Button>
+        )
+      }
     >
       {viewMode === "calendar" ? (
         <>
@@ -410,18 +422,9 @@ export default function MeetingRoomBookingPage() {
       <div className="flex-1 flex overflow-hidden">
         {/* LEFT panel — 32% of viewport (reduced 20% from previous 40%) */}
         <div className="w-[32%] min-w-[340px] border-r border-gray-200 bg-white flex flex-col overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <CalendarClock className="text-[#ec9324] flex-shrink-0" size={22} />
-            </div>
-            <Button
-              onClick={openBookingForm}
-              data-testid="mrb-book-meeting-room-btn"
-              className="bg-[#ec9324] hover:bg-[#d4811f] text-white shadow-sm flex-shrink-0"
-            >
-              <Plus size={16} className="mr-1.5" />
-              Book Meeting Room
-            </Button>
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
+            <CalendarClock className="text-[#ec9324] flex-shrink-0" size={22} />
+            <span className="text-sm font-semibold text-gray-700">Upcoming bookings</span>
           </div>
 
           {/* Left panel body: a single flex column that fills the remaining height.

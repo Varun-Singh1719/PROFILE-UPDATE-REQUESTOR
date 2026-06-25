@@ -414,27 +414,22 @@ export default function PermissionsPage() {
   return (
     <Layout
       title="Permissions"
-      description="Configure feature access and save reusable Permission Sets to assign to employees."
+      actions={
+        <button
+          onClick={() => navigate("/admin/permission-sets")}
+          data-testid="pset-count-chip"
+          className="flex items-center gap-2 px-3 h-9 rounded-md bg-white border border-gray-200 hover:border-[#ec9324]/40 hover:shadow-sm transition-all cursor-pointer group"
+          title={`${stats.total_sets || 0} Permission Sets`}
+        >
+          <ListChecks size={16} className="text-[#ec9324]" />
+          <span className="text-sm font-bold text-gray-900 group-hover:text-[#ec9324] leading-none" data-testid="pset-count-number">
+            {stats.total_sets || 0}
+          </span>
+          <span className="text-xs text-gray-500">Sets</span>
+        </button>
+      }
     >
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-start justify-end gap-4">
-          <button
-            onClick={() => navigate("/admin/permission-sets")}
-            data-testid="pset-count-chip"
-            className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white border border-gray-200 hover:border-[#ec9324]/40 hover:shadow-md transition-all cursor-pointer group"
-          >
-            <div className="w-10 h-10 rounded-lg bg-[#ec9324]/10 text-[#ec9324] flex items-center justify-center">
-              <ListChecks size={20} />
-            </div>
-            <div className="text-left">
-              <div className="text-2xl font-bold text-gray-900 group-hover:text-[#ec9324] transition-colors leading-none" data-testid="pset-count-number">
-                {stats.total_sets || 0}
-              </div>
-              <div className="text-xs text-gray-500 mt-1">Permission Sets →</div>
-            </div>
-          </button>
-        </div>
 
         {/* Editor */}
         {loading ? (

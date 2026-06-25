@@ -22,12 +22,11 @@ export default function DQDashboard() {
   const goto = (status) => navigate(`/dq/tickets${status ? `?status=${encodeURIComponent(status)}` : ""}`);
 
   return (
-    <Layout title="DQ Dashboard" description="Requests assigned to you.">
-      <div className="flex items-start justify-end flex-wrap gap-4">
-        <DateFilter value={dateFilter} onChange={setDateFilter} />
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-4">
+    <Layout
+      title="DQ Dashboard"
+      actions={<DateFilter value={dateFilter} onChange={setDateFilter} />}
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard label="Total Requests" value={stats.total} icon={Ticket} onClick={() => goto()} />
         <MetricCard label="Open" value={stats.open} color="#ec9324" icon={AlertCircle} onClick={() => goto("Open")} />
         <MetricCard label="In Progress" value={stats.in_progress} color="#22c55e" icon={Loader} onClick={() => goto("In Progress")} />

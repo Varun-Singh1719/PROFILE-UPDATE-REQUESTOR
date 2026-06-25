@@ -57,51 +57,51 @@ export default function TicketDetailPage() {
   return (
     <Layout
       title={ticket.subject}
-      description={ticket.ticket_id}
+      actions={
+        <div className="flex gap-2">
+          {canUpdateStatus && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" data-testid="detail-status-btn" className="h-9">Update Status</Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => update({ status: "Open" })}>Open</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => update({ status: "In Progress" })}>In Progress</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => update({ status: "Closed" })}>Closed</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {isAdmin && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9" data-testid="detail-assign-btn">
+                  {ticket.assigned_to_id ? "Reassign" : "Assign"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {members.map(m => (
+                  <DropdownMenuItem key={m.id} onClick={() => update({ assigned_to: m.id })}>{m.name}</DropdownMenuItem>
+                ))}
+                {ticket.assigned_to_id && <DropdownMenuItem onClick={() => update({ assigned_to: "" })}>Unassign</DropdownMenuItem>}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {isDQ && !ticket.assigned_to_id && (
+            <Button className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9" data-testid="detail-assign-me-btn"
+              onClick={() => update({ assigned_to: user.id })}>Assign to Me</Button>
+          )}
+        </div>
+      }
     >
       <button onClick={() => navigate(-1)} className="text-sm text-gray-500 hover:text-gray-900 flex items-center gap-1 mb-4" data-testid="back-btn">
         <ArrowLeft size={14}/> Back
       </button>
 
       <div className="bg-white rounded-xl shadow-soft border border-gray-100 p-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <div className="flex gap-2"><StatusBadge status={ticket.status}/><PriorityBadge priority={ticket.priority}/></div>
+        <div className="flex gap-2 mb-2" data-testid="ticket-id">
+          <span className="text-xs font-mono text-[#ec9324] font-semibold">{ticket.ticket_id}</span>
         </div>
-          <div className="flex gap-2">
-            {canUpdateStatus && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" data-testid="detail-status-btn">Update Status</Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => update({ status: "Open" })}>Open</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => update({ status: "In Progress" })}>In Progress</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => update({ status: "Closed" })}>Closed</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            {isAdmin && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="detail-assign-btn">
-                    {ticket.assigned_to_id ? "Reassign" : "Assign"}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {members.map(m => (
-                    <DropdownMenuItem key={m.id} onClick={() => update({ assigned_to: m.id })}>{m.name}</DropdownMenuItem>
-                  ))}
-                  {ticket.assigned_to_id && <DropdownMenuItem onClick={() => update({ assigned_to: "" })}>Unassign</DropdownMenuItem>}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            {isDQ && !ticket.assigned_to_id && (
-              <Button className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="detail-assign-me-btn"
-                onClick={() => update({ assigned_to: user.id })}>Assign to Me</Button>
-            )}
-          </div>
-        </div>
+        <div className="flex gap-2"><StatusBadge status={ticket.status}/><PriorityBadge priority={ticket.priority}/></div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-8 text-sm">
           <Field label="Created By" icon={User} value={ticket.created_by_name}/>
