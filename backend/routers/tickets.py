@@ -71,7 +71,7 @@ def _date_match(date_from, date_to, field="created_at"):
     return {db_field: cond}
 
 
-def parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date, date_from=None, date_to=None, date_field="created_at"):
+def parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date, date_from=None, date_to=None, date_field="created_at", team=None):
     query = {}
     if status:
         query["status"] = status
@@ -84,12 +84,16 @@ def parse_filters(status, priority, created_by, assigned_to, q, created_on, upda
             query["assigned_to_id"] = {"$in": [None, ""]}
         else:
             query["assigned_to_id"] = assigned_to
+    if team:
+        query["team_id"] = team
     if q:
         query["$or"] = [
             {"ticket_id": {"$regex": q, "$options": "i"}},
             {"subject": {"$regex": q, "$options": "i"}},
+            {"description": {"$regex": q, "$options": "i"}},
             {"assigned_to_name": {"$regex": q, "$options": "i"}},
             {"created_by_name": {"$regex": q, "$options": "i"}},
+            {"team_name": {"$regex": q, "$options": "i"}},
         ]
     if created_on:
         query["created_on"] = {"$regex": f"^{created_on}"}
@@ -110,6 +114,7 @@ async def list_tickets(
     priority: Optional[str] = None,
     created_by: Optional[str] = None,
     assigned_to: Optional[str] = None,
+    team: Optional[str] = None,
     q: Optional[str] = None,
     created_on: Optional[str] = None,
     updated_on: Optional[str] = None,
@@ -122,7 +127,7 @@ async def list_tickets(
     sort_by: str = "updated_on",
     sort_dir: str = "desc",
 ):
-    query = parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date, date_from, date_to, date_field)
+    query = parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date, date_from, date_to, date_field, team=team)
 
     role = user["role"]
     uid = user["id"]
@@ -172,6 +177,7 @@ async def export_tickets_csv(
     priority: Optional[str] = None,
     created_by: Optional[str] = None,
     assigned_to: Optional[str] = None,
+    team: Optional[str] = None,
     q: Optional[str] = None,
     created_on: Optional[str] = None,
     updated_on: Optional[str] = None,
@@ -180,7 +186,7 @@ async def export_tickets_csv(
     date_to: Optional[str] = None,
     date_field: Optional[str] = "created_at",
 ):
-    query = parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date, date_from, date_to, date_field)
+    query = parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date, date_from, date_to, date_field, team=team)
     role = user["role"]; uid = user["id"]
     if scope == "mine":
         if role == "Research":
@@ -203,11 +209,12 @@ async def export_tickets_csv(
     items = await db.tickets.find(query, {"_id": 0}).sort("updated_on", -1).to_list(20000)
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["Ticket ID", "Subject", "Status", "Priority", "Created By", "Assigned To", "Profiles", "Due Date", "Created On", "Updated On"])
+    w.writerow(["Ticket ID", "Subject", "Status", "Priority", "Created By", "Team", "Assigned To", "Profiles", "Due Date", "Created On", "Updated On"])
     for t in items:
         w.writerow([
             t.get("ticket_id", ""), t.get("subject", ""), t.get("status", ""), t.get("priority", ""),
-            t.get("created_by_name", ""), t.get("assigned_to_name") or "Unassigned",
+            t.get("created_by_name", ""), t.get("team_name", "") or "—",
+            t.get("assigned_to_name") or "Unassigned",
             t.get("number_of_profiles", "") or 0,
             t.get("due_date") or "", t.get("created_on", ""), t.get("updated_on", ""),
         ])
@@ -229,6 +236,14 @@ async def create_ticket(body: TicketCreate, user=Depends(get_current_user)):
         raise HTTPException(400, "No. of Records cannot be 0")
     if body.number_of_profiles < 0:
         raise HTTPException(400, "No. of Records must be greater than 0")
+    # Denormalise the creator's team onto the ticket so list/filter/export
+    # can show "Team" without per-row joins.
+    creator = await db.contacts.find_one({"id": user["id"]}, {"_id": 0, "team_id": 1}) or {}
+    team_id = creator.get("team_id")
+    team_name = None
+    if team_id:
+        team_doc = await db.teams.find_one({"id": team_id}, {"_id": 0, "name": 1})
+        team_name = (team_doc or {}).get("name")
     count = await db.tickets.count_documents({})
     doc = {
         "id": str(uuid.uuid4()),
@@ -244,6 +259,8 @@ async def create_ticket(body: TicketCreate, user=Depends(get_current_user)):
         "status": "Open",
         "created_by_id": user["id"],
         "created_by_name": user["name"],
+        "team_id": team_id,
+        "team_name": team_name,
         "assigned_to_id": None,
         "assigned_to_name": None,
         "created_on": now_iso(),

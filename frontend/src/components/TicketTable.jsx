@@ -37,6 +37,7 @@ export default function TicketTable({
               <th className="px-4 py-3">Request ID</th>
               <th className="px-4 py-3">Subject</th>
               <th className="px-4 py-3">Created By</th>
+              <th className="px-4 py-3">Team</th>
               <th className="px-4 py-3">Assigned To</th>
               <th className="px-4 py-3">Priority</th>
               <th className="px-4 py-3">Status</th>
@@ -49,7 +50,7 @@ export default function TicketTable({
           </thead>
           <tbody>
             {tickets.length === 0 && (
-              <tr><td colSpan={12} className="px-6 py-12 text-center text-gray-400">No requests found</td></tr>
+              <tr><td colSpan={13} className="px-6 py-12 text-center text-gray-400">No requests found</td></tr>
             )}
             {tickets.map((t) => (
               <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50/80 transition-colors" data-testid={`ticket-row-${t.ticket_id}`}>
@@ -74,6 +75,13 @@ export default function TicketTable({
                 </td>
                 <td className="px-4 py-3 font-medium text-gray-900 max-w-xs truncate">{t.subject}</td>
                 <td className="px-4 py-3 text-gray-600">{t.created_by_name}</td>
+                <td className="px-4 py-3 text-gray-600">
+                  {t.team_name ? (
+                    <span data-testid={`team-cell-${t.ticket_id}`}>{t.team_name}</span>
+                  ) : (
+                    <span className="text-gray-400 italic">—</span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-gray-600">{t.assigned_to_name || <span className="text-gray-400 italic">Unassigned</span>}</td>
                 <td className="px-4 py-3"><PriorityBadge priority={t.priority} /></td>
                 <td className="px-4 py-3"><StatusBadge status={t.status} /></td>

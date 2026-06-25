@@ -20,7 +20,7 @@ const NAV_CONFIG = [
   {
     kind: "group", label: "ProfiX", icon: Briefcase,
     children: [
-      { to: "/admin/open-tickets", label: "Open Requests", icon: Ticket,  perm: { module: "profix", feature: "ticket", action: "view" } },
+      { to: "/admin/open-tickets", label: "All Requests", icon: Ticket,  perm: { module: "profix", feature: "ticket", action: "view" } },
       { to: "/admin/unassigned",   label: "Unassigned",    icon: Inbox,   perm: { module: "profix", feature: "ticket", action: "assign" } },
     ],
   },

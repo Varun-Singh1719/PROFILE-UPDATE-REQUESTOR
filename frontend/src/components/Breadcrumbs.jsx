@@ -23,6 +23,7 @@ const DEFAULT_SECTION_ROUTES = {
   "Employee List": "/admin/contacts",
   "Tickets": "/admin/open-tickets",
   "Open Requests": "/admin/open-tickets",
+  "All Requests": "/admin/open-tickets",
   "Unassigned": "/admin/unassigned",
 };
 

@@ -7,7 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { Search, Plus, RefreshCw, Download } from "lucide-react";
+import { Search, Plus, RefreshCw, Download, X } from "lucide-react";
 import Pagination from "../components/Pagination";
 import notify from "../lib/notify";
 import { StatusBadge } from "../components/Badges";
@@ -29,8 +29,10 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
   const [selected, setSelected] = useState([]);
   const [members, setMembers] = useState([]);
   const [creators, setCreators] = useState([]);
+  const [teams, setTeams] = useState([]);
   const [createdBy, setCreatedBy] = useState("");
   const [assigneeFilter, setAssigneeFilter] = useState("");
+  const [teamFilter, setTeamFilter] = useState("");
   const [dateFilter, setDateFilter] = useState({ field: "created_at", mode: "between", from: null, to: null });
 
   const status = params.get("status") || "";
@@ -48,6 +50,7 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
           priority: priority || undefined,
           assigned_to: assigneeFilter || urlAssignedTo || undefined,
           created_by: createdBy || undefined,
+          team: teamFilter || undefined,
           q: search || undefined,
           page, page_size: pageSize,
           ...dateParams,
@@ -59,10 +62,10 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
         setTickets(r.data); setTotal(r.data.length);
       }
     } finally { setLoading(false); }
-  }, [scope, status, priority, urlAssignedTo, assigneeFilter, createdBy, search, dateFilter, page, pageSize]);
+  }, [scope, status, priority, urlAssignedTo, assigneeFilter, createdBy, teamFilter, search, dateFilter, page, pageSize]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { setPage(1); }, [scope, status, priority, urlAssignedTo, assigneeFilter, createdBy, search, dateFilter, pageSize]);
+  useEffect(() => { setPage(1); }, [scope, status, priority, urlAssignedTo, assigneeFilter, createdBy, teamFilter, search, dateFilter, pageSize]);
 
   const exportCsv = () => {
     const token = localStorage.getItem("access_token") || "";
@@ -72,6 +75,7 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
     if (priority) p.set("priority", priority);
     if (assigneeFilter || urlAssignedTo) p.set("assigned_to", assigneeFilter || urlAssignedTo);
     if (createdBy) p.set("created_by", createdBy);
+    if (teamFilter) p.set("team", teamFilter);
     if (search) p.set("q", search);
     const dateParams = dateFilterToParams(dateFilter);
     Object.entries(dateParams).forEach(([k, v]) => { if (v) p.set(k, v); });
@@ -97,11 +101,28 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
       const list = (r.data?.items || r.data || []).filter(c => c.role === "Super Admin" || c.role === "Admin");
       setCreators(list);
     }).catch(() => {});
+    // Teams — used for the Team filter dropdown.
+    api.get("/teams").then(r => setTeams(r.data || [])).catch(() => {});
   }, [user]);
 
   const setParam = (k, v) => {
     const np = new URLSearchParams(params);
     if (v) np.set(k, v); else np.delete(k);
+    setParams(np);
+  };
+
+  // Filter helpers — visible only when at least one filter is active, keeps the
+  // toolbar compact in the default state.
+  const isDateFilterActive = !!(dateFilter && (dateFilter.from || dateFilter.to || dateFilter.mode === "preset"));
+  const hasActiveFilters = !!(search || status || priority || createdBy || assigneeFilter || teamFilter || urlAssignedTo || isDateFilterActive);
+  const clearAllFilters = () => {
+    setSearch("");
+    setCreatedBy("");
+    setAssigneeFilter("");
+    setTeamFilter("");
+    setDateFilter({ field: "created_at", mode: "between", from: null, to: null });
+    const np = new URLSearchParams(params);
+    np.delete("status"); np.delete("priority"); np.delete("assigned_to");
     setParams(np);
   };
 
@@ -269,7 +290,7 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
       <div className="flex flex-wrap gap-3 items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100">
         <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
-          <Input placeholder="Search by Request ID, Subject..." data-testid="search-input"
+          <Input placeholder="Search by Request ID, Subject or Description..." data-testid="search-input"
             className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <Select value={status || "all"} onValueChange={(v) => setParam("status", v === "all" ? "" : v)}>
@@ -290,6 +311,13 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
             <SelectItem value="Low">Low</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={teamFilter || "all"} onValueChange={(v) => setTeamFilter(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-40" data-testid="filter-team"><SelectValue placeholder="Team" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Teams</SelectItem>
+            {teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
         <Select value={createdBy || "all"} onValueChange={(v) => setCreatedBy(v === "all" ? "" : v)}>
           <SelectTrigger className="w-44" data-testid="filter-created-by"><SelectValue placeholder="Created By" /></SelectTrigger>
           <SelectContent>
@@ -308,6 +336,18 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
           </Select>
         )}
         <DateFilter value={dateFilter} onChange={setDateFilter} />
+        {hasActiveFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearAllFilters}
+            data-testid="clear-all-filters"
+            className="h-9 text-xs text-gray-600 hover:text-[#ec9324] hover:bg-[#ec9324]/10 px-2 gap-1"
+            title="Clear all filters"
+          >
+            <X size={14}/> Clear all
+          </Button>
+        )}
       </div>
 
       <div className="mt-6">

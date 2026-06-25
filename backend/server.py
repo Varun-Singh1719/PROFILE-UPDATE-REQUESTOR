@@ -138,6 +138,31 @@ async def startup():
     if migrated:
         logger.info(f"Migrated {migrated} contacts from type -> role")
 
+    # ---- Migration: backfill team_id / team_name on existing tickets ----
+    # Idempotent: only touches tickets that lack team_id and whose creator
+    # currently belongs to a team.
+    missing = await db.tickets.find({"team_id": {"$in": [None, ""]}}, {"_id": 0, "id": 1, "created_by_id": 1}).to_list(20000)
+    if missing:
+        # Build a creator_id -> team_id/name map in one shot.
+        creator_ids = list({m.get("created_by_id") for m in missing if m.get("created_by_id")})
+        contacts = await db.contacts.find({"id": {"$in": creator_ids}}, {"_id": 0, "id": 1, "team_id": 1}).to_list(len(creator_ids))
+        team_ids = list({c["team_id"] for c in contacts if c.get("team_id")})
+        teams = await db.teams.find({"id": {"$in": team_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(len(team_ids))
+        team_name_by_id = {t["id"]: t["name"] for t in teams}
+        team_by_creator = {c["id"]: c.get("team_id") for c in contacts}
+        ticket_backfilled = 0
+        for m in missing:
+            tid = team_by_creator.get(m.get("created_by_id"))
+            if not tid:
+                continue
+            await db.tickets.update_one(
+                {"id": m["id"]},
+                {"$set": {"team_id": tid, "team_name": team_name_by_id.get(tid)}},
+            )
+            ticket_backfilled += 1
+        if ticket_backfilled:
+            logger.info(f"Backfilled team on {ticket_backfilled} tickets")
+
     # ---- Migration: rename role 'Research Associate' -> 'Research' (one-way) ----
     res = await db.contacts.update_many({"role": "Research Associate"}, {"$set": {"role": "Research"}})
     if res.modified_count:
