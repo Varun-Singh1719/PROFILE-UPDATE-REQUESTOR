@@ -11,7 +11,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 
 # Backend URL from environment
-BASE_URL = "https://preview-cluster.preview.emergentagent.com/api"
+BASE_URL = "https://mongo-app-preview-1.preview.emergentagent.com/api"
 
 # Test credentials
 SUPER_ADMIN_EMAIL = "admin@ticketing.com"

@@ -3,7 +3,7 @@ import os
 import pytest
 import requests
 
-BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://preview-cluster.preview.emergentagent.com").rstrip("/")
+BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://mongo-app-preview-1.preview.emergentagent.com").rstrip("/")
 API = f"{BASE}/api"
 
 CREDS = {
