@@ -16,7 +16,16 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from "../components/ui/dropdown-menu";
 
-export default function TicketListPage({ scope = "mine", title = "My Tickets", basePath = "/ra/tickets", allowCreate = false }) {
+export default function TicketListPage({
+  scope = "mine",
+  title = "My Tickets",
+  basePath = "/ra/tickets",
+  allowCreate = false,
+  // If set, this status is force-applied to every query and the Status
+  // dropdown is hidden. Used by the "Open Requests" route to lock the
+  // listing to status=Open while keeping every other filter available.
+  lockedStatus = null,
+}) {
   const [tickets, setTickets] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -35,7 +44,7 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
   const [teamFilter, setTeamFilter] = useState("");
   const [dateFilter, setDateFilter] = useState({ field: "created_at", mode: "between", from: null, to: null });
 
-  const status = params.get("status") || "";
+  const status = lockedStatus || params.get("status") || "";
   const priority = params.get("priority") || "";
   const urlAssignedTo = params.get("assigned_to") || "";
 
@@ -114,7 +123,10 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
   // Filter helpers — visible only when at least one filter is active, keeps the
   // toolbar compact in the default state.
   const isDateFilterActive = !!(dateFilter && (dateFilter.from || dateFilter.to || dateFilter.mode === "preset"));
-  const hasActiveFilters = !!(search || status || priority || createdBy || assigneeFilter || teamFilter || urlAssignedTo || isDateFilterActive);
+  // status counts as an active filter only when the user picked it; if the
+  // route locks status (e.g. Open Requests) it should not show "Clear all".
+  const userPickedStatus = !lockedStatus && !!status;
+  const hasActiveFilters = !!(search || userPickedStatus || priority || createdBy || assigneeFilter || teamFilter || urlAssignedTo || isDateFilterActive);
   const clearAllFilters = () => {
     setSearch("");
     setCreatedBy("");
@@ -293,15 +305,17 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
           <Input placeholder="Search by Request ID, Subject or Description..." data-testid="search-input"
             className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <Select value={status || "all"} onValueChange={(v) => setParam("status", v === "all" ? "" : v)}>
-          <SelectTrigger className="w-40" data-testid="filter-status"><SelectValue placeholder="Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="Open">Open</SelectItem>
-            <SelectItem value="In Progress">In Progress</SelectItem>
-            <SelectItem value="Closed">Closed</SelectItem>
-          </SelectContent>
-        </Select>
+        {!lockedStatus && (
+          <Select value={status || "all"} onValueChange={(v) => setParam("status", v === "all" ? "" : v)}>
+            <SelectTrigger className="w-40" data-testid="filter-status"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="Open">Open</SelectItem>
+              <SelectItem value="In Progress">In Progress</SelectItem>
+              <SelectItem value="Closed">Closed</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
         <Select value={priority || "all"} onValueChange={(v) => setParam("priority", v === "all" ? "" : v)}>
           <SelectTrigger className="w-40" data-testid="filter-priority"><SelectValue placeholder="Priority" /></SelectTrigger>
           <SelectContent>

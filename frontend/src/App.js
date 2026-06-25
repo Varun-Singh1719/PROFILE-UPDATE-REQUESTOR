@@ -78,6 +78,9 @@ function App() {
             <Route path="/admin/open-tickets" element={<ProtectedRoute roles={ADMIN_ROLES}>
               <TicketListPage scope="all" title="All Requests" basePath="/admin/tickets" />
             </ProtectedRoute>} />
+            <Route path="/admin/open-requests" element={<ProtectedRoute roles={ADMIN_ROLES}>
+              <TicketListPage scope="all" title="Open Requests" basePath="/admin/tickets" lockedStatus="Open" />
+            </ProtectedRoute>} />
             <Route path="/admin/unassigned" element={<ProtectedRoute roles={ADMIN_ROLES}>
               <TicketListPage scope="unassigned" title="Unassigned Requests" basePath="/admin/tickets" />
             </ProtectedRoute>} />

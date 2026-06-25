@@ -7,7 +7,7 @@ import {
   ChevronDown, ChevronRight, Briefcase, Settings, Shield,
   Armchair, Send, MailPlus, PanelLeftClose, PanelLeftOpen,
   Search, Menu, X, CalendarClock, ClipboardList,
-  Map, Crosshair, BookUser,
+  Map, Crosshair, BookUser, CircleDot,
 } from "lucide-react";
 import AddTaskIcon from "./icons/AddTaskIcon";
 import EventSeatRoundedIcon from "./icons/EventSeatRoundedIcon";
@@ -21,6 +21,7 @@ const NAV_CONFIG = [
     kind: "group", label: "ProfiX", icon: Briefcase,
     children: [
       { to: "/admin/open-tickets", label: "All Requests", icon: Ticket,  perm: { module: "profix", feature: "ticket", action: "view" } },
+      { to: "/admin/open-requests", label: "Open Requests", icon: CircleDot, perm: { module: "profix", feature: "ticket", action: "view" } },
       { to: "/admin/unassigned",   label: "Unassigned",    icon: Inbox,   perm: { module: "profix", feature: "ticket", action: "assign" } },
     ],
   },
