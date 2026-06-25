@@ -158,18 +158,13 @@ export default function PermissionSetsListPage() {
   };
 
   return (
-    <Layout>
+    <Layout
+      title="Permission Sets"
+      description="Reusable permission templates that can be assigned to employees."
+    >
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <ListChecks size={24} className="text-[#ec9324]" /> Permission Sets
-            </h1>
-            <p className="text-gray-500 text-sm mt-1">
-              Reusable permission templates that can be assigned to employees.
-            </p>
-          </div>
+        <div className="flex items-start justify-end gap-4">
           <button
             onClick={() => navigate("/admin/permissions")}
             data-testid="pset-new-btn"

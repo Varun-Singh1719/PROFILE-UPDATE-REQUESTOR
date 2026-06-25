@@ -302,7 +302,7 @@ export default function ProfilePage() {
   };
 
   return (
-    <Layout breadcrumbs={[{ label: "Profile" }]}>
+    <Layout title="My Profile" breadcrumbs={[{ label: "Profile" }]}>
       {loading || !profile ? (
         <div className="flex items-center justify-center py-24 text-gray-400">
           <Loader2 size={20} className="animate-spin mr-2"/> Loading profile…

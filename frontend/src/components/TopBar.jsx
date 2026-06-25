@@ -21,7 +21,7 @@ import ChangePasswordModal from "./ChangePasswordModal";
 import LogoutConfirmModal from "./LogoutConfirmModal";
 import { ChevronDown, User as UserIcon, KeyRound, LogOut } from "lucide-react";
 
-export default function TopBar() {
+export default function TopBar({ title, description }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [cpOpen, setCpOpen] = useState(false);
@@ -38,11 +38,30 @@ export default function TopBar() {
   return (
     <>
       <header
-        className="sticky top-0 z-20 h-14 bg-white/95 backdrop-blur border-b border-gray-200 flex items-center justify-end px-4 gap-3"
+        className="sticky top-0 z-20 h-14 bg-white/95 backdrop-blur border-b border-gray-200 flex items-center px-4 gap-3"
         data-testid="app-topbar"
       >
-        {/* Slot — future toolbar icons could go here */}
-        <div className="flex-1"/>
+        {/* Page title slot — set via <Layout title="..." description="..."/> */}
+        <div className="flex-1 min-w-0 flex items-baseline gap-3 overflow-hidden">
+          {title && (
+            <h1
+              className="text-xl font-bold text-gray-900 tracking-tight truncate leading-none"
+              data-testid="topbar-page-title"
+              title={title}
+            >
+              {title}
+            </h1>
+          )}
+          {description && (
+            <p
+              className="hidden md:block text-xs text-gray-500 truncate"
+              data-testid="topbar-page-description"
+              title={description}
+            >
+              {description}
+            </p>
+          )}
+        </div>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

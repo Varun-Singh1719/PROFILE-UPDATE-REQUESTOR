@@ -27,12 +27,8 @@ export default function AdminDashboard() {
   const gotoMember = (id) => navigate(`/admin/open-tickets?assigned_to=${id}`);
 
   return (
-    <Layout>
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Admin Dashboard</h1>
-          <p className="text-gray-500 mt-1">Organization-wide request overview.</p>
-        </div>
+    <Layout title="Admin Dashboard" description="Organization-wide request overview.">
+      <div className="flex items-start justify-end flex-wrap gap-4">
         <div className="flex items-center gap-2">
           <DateFilter value={dateFilter} onChange={setDateFilter} />
           <Button
@@ -45,7 +41,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-4">
         <MetricCard label="Total Requests" value={stats.total} icon={Ticket} onClick={() => goto()} />
         <MetricCard label="Open" value={stats.open} color="#ec9324" icon={AlertCircle} onClick={() => goto("Open")} />
         <MetricCard label="In Progress" value={stats.in_progress} color="#22c55e" icon={Loader} onClick={() => goto("In Progress")} />

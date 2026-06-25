@@ -202,12 +202,8 @@ export default function TicketListPage({ scope = "mine", title = "My Tickets", b
   const selectable = isDQ || isAdmin;
 
   return (
-    <Layout>
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">{title}</h1>
-          <p className="text-gray-500 mt-1">{total} request{total === 1 ? "" : "s"}</p>
-        </div>
+    <Layout title={title} description={`${total} request${total === 1 ? "" : "s"}`}>
+      <div className="flex items-center justify-end flex-wrap gap-4">
         <div className="flex gap-2">
           {selected.length > 0 && isDQ && (
             <>

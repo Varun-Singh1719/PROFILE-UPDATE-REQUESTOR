@@ -181,7 +181,13 @@ function PlanInteractiveView({ plan, onBack }) {
   };
 
   return (
-    <Layout fullBleed breadcrumbs={crumbs} contentClassName="flex flex-col h-screen">
+    <Layout
+      title={plan.name}
+      description={`Live · ${stats.seats} seats · ${stats.booked} booked · ${stats.pending} pending · ${stats.meetings} meeting${stats.meetings !== 1 ? "s" : ""}`}
+      fullBleed
+      breadcrumbs={crumbs}
+      contentClassName="flex flex-col h-screen"
+    >
       <div className="bg-white border-b border-gray-200 px-6 py-3 flex-shrink-0">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
@@ -195,8 +201,7 @@ function PlanInteractiveView({ plan, onBack }) {
             </button>
             <LayoutGrid className="text-[#ec9324] flex-shrink-0" size={24}/>
             <div className="min-w-0">
-              <h1 className="text-lg font-bold text-gray-900 truncate" data-testid="floor-layout-title">{plan.name}</h1>
-              <p className="text-xs text-gray-600 inline-flex items-center gap-2 flex-wrap">
+              <p className="text-xs text-gray-600 inline-flex items-center gap-2 flex-wrap" data-testid="floor-layout-title">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border" style={{ color: "#15B867", backgroundColor: "#15B86715", borderColor: "#15B86755" }}>
                   Live · {stats.seats} seats
                 </span>
@@ -329,15 +334,11 @@ export default function FloorLayoutPage() {
   }
 
   return (
-    <Layout breadcrumbs={[{ label: "Workspace Manager" }, { label: "Floor Layout" }]}>
-      <div className="flex items-center gap-3 mb-5">
-        <LayoutGrid className="text-[#ec9324]" size={28}/>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900" data-testid="floor-layout-title">Floor Layout</h1>
-          <p className="text-sm text-gray-600">Select a floor plan to view its live seating + meeting bookings.</p>
-        </div>
-      </div>
-
+    <Layout
+      title="Floor Layout"
+      description="Select a floor plan to view its live seating + meeting bookings."
+      breadcrumbs={[{ label: "Workspace Manager" }, { label: "Floor Layout" }]}
+    >
       {loading ? (
         <div className="flex items-center justify-center py-20 text-gray-500">
           <Loader2 className="animate-spin mr-2"/> Loading floor plans…

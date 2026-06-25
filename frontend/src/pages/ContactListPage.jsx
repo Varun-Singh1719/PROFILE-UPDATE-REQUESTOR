@@ -807,15 +807,11 @@ export default function ContactListPage() {
   const anySelected = selected.length > 0;
 
   return (
-    <Layout>
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Employee List</h1>
-          <p className="text-gray-500 mt-1">
-            {total} employee{total === 1 ? "" : "s"}
-            {anySelected && <span className="ml-2 text-[#ec9324] font-medium">• {selected.length} selected</span>}
-          </p>
-        </div>
+    <Layout
+      title="Employee List"
+      description={`${total} employee${total === 1 ? "" : "s"}${anySelected ? ` • ${selected.length} selected` : ""}`}
+    >
+      <div className="flex items-center justify-end flex-wrap gap-4">
         <div className="flex items-center gap-2">
           {anySelected && (
             <DropdownMenu>

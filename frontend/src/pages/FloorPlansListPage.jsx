@@ -127,12 +127,12 @@ export default function FloorPlansListPage() {
   };
 
   return (
-    <Layout breadcrumbs={[{ label: "Workspace Manager" }, { label: "Floor Plans" }]}>
-      <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900" data-testid="floor-plans-title">Floor Plans</h1>
-            <p className="text-sm text-gray-600">Manage all calibrated floor maps. Multiple plans can be Live at the same time.</p>
-          </div>
+    <Layout
+      title="Floor Plans"
+      description="Manage all calibrated floor maps. Multiple plans can be Live at the same time."
+      breadcrumbs={[{ label: "Workspace Manager" }, { label: "Floor Plans" }]}
+    >
+      <div className="flex items-center justify-end mb-4">
           <button
             onClick={() => { setCreateName(""); setShowCreate(true); }}
             data-testid="new-floor-plan-btn"

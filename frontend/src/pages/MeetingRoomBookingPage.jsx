@@ -343,6 +343,7 @@ export default function MeetingRoomBookingPage() {
 
   return (
     <Layout
+      title="Meeting Room Booking"
       fullBleed
       breadcrumbs={[{ label: "Workspace Manager" }, { label: "Meeting Room Booking" }]}
       contentClassName="h-screen flex flex-col"
@@ -412,9 +413,6 @@ export default function MeetingRoomBookingPage() {
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <CalendarClock className="text-[#ec9324] flex-shrink-0" size={22} />
-              <div className="min-w-0">
-                <h1 className="text-lg font-bold text-gray-900 truncate" data-testid="mrb-title">Meeting Room Booking</h1>
-              </div>
             </div>
             <Button
               onClick={openBookingForm}

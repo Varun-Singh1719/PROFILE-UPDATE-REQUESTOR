@@ -1094,6 +1094,8 @@ export default function SeatCalibrationPage() {
   // ============================================================ RENDER
   return (
     <Layout
+      title={plan?.name || "Calibration"}
+      description={viewOnly ? "View mode — read-only" : "Seat calibration & publishing"}
       fullBleed
       contentClassName="h-screen flex flex-col bg-gray-50"
       breadcrumbs={[

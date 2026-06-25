@@ -414,6 +414,8 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
 
   return (
     <Layout
+      title={pageTitle}
+      description="Full-day seat booking on the Live floor layout · IST"
       breadcrumbs={[{ label: "Workspace Manager" }, { label: pageTitle }]}
       fullBleed
       contentClassName="bg-gray-50"
@@ -424,10 +426,6 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-[#ec9324]/10 flex items-center justify-center">
               <Armchair className="text-[#ec9324]" size={20} />
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold text-gray-900">{pageTitle}</h1>
-              <p className="text-xs text-gray-500">Full-day seat booking on the Live floor layout · IST</p>
             </div>
           </div>
 

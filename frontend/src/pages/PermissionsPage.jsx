@@ -412,18 +412,13 @@ export default function PermissionsPage() {
   };
 
   return (
-    <Layout>
+    <Layout
+      title="Permissions"
+      description="Configure feature access and save reusable Permission Sets to assign to employees."
+    >
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Shield size={24} className="text-[#ec9324]" /> Permissions
-            </h1>
-            <p className="text-gray-500 text-sm mt-1">
-              Configure feature access and save reusable Permission Sets to assign to employees.
-            </p>
-          </div>
+        <div className="flex items-start justify-end gap-4">
           <button
             onClick={() => navigate("/admin/permission-sets")}
             data-testid="pset-count-chip"

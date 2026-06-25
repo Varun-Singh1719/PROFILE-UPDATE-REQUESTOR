@@ -295,16 +295,12 @@ export default function BookingsPage() {
   };
 
   return (
-    <Layout>
+    <Layout title="Bookings" description={loading ? "" : `${total} total`}>
       <div className="h-full flex flex-col bg-gray-50">
         {/* HEADER */}
         <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <ClipboardList className="text-[#ec9324] flex-shrink-0" size={22} />
-            <h1 className="text-lg font-bold text-gray-900 truncate" data-testid="bookings-page-title">Bookings</h1>
-            <span className="text-[11px] text-gray-400" data-testid="bookings-total-count">
-              {loading ? "" : `· ${total} total`}
-            </span>
           </div>
           <div className="flex items-center gap-2">
             {/* Export */}

@@ -288,6 +288,8 @@ export default function PendingApprovalsPage() {
 
   return (
     <Layout
+      title="Pending Approvals"
+      description={`${pendingCount} pending`}
       breadcrumbs={[{ label: "Workspace Manager" }, { label: "Pending Approvals" }]}
       fullBleed
       contentClassName="bg-gray-50"
@@ -296,7 +298,6 @@ export default function PendingApprovalsPage() {
         {/* Header */}
         <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h1 className="text-lg font-semibold text-gray-900">Pending Approvals</h1>
             <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
               {pendingCount} pending
             </span>

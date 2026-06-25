@@ -55,7 +55,10 @@ export default function TicketDetailPage() {
   };
 
   return (
-    <Layout>
+    <Layout
+      title={ticket.subject}
+      description={ticket.ticket_id}
+    >
       <button onClick={() => navigate(-1)} className="text-sm text-gray-500 hover:text-gray-900 flex items-center gap-1 mb-4" data-testid="back-btn">
         <ArrowLeft size={14}/> Back
       </button>
@@ -63,9 +66,7 @@ export default function TicketDetailPage() {
       <div className="bg-white rounded-xl shadow-soft border border-gray-100 p-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight" data-testid="ticket-subject">{ticket.subject}</h1>
-          <div className="text-xs font-mono text-[#ec9324] font-semibold mt-1" data-testid="ticket-id">{ticket.ticket_id}</div>
-          <div className="mt-3 flex gap-2"><StatusBadge status={ticket.status}/><PriorityBadge priority={ticket.priority}/></div>
+          <div className="flex gap-2"><StatusBadge status={ticket.status}/><PriorityBadge priority={ticket.priority}/></div>
         </div>
           <div className="flex gap-2">
             {canUpdateStatus && (

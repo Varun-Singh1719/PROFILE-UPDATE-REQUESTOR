@@ -388,18 +388,12 @@ export default function EmailTemplatesPage() {
   };
 
   return (
-    <Layout>
+    <Layout
+      title="Email Templates"
+      description={`${items.length} template${items.length === 1 ? "" : "s"} — toggle status to start/stop a notification kind.${!isAdmin ? " (View + toggle only — Admin can edit)" : ""}`}
+    >
       <TooltipProvider delayDuration={150}>
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
-            <Mail className="text-[#ec9324]" size={26}/> Email Templates
-          </h1>
-          <p className="text-gray-500 mt-1">
-            {items.length} template{items.length === 1 ? "" : "s"} — toggle status to start/stop a notification kind.
-            {!isAdmin && <span className="ml-2 inline-flex items-center gap-1 text-[11px] bg-amber-50 border border-amber-200 text-amber-700 rounded px-1.5 py-0.5">View + toggle only (Admin can edit)</span>}
-          </p>
-        </div>
+      <div className="flex items-center justify-end flex-wrap gap-4">
         {isAdmin && (
           <Button onClick={openCreate} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="add-template-btn">
             <Plus size={16} className="mr-2"/> New Template
@@ -407,7 +401,7 @@ export default function EmailTemplatesPage() {
         )}
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-3 items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100">
+      <div className="mt-4 flex flex-wrap gap-3 items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100">
         <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
           <Input placeholder="Search by name, kind or subject…" className="pl-9" value={q} onChange={(e) => setQ(e.target.value)} data-testid="template-search"/>
