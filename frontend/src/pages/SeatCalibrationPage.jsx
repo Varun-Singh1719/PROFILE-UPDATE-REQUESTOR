@@ -134,7 +134,7 @@ export default function SeatCalibrationPage() {
   // ---- editing state
   const [mappedSeats, setMappedSeats] = useState({});
   const [currentBay, setCurrentBay] = useState('A');
-  const [toolMode, setToolMode] = useState('place'); // place|select|delete|box|lasso
+  const [toolMode, setToolMode] = useState(null); // null|place|select|delete|box|lasso — null = default cursor (no tool)
   const [isCalibrating, setIsCalibrating] = useState(true);
   const [showCoordinates, setShowCoordinates] = useState(true);
   const [previewMode, setPreviewMode] = useState(false);
@@ -1232,7 +1232,12 @@ export default function SeatCalibrationPage() {
                 return (
                   <button
                     key={mode}
-                    onClick={() => { setToolMode(mode); setIsCalibrating(true); }}
+                    onClick={() => {
+                      // Toggle: clicking the active tool deselects it
+                      // (returns to default cursor / no-tool mode).
+                      setToolMode(prev => (prev === mode ? null : mode));
+                      setIsCalibrating(true);
+                    }}
                     data-testid={`tool-${mode}`}
                     title={label}
                     className={`p-1.5 rounded text-[9px] flex flex-col items-center gap-0.5 border transition-colors ${
@@ -1497,7 +1502,8 @@ export default function SeatCalibrationPage() {
                     toolMode === 'place' ? 'cursor-crosshair' :
                     toolMode === 'delete' ? 'cursor-pointer' :
                     toolMode === 'box' || toolMode === 'lasso' ? 'cursor-crosshair' :
-                    'cursor-pointer'
+                    toolMode === 'select' ? 'cursor-pointer' :
+                    'cursor-default'
                   }`}
                 >
                   <Document file={resolvePdfUrl(pdfUrl)}>
@@ -1626,6 +1632,7 @@ export default function SeatCalibrationPage() {
                   {/* Status banner */}
                   {isCalibrating && !previewMode && (
                     <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-yellow-500 text-white px-4 py-2 rounded-lg shadow-lg text-xs font-semibold z-50" data-testid="status-banner">
+                      {calibMode === 'workstation' && toolMode === null    && 'Pick a tool from the right panel to start calibrating'}
                       {calibMode === 'workstation' && toolMode === 'place'  && (isBayLocked(currentBay)
                         ? `🔒 Bay ${currentBay} locked`
                         : `✓ Place Mode · Bay ${currentBay} · Click to add ${currentBay}${nextSeatNumber}`)}
