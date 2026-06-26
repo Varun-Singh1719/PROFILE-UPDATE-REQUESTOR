@@ -12,6 +12,8 @@ import {
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 import api from '../lib/api';
+import notify from '../lib/notify';
+import { confirm as confirmDialog, prompt as promptDialog } from '../lib/dialog';
 import { resolvePdfUrl } from '../lib/pdfUrl';
 import Layout from '../components/Layout';
 import PublishDialog from '../components/calibration/PublishDialog';
@@ -291,7 +293,7 @@ export default function SeatCalibrationPage() {
       setDraftDirty(false);
       setLastSaved(res.data.draft_updated_at || null);
     } catch (e) {
-      alert(`Failed to load plan: ${e?.response?.data?.detail || e.message}`);
+      notify.error(e, { what: "Load plan" });
     } finally { if (!silent) setLoadingPlan(false); }
   }, [planId]);
   useEffect(() => { loadPlan(); }, [loadPlan]);
@@ -794,9 +796,9 @@ export default function SeatCalibrationPage() {
   };
 
   const lockSelected = (lock) => applyToSelected(() => ({ locked: lock }), false);
-  const renamePrefix = () => {
+  const renamePrefix = async () => {
     if (selectedSeats.length === 0) return;
-    const newPrefix = window.prompt('New bay prefix (e.g. "Z"):', '');
+    const newPrefix = await promptDialog({ title: 'Rename bay prefix', message: 'Enter the new bay prefix (uppercase letters only, e.g. "Z"):', placeholder: 'Z' });
     if (!newPrefix || !/^[A-Z]+$/.test(newPrefix.trim())) { setValidationError('Prefix must be uppercase letters.'); return; }
     const ns = { ...mappedSeats };
     let counter = nextSeatNumberFor(newPrefix.trim());
@@ -931,7 +933,7 @@ export default function SeatCalibrationPage() {
       setDraftDirty(false);
       if (!silent) setValidationError('');
     } catch (e) {
-      if (!silent) alert(`Save failed: ${e?.response?.data?.detail || e.message}`);
+      if (!silent) notify.error(e, { what: 'Save draft' });
     } finally { setSaving(false); }
   }, [plan, planId, pdfUrl, mappedSeats, mappedRooms]);
 
@@ -985,7 +987,7 @@ export default function SeatCalibrationPage() {
       setShowPublishDialog(false);
       await loadPlan(true);  // silent reload — keep canvas viewport intact
     } catch (e) {
-      alert(`Publish failed: ${e?.response?.data?.detail || e.message}`);
+      notify.error(e, { what: 'Publish plan' });
     } finally { setPublishing(false); }
   };
 
@@ -1171,7 +1173,7 @@ export default function SeatCalibrationPage() {
                   await api.patch(`/floor-plans/${planId}/status`, { status: next });
                   await loadPlan(true);  // silent reload — keep canvas viewport intact
                 } catch (e) {
-                  alert(`Failed to update status: ${e?.response?.data?.detail || e.message}`);
+                  notify.error(e, { what: 'Update plan status' });
                 }
               }}
             />
@@ -1750,8 +1752,8 @@ function LiveToggle({ plan, draftDirty, totalMapped, hasDupes, onPublishRequeste
     }
     // Turning ON — publish if no live yet, local edits unsaved, or a saved backend draft is pending
     if (!hasLive || draftDirty || plan?.has_draft) {
-      if (totalMapped === 0) { alert("Place at least one seat before going Live."); return; }
-      if (hasDupes) { alert("Resolve duplicate seat IDs before publishing."); return; }
+      if (totalMapped === 0) { notify.warning('Place at least one seat before going Live.'); return; }
+      if (hasDupes) { notify.warning('Resolve duplicate seat IDs before publishing.'); return; }
       onPublishRequested();
     } else {
       onSetStatus("live");

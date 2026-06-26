@@ -9,6 +9,7 @@ import {
 } from "../components/ui/dialog";
 import { Search, Mail, RefreshCw, Trash2, Eye, AlertCircle, Clock, CheckCircle2 } from "lucide-react";
 import notify from "../lib/notify";
+import { confirm as confirmDialog } from '../lib/dialog';
 
 const KIND_LABEL = {
   new_employee: "New employee credentials",
@@ -50,7 +51,8 @@ export default function NotificationsOutboxPage() {
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [q, kind, status]);
 
   const remove = async (n) => {
-    if (!window.confirm(`Delete this notification log entry?`)) return;
+    const ok = await confirmDialog({ title: 'Delete log entry', message: 'Delete this notification log entry?', confirmLabel: 'Delete', confirmVariant: 'destructive' });
+    if (!ok) return;
     await api.delete(`/notifications/outbox/${n.id}`);
     notify.success("Deleted");
     load();

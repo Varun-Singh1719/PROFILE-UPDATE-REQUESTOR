@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { BusyProvider } from "./context/BusyContext";
 import BusyOverlay from "./components/BusyOverlay";
 import GlobalToaster from "./components/GlobalToaster";
+import DialogHost from "./components/DialogHost";
 import LoginPage from "./pages/LoginPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
@@ -122,6 +123,8 @@ function App() {
           </Routes>
           {/* Global, app-wide busy overlay — sits above all routes incl. login */}
           <BusyOverlay />
+          {/* Global confirm / prompt / alert dialog renderer */}
+          <DialogHost />
         </BrowserRouter>
         </GlobalToaster>
       </AuthProvider>

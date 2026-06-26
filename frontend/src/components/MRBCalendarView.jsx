@@ -7,6 +7,7 @@ import {
 import api from "../lib/api";
 import { Button } from "./ui/button";
 import { toast } from "../lib/notify";
+import { confirm as confirmDialog } from '../lib/dialog';
 
 // ============================================================ Date helpers
 const pad = (n) => String(n).padStart(2, "0");
@@ -629,7 +630,8 @@ export default function MRBCalendarView({ user, onClose, onPickSlot, onReschedul
 
   const handleCancelFromCard = useCallback(async (b) => {
     if (!b) return;
-    if (!window.confirm(`Cancel "${b.title}"?`)) return;
+    const ok = await confirmDialog({ title: 'Cancel booking', message: `Cancel "${b.title}"?`, confirmLabel: 'Cancel booking', confirmVariant: 'destructive' });
+    if (!ok) return;
     try {
       await api.delete(`/room-bookings/${b.id}`);
       toast.success("Booking cancelled");

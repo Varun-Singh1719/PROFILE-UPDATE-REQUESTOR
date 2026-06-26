@@ -20,6 +20,7 @@ import { Button } from "../components/ui/button";
 import { Checkbox } from "../components/ui/checkbox";
 import { toast } from "../lib/notify";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { confirm as confirmDialog } from '../lib/dialog';
 
 // ---------------------------------------------------------------------------- helpers
 const PAGE_SIZE = 25;
@@ -237,7 +238,8 @@ export default function BookingsPage() {
   };
   const onCancel = async (b) => {
     if (b.status === "Cancelled") { toast.info("Already cancelled"); return; }
-    if (!window.confirm(`Cancel booking #${b.seq_no} (${b.title})?`)) return;
+    const ok = await confirmDialog({ title: 'Cancel booking', message: `Cancel booking #${b.seq_no} (${b.title})?`, confirmLabel: 'Cancel booking', confirmVariant: 'destructive' });
+    if (!ok) return;
     try {
       await api.delete(`/room-bookings/${b.id}`);
       toast.success("Booking cancelled");

@@ -21,6 +21,7 @@ import notify from "../lib/notify";
 import { __busyBridge } from "../context/BusyContext";
 import { Search, UserPlus, Pencil, Eye, EyeOff, Copy, RefreshCw, KeyRound, X, Mail, Phone, Calendar, IdCard, Briefcase, UsersRound, Download, ChevronLeft, ChevronRight, MoreHorizontal, ShieldCheck, Upload, FileSpreadsheet, History, CheckCircle2, AlertTriangle, FileDown, Loader2 } from "lucide-react";
 import { teamBackground } from "../lib/teamColors";
+import { confirm as confirmDialog } from '../lib/dialog';
 
 function fmt(iso) { if (!iso) return "Never"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
 
@@ -47,7 +48,8 @@ function PasswordField({ contactId, testIdPrefix = "contact" }) {
   };
 
   const reset = async () => {
-    if (!window.confirm("Generate a new password? The old one will stop working.")) return;
+    const ok = await confirmDialog({ title: 'Reset password', message: 'Generate a new password? The old one will stop working.', confirmLabel: 'Reset' });
+    if (!ok) return;
     setLoading(true);
     try {
       const r = await api.post(`/contacts/${contactId}/reset-password`);

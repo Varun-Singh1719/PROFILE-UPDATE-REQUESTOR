@@ -6,6 +6,8 @@ import {
 } from "lucide-react";
 import api from "../lib/api";
 import Layout from "../components/Layout";
+import notify from '../lib/notify';
+import { confirm as confirmDialog } from '../lib/dialog';
 
 function fmtDate(iso) {
   if (!iso) return "—";
@@ -50,7 +52,7 @@ export default function FloorPlansListPage() {
       setShowCreate(false); setCreateName(""); setUploadedPdfPath(null); setUploadError("");
       navigate(`/workspace-manager/calibration/${res.data.id}`);
     } catch (e) {
-      alert(`Create failed: ${e?.response?.data?.detail || e.message}`);
+      notify.error(e, { what: 'Create floor plan' });
     } finally { setWorking(false); }
   };
 
@@ -95,24 +97,26 @@ export default function FloorPlansListPage() {
       setShowClone(null); setCloneName("");
       await load();
     } catch (e) {
-      alert(`Clone failed: ${e?.response?.data?.detail || e.message}`);
+      notify.error(e, { what: 'Clone floor plan' });
     } finally { setWorking(false); }
   };
 
   const deletePlan = async (p) => {
-    if (!window.confirm(`Delete floor plan "${p.name}"? This removes all versions and audit history. This cannot be undone.`)) return;
+    const ok = await confirmDialog({ title: 'Delete floor plan', message: `Delete "${p.name}"? This removes all versions and audit history. This cannot be undone.`, confirmLabel: 'Delete', confirmVariant: 'destructive' });
+    if (!ok) return;
     try {
       await api.delete(`/floor-plans/${p.id}`);
       await load();
     } catch (e) {
-      alert(`Delete failed: ${e?.response?.data?.detail || e.message}`);
+      notify.error(e, { what: 'Delete floor plan' });
     }
   };
 
   const togglePlanLive = async (p) => {
     if (!p.live_version_id) {
       // No live version yet — guide the user to publish from calibration page.
-      if (window.confirm(`"${p.name}" has no published version yet. Open calibration to publish?`)) {
+      const open = await confirmDialog({ title: 'No published version', message: `"${p.name}" has no published version yet. Open calibration to publish?`, confirmLabel: 'Open calibration' });
+      if (open) {
         navigate(`/workspace-manager/calibration/${p.id}`);
       }
       return;
@@ -122,7 +126,7 @@ export default function FloorPlansListPage() {
       await api.patch(`/floor-plans/${p.id}/status`, { status: next });
       await load();
     } catch (e) {
-      alert(`Failed to update status: ${e?.response?.data?.detail || e.message}`);
+      notify.error(e, { what: 'Update plan status' });
     }
   };
 

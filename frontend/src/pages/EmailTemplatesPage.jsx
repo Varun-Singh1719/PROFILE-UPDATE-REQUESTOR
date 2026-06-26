@@ -17,6 +17,7 @@ import {
   ArrowUp, ArrowDown, ChevronsUpDown,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { confirm as confirmDialog, prompt as promptDialog } from '../lib/dialog';
 
 function fmt(iso) { if (!iso) return "—"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
 
@@ -132,9 +133,8 @@ function RichTextEditor({ value, onChange, testId = "rte" }) {
     document.execCommand(cmd, false, arg);
     if (ref.current) onChange(ref.current.innerHTML);
   };
-  const addLink = () => {
-    // eslint-disable-next-line no-alert
-    const url = window.prompt("Link URL", "https://");
+  const addLink = async () => {
+    const url = await promptDialog({ title: 'Insert link', message: 'Enter the destination URL', defaultValue: 'https://' });
     if (url) exec("createLink", url);
   };
 
@@ -371,7 +371,8 @@ export default function EmailTemplatesPage() {
   const remove = async (tpl) => {
     if (tpl.local) {
       // Resetting a local template (restore defaults) is friendlier than blocking outright.
-      if (!window.confirm(`Reset "${tpl.name}" back to its default content?`)) return;
+      const ok = await confirmDialog({ title: 'Reset template', message: `Reset "${tpl.name}" back to its default content?`, confirmLabel: 'Reset' });
+      if (!ok) return;
       const overrides = loadLocalOverrides();
       delete overrides[tpl.kind];
       saveLocalOverrides(overrides);
@@ -379,7 +380,8 @@ export default function EmailTemplatesPage() {
       load();
       return;
     }
-    if (!window.confirm(`Delete template "${tpl.name}"? This cannot be undone.`)) return;
+    const ok = await confirmDialog({ title: 'Delete template', message: `Delete "${tpl.name}"? This cannot be undone.`, confirmLabel: 'Delete', confirmVariant: 'destructive' });
+    if (!ok) return;
     try {
       await api.delete(`/email-templates/${tpl.id}`);
       notify.success("Deleted");

@@ -10,6 +10,7 @@ import {
 import notify from "../lib/notify";
 import MultiSelect from "../components/MultiSelect";
 import { Plus, Pencil, Users, Trash2, Search, Sparkles, Check } from "lucide-react";
+import { confirm as confirmDialog } from '../lib/dialog';
 import {
   TEAM_PALETTES,
   teamBackground,
@@ -154,7 +155,8 @@ export default function TeamsPage() {
   };
 
   const remove = async (t) => {
-    if (!window.confirm(`Delete team "${t.name}"?`)) return;
+    const ok = await confirmDialog({ title: 'Delete team', message: `Delete team "${t.name}"?`, confirmLabel: 'Delete', confirmVariant: 'destructive' });
+    if (!ok) return;
     try {
       await api.delete(`/teams/${t.id}`);
       notify.success("Team deleted");

@@ -5,6 +5,8 @@
 import React, { useEffect, useState } from 'react';
 import { X, History, RotateCcw, GitCompare, Loader2 } from 'lucide-react';
 import api from '../../lib/api';
+import notify from '../../lib/notify';
+import { confirm as confirmDialog } from '../../lib/dialog';
 
 function fmtDate(iso) {
   if (!iso) return '—';
@@ -44,17 +46,18 @@ export default function VersionHistoryPanel({ planId, liveVersionId, open, onClo
       const res = await api.get(`/floor-plans/${planId}/versions/compare`, { params: { a, b } });
       setCompareResult(res.data);
     } catch (e) {
-      alert(`Compare failed: ${e?.response?.data?.detail || e.message}`);
+      notify.error(e, { what: 'Compare versions' });
     } finally { setComparing(false); }
   };
 
   const doRollback = async (v) => {
-    if (!window.confirm(`Restore version ${v.version_number}? A new published version will be created with these seats.`)) return;
+    const ok = await confirmDialog({ title: 'Restore version', message: `Restore version ${v.version_number}? A new published version will be created with these seats.`, confirmLabel: 'Restore' });
+    if (!ok) return;
     try {
       await api.post(`/floor-plans/${planId}/versions/${v.id}/rollback`, { comments: `Rollback to v${v.version_number}` });
       onRollback?.();
     } catch (e) {
-      alert(`Rollback failed: ${e?.response?.data?.detail || e.message}`);
+      notify.error(e, { what: 'Rollback version' });
     }
   };
 

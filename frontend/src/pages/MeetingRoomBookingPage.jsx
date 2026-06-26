@@ -15,6 +15,7 @@ import { useAuth } from "../context/AuthContext";
 import MRBCalendarView from "../components/MRBCalendarView";
 import TimePickerOrange from "../components/ui/TimePickerOrange";
 import SelectOrange from "../components/ui/SelectOrange";
+import { confirm as confirmDialog } from '../lib/dialog';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
@@ -262,7 +263,8 @@ export default function MeetingRoomBookingPage() {
   }, []);
 
   const handleCancel = async (id) => {
-    if (!window.confirm("Cancel this booking?")) return;
+    const ok = await confirmDialog({ title: 'Cancel booking', message: 'Cancel this booking?', confirmLabel: 'Cancel booking', confirmVariant: 'destructive' });
+    if (!ok) return;
     try {
       await api.delete(`/room-bookings/${id}`);
       await Promise.all([
