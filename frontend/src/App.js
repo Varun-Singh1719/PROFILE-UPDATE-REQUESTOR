@@ -64,6 +64,7 @@ function App() {
     <div className="App">
       <BusyProvider>
         <AuthProvider>
+          <GlobalToaster>
           <BrowserRouter>
             <Routes>
             <Route path="/" element={<HomeRedirect />} />
@@ -121,9 +122,8 @@ function App() {
           </Routes>
           {/* Global, app-wide busy overlay — sits above all routes incl. login */}
           <BusyOverlay />
-          {/* Single global Toaster — bottom-left, orange-on-white theme */}
-          <GlobalToaster />
         </BrowserRouter>
+        </GlobalToaster>
       </AuthProvider>
       </BusyProvider>
     </div>

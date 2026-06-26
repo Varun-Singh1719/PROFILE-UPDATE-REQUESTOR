@@ -10,7 +10,7 @@ import Layout from "../components/Layout";
 import api from "../lib/api";
 import { resolvePdfUrl } from "../lib/pdfUrl";
 import { Button } from "../components/ui/button";
-import { toast } from "sonner";
+import { toast } from "../lib/notify";
 import { useAuth } from "../context/AuthContext";
 import MRBCalendarView from "../components/MRBCalendarView";
 import TimePickerOrange from "../components/ui/TimePickerOrange";

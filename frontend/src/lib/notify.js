@@ -1,15 +1,21 @@
-import { toast } from "sonner";
+import { enqueueSnackbar, closeSnackbar } from "notistack";
 
 /**
- * Centralised toast helpers with structured error formatting and a consistent
- * orange-on-white theme (applied via the global Toaster's toastOptions).
+ * Centralised notification helpers built on notistack's `enqueueSnackbar`.
+ *
+ * Variants and their notistack-default backgrounds (text is white on all):
+ *   success → #43a047 (green)
+ *   error   → #d32f2f (red)
+ *   warning → #ff9800 (orange)
+ *   info    → #2196f3 (blue)
  *
  * Usage:
- *   notify.success("Saved", { description: "Settings applied." })
+ *   notify.success("Saved")
  *   notify.error(err, { what: "Save Permission Set" })
- *   notify.warning("Heads up", { description: "..." })
+ *   notify.warning("Heads up")
  *   notify.info("FYI")
- *   notify.confirm({ title, description, confirmLabel, onConfirm })
+ *
+ * The optional `description` is appended to the title on a second line.
  */
 
 // HTTP status → suggested corrective action.
@@ -62,14 +68,31 @@ function extractError(err) {
   return { message: detailText, hint, status };
 }
 
+/**
+ * Combine title + description into a single string that notistack will render.
+ * notistack v3 supports a `message` that can be a string or a ReactNode; we
+ * keep it as a string with a newline so the snackbar wraps naturally.
+ */
+function composeMessage(title, description) {
+  if (!description) return String(title ?? "");
+  return `${title}\n${description}`;
+}
+
+const baseOptions = {
+  // Allow the snackbar to wrap multi-line text from `composeMessage`.
+  style: { whiteSpace: "pre-line" },
+  preventDuplicate: true,
+};
+
 export const notify = {
   success(message, opts = {}) {
-    return toast.success(message, {
-      description: opts.description,
-      duration: opts.duration ?? 3500,
-      closeButton: opts.closeButton ?? true,
+    return enqueueSnackbar(composeMessage(message, opts.description), {
+      ...baseOptions,
+      variant: "success",
+      autoHideDuration: opts.duration ?? 3500,
     });
   },
+
   error(err, opts = {}) {
     const { message, hint, status } = extractError(err);
     const title = opts.title
@@ -78,32 +101,83 @@ export const notify = {
         ? `Couldn't ${opts.what.replace(/^\w/, (c) => c.toLowerCase())}`
         : "Action failed";
     const description = [message, hint].filter(Boolean).join("\n");
-    // Log to console for developers
+    // Log to console for developers.
     try {
       // eslint-disable-next-line no-console
       console.warn(`[notify.error] (${status ?? "n/a"}) ${title}: ${description}`, err);
     } catch (_) { /* ignore */ }
-    return toast.error(title, {
-      description,
-      duration: opts.duration ?? 6000,
-      closeButton: opts.closeButton ?? true,
+    return enqueueSnackbar(composeMessage(title, description), {
+      ...baseOptions,
+      variant: "error",
+      autoHideDuration: opts.duration ?? 6000,
     });
   },
+
   warning(message, opts = {}) {
-    return toast.warning(message, {
-      description: opts.description,
-      duration: opts.duration ?? 4500,
-      closeButton: opts.closeButton ?? true,
+    return enqueueSnackbar(composeMessage(message, opts.description), {
+      ...baseOptions,
+      variant: "warning",
+      autoHideDuration: opts.duration ?? 4500,
     });
   },
+
   info(message, opts = {}) {
-    return toast(message, {
-      description: opts.description,
-      duration: opts.duration ?? 3500,
-      closeButton: opts.closeButton ?? true,
+    return enqueueSnackbar(composeMessage(message, opts.description), {
+      ...baseOptions,
+      variant: "info",
+      autoHideDuration: opts.duration ?? 3500,
     });
   },
-  dismiss(id) { toast.dismiss(id); },
+
+  dismiss(id) {
+    closeSnackbar(id);
+  },
 };
+
+/**
+ * Sonner-compatible `toast` shim — lets pages that previously did
+ * `import { toast } from "sonner"` simply switch the import path to
+ * `from "../lib/notify"` and keep working. All variants route through
+ * notistack's `enqueueSnackbar` so they pick up the configured variants
+ * (success / error / warning / info) with the correct colour + white text.
+ *
+ * Note: sonner's `toast.error("message")` shows the message as-is; we
+ * therefore route it directly to enqueueSnackbar instead of through
+ * `notify.error` (which wraps Axios errors with a "Couldn't ..." title).
+ */
+function toastFn(message, opts = {}) {
+  return enqueueSnackbar(composeMessage(message, opts?.description), {
+    ...baseOptions,
+    variant: "default",
+    autoHideDuration: opts?.duration ?? 3500,
+  });
+}
+toastFn.success = (message, opts = {}) =>
+  enqueueSnackbar(composeMessage(message, opts?.description), {
+    ...baseOptions,
+    variant: "success",
+    autoHideDuration: opts?.duration ?? 3500,
+  });
+toastFn.error = (message, opts = {}) =>
+  enqueueSnackbar(composeMessage(message, opts?.description), {
+    ...baseOptions,
+    variant: "error",
+    autoHideDuration: opts?.duration ?? 6000,
+  });
+toastFn.warning = (message, opts = {}) =>
+  enqueueSnackbar(composeMessage(message, opts?.description), {
+    ...baseOptions,
+    variant: "warning",
+    autoHideDuration: opts?.duration ?? 4500,
+  });
+toastFn.info = (message, opts = {}) =>
+  enqueueSnackbar(composeMessage(message, opts?.description), {
+    ...baseOptions,
+    variant: "info",
+    autoHideDuration: opts?.duration ?? 3500,
+  });
+toastFn.dismiss = (id) => closeSnackbar(id);
+
+export const toast = toastFn;
 
 export default notify;

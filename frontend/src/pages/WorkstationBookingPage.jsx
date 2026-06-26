@@ -46,7 +46,7 @@ import {
   Armchair, Calendar as CalendarIcon, Loader2, Users, AlertTriangle,
   Repeat, RefreshCw, Trash2, ChevronDown, X, ShieldAlert,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "../lib/notify";
 import Layout from "../components/Layout";
 import api, { formatApiError } from "../lib/api";
 import { Button } from "../components/ui/button";

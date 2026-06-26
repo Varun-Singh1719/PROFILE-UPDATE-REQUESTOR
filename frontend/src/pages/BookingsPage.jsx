@@ -18,7 +18,7 @@ import Layout from "../components/Layout";
 import api from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Checkbox } from "../components/ui/checkbox";
-import { toast } from "sonner";
+import { toast } from "../lib/notify";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 // ---------------------------------------------------------------------------- helpers
