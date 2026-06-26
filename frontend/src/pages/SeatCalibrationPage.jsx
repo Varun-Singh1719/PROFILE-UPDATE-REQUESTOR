@@ -61,7 +61,7 @@ const SeatIcon = ({ size = 10, label, rotation = 0, isSelected = false, isLocked
           position: 'absolute',
           top:  `${WORKSTATION_SEAT_CENTER.y}%`,
           left: `${WORKSTATION_SEAT_CENTER.x}%`,
-          transform: `translate(-50%, -50%) rotate(${-rotation}deg)`,
+          transform: `translate(-50%, -50%)`,
           fontSize: fontSize + 'px',
           fontWeight: 900,
           color: '#000',
@@ -74,7 +74,9 @@ const SeatIcon = ({ size = 10, label, rotation = 0, isSelected = false, isLocked
       {isLocked && (
         <Lock size={Math.max(6, size * 0.4)} style={{ position: 'absolute', top: -size * 0.15, right: -size * 0.15, color: '#475569', background: 'white', borderRadius: '50%', padding: 1 }} />
       )}
-      {isSelected && <div style={{ position: 'absolute', inset: -2, border: '2px solid #00FF00', borderRadius: '4px', pointerEvents: 'none' }} />}
+      {/* Selected state — no bounding-box border. The green chair fill + the
+          green drop-shadow glow on the SVG silhouette are the only visual
+          cues, so the selection follows the chair shape, not its bbox. */}
       {isDup && <div style={{ position: 'absolute', inset: -2, border: '2px dashed #ef4444', borderRadius: '4px', pointerEvents: 'none' }} />}
       {isOverlap && !isDup && <div style={{ position: 'absolute', inset: -2, border: '2px dashed #f59e0b', borderRadius: '4px', pointerEvents: 'none' }} />}
     </div>

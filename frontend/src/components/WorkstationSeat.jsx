@@ -183,7 +183,7 @@ const WorkstationSeat = ({
                 position: 'absolute',
                 top:  `${WORKSTATION_SEAT_CENTER.y}%`,
                 left: `${WORKSTATION_SEAT_CENTER.x}%`,
-                transform: `translate(-50%, -50%) rotate(${-rotation}deg)`,
+                transform: `translate(-50%, -50%)`,
                 fontSize: fontSize + 'px',
                 fontWeight: 900,
                 color: isPending ? '#FFFFFF' : '#000000',
@@ -213,18 +213,10 @@ const WorkstationSeat = ({
             }}
           />
         )}
-        {/* Selected ring */}
-        {isSelected && (
-          <div
-            style={{
-              position: 'absolute',
-              inset: -2,
-              border: '2px solid #22C55E',
-              borderRadius: '4px',
-              pointerEvents: 'none',
-            }}
-          />
-        )}
+        {/* Selected state — visualised purely via the green fill on the chair
+            SVG (status colour) plus the soft drop-shadow glow on the SVG
+            silhouette. No bounding-box rectangle is drawn around the seat
+            so the selection follows the chair shape exactly. */}
       </div>
 
       {/* Hover tooltip — Workstation X + employee/team/date when occupied.
