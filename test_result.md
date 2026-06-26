@@ -525,3 +525,51 @@ old_agent_communication:
           - GET /api/permissions/stats works
        
        NO ISSUES FOUND. All v3 backend functionality working as specified.
+
+
+frontend:
+  - task: "Teams form — remove explainers + fix duplicate auto-assigned colour"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/pages/TeamsPage.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Two changes applied to the Add New Team / Edit Team form in /admin/teams:
+            1) Removed ALL helper/explainer texts that sat below input boxes:
+               - Initials helper ("Initials default to XX from the team name — leave blank to keep auto, or type 1–2 characters to override.")
+               - Members helper ("An employee can belong to only one team. Members already assigned elsewhere appear greyed out.")
+               - Colour helper above grid ("Pick a two-shade gradient for ...")
+               - Colour helper below grid ("60+ two-shade gradients available. A new team auto-picks the next unused shade — you can override before saving. Each colour can belong to only one team.")
+            2) Fixed bug where auto-assigned team colour could be a duplicate of an already-taken palette id (race / stale state). `openCreate` is now async: it refetches GET /api/teams/colors immediately before opening the dialog so `suggestNextPalette` uses the authoritative list of used colours.
+
+            Test plan:
+            - Login as admin@ticketing.com / Admin@123, go to /admin/teams.
+            - Click "Add New Team" → modal opens with title "Add New Team".
+            - VERIFY the form contains NO helper text below any input. Specifically these strings must NOT appear in the modal: "Initials default to", "An employee can belong to only one team", "Pick a two-shade gradient", "two-shade gradients available". (Old strings are gone.)
+            - VERIFY a colour swatch is auto-selected (ring around it, `data-testid` starts with `team-color-tp`) AND that swatch is NOT in the "used" list returned by GET /api/teams/colors. i.e. the auto-assigned palette id must be unique vs the colours currently used by existing teams in the table.
+            - Close modal, reopen — auto-selected palette id may differ but must still be unused.
+            - Bonus: create a brand new team with a unique name (e.g. "QA Auto Team {timestamp}"), submit, confirm 200, then click "Add New Team" again — the newly-used colour should now be locked/greyed in the grid and the auto-assigned colour should NOT equal the just-saved team's colour.
+            - Test creds in /app/memory/test_credentials.md.
+
+metadata:
+  needs_retesting: true
+
+test_plan:
+  current_focus:
+    - "Teams form — remove explainers + fix duplicate auto-assigned colour"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "stuck_first"
+
+agent_communication:
+    - agent: "main"
+      message: |
+        Bug fix in Teams form (/admin/teams → Add New Team).
+        File touched: /app/frontend/src/pages/TeamsPage.jsx only.
+        Please run the focused frontend test described above. Do NOT regress unrelated team flows (edit, delete, search).
+

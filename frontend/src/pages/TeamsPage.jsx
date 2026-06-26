@@ -103,9 +103,19 @@ export default function TeamsPage() {
     });
   }, [teams, search]);
 
-  const openCreate = () => {
+  const openCreate = async () => {
     setEditing(null);
-    setForm({ ...EMPTY_FORM, color: suggestNextPalette(usedColors) });
+    // Always refetch the latest used colours right before opening so we never
+    // auto-assign a palette id that another team has already taken (would
+    // otherwise be a stale-state race when the user opens the form quickly
+    // after another team was created elsewhere).
+    let freshUsed = usedColors;
+    try {
+      const { data } = await api.get("/teams/colors");
+      freshUsed = data?.used || [];
+      setUsedColors(freshUsed);
+    } catch (_) { /* fall back to existing state */ }
+    setForm({ ...EMPTY_FORM, color: suggestNextPalette(freshUsed) });
     setOpen(true);
   };
 
@@ -293,9 +303,6 @@ export default function TeamsPage() {
                   aria-label="Team initials override"
                 />
               </div>
-              <div className="col-span-2 text-[11px] text-gray-500 -mt-2">
-                Initials default to <span className="font-semibold">{teamInitials(form.name)}</span> from the team name — leave blank to keep auto, or type 1–2 characters to override.
-              </div>
             </div>
             <div>
               <Label>Manager(s)</Label>
@@ -316,7 +323,6 @@ export default function TeamsPage() {
                 placeholder="Select team members..."
                 testId="team-members"
               />
-              <div className="text-xs text-gray-500 mt-1">An employee can belong to only one team. Members already assigned elsewhere appear greyed out.</div>
             </div>
             <div>
               <Label className="flex items-center gap-1.5">
@@ -327,12 +333,8 @@ export default function TeamsPage() {
                   </span>
                 )}
               </Label>
-              <div className="text-xs text-gray-500 mt-1 mb-2">
-                Pick a two-shade gradient for <span className="font-semibold">{form.name || "your team"}</span>.
-                Colours already assigned to other teams are locked.
-              </div>
               <div
-                className="grid grid-cols-10 gap-2 max-h-56 overflow-y-auto p-1 -m-1"
+                className="grid grid-cols-10 gap-2 max-h-56 overflow-y-auto p-1 -m-1 mt-2"
                 data-testid="team-color-grid"
               >
                 {TEAM_PALETTES.map((p) => {
@@ -372,9 +374,6 @@ export default function TeamsPage() {
                     </button>
                   );
                 })}
-              </div>
-              <div className="text-[11px] text-gray-500 mt-2">
-                {TEAM_PALETTES.length}+ two-shade gradients available. A new team auto-picks the next unused shade — you can override before saving. Each colour can belong to only one team.
               </div>
             </div>
             <DialogFooter>
