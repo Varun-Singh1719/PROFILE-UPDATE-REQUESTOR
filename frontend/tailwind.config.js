@@ -7,6 +7,13 @@ module.exports = {
   ],
   theme: {
   	extend: {
+  		fontFamily: {
+  			sans: ['Poppins', 'Montserrat', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+  			heading: ['Montserrat', 'Poppins', 'system-ui', 'sans-serif'],
+  			display: ['Montserrat', 'Poppins', 'system-ui', 'sans-serif'],
+  			montserrat: ['Montserrat', 'sans-serif'],
+  			poppins: ['Poppins', 'sans-serif']
+  		},
   		borderRadius: {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
