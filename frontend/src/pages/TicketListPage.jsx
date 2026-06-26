@@ -364,7 +364,7 @@ export default function TicketListPage({
         )}
       </div>
 
-      <div className="mt-6">
+      <div className="mt-6 flex-1 flex flex-col">
         <TicketTable
           tickets={tickets}
           selectable={selectable}
@@ -376,8 +376,8 @@ export default function TicketListPage({
           showView={!isDQ}
           numericIdOnly={isDQ}
         />
-        {/* Pagination footer */}
-        <div className="mt-3 bg-white rounded-xl shadow-soft border border-gray-100">
+        {/* Pagination footer — sticks to viewport bottom when content is short */}
+        <div className="mt-auto pt-3 bg-white rounded-xl shadow-soft border border-gray-100">
           <Pagination
             page={page}
             pageSize={pageSize}

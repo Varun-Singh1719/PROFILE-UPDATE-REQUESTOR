@@ -64,7 +64,7 @@ export default function Layout({
             {children}
           </div>
         ) : (
-          <div className={contentClassName || "max-w-[1400px] mx-auto px-6 py-4"}>
+          <div className={contentClassName || "w-full px-4 pt-4 pb-3 flex flex-col min-h-[calc(100vh-56px)]"}>
             {breadcrumbs && <Breadcrumbs items={breadcrumbs} className="mb-3"/>}
             {children}
           </div>

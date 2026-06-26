@@ -338,7 +338,7 @@ export default function BookingsPage() {
         </>
       }
     >
-      <div className="h-full flex flex-col bg-gray-50">
+      <div className="flex-1 min-h-0 flex flex-col bg-gray-50 -mx-4 -mt-4 -mb-3">
         {/* FILTERS */}
         <div className="bg-white border-b border-gray-200 px-6 py-3" data-testid="bookings-filters">
           <div className="grid grid-cols-12 gap-3">

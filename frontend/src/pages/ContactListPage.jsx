@@ -1011,8 +1011,8 @@ export default function ContactListPage() {
         </Select>
       </div>
 
-      <div className="mt-6 bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
+      <div className="mt-6 flex-1 flex flex-col bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto max-h-[60vh] overflow-y-auto flex-1">
           <table className="w-full text-sm">
             <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200 sticky top-0 z-10">
               <tr>
@@ -1123,7 +1123,7 @@ export default function ContactListPage() {
             </tbody>
           </table>
         </div>
-        {/* Pagination footer */}
+        {/* Pagination footer — sticks to viewport bottom when content is short */}
         <Pagination
           page={page}
           pageSize={pageSize}
@@ -1132,6 +1132,7 @@ export default function ContactListPage() {
           onPageSizeChange={setPageSize}
           label="Employees"
           testIdPrefix="contacts-pg"
+          className="mt-auto"
         />
       </div>
 
