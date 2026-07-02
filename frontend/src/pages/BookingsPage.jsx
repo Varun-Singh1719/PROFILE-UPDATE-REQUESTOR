@@ -11,10 +11,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ClipboardList, Search, RefreshCw, Download, X, Eye, Pencil, Trash2,
-  Calendar, ChevronDown, Loader2, ChevronLeft, ChevronRight, ArrowUp, ArrowDown,
+  Calendar, ChevronDown, Loader2, ArrowUp, ArrowDown,
   AlertCircle, Repeat, ChevronUp,
 } from "lucide-react";
 import Layout from "../components/Layout";
+import Pagination from "../components/Pagination";
 import api from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Checkbox } from "../components/ui/checkbox";
@@ -23,7 +24,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { confirm as confirmDialog } from '../lib/dialog';
 
 // ---------------------------------------------------------------------------- helpers
-const PAGE_SIZE = 25;
 const todayIso = () => {
   const d = new Date(); const p = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
@@ -86,11 +86,11 @@ export default function BookingsPage() {
   const [sort, setSort] = useState("date");
   const [direction, setDirection] = useState("desc");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
 
   // Data
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -153,7 +153,7 @@ export default function BookingsPage() {
   }, []);
 
   const buildParams = useCallback(() => {
-    const p = { page, page_size: PAGE_SIZE, sort, direction, status, type };
+    const p = { page, page_size: pageSize, sort, direction, status, type };
     if (dateFrom) p.date_from = dateFrom;
     if (dateTo) p.date_to = dateTo;
     if (teamId) p.team_id = teamId;
@@ -161,7 +161,7 @@ export default function BookingsPage() {
     if (createdById) p.created_by_id = createdById;
     if (debouncedSearch) p.search = debouncedSearch;
     return p;
-  }, [page, sort, direction, status, type, dateFrom, dateTo, teamId, employeeId, createdById, debouncedSearch]);
+  }, [page, pageSize, sort, direction, status, type, dateFrom, dateTo, teamId, employeeId, createdById, debouncedSearch]);
 
   // Manual refresh button (no effect — caller can mark `refreshing` itself)
   const refreshNow = useCallback(() => {
@@ -170,7 +170,6 @@ export default function BookingsPage() {
       .then(r => {
         setRows(r.data?.items || []);
         setTotal(r.data?.total || 0);
-        setTotalPages(r.data?.total_pages || 0);
       })
       .catch(e => toast.error(e?.response?.data?.detail || "Failed to load bookings"))
       .finally(() => setRefreshing(false));
@@ -185,7 +184,6 @@ export default function BookingsPage() {
         if (cancelled) return;
         setRows(r.data?.items || []);
         setTotal(r.data?.total || 0);
-        setTotalPages(r.data?.total_pages || 0);
         setLoading(false);
       })
       .catch(e => {
@@ -494,23 +492,16 @@ export default function BookingsPage() {
         </div>
 
         {/* PAGINATION */}
-        {!loading && total > 0 && (
-          <div className="bg-white border-t border-gray-200 px-6 py-2 flex items-center justify-between text-xs" data-testid="bookings-pagination">
-            <div className="text-gray-500">
-              Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
-            </div>
-            <div className="flex items-center gap-1">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-                className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                data-testid="bookings-page-prev"
-              ><ChevronLeft size={14}/></button>
-              <span className="px-2 text-gray-700">Page {page} of {totalPages}</span>
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
-                className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                data-testid="bookings-page-next"
-              ><ChevronRight size={14}/></button>
-            </div>
-          </div>
+        {!loading && (
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            label="Bookings"
+            testIdPrefix="bookings-pg"
+          />
         )}
       </div>
 
