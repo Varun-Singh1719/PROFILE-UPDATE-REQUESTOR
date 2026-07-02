@@ -20,7 +20,7 @@
  * and approved requests also appear as bookings in the Bookings module.
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, X, Loader2, Calendar, User, Clock, MapPin, RefreshCw, ShieldAlert, CheckSquare, Square } from "lucide-react";
+import { Check, X, Loader2, Calendar, User, Clock, MapPin, RefreshCw, ShieldAlert, CheckSquare, Square, Settings, Sparkles } from "lucide-react";
 import { toast } from "../lib/notify";
 import Layout from "../components/Layout";
 import api, { formatApiError } from "../lib/api";
@@ -30,6 +30,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from "../components/ui/dialog";
 import WorkstationFloorMap from "../components/WorkstationFloorMap";
+import ApprovalSettingsModal from "../components/ApprovalSettingsModal";
 import { useAuth } from "../context/AuthContext";
 
 // ----- helpers -----
@@ -84,6 +85,35 @@ export default function PendingApprovalsPage() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkAction, setBulkAction] = useState(null); // 'approve' | 'decline' | null
   const [bulkProcessing, setBulkProcessing] = useState(false);
+
+  // ----- Auto-Approval settings -----
+  const [approvalSettings, setApprovalSettings] = useState(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [togglingAuto, setTogglingAuto] = useState(false);
+
+  const loadApprovalSettings = useCallback(async () => {
+    try {
+      const { data } = await api.get("/approval-settings");
+      setApprovalSettings(data);
+    } catch (e) {
+      // Not fatal — page still works, just no toggle state.
+    }
+  }, []);
+  useEffect(() => { loadApprovalSettings(); }, [loadApprovalSettings]);
+
+  const toggleAutoApproval = async (next) => {
+    if (!canApprove) return;
+    setTogglingAuto(true);
+    try {
+      const { data } = await api.put("/approval-settings", { enabled: next });
+      setApprovalSettings(data);
+      toast.success(`Auto Approval turned ${next ? "ON" : "OFF"}`);
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail) || "Could not update setting");
+    } finally {
+      setTogglingAuto(false);
+    }
+  };
 
   // ----- initial load -----
   const loadPlans = useCallback(async () => {
@@ -319,11 +349,51 @@ export default function PendingApprovalsPage() {
       }
     >
       <div className="flex flex-col h-[calc(100vh-4rem)] min-h-[560px]">
-        {/* Header */}
-        <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center">
+        {/* Header — pending count + Auto-Approval toggle + settings */}
+        <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 flex-wrap" data-testid="pa-header">
           <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
             {pendingCount} pending
           </span>
+
+          {/* Auto Approval toggle */}
+          <div className="ml-auto flex items-center gap-2">
+            <div className="inline-flex items-center gap-2 h-9 px-3 rounded-md border border-gray-200 bg-white">
+              <Sparkles size={14} className="text-[#ec9324]" />
+              <span className="text-xs font-medium text-gray-700">Auto Approval</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={!!approvalSettings?.enabled}
+                aria-label="Toggle Auto Approval"
+                disabled={!canApprove || togglingAuto || !approvalSettings}
+                onClick={() => toggleAutoApproval(!approvalSettings?.enabled)}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#ec9324] focus:ring-offset-1 disabled:opacity-50 ${
+                  approvalSettings?.enabled ? "bg-[#ec9324]" : "bg-gray-300"
+                }`}
+                data-testid="auto-approval-toggle"
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    approvalSettings?.enabled ? "translate-x-4" : "translate-x-0.5"
+                  }`}
+                />
+              </button>
+              <span className={`text-[10px] font-semibold ${approvalSettings?.enabled ? "text-[#ec9324]" : "text-gray-400"}`}>
+                {approvalSettings?.enabled ? "ON" : "OFF"}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              disabled={!canApprove}
+              className="h-9 w-9 inline-flex items-center justify-center rounded-md border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50"
+              title={canApprove ? "Approval settings" : "Only Super Admin can configure"}
+              aria-label="Approval settings"
+              data-testid="approval-settings-btn"
+            >
+              <Settings size={16} />
+            </button>
+          </div>
         </div>
 
         {!canApprove && (
@@ -557,6 +627,14 @@ export default function PendingApprovalsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Approval Settings modal */}
+      <ApprovalSettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        initial={approvalSettings}
+        onSaved={(fresh) => setApprovalSettings(fresh)}
+      />
     </Layout>
   );
 }

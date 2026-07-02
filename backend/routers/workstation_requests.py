@@ -118,6 +118,70 @@ def _actor(user: dict) -> dict:
     return {"id": user.get("id"), "email": user.get("email"), "name": user.get("name")}
 
 
+async def _auto_approve_request(request_id: str, actor: dict) -> Optional[dict]:
+    """Server-side approval used by the auto-approval flow.
+
+    Mirrors `approve_workstation_request` but is callable without going through
+    the FastAPI dependency stack (so it can run inside `create_workstation_request`).
+    Returns `{ "request": <fresh>, "booking": <booking> }` on success or None
+    if the seat is no longer available (caller should log & leave request pending).
+    """
+    req = await db.workstation_requests.find_one({"id": request_id}, {"_id": 0})
+    if not req or req.get("status") != STATUS_PENDING:
+        return None
+    # Re-check seat availability (could have been booked in the interim).
+    seat_clash = await db.workstation_bookings.find_one(
+        {"plan_id": req["plan_id"], "seat_id": req["seat_id"],
+         "date": req["date"], "cancelled": False},
+        {"_id": 0, "seat_label": 1},
+    )
+    if seat_clash:
+        return None
+    from routers.workstation_bookings import _next_seq as _booking_seq
+    now = now_iso()
+    booking = {
+        "id": str(uuid.uuid4()),
+        "seq_no": await _booking_seq(),
+        "plan_id": req["plan_id"],
+        "plan_name": req.get("plan_name"),
+        "seat_id": req["seat_id"],
+        "seat_label": req.get("seat_label"),
+        "date": req["date"],
+        "employee": req.get("employee"),
+        "team_id": req.get("team_id"),
+        "team_name": req.get("team_name"),
+        "team_color": req.get("team_color"),
+        "recurring": None,
+        "series_id": None,
+        "cancelled": False,
+        "created_at": now,
+        "updated_at": now,
+        "created_by": {**actor, "auto_approved": True},
+        "from_request_id": req["id"],
+    }
+    await db.workstation_bookings.insert_one(booking)
+    booking.pop("_id", None)
+    await db.workstation_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "status": STATUS_APPROVED,
+            "decided_by": {**actor, "auto_approved": True},
+            "decided_on": now,
+            "approved_booking_id": booking["id"],
+            "updated_at": now,
+        }},
+    )
+    await log_audit(
+        actor=actor, action="workstation_request.auto_approve",
+        resource="workstation_request", resource_id=request_id,
+        detail=f"Auto-approved request #{req.get('seq_no')} → booking #{booking.get('seq_no')}",
+        metadata={"booking_id": booking["id"], "seat_label": req.get("seat_label"),
+                  "date": req["date"], "auto": True},
+    )
+    fresh = await db.workstation_requests.find_one({"id": request_id}, {"_id": 0})
+    return {"request": fresh, "booking": booking}
+
+
 def _parse_date(s: str, field: str = "date") -> date_cls:
     try:
         return date_cls.fromisoformat(s)
@@ -484,7 +548,32 @@ async def create_workstation_request(
                   "team_id": (team or {}).get("id") if team else None},
     )
 
-    return {"ok": True, "created": len(inserted), "group_id": group_id, "requests": inserted}
+    # ---- Auto-approval (phase 1: workstation only, single-day, non-recurring)
+    # If the current settings match this submitter, immediately approve every
+    # freshly-created request and return the resulting bookings alongside the
+    # requests. Failures are non-fatal — the request stays in Pending Approval.
+    auto_approved: List[dict] = []
+    try:
+        from routers.approval_settings import should_auto_approve_workstation
+        if await should_auto_approve_workstation(actor, is_recurring=False):
+            for req in inserted:
+                try:
+                    result = await _auto_approve_request(req["id"], actor)
+                    if result and result.get("booking"):
+                        auto_approved.append(result["booking"])
+                except Exception:
+                    # Best-effort; leave the request Pending for manual review.
+                    pass
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "created": len(inserted),
+        "group_id": group_id,
+        "requests": inserted,
+        "auto_approved": auto_approved,
+    }
 
 
 @api_router.post("/workstation-requests/{request_id}/approve")
