@@ -3,7 +3,7 @@ import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import api, { formatApiError } from "../lib/api";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
-import { Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Loader2, CheckCircle2, AlertTriangle, Eye, EyeOff } from "lucide-react";
 import notify from "../lib/notify";
 
 export default function ResetPasswordPage() {
@@ -12,6 +12,8 @@ export default function ResetPasswordPage() {
   const token = useMemo(() => params.get("token") || "", [params]);
   const [pwd, setPwd] = useState("");
   const [pwd2, setPwd2] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
+  const [showPwd2, setShowPwd2] = useState(false);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
@@ -46,10 +48,34 @@ export default function ResetPasswordPage() {
               </div>
             )}
             <form onSubmit={submit} className="space-y-4 mt-6">
-              <Input type="password" required value={pwd} onChange={(e) => setPwd(e.target.value)}
-                placeholder="New password" data-testid="reset-pwd-input" className="h-11"/>
-              <Input type="password" required value={pwd2} onChange={(e) => setPwd2(e.target.value)}
-                placeholder="Confirm new password" data-testid="reset-pwd2-input" className="h-11"/>
+              <div className="relative">
+                <Input type={showPwd ? "text" : "password"} required value={pwd} onChange={(e) => setPwd(e.target.value)}
+                  placeholder="New password" data-testid="reset-pwd-input" className="h-11 pr-10"/>
+                <button
+                  type="button"
+                  onClick={() => setShowPwd((v) => !v)}
+                  tabIndex={-1}
+                  aria-label={showPwd ? "Hide password" : "Show password"}
+                  data-testid="reset-pwd-toggle"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 focus:outline-none"
+                >
+                  {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              <div className="relative">
+                <Input type={showPwd2 ? "text" : "password"} required value={pwd2} onChange={(e) => setPwd2(e.target.value)}
+                  placeholder="Confirm new password" data-testid="reset-pwd2-input" className="h-11 pr-10"/>
+                <button
+                  type="button"
+                  onClick={() => setShowPwd2((v) => !v)}
+                  tabIndex={-1}
+                  aria-label={showPwd2 ? "Hide password" : "Show password"}
+                  data-testid="reset-pwd2-toggle"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 focus:outline-none"
+                >
+                  {showPwd2 ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
               {error && <div className="text-sm text-red-600" data-testid="reset-error">{error}</div>}
               <Button type="submit" disabled={loading || !token} data-testid="reset-submit-btn"
                 className="w-full h-11 bg-[#ec9324] hover:bg-[#d4811f] text-white">

@@ -6,13 +6,14 @@ import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { formatApiError } from "../lib/api";
-import { Loader2 } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -102,10 +103,22 @@ export default function LoginPage() {
                 data-testid="login-email-input" className="h-11" />
             </div>
             <div>
-              <Input id="password" type="password" required value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password: ••••••••"
-                data-testid="login-password-input" className="h-11" />
+              <div className="relative">
+                <Input id="password" type={showPassword ? "text" : "password"} required value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Password: ••••••••"
+                  data-testid="login-password-input" className="h-11 pr-10" />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  tabIndex={-1}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  data-testid="login-password-toggle"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 focus:outline-none"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
             {error && <div className="text-sm text-red-600 text-center" data-testid="login-error">{error}</div>}
             <Button type="submit" disabled={loading} data-testid="login-submit-btn"
