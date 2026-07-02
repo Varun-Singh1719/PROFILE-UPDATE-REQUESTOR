@@ -25,9 +25,9 @@ const RESOURCES = [
   { key: "meeting_room", label: "Meeting Room",  enforced: false },
 ];
 const CRITERIA = [
-  { key: "team_member", label: "Team Member Request", desc: "Requests submitted directly by team members." },
-  { key: "manager",     label: "Manager Request",     desc: "Requests submitted by managers on behalf of themselves or their teams." },
-  { key: "recurring",   label: "Recurring Request",   desc: "Recurring bookings when the requester picks Recurring during booking." },
+  { key: "team_member", label: "Team Member Request" },
+  { key: "manager",     label: "Manager Request" },
+  { key: "recurring",   label: "Recurring Request" },
 ];
 
 const EMPTY_MATRIX = RESOURCES.reduce(
@@ -192,7 +192,6 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
                   <tr key={c.key} className={ci % 2 ? "bg-white" : "bg-gray-50/40"}>
                     <td className="px-3 py-3">
                       <div className="font-medium text-gray-900 text-sm">{c.label}</div>
-                      <div className="text-[11px] text-gray-500 mt-0.5 leading-snug">{c.desc}</div>
                     </td>
                     {RESOURCES.map((r) => (
                       <td key={r.key} className="text-center px-3 py-3 align-middle">
