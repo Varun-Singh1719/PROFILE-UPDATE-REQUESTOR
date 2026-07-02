@@ -26,6 +26,15 @@ import {
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
+// ---------------------------------------------------------------- Bay list
+// Ordered list of bay prefixes shown in the calibration side-tool "Bay" picker.
+// Extends past the single-letter A–Z range into double-letter AA–AI so
+// large floors can address up to 35 bays.
+const BAY_LIST = [
+  ...Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)),        // A..Z
+  ...Array.from({ length: 9 },  (_, i) => 'A' + String.fromCharCode(65 + i)),  // AA..AI
+];
+
 // ---------------------------------------------------------------- Seat icon
 // Top-down office-chair silhouette (Option 2) rendered inline so we can use
 // a true black stroke around a white fill — required so unmapped /
@@ -1260,11 +1269,11 @@ export default function SeatCalibrationPage() {
           <div className="mb-3 p-2 bg-gray-50 border border-gray-200 rounded">
             <div className="text-[10px] font-semibold mb-1.5 text-gray-700">BAY {isBayLocked(currentBay) && <Lock size={10} className="inline"/>}</div>
             <div className="flex items-center gap-1 mb-1">
-              <button onClick={() => setCurrentBay(String.fromCharCode(Math.max(65, currentBay.charCodeAt(0) - 1)))} className="p-1 bg-white border border-gray-200 rounded hover:border-[#ec9324]"><ChevronLeft size={12}/></button>
+              <button onClick={() => { const idx = BAY_LIST.indexOf(currentBay); setCurrentBay(BAY_LIST[Math.max(0, idx - 1)] || BAY_LIST[0]); }} className="p-1 bg-white border border-gray-200 rounded hover:border-[#ec9324]"><ChevronLeft size={12}/></button>
               <select value={currentBay} onChange={(e) => setCurrentBay(e.target.value)} className="flex-1 px-1.5 py-1 border border-gray-200 rounded text-xs font-bold bg-white focus:outline-none focus:border-[#ec9324]" data-testid="bay-select">
-                {Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)).map(l => <option key={l} value={l}>Bay {l}</option>)}
+                {BAY_LIST.map(l => <option key={l} value={l}>Bay {l}</option>)}
               </select>
-              <button onClick={() => setCurrentBay(String.fromCharCode(Math.min(90, currentBay.charCodeAt(0) + 1)))} className="p-1 bg-white border border-gray-200 rounded hover:border-[#ec9324]"><ChevronRight size={12}/></button>
+              <button onClick={() => { const idx = BAY_LIST.indexOf(currentBay); setCurrentBay(BAY_LIST[Math.min(BAY_LIST.length - 1, idx + 1)] || BAY_LIST[BAY_LIST.length - 1]); }} className="p-1 bg-white border border-gray-200 rounded hover:border-[#ec9324]"><ChevronRight size={12}/></button>
             </div>
             <div className="flex justify-between items-center text-[10px] text-gray-600">
               <span>{currentBaySeats.length} seat(s)</span>
