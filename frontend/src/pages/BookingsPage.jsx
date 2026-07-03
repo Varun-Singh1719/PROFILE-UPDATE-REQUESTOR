@@ -629,7 +629,9 @@ function BookingRow({ booking: b, selected, onToggle, onView, onEdit, onCancel }
       <td className="px-3 py-2 text-gray-800 max-w-[160px] truncate" title={b.organizer?.name}>{b.organizer?.name || "—"}</td>
       <td className="px-3 py-2 text-gray-600">{b.organizer_team_name || "—"}</td>
       <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{fmtDate(b.start_at)}</td>
-      <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{fmtTimeRange(b.start_at, b.end_at)}</td>
+      <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
+        {(b.type === "Workstation" || b.type === "workstation") ? "9:30 am – 6:30 pm" : fmtTimeRange(b.start_at, b.end_at)}
+      </td>
       <td className="px-3 py-2">
         {b.recurring ? (
           <span className="relative group inline-flex items-center gap-1 text-emerald-700 font-semibold">
@@ -794,17 +796,24 @@ function BookingDetailsDrawer({ booking: b, editing, onStartEdit, onExitEdit, on
         <header className="relative bg-gradient-to-br from-[#ec9324] to-[#d4811f] text-white px-6 pt-5 pb-6">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-3">
                 <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded ${typePill.bg} ring-1 ${typePill.ring}`}>
                   {typePill.text}
                 </span>
                 <StatusBadge status={b.status}/>
               </div>
-              <div className="font-mono text-xs opacity-90">#{b.seq_no}</div>
-              <h2 className="text-lg font-bold truncate mt-0.5" title={b.title}>{b.title}</h2>
+              <h2 className="text-lg font-bold truncate" title={b.title}>{b.title}</h2>
               <div className="text-xs opacity-90 mt-0.5 truncate">{b.room_name}{b.plan_name ? ` · ${b.plan_name}` : ""}</div>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex flex-col items-end gap-2 shrink-0">
+              <button
+                onClick={onClose}
+                className="p-1.5 rounded-md hover:bg-white/20 transition-colors"
+                data-testid="bookings-drawer-close"
+                aria-label="Close"
+              >
+                <X size={16}/>
+              </button>
               {!editing && !isCancelled && (
                 <button
                   onClick={onStartEdit}
@@ -815,14 +824,6 @@ function BookingDetailsDrawer({ booking: b, editing, onStartEdit, onExitEdit, on
                   <Pencil size={13}/> Edit
                 </button>
               )}
-              <button
-                onClick={onClose}
-                className="p-1.5 rounded-md hover:bg-white/20 transition-colors"
-                data-testid="bookings-drawer-close"
-                aria-label="Close"
-              >
-                <X size={16}/>
-              </button>
             </div>
           </div>
         </header>
