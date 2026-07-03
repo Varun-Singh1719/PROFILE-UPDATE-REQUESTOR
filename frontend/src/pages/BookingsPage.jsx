@@ -110,6 +110,7 @@ export default function BookingsPage() {
 
   // Drawer
   const [drawerBooking, setDrawerBooking] = useState(null);
+  const [drawerEditing, setDrawerEditing] = useState(false);
 
   // Deep-link: ?bookingId=<id|seq_no> opens the detail drawer once the data loads.
   // Used by Workstation Booking floor map when an occupied seat is clicked.
@@ -238,11 +239,11 @@ export default function BookingsPage() {
   const clearSelection = () => setSelected(new Set());
 
   // ---- Actions ---------------------------------------------------------------
-  const onView = (b) => setDrawerBooking(b);
+  const onView = (b) => { setDrawerBooking(b); setDrawerEditing(false); };
   const onEdit = (b) => {
-    // Route to Meeting Room Booking page with the booking id pre-loaded for reschedule.
-    // We pass via query param; the MRB page can read it on mount (future enhancement).
-    navigate(`/workspace-manager/meeting-room-booking?reschedule=${b.id}`);
+    // Open the row in the side-drawer in edit mode. Do NOT navigate away.
+    setDrawerBooking(b);
+    setDrawerEditing(true);
   };
   const onCancel = async (b) => {
     if (b.status === "Cancelled") { toast.info("Already cancelled"); return; }
@@ -383,7 +384,7 @@ export default function BookingsPage() {
         </>
       }
     >
-      <div className="flex-1 min-h-0 flex flex-col bg-gray-50 -mx-4 -mt-4 -mb-3">
+      <div className="h-[calc(100vh-3.5rem)] flex flex-col bg-gray-50 -mx-4 -mt-4 -mb-3 overflow-hidden">
         {/* FILTERS — single row, sticky */}
         <div className="bg-white border-b border-gray-200 px-6 py-3 sticky top-0 z-20" data-testid="bookings-filters">
           <div className="flex flex-wrap items-center gap-2">
@@ -445,12 +446,13 @@ export default function BookingsPage() {
             />
             {/* Employee */}
             <MultiSelectFilter
-              label="Employee"
+              label="Employee Name"
               value={employeeId}
               onChange={onFilterChange(setEmployeeId)}
               options={(filterOptions.employees || []).map(e => ({
                 value: e.id,
-                label: e.name + (e.emp_id ? ` (${e.emp_id})` : ""),
+                label: e.name,
+                meta: e.emp_id || "",
               }))}
               testIdPrefix="bookings-employee-filter"
               className="w-52"
@@ -470,7 +472,7 @@ export default function BookingsPage() {
               onClick={resetFilters}
               className="ml-auto text-[11px] text-gray-500 hover:text-[#ec9324] underline"
               data-testid="bookings-reset-filters"
-            >Reset</button>
+            >Clear All</button>
             {refreshing && <Loader2 size={14} className="animate-spin text-gray-400"/>}
           </div>
         </div>
@@ -511,9 +513,9 @@ export default function BookingsPage() {
                   <ThSort label="Booking ID" field="seq_no" currentSort={sort} currentDir={direction} onSort={onSort}/>
                   <th className="px-3 py-2">Type</th>
                   <ThSort label="Seat / Room" field="room_name" currentSort={sort} currentDir={direction} onSort={onSort}/>
-                  <ThSort label="Employee" field="organizer" currentSort={sort} currentDir={direction} onSort={onSort}/>
+                  <ThSort label="Employee Name" field="organizer" currentSort={sort} currentDir={direction} onSort={onSort}/>
                   <th className="px-3 py-2">Team</th>
-                  <ThSort label="Date" field="date" currentSort={sort} currentDir={direction} onSort={onSort}/>
+                  <ThSort label="Booked For Date" field="date" currentSort={sort} currentDir={direction} onSort={onSort}/>
                   <th className="px-3 py-2">Time</th>
                   <th className="px-3 py-2">Recurring</th>
                   <ThSort label="Status" field="status" currentSort={sort} currentDir={direction} onSort={onSort}/>
@@ -555,7 +557,20 @@ export default function BookingsPage() {
 
       {/* RIGHT DRAWER */}
       {drawerBooking && (
-        <BookingDetailsDrawer booking={drawerBooking} onClose={() => setDrawerBooking(null)} onEdit={() => { setDrawerBooking(null); onEdit(drawerBooking); }} onCancel={() => { onCancel(drawerBooking); setDrawerBooking(null); }} />
+        <BookingDetailsDrawer
+          booking={drawerBooking}
+          editing={drawerEditing}
+          onStartEdit={() => setDrawerEditing(true)}
+          onExitEdit={() => setDrawerEditing(false)}
+          onClose={() => { setDrawerBooking(null); setDrawerEditing(false); }}
+          onCancel={() => { onCancel(drawerBooking); setDrawerBooking(null); setDrawerEditing(false); }}
+          onSaved={(fresh) => {
+            setDrawerBooking(fresh || drawerBooking);
+            setDrawerEditing(false);
+            refreshNow();
+          }}
+          employees={filterOptions.employees || []}
+        />
       )}
 
       {/* BULK CANCEL CONFIRM */}
@@ -689,82 +704,305 @@ function EmptyState() {
 }
 
 // ----------------------------------------------------------------- Drawer
-function BookingDetailsDrawer({ booking: b, onClose, onEdit, onCancel }) {
+function BookingDetailsDrawer({ booking: b, editing, onStartEdit, onExitEdit, onClose, onCancel, onSaved, employees = [] }) {
   const isCancelled = b.status === "Cancelled";
+  const isWorkstation = (b.type === "Workstation" || b.type === "workstation");
+
+  // ---- Edit state (initialized every time we enter edit mode) --------------
+  // Workstation editable fields: date, employee_id
+  // Meeting-room editable fields: title, date, start_time, end_time
+  const initialDraft = React.useMemo(() => {
+    if (isWorkstation) {
+      return {
+        date: b.date || (b.start_at || "").slice(0, 10),
+        employee_id: b.organizer?.id || "",
+      };
+    }
+    // Meeting Room: split ISO into date + hh:mm parts (local browser tz)
+    const isoToLocalParts = (iso) => {
+      if (!iso) return { date: "", time: "" };
+      const d = new Date(iso);
+      const p = (n) => String(n).padStart(2, "0");
+      return {
+        date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
+        time: `${p(d.getHours())}:${p(d.getMinutes())}`,
+      };
+    };
+    const s = isoToLocalParts(b.start_at);
+    const e = isoToLocalParts(b.end_at);
+    return {
+      title: b.title || "",
+      date: s.date,
+      start_time: s.time,
+      end_time: e.time,
+    };
+  }, [b, isWorkstation]);
+
+  const [draft, setDraft] = React.useState(initialDraft);
+  const [saving, setSaving] = React.useState(false);
+  React.useEffect(() => { setDraft(initialDraft); }, [initialDraft, editing]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      if (isWorkstation) {
+        const payload = { date: draft.date, employee_id: draft.employee_id };
+        const r = await api.patch(`/workstation-bookings/${b.id}`, payload);
+        toast.success("Booking updated");
+        onSaved?.(null); // let parent refresh; single-row detail refetch not implemented
+      } else {
+        // Combine date + time into ISO with browser tz offset
+        const combine = (d, t) => {
+          if (!d || !t) return null;
+          const [yy, mm, dd] = d.split("-").map(Number);
+          const [hh, mi] = t.split(":").map(Number);
+          const dt = new Date(yy, mm - 1, dd, hh, mi, 0, 0);
+          return dt.toISOString();
+        };
+        const payload = {
+          title: draft.title || undefined,
+          start_at: combine(draft.date, draft.start_time) || undefined,
+          end_at: combine(draft.date, draft.end_time) || undefined,
+        };
+        await api.patch(`/room-bookings/${b.id}`, payload);
+        toast.success("Booking updated");
+        onSaved?.(null);
+      }
+    } catch (e) {
+      const detail = e?.response?.data?.detail;
+      const msg = typeof detail === "string" ? detail : (detail?.message || "Update failed");
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const typePill = isWorkstation
+    ? { bg: "bg-white/20", text: "Workstation", ring: "ring-white/30" }
+    : { bg: "bg-white/20", text: "Meeting Room", ring: "ring-white/30" };
+
+  const activeEmployees = employees.filter((e) => (e.status || "Active") === "Active");
+
   return (
     <>
-      <div className="fixed inset-0 bg-black/30 z-40 animate-in fade-in duration-200" onClick={onClose} data-testid="bookings-drawer-backdrop"/>
+      <div className="fixed inset-0 bg-black/40 z-40 animate-in fade-in duration-200" onClick={onClose} data-testid="bookings-drawer-backdrop"/>
       <aside
-        className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-white shadow-xl z-50 flex flex-col animate-in slide-in-from-right duration-300"
+        className="fixed right-0 top-0 bottom-0 w-full max-w-lg bg-white shadow-2xl z-50 flex flex-col animate-in slide-in-from-right duration-300"
         data-testid="bookings-drawer"
       >
-        <header className="border-b border-gray-200 px-5 py-3 flex items-center justify-between">
-          <div className="min-w-0">
-            <div className="text-[10px] uppercase tracking-wide text-gray-500 font-bold">Booking</div>
-            <h2 className="text-base font-bold text-gray-900 truncate">#{b.seq_no} · {b.title}</h2>
+        {/* ============ HEADER (gradient) ================================== */}
+        <header className="relative bg-gradient-to-br from-[#ec9324] to-[#d4811f] text-white px-6 pt-5 pb-6">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded ${typePill.bg} ring-1 ${typePill.ring}`}>
+                  {typePill.text}
+                </span>
+                <StatusBadge status={b.status}/>
+              </div>
+              <div className="font-mono text-xs opacity-90">#{b.seq_no}</div>
+              <h2 className="text-lg font-bold truncate mt-0.5" title={b.title}>{b.title}</h2>
+              <div className="text-xs opacity-90 mt-0.5 truncate">{b.room_name}{b.plan_name ? ` · ${b.plan_name}` : ""}</div>
+            </div>
+            <div className="flex items-center gap-1">
+              {!editing && !isCancelled && (
+                <button
+                  onClick={onStartEdit}
+                  data-testid="bookings-drawer-edit"
+                  className="inline-flex items-center gap-1 px-2.5 h-8 rounded-md bg-white/20 hover:bg-white/30 text-xs font-semibold transition-colors"
+                  aria-label="Edit booking"
+                >
+                  <Pencil size={13}/> Edit
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="p-1.5 rounded-md hover:bg-white/20 transition-colors"
+                data-testid="bookings-drawer-close"
+                aria-label="Close"
+              >
+                <X size={16}/>
+              </button>
+            </div>
           </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100" data-testid="bookings-drawer-close">
-            <X size={16}/>
-          </button>
         </header>
-        <div className="flex-1 overflow-y-auto p-5 space-y-5 text-xs">
-          <DrawerSection title="Booking Information">
-            <DrawerRow label="Booking ID" value={`#${b.seq_no}`}/>
-            <DrawerRow label="Type" value={<span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded font-semibold">{b.type}</span>}/>
-            <DrawerRow label="Status" value={<StatusBadge status={b.status}/>}/>
-            <DrawerRow label="Booked By" value={b.created_by?.name || "—"}/>
-            <DrawerRow label="Booked On" value={fmtDateTime(b.created_at)}/>
-          </DrawerSection>
 
-          <DrawerSection title="Resource Information">
-            <DrawerRow label="Room Name" value={b.room_name}/>
-            <DrawerRow label="Capacity" value={`${b.room_capacity || "—"} people`}/>
-            <DrawerRow label="Floor / Plan" value={b.plan_name || "—"}/>
-          </DrawerSection>
+        {/* ============ BODY ============================================== */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 text-sm bg-gray-50">
+          {/* Card: Booking Information */}
+          <ModernCard title="Booking Information">
+            <ModernRow label="Booking ID" value={<span className="font-mono">#{b.seq_no}</span>}/>
+            <ModernRow label="Type" value={b.type}/>
+            <ModernRow label="Status" value={<StatusBadge status={b.status}/>}/>
+            <ModernRow label="Booked By" value={b.created_by?.name || "—"}/>
+            <ModernRow label="Booked On" value={fmtDateTime(b.created_at)}/>
+          </ModernCard>
 
-          <DrawerSection title="Meeting Details">
-            <DrawerRow label="Title" value={b.title}/>
-            <DrawerRow label="Organizer" value={`${b.organizer?.name || "—"}${b.organizer?.email ? ` · ${b.organizer.email}` : ""}`}/>
-            <DrawerRow label="Team" value={b.organizer_team_name || "—"}/>
-            <DrawerRow label="Date" value={fmtDate(b.start_at)}/>
-            <DrawerRow label="Time" value={fmtTimeRange(b.start_at, b.end_at)}/>
-            {b.recurring && (
-              <DrawerRow label="Recurring" value={
-                <div className="text-emerald-700">
-                  <div className="font-semibold capitalize">{b.recurring.frequency}</div>
-                  <div className="text-[10px] text-gray-500">Until {b.recurring.end_date}{b.recurring.days?.length ? ` · ${b.recurring.days.join(",")}` : ""}</div>
-                </div>
-              }/>
+          {/* Card: Resource */}
+          <ModernCard title={isWorkstation ? "Workstation" : "Meeting Room"}>
+            <ModernRow label="Name" value={b.room_name}/>
+            {!isWorkstation && <ModernRow label="Capacity" value={`${b.room_capacity || "—"} people`}/>}
+            <ModernRow label="Floor / Plan" value={b.plan_name || "—"}/>
+          </ModernCard>
+
+          {/* Card: Schedule */}
+          <ModernCard title="Schedule">
+            {editing ? (
+              <div className="space-y-3">
+                {!isWorkstation && (
+                  <EditField label="Title">
+                    <input
+                      type="text"
+                      value={draft.title}
+                      onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+                      data-testid="drawer-edit-title"
+                      className="w-full h-9 px-3 text-sm rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40"
+                    />
+                  </EditField>
+                )}
+                <EditField label="Booked For Date">
+                  <input
+                    type="date"
+                    value={draft.date}
+                    onChange={(e) => setDraft({ ...draft, date: e.target.value })}
+                    data-testid="drawer-edit-date"
+                    className="w-full h-9 px-3 text-sm rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40"
+                  />
+                </EditField>
+                {!isWorkstation && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <EditField label="Start Time">
+                      <input
+                        type="time"
+                        value={draft.start_time}
+                        onChange={(e) => setDraft({ ...draft, start_time: e.target.value })}
+                        data-testid="drawer-edit-start"
+                        className="w-full h-9 px-3 text-sm rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40"
+                      />
+                    </EditField>
+                    <EditField label="End Time">
+                      <input
+                        type="time"
+                        value={draft.end_time}
+                        onChange={(e) => setDraft({ ...draft, end_time: e.target.value })}
+                        data-testid="drawer-edit-end"
+                        className="w-full h-9 px-3 text-sm rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40"
+                      />
+                    </EditField>
+                  </div>
+                )}
+                {isWorkstation && (
+                  <EditField label="Employee">
+                    <select
+                      value={draft.employee_id}
+                      onChange={(e) => setDraft({ ...draft, employee_id: e.target.value })}
+                      data-testid="drawer-edit-employee"
+                      className="w-full h-9 px-2 text-sm rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40 bg-white"
+                    >
+                      {activeEmployees.length === 0 && <option value="">— No employees available —</option>}
+                      {activeEmployees.map((e) => (
+                        <option key={e.id} value={e.id}>{e.name}{e.emp_id ? ` · ${e.emp_id}` : ""}</option>
+                      ))}
+                    </select>
+                  </EditField>
+                )}
+              </div>
+            ) : (
+              <>
+                <ModernRow label="Booked For Date" value={fmtDate(b.start_at)}/>
+                {!isWorkstation && <ModernRow label="Time" value={fmtTimeRange(b.start_at, b.end_at)}/>}
+                {b.recurring && (
+                  <ModernRow label="Recurring" value={
+                    <div className="text-emerald-700">
+                      <div className="font-semibold capitalize">{b.recurring.frequency}</div>
+                      <div className="text-[11px] text-gray-500">Until {b.recurring.end_date}{b.recurring.days?.length ? ` · ${b.recurring.days.join(",")}` : ""}</div>
+                    </div>
+                  }/>
+                )}
+              </>
             )}
-          </DrawerSection>
+          </ModernCard>
+
+          {/* Card: Employee / Organizer */}
+          <ModernCard title={isWorkstation ? "Employee" : "Organizer"}>
+            <ModernRow label="Name" value={b.organizer?.name || "—"}/>
+            {b.organizer?.email && <ModernRow label="Email" value={b.organizer.email}/>}
+            <ModernRow label="Team" value={b.organizer_team_name || "—"}/>
+          </ModernCard>
 
           {(b.attendees && b.attendees.length > 0) && (
-            <DrawerSection title={`Attendees (${b.attendees.length})`}>
-              <div className="space-y-1">
+            <ModernCard title={`Attendees (${b.attendees.length})`}>
+              <div className="space-y-1.5">
                 {b.attendees.map((a, i) => (
-                  <div key={i} className="flex items-center justify-between border border-gray-100 rounded px-2 py-1">
-                    <div>
-                      <div className="text-gray-800 font-medium">{a.name || a.email || "—"}</div>
-                      {a.email && <div className="text-[10px] text-gray-500">{a.email}</div>}
+                  <div key={i} className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-3 py-2">
+                    <div className="min-w-0">
+                      <div className="text-gray-900 font-medium truncate">{a.name || a.email || "—"}</div>
+                      {a.email && <div className="text-[11px] text-gray-500 truncate">{a.email}</div>}
                     </div>
-                    <span className="text-[10px] uppercase text-gray-400 font-bold">{a.type}</span>
+                    <span className="text-[10px] uppercase text-gray-400 font-bold shrink-0 ml-2">{a.type}</span>
                   </div>
                 ))}
               </div>
-            </DrawerSection>
+            </ModernCard>
           )}
         </div>
-        <footer className="border-t border-gray-200 px-5 py-3 flex items-center justify-end gap-2">
-          <Button size="sm" variant="outline" onClick={onClose} className="text-xs">Close</Button>
-          <Button size="sm" variant="outline" disabled={isCancelled} onClick={onEdit} className="text-xs" data-testid="bookings-drawer-edit">
-            <Pencil size={12} className="mr-1"/> Reschedule
-          </Button>
-          <Button size="sm" variant="destructive" disabled={isCancelled} onClick={onCancel} className="text-xs" data-testid="bookings-drawer-cancel">
-            <Trash2 size={12} className="mr-1"/> Cancel
-          </Button>
+
+        {/* ============ FOOTER ============================================ */}
+        <footer className="border-t border-gray-200 px-6 py-3 flex items-center justify-between gap-2 bg-white">
+          {editing ? (
+            <>
+              <Button size="sm" variant="ghost" onClick={onExitEdit} disabled={saving} className="text-xs">
+                Cancel Edit
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={saving}
+                className="text-xs bg-[#ec9324] hover:bg-[#d4811f] text-white"
+                data-testid="bookings-drawer-save"
+              >
+                {saving ? <Loader2 size={12} className="animate-spin mr-1"/> : null}
+                {saving ? "Saving…" : "Save Changes"}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button size="sm" variant="outline" onClick={onClose} className="text-xs">Close</Button>
+              <Button size="sm" variant="destructive" disabled={isCancelled} onClick={onCancel} className="text-xs" data-testid="bookings-drawer-cancel">
+                <Trash2 size={12} className="mr-1"/> Cancel Booking
+              </Button>
+            </>
+          )}
         </footer>
       </aside>
     </>
+  );
+}
+
+function ModernCard({ title, children }) {
+  return (
+    <section className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+      <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-3">{title}</div>
+      <div className="space-y-2">{children}</div>
+    </section>
+  );
+}
+
+function ModernRow({ label, value }) {
+  return (
+    <div className="flex items-start gap-3 text-xs">
+      <div className="w-32 flex-shrink-0 text-gray-500">{label}</div>
+      <div className="flex-1 text-gray-900 break-words font-medium">{value}</div>
+    </div>
+  );
+}
+
+function EditField({ label, children }) {
+  return (
+    <div>
+      <label className="block text-[11px] font-medium text-gray-600 mb-1">{label}</label>
+      {children}
+    </div>
   );
 }
 

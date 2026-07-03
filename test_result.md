@@ -605,10 +605,18 @@ agent_communication:
           - Table header "Created On" → "Booked On"  (sort field remains `created_at`)
           - Detail drawer rows "Created By" → "Booked By", "Created On" → "Booked On"
 
-        Test scope for the testing agent:
-          1) Backend: verify DELETE /api/workstation-bookings/{id} succeeds for a live workstation booking (and correctly returns 404 for a random id). Verify DELETE /api/room-bookings/{id} still works for meeting-room bookings.
-          2) Backend regression: GET /api/bookings should still return both types with correct type labels ("Workstation" and "Meeting Room").
-          3) Do NOT try to seed new workstation bookings; use whatever already exists (there are ~13 workstation bookings for today 03-Jul-2026 seeded in the Atlas DB).
-        Login: admin@ticketing.com / Admin@123. Backend base URL is the value of REACT_APP_BACKEND_URL from frontend/.env.
+    - agent: "main"
+      message: |
+        Bookings page UI overhaul (frontend only). File touched: /app/frontend/src/pages/BookingsPage.jsx.
+          1) Layout frozen: outer container is now `h-[calc(100vh-3.5rem)] overflow-hidden` so ONLY the table body scrolls; top bar (Layout), filter bar and <thead> all remain visible while rows scroll. Single page scrollbar.
+          2) Renames: "Date" → "Booked For Date" (table + drawer); "Employee" → "Employee Name" (filter + table); "Reset" → "Clear All".
+          3) Employee filter: label now shows just the name; emp_id moved to `meta`, which the shared MultiSelectFilter renders right-aligned. All rows line up vertically.
+          4) BookingDetailsDrawer rewritten with a modern orange-gradient header, card-based body sections (Booking Information / Workstation or Meeting Room / Schedule / Employee or Organizer / Attendees), and an Edit button in the header. Wider drawer (max-w-lg).
+          5) Inline edit — the row-level "Edit" action now opens the drawer directly in edit mode (no navigation). Save from the same panel:
+             - Workstation booking → PATCH /api/workstation-bookings/:id  { date, employee_id }
+             - Meeting Room booking → PATCH /api/room-bookings/:id { title, start_at, end_at } (date + start/end times combined to ISO)
+             Toast + row refresh on success; error toast surfaces backend detail (conflict messages).
+        No backend change required.
+
 
 
