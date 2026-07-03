@@ -738,3 +738,39 @@ frontend:
         - Team Filter: 2 teams (Aquadatics, Chem Catalysts) found; single-select triggers zoom (bbox anchor rendered), multi-select shows both gradients side-by-side with non-team seats dimmed to 25%
         - Non-regression: Workstation Booking page legend still shows all 5 items (Available, Selected, Occupied, Pending Approval, Team-assigned)
         - No console errors.
+
+    - agent: "main"
+      message: |
+        Floor Layout — follow-up bug fix + refinements. Files touched:
+          - /app/frontend/src/pages/FloorLayoutPage.jsx
+          - /app/frontend/src/components/WorkstationFloorMap.jsx
+
+        Changes:
+        1) BUG FIX (again) — "Next Date" button still failing for the user despite previous CSS workaround. Root cause revisited: the native `<input type="date">` and its browser-owned calendar-picker-indicator can capture click events even when styled to opacity:0. Now REPLACED entirely with a plain `<button>` that shows the formatted date; the actual `<input type="date">` is rendered off-screen (sr-only, `pointer-events:none`, absolutely positioned 1×1px) and only used to surface the OS date picker via `showPicker()`. Result: Prev/Next chevron buttons cannot overlap with anything.
+        2) "Meeting Bookings" panel renamed to "Upcoming Meetings" and now filters out meetings whose `end_at` is already in the past. `nowTick` state ticks every 60s so ended meetings disappear naturally.
+        3) Upcoming Meetings panel moved to the RIGHT side (opposite of the left filter/stats panel).
+        4) Collapse button (`ChevronRight` ">") added to the panel header. Collapsed state shows a thin 28px tab on the right edge with a vertical "Upcoming Meetings" label + count badge and a `ChevronLeft` icon to re-expand. State is `meetingsCollapsed` (default false).
+        5) "Search Workstation" search bar removed from the floor map — but ONLY on the Floor Layout view. Gated by `legendPreset !== "floor-layout"` in `WorkstationFloorMap.jsx`. Workstation Booking + Pending Approvals + Seat Calibration screens keep the search box.
+
+        Please test:
+          - Next/Prev date buttons: click the ChevronRight beside the date display button — the visible date must advance by 1 day (Prev = back 1 day). Also verify the hidden `input[data-testid="floor-layout-date-input"]` value updates.
+          - "Upcoming Meetings" title visible in the right-side panel header; collapse button (data-testid="floor-layout-meetings-collapse") folds the panel; collapsed tab (data-testid="floor-layout-meetings-expand") re-opens it.
+          - No search bar on the Floor Layout floor map; verify the search bar STILL appears on the Workstation Booking page (non-regression).
+
+    - agent: "main"
+      message: |
+        Frontend task marked needs_retesting=true for the Floor Layout second-round changes.
+
+frontend:
+  - task: "Floor Layout round 2 — hardened Next Date fix + Upcoming Meetings rename+filter+right-side collapsible panel + remove search bar"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/pages/FloorLayoutPage.jsx"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Second-round fix for user-reported "Next Date button still not working". Replaced native <input type="date"> in the header with a display <button> + off-screen sr-only input opened via showPicker(). Also renamed Meeting Bookings → Upcoming Meetings (past ones filtered by end_at > now), moved that panel back to the right side, added a collapse ">" button (folded state shows a vertical "Upcoming Meetings" tab), and removed the "Search Workstation" search box from the floor map on this preset only.

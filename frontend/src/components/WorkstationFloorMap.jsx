@@ -177,26 +177,30 @@ const WorkstationFloorMap = ({
           <>
             {/* Top-left search + legend */}
             <div className="absolute top-4 left-4 z-20 flex flex-col gap-3" data-testid="ws-map-toolbar">
-              <div className="bg-white rounded-lg shadow-lg p-2 flex items-center gap-2 w-64">
-                <Search size={16} className="text-gray-400 flex-none" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search workstation (e.g. A1)"
-                  className="flex-1 text-sm bg-transparent outline-none"
-                  data-testid="ws-search-input"
-                />
-                {search && (
-                  <button onClick={() => setSearch('')} className="text-gray-400 hover:text-gray-700" aria-label="Clear search">
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-              {debouncedSearch && (
-                <div className="bg-white rounded-md shadow px-2 py-1 text-[11px] text-gray-600 w-64">
-                  {matchCount > 0 ? `${matchCount} match${matchCount > 1 ? 'es' : ''}` : 'No matches'}
-                </div>
+              {legendPreset !== "floor-layout" && (
+                <>
+                  <div className="bg-white rounded-lg shadow-lg p-2 flex items-center gap-2 w-64">
+                    <Search size={16} className="text-gray-400 flex-none" />
+                    <input
+                      type="text"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Search workstation (e.g. A1)"
+                      className="flex-1 text-sm bg-transparent outline-none"
+                      data-testid="ws-search-input"
+                    />
+                    {search && (
+                      <button onClick={() => setSearch('')} className="text-gray-400 hover:text-gray-700" aria-label="Clear search">
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                  {debouncedSearch && (
+                    <div className="bg-white rounded-md shadow px-2 py-1 text-[11px] text-gray-600 w-64">
+                      {matchCount > 0 ? `${matchCount} match${matchCount > 1 ? 'es' : ''}` : 'No matches'}
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="bg-white rounded-lg shadow-lg p-3" data-testid="ws-map-legend">

@@ -76,19 +76,42 @@ function FloorPlanCard({ plan, onOpen }) {
 }
 
 // ---------- Date stepper ----------
+// The native `<input type="date">` used to intercept clicks on the Next arrow
+// via its `::-webkit-calendar-picker-indicator` pseudo-element which, in some
+// Chromium builds, extends beyond the input's visible bounds. To completely
+// remove that failure mode we now render a plain button that mirrors the
+// date's label and open the calendar programmatically via `showPicker()` on
+// an off-screen input.
 function DateStepper({ value, onChange }) {
+  const hiddenInputRef = React.useRef(null);
   const shift = (days) => {
     const d = new Date(value + "T00:00:00");
     d.setDate(d.getDate() + days);
     const out = d.toISOString().slice(0, 10);
     onChange(out);
   };
+  const openPicker = () => {
+    const el = hiddenInputRef.current;
+    if (!el) return;
+    if (typeof el.showPicker === "function") {
+      try { el.showPicker(); return; } catch { /* fall through */ }
+    }
+    el.focus();
+    el.click();
+  };
+  const displayLabel = React.useMemo(() => {
+    if (!value) return "Select date";
+    const d = new Date(value + "T00:00:00");
+    if (Number.isNaN(d.getTime())) return value;
+    return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
+  }, [value]);
+
   return (
-    <div className="flex items-center gap-2" data-testid="floor-layout-date-stepper">
+    <div className="flex items-center gap-2 relative" data-testid="floor-layout-date-stepper">
       <button
         type="button"
         onClick={() => shift(-1)}
-        className="p-1.5 rounded-md border border-gray-300 hover:bg-gray-50 relative group/prev"
+        className="p-1.5 rounded-md border border-gray-300 hover:bg-gray-50 relative group/prev bg-white"
         data-testid="floor-layout-prev-date"
         aria-label="Previous Date"
       >
@@ -98,20 +121,36 @@ function DateStepper({ value, onChange }) {
           className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1 z-30 px-1.5 py-0.5 rounded bg-gray-900 text-white text-[10px] font-medium whitespace-nowrap shadow opacity-0 group-hover/prev:opacity-100 transition-opacity"
         >Previous Date</span>
       </button>
-      <div className="relative">
-        <CalendarIcon size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-[#ec9324] pointer-events-none z-[1]"/>
-        <input
-          type="date"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="floor-layout-date-input pl-7 pr-2 py-1.5 text-sm border border-gray-300 rounded-md focus:border-[#ec9324] focus:ring-1 focus:ring-[#ec9324] outline-none bg-white"
-          data-testid="floor-layout-date-input"
-        />
-      </div>
+
+      <button
+        type="button"
+        onClick={openPicker}
+        className="inline-flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-sm border border-gray-300 rounded-md focus:border-[#ec9324] focus:ring-1 focus:ring-[#ec9324] outline-none bg-white hover:bg-gray-50 cursor-pointer"
+        data-testid="floor-layout-date-picker-btn"
+        aria-label="Change date"
+      >
+        <CalendarIcon size={14} className="text-[#ec9324]"/>
+        <span className="tabular-nums">{displayLabel}</span>
+      </button>
+      {/* Off-screen native date input used purely to surface the OS/browser
+          date picker via showPicker(). Never receives layout space and cannot
+          overlap the neighbouring buttons. */}
+      <input
+        ref={hiddenInputRef}
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-hidden="true"
+        tabIndex={-1}
+        className="sr-only pointer-events-none"
+        style={{ position: "absolute", left: 0, top: 0, width: 1, height: 1, opacity: 0 }}
+        data-testid="floor-layout-date-input"
+      />
+
       <button
         type="button"
         onClick={() => shift(1)}
-        className="p-1.5 rounded-md border border-gray-300 hover:bg-gray-50 relative group/next"
+        className="p-1.5 rounded-md border border-gray-300 hover:bg-gray-50 relative group/next bg-white"
         data-testid="floor-layout-next-date"
         aria-label="Next Date"
       >
@@ -121,23 +160,15 @@ function DateStepper({ value, onChange }) {
           className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1 z-30 px-1.5 py-0.5 rounded bg-gray-900 text-white text-[10px] font-medium whitespace-nowrap shadow opacity-0 group-hover/next:opacity-100 transition-opacity"
         >Next Date</span>
       </button>
+
       <button
         type="button"
         onClick={() => onChange(todayIso())}
-        className="px-2 py-1 text-xs rounded-md border border-[#ec9324] text-[#ec9324] hover:bg-[#ec9324]/10"
+        className="px-2 py-1 text-xs rounded-md border border-[#ec9324] text-[#ec9324] hover:bg-[#ec9324]/10 bg-white"
         data-testid="floor-layout-today-btn"
       >
         Today
       </button>
-      {/* Hide the native date-picker indicator so it can't overlap the Next button */}
-      <style>{`
-        .floor-layout-date-input::-webkit-calendar-picker-indicator {
-          opacity: 0;
-          position: absolute;
-          left: 0; top: 0; width: 100%; height: 100%;
-          cursor: pointer;
-        }
-      `}</style>
     </div>
   );
 }
@@ -249,20 +280,34 @@ function PlanInteractiveView({ plan, onBack, hideBack = false }) {
     return { total, booked, pending, meetings, available };
   }, [availability, roomBookings]);
 
-  // Meetings list respects the team filter — if the meeting organizer's team
-  // is one of the selected teams, keep it. When nothing is selected, show all.
+  // Meetings list respects the team filter AND drops any meeting whose end
+  // time is already in the past (Upcoming Meetings only). Ticks the "now"
+  // reference every minute so items disappear naturally as they end.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
   const filteredMeetings = useMemo(() => {
-    if (selectedTeamIds.length === 0) return roomBookings;
+    const now = new Date(nowTick);
+    const upcoming = (roomBookings || []).filter((rb) => {
+      const end = rb.end_at ? new Date(rb.end_at) : null;
+      // Keep the meeting while it is still running (end > now).
+      return !end || end.getTime() > now.getTime();
+    });
+    if (selectedTeamIds.length === 0) return upcoming;
     const set = new Set(selectedTeamIds);
-    return roomBookings.filter((rb) => {
-      // Try common shapes from the API: organizer_team_id or attendees carrying team refs
+    return upcoming.filter((rb) => {
       if (rb.organizer_team_id && set.has(rb.organizer_team_id)) return true;
       if (Array.isArray(rb.attendees)) {
         return rb.attendees.some((a) => a?.type === "team" && set.has(a.id));
       }
       return false;
     });
-  }, [roomBookings, selectedTeamIds]);
+  }, [roomBookings, selectedTeamIds, nowTick]);
+
+  // Right-side "Upcoming Meetings" panel — user-collapsible.
+  const [meetingsCollapsed, setMeetingsCollapsed] = useState(false);
 
   return (
     <Layout
@@ -317,7 +362,7 @@ function PlanInteractiveView({ plan, onBack, hideBack = false }) {
           </div>
 
           {/* Stats card */}
-          <div className="px-4 py-3 border-b border-gray-100" data-testid="floor-layout-stats-card">
+          <div className="px-4 py-3" data-testid="floor-layout-stats-card">
             <div className="rounded-lg border border-gray-200 overflow-hidden">
               <div className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-[#ec9324]/10 to-transparent">
                 <div className="inline-flex items-center gap-2">
@@ -335,43 +380,9 @@ function PlanInteractiveView({ plan, onBack, hideBack = false }) {
               </div>
             </div>
           </div>
-
-          {/* Meeting bookings list */}
-          <div className="px-4 pt-2 pb-1 flex items-center justify-between flex-shrink-0">
-            <div className="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">
-              <Building2 size={14} className="text-emerald-600"/>
-              Meeting Bookings
-            </div>
-            <span className="text-[11px] text-gray-500">{filteredMeetings.length}</span>
-          </div>
-          <div className="flex-1 overflow-y-auto px-3 pt-1 pb-3 space-y-2 min-h-0" data-testid="floor-layout-meetings-panel">
-            {filteredMeetings.length === 0 ? (
-              <div className="text-center text-xs text-gray-400 py-8">
-                {selectedTeamIds.length > 0 && roomBookings.length > 0
-                  ? "No meetings match the selected team(s)."
-                  : "No meeting bookings for this day."}
-              </div>
-            ) : filteredMeetings.map((rb) => (
-              <div key={rb.id} className="border border-gray-200 rounded-lg p-2.5 hover:border-emerald-300 transition" data-testid={`floor-meeting-${rb.id}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="font-semibold text-sm text-gray-900 truncate">{rb.title}</div>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-100 whitespace-nowrap">{rb.room_name}</span>
-                </div>
-                <div className="mt-1 flex items-center gap-1.5 text-[11px] text-gray-600">
-                  <Clock size={11}/>
-                  {fmtTime(rb.start_at)} – {fmtTime(rb.end_at)}
-                </div>
-                <div className="mt-1 flex items-center gap-1.5 text-[11px] text-gray-600">
-                  <Users size={11}/>
-                  {(rb.organizer || {}).name || "—"}
-                  {rb.attendees?.length ? ` · ${rb.attendees.length} attendee${rb.attendees.length > 1 ? "s" : ""}` : ""}
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
 
-        {/* RIGHT — full-bleed floor map (no header banner on top). */}
+        {/* CENTER — full-height floor map. */}
         <div className="flex-1 relative min-w-0">
           {loading || !availability ? (
             <div className="absolute inset-0 flex items-center justify-center text-gray-500">
@@ -397,6 +408,74 @@ function PlanInteractiveView({ plan, onBack, hideBack = false }) {
             />
           )}
         </div>
+
+        {/* RIGHT — Upcoming Meetings panel (collapsible). Positioned on the
+             opposite side of the left filter/stats panel. */}
+        {meetingsCollapsed ? (
+          <button
+            type="button"
+            onClick={() => setMeetingsCollapsed(false)}
+            className="hidden lg:flex flex-col items-center justify-center w-7 border-l border-gray-200 bg-white hover:bg-gray-50 text-gray-500 flex-shrink-0 group"
+            data-testid="floor-layout-meetings-expand"
+            aria-label="Expand Upcoming Meetings"
+            title="Show Upcoming Meetings"
+          >
+            <ChevronLeft size={14} className="text-[#ec9324]"/>
+            <span className="mt-2 text-[10px] font-semibold tracking-wide text-gray-600 [writing-mode:vertical-rl] rotate-180 select-none whitespace-nowrap">
+              Upcoming Meetings
+              {filteredMeetings.length > 0 && (
+                <span className="ml-1 inline-flex items-center justify-center min-w-[16px] h-4 rounded-full text-[9px] bg-emerald-100 text-emerald-700 px-1 align-middle">
+                  {filteredMeetings.length}
+                </span>
+              )}
+            </span>
+          </button>
+        ) : (
+          <div className="w-72 border-l border-gray-200 bg-white flex-col hidden lg:flex flex-shrink-0" data-testid="floor-layout-meetings-side-panel">
+            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between gap-2 flex-shrink-0">
+              <div className="inline-flex items-center gap-2 text-sm font-semibold text-gray-700 min-w-0">
+                <Building2 size={14} className="text-emerald-600 flex-shrink-0"/>
+                <span className="truncate">Upcoming Meetings</span>
+                <span className="text-[11px] font-medium text-gray-500 ml-1">{filteredMeetings.length}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMeetingsCollapsed(true)}
+                className="p-1 rounded-md hover:bg-gray-100 text-gray-500 flex-shrink-0"
+                data-testid="floor-layout-meetings-collapse"
+                aria-label="Collapse Upcoming Meetings"
+                title="Collapse"
+              >
+                <ChevronRight size={16}/>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0" data-testid="floor-layout-meetings-panel">
+              {filteredMeetings.length === 0 ? (
+                <div className="text-center text-xs text-gray-400 py-10">
+                  {selectedTeamIds.length > 0 && roomBookings.length > 0
+                    ? "No upcoming meetings match the selected team(s)."
+                    : "No upcoming meetings."}
+                </div>
+              ) : filteredMeetings.map((rb) => (
+                <div key={rb.id} className="border border-gray-200 rounded-lg p-2.5 hover:border-emerald-300 transition" data-testid={`floor-meeting-${rb.id}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-semibold text-sm text-gray-900 truncate">{rb.title}</div>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-100 whitespace-nowrap">{rb.room_name}</span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-1.5 text-[11px] text-gray-600">
+                    <Clock size={11}/>
+                    {fmtTime(rb.start_at)} – {fmtTime(rb.end_at)}
+                  </div>
+                  <div className="mt-1 flex items-center gap-1.5 text-[11px] text-gray-600">
+                    <Users size={11}/>
+                    {(rb.organizer || {}).name || "—"}
+                    {rb.attendees?.length ? ` · ${rb.attendees.length} attendee${rb.attendees.length > 1 ? "s" : ""}` : ""}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
   );
