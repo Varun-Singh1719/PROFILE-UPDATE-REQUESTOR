@@ -113,7 +113,7 @@ function DateStepper({ value, onChange }) {
 }
 
 // ---------- Interactive combined view (per plan) ----------
-function PlanInteractiveView({ plan, onBack }) {
+function PlanInteractiveView({ plan, onBack, hideBack = false }) {
   const [date, setDate] = useState(todayIso());
   const [availability, setAvailability] = useState(null);
   const [roomBookings, setRoomBookings] = useState([]);
@@ -191,15 +191,17 @@ function PlanInteractiveView({ plan, onBack }) {
       <div className="bg-white border-b border-gray-200 px-6 py-3 flex-shrink-0">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
-            <button
-              onClick={onBack}
-              data-testid="floor-layout-back-btn"
-              className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
-              aria-label="Back to floor plans"
-              title="Back to floor plans"
-            >
-              <ArrowLeft size={18}/>
-            </button>
+            {!hideBack && (
+              <button
+                onClick={onBack}
+                data-testid="floor-layout-back-btn"
+                className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
+                aria-label="Back to floor plans"
+                title="Back to floor plans"
+              >
+                <ArrowLeft size={18}/>
+              </button>
+            )}
             <LayoutGrid className="text-[#ec9324] flex-shrink-0" size={20}/>
             <p className="text-xs text-gray-600 inline-flex items-center gap-2 flex-wrap" data-testid="floor-layout-title">
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border" style={{ color: "#15B867", backgroundColor: "#15B86715", borderColor: "#15B86755" }}>
@@ -283,6 +285,11 @@ export default function FloorLayoutPage() {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState(null);
+  // Tracks whether the current `active` plan was auto-opened because it is the
+  // only live plan. In that case pressing "Back" should not drop the user onto
+  // a single-card grid — we simply keep them on the auto-opened plan (or the
+  // user can navigate away via the sidebar / breadcrumbs).
+  const [autoOpened, setAutoOpened] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -293,6 +300,14 @@ export default function FloorLayoutPage() {
         const all = res.data || [];
         const live = all.filter(p => (p.status || (p.live_version_id ? "live" : "draft")) === "live");
         setPlans(live);
+        // Auto-open when exactly one live floor exists — skip the card view.
+        if (live.length === 1) {
+          const only = [...live].sort((a, b) =>
+            (b.last_published_at || "").localeCompare(a.last_published_at || "")
+          )[0];
+          setActive(only);
+          setAutoOpened(true);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -307,7 +322,19 @@ export default function FloorLayoutPage() {
   }, [plans]);
 
   if (active) {
-    return <PlanInteractiveView plan={active} onBack={() => setActive(null)}/>;
+    return (
+      <PlanInteractiveView
+        plan={active}
+        onBack={() => {
+          // When auto-opened (single live plan), a "Back" action would land on
+          // an unnecessary single-card grid — hide the back button by making
+          // it a no-op if there is nothing to go back to.
+          if (autoOpened || sortedPlans.length <= 1) return;
+          setActive(null);
+        }}
+        hideBack={autoOpened || sortedPlans.length <= 1}
+      />
+    );
   }
 
   if (!loading && sortedPlans.length === 0) {
