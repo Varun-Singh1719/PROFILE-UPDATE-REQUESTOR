@@ -726,3 +726,15 @@ frontend:
             - Floor Layout preset did NOT leak into Workstation Booking page
             
             No console errors detected during testing. All screenshots captured successfully.
+
+    - agent: "testing"
+      message: |
+        Floor Layout screen — VERIFIED ✅ all 6 features and the primary Next-Date bug fix.
+        - Next Date: 2026-07-03 → 2026-07-04 (bug fixed via ::-webkit-calendar-picker-indicator opacity:0)
+        - Prev Date + Today both working
+        - Tooltips "Next Date" / "Previous Date" appear on hover
+        - Left panel: FLOOR LAYOUT header + Team Filter + Total Seats (Available=156, Pending=0, Meetings=0) + Meeting Bookings. No "Booked" row.
+        - Legend on Floor Layout shows exactly 3 items (Available, Pending Approval, Teams)
+        - Team Filter: 2 teams (Aquadatics, Chem Catalysts) found; single-select triggers zoom (bbox anchor rendered), multi-select shows both gradients side-by-side with non-team seats dimmed to 25%
+        - Non-regression: Workstation Booking page legend still shows all 5 items (Available, Selected, Occupied, Pending Approval, Team-assigned)
+        - No console errors.
