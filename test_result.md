@@ -573,3 +573,14 @@ agent_communication:
         File touched: /app/frontend/src/pages/TeamsPage.jsx only.
         Please run the focused frontend test described above. Do NOT regress unrelated team flows (edit, delete, search).
 
+    - agent: "main"
+      message: |
+        Filter dropdowns + sticky bars pass (no testing agent run per user instruction).
+        Env: switched backend/.env to user's MongoDB Atlas cluster (DB_NAME=app_db); recreated frontend/.env with REACT_APP_BACKEND_URL.
+        UI changes:
+          - MultiSelectFilter (components/ui/MultiSelectFilter.jsx): added optional `single` prop → radio-style row for filters where the backend only accepts one value.
+          - PermissionSetsListPage: replaced native <select> "Created By" with MultiSelectFilter single-mode (still sends a single created_by id; no backend change).
+          - Sticky filter bar (`sticky top-14 z-30 bg-gray-50/95 backdrop-blur`) added to: TicketListPage, ContactListPage, NotificationsOutboxPage, EmailTemplatesPage, PermissionSetsListPage, TeamsPage. Sticky <thead> added inside a `max-h-[calc(100vh-14rem)] overflow-y-auto` wrapper where it wasn't already sticky.
+          - Left as native <select>: PendingApprovalsPage plan selector and WorkstationBookingPage floor-plan selector (single-choice context switchers, per user's answer to Q1).
+        Test credentials: admin@ticketing.com / Admin@123 (see /app/memory/test_credentials.md).
+

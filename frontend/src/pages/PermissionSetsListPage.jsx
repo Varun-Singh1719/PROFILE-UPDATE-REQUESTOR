@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import Layout from "../components/Layout";
 import notify from "../lib/notify";
+import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import {
   ListChecks, Loader2, Eye, Pencil, Trash2, Plus, Filter, X, Search,
   Briefcase, Armchair, Copy,
@@ -173,6 +174,7 @@ export default function PermissionSetsListPage() {
       <div className="space-y-6">
 
         {/* Filters */}
+        <div className="sticky top-14 z-30 -mx-4 px-4 pt-1 pb-2 bg-gray-50/95 backdrop-blur">
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">
             <Filter size={14} className="text-gray-500" />
@@ -222,17 +224,15 @@ export default function PermissionSetsListPage() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Created By</label>
-              <select
-                value={createdBy}
-                onChange={(e) => setCreatedBy(e.target.value)}
-                data-testid="pset-filter-creator"
-                className="w-full px-2 py-2 text-sm rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40 bg-white"
-              >
-                <option value="">All</option>
-                {creators.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name || c.email}</option>
-                ))}
-              </select>
+              <MultiSelectFilter
+                label="Created By"
+                value={createdBy ? [createdBy] : []}
+                onChange={(arr) => setCreatedBy(arr[0] || "")}
+                options={creators.map((c) => ({ value: c.id, label: c.name || c.email }))}
+                testIdPrefix="pset-filter-creator"
+                single
+                className="w-full"
+              />
             </div>
             <div className="md:col-span-2 lg:col-span-5">
               <label className="block text-xs font-medium text-gray-600 mb-1">Module</label>
@@ -270,6 +270,7 @@ export default function PermissionSetsListPage() {
             >Apply</button>
           </div>
         </div>
+        </div>
 
         {/* Table */}
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
@@ -281,9 +282,9 @@ export default function PermissionSetsListPage() {
               <button onClick={() => navigate("/admin/permissions")} className="text-[#ec9324] font-medium hover:underline" data-testid="pset-empty-cta">Create your first one</button>.
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[calc(100vh-22rem)] overflow-y-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-600">
+                <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-600 sticky top-0 z-10">
                   <tr>
                     <th className="px-4 py-3 text-left">ID</th>
                     <th className="px-4 py-3 text-left">Name</th>

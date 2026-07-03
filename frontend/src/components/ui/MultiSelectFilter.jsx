@@ -40,6 +40,8 @@ export default function MultiSelectFilter({
   disabled = false,
   align = "left",
   maxSelectedLabels = 3,
+  single = false, // when true, only one value can be selected; renders radio-style row
+  closeOnSelectSingle = true,
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -84,6 +86,16 @@ export default function MultiSelectFilter({
   const showSearch = options.length > searchThreshold;
 
   const toggle = (val) => {
+    if (single) {
+      // Single-choice: clicking the currently-selected row clears; otherwise replaces
+      if (selected.has(val)) {
+        onChange([]);
+      } else {
+        onChange([val]);
+      }
+      if (closeOnSelectSingle) setOpen(false);
+      return;
+    }
     const next = new Set(selected);
     if (next.has(val)) next.delete(val);
     else next.add(val);
@@ -199,12 +211,15 @@ export default function MultiSelectFilter({
                               ${checked ? "bg-orange-50" : "hover:bg-gray-50"}`}
                 >
                   <span
-                    className={`shrink-0 inline-flex items-center justify-center w-4 h-4 rounded border
+                    className={`shrink-0 inline-flex items-center justify-center w-4 h-4 border
+                                ${single ? "rounded-full" : "rounded"}
                                 ${checked
                                   ? "bg-[#ec9324] border-[#ec9324] text-white"
                                   : "bg-white border-gray-300 text-transparent"}`}
                   >
-                    <Check size={12} strokeWidth={3} />
+                    {single
+                      ? (checked && <span className="w-1.5 h-1.5 rounded-full bg-white" />)
+                      : <Check size={12} strokeWidth={3} />}
                   </span>
                   <span className={`flex-1 truncate ${checked ? "text-gray-900 font-medium" : "text-gray-700"}`}>
                     {o.label}

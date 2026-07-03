@@ -400,7 +400,8 @@ export default function EmailTemplatesPage() {
       )}
     >
       <TooltipProvider delayDuration={150}>
-      <div className="flex flex-wrap gap-3 items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100">
+      <div className="sticky top-14 z-30 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
+        <div className="flex flex-wrap gap-3 items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100" data-testid="templates-filter-bar">
         <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
           <Input placeholder="Search by name, kind or subject…" className="pl-9" value={q} onChange={(e) => setQ(e.target.value)} data-testid="template-search"/>
@@ -424,12 +425,13 @@ export default function EmailTemplatesPage() {
           testIdPrefix="template-status-filter"
           className="w-40"
         />
+        </div>
       </div>
 
       <div className="mt-6 bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[calc(100vh-14rem)] overflow-y-auto">
           <table className="w-full text-sm">
-            <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200">
+            <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200 sticky top-0 z-10">
               <tr>
                 <SortableTh label="Template Name" col="name" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} testId="sort-name"/>
                 <SortableTh label="Type" col="type" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} testId="sort-type"/>

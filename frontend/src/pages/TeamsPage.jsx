@@ -179,6 +179,7 @@ export default function TeamsPage() {
         </Button>
       }
     >
+      <div className="sticky top-14 z-30 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
       <div className="bg-white p-4 rounded-xl shadow-soft border border-gray-100">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
@@ -191,11 +192,12 @@ export default function TeamsPage() {
           />
         </div>
       </div>
+      </div>
 
       <div className="mt-6 bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[calc(100vh-14rem)] overflow-y-auto">
           <table className="w-full text-sm">
-            <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200">
+            <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200 sticky top-0 z-10">
               <tr>
                 <th className="px-4 py-3 text-left">Color</th>
                 <th className="px-4 py-3 text-left">Team Name</th>

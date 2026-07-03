@@ -979,7 +979,8 @@ export default function ContactListPage() {
         </DialogContent>
       </Dialog>
 
-      <div className="mt-6 flex gap-3 flex-wrap items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100">
+      <div className="mt-6 sticky top-14 z-30 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
+        <div className="flex gap-3 flex-wrap items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100" data-testid="contacts-filter-bar">
         <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
           <Input placeholder="Search name or email..." className="pl-9" value={q} onChange={(e) => setQ(e.target.value)} data-testid="contact-search"/>
@@ -1011,6 +1012,7 @@ export default function ContactListPage() {
           testIdPrefix="contact-pset-filter"
           className="w-64"
         />
+        </div>
       </div>
 
       <div className="mt-6 flex-1 flex flex-col bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">
