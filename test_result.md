@@ -561,7 +561,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Teams form — remove explainers + fix duplicate auto-assigned colour"
+    - "Bookings page — cancel workstation booking routes to /api/workstation-bookings/:id (not /api/room-bookings/:id)"
   stuck_tasks: []
   test_all: false
   test_priority: "stuck_first"
@@ -592,4 +592,23 @@ agent_communication:
           - Sticky filter bar (`sticky top-14 z-30 bg-gray-50/95 backdrop-blur`) added to: TicketListPage, ContactListPage, NotificationsOutboxPage, EmailTemplatesPage, PermissionSetsListPage, TeamsPage. Sticky <thead> added inside a `max-h-[calc(100vh-14rem)] overflow-y-auto` wrapper where it wasn't already sticky.
           - Left as native <select>: PendingApprovalsPage plan selector and WorkstationBookingPage floor-plan selector (single-choice context switchers, per user's answer to Q1).
         Test credentials: admin@ticketing.com / Admin@123 (see /app/memory/test_credentials.md).
+
+    - agent: "main"
+      message: |
+        BUG FIX — Bookings page "Booking not found" when cancelling a workstation booking.
+        Root cause: onCancel() in /app/frontend/src/pages/BookingsPage.jsx always called DELETE /api/room-bookings/{id}, but rows in the centralised Bookings table also include workstation bookings (type === "Workstation"), whose delete endpoint is DELETE /api/workstation-bookings/{id}. Meeting-room DELETE therefore returned 404 for every workstation row.
+        Fix: onCancel now inspects b.type and calls the correct endpoint (workstation-bookings vs room-bookings). No backend change.
+
+        Frontend-only rename in BookingsPage (per user request):
+          - Filter chip "Created By" → "Booked By"
+          - Table header "Created By" → "Booked By"
+          - Table header "Created On" → "Booked On"  (sort field remains `created_at`)
+          - Detail drawer rows "Created By" → "Booked By", "Created On" → "Booked On"
+
+        Test scope for the testing agent:
+          1) Backend: verify DELETE /api/workstation-bookings/{id} succeeds for a live workstation booking (and correctly returns 404 for a random id). Verify DELETE /api/room-bookings/{id} still works for meeting-room bookings.
+          2) Backend regression: GET /api/bookings should still return both types with correct type labels ("Workstation" and "Meeting Room").
+          3) Do NOT try to seed new workstation bookings; use whatever already exists (there are ~13 workstation bookings for today 03-Jul-2026 seeded in the Atlas DB).
+        Login: admin@ticketing.com / Admin@123. Backend base URL is the value of REACT_APP_BACKEND_URL from frontend/.env.
+
 

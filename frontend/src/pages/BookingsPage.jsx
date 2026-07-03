@@ -249,7 +249,11 @@ export default function BookingsPage() {
     const ok = await confirmDialog({ title: 'Cancel booking', message: `Cancel booking #${b.seq_no} (${b.title})?`, confirmLabel: 'Cancel booking', confirmVariant: 'destructive' });
     if (!ok) return;
     try {
-      await api.delete(`/room-bookings/${b.id}`);
+      // Route to the correct backend endpoint based on booking type.
+      // Meeting Room → /api/room-bookings/:id ; Workstation → /api/workstation-bookings/:id
+      const isWorkstation = (b.type === "Workstation" || b.type === "workstation");
+      const path = isWorkstation ? `/workstation-bookings/${b.id}` : `/room-bookings/${b.id}`;
+      await api.delete(path);
       toast.success("Booking cancelled");
       refreshNow();
     } catch (e) {
@@ -453,7 +457,7 @@ export default function BookingsPage() {
             />
             {/* Created by */}
             <MultiSelectFilter
-              label="Created By"
+              label="Booked By"
               value={createdById}
               onChange={onFilterChange(setCreatedById)}
               options={(filterOptions.creators || []).map(c => ({ value: c.id, label: c.name }))}
@@ -513,8 +517,8 @@ export default function BookingsPage() {
                   <th className="px-3 py-2">Time</th>
                   <th className="px-3 py-2">Recurring</th>
                   <ThSort label="Status" field="status" currentSort={sort} currentDir={direction} onSort={onSort}/>
-                  <th className="px-3 py-2">Created By</th>
-                  <ThSort label="Created On" field="created_at" currentSort={sort} currentDir={direction} onSort={onSort}/>
+                  <th className="px-3 py-2">Booked By</th>
+                  <ThSort label="Booked On" field="created_at" currentSort={sort} currentDir={direction} onSort={onSort}/>
                   <th className="px-3 py-2 w-24 text-center">Actions</th>
                 </tr>
               </thead>
@@ -708,8 +712,8 @@ function BookingDetailsDrawer({ booking: b, onClose, onEdit, onCancel }) {
             <DrawerRow label="Booking ID" value={`#${b.seq_no}`}/>
             <DrawerRow label="Type" value={<span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded font-semibold">{b.type}</span>}/>
             <DrawerRow label="Status" value={<StatusBadge status={b.status}/>}/>
-            <DrawerRow label="Created By" value={b.created_by?.name || "—"}/>
-            <DrawerRow label="Created On" value={fmtDateTime(b.created_at)}/>
+            <DrawerRow label="Booked By" value={b.created_by?.name || "—"}/>
+            <DrawerRow label="Booked On" value={fmtDateTime(b.created_at)}/>
           </DrawerSection>
 
           <DrawerSection title="Resource Information">
