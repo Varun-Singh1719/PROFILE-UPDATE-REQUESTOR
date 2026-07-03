@@ -133,7 +133,6 @@ export default function FloorPlansListPage() {
   return (
     <Layout
       title="Floor Plans"
-      breadcrumbs={[{ label: "Workspace Manager" }, { label: "Floor Plans" }]}
       actions={
         <button
           onClick={() => { setCreateName(""); setShowCreate(true); }}

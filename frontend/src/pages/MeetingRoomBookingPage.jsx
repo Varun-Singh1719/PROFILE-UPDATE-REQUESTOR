@@ -347,7 +347,6 @@ export default function MeetingRoomBookingPage() {
     <Layout
       title="Meeting Room Booking"
       fullBleed
-      breadcrumbs={[{ label: "Workspace Manager" }, { label: "Meeting Room Booking" }]}
       contentClassName="h-screen flex flex-col"
       actions={
         viewMode === "calendar" ? null : (

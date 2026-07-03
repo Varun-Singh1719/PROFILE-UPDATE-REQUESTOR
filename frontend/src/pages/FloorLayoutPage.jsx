@@ -167,12 +167,6 @@ function PlanInteractiveView({ plan, onBack, hideBack = false }) {
     return m;
   }, [roomBookings]);
 
-  const crumbs = [
-    { label: "Workspace Manager" },
-    { label: "Floor Layout", to: "/workspace-manager/floor-layout" },
-    { label: plan.name },
-  ];
-
   const stats = {
     seats: (availability?.seats || []).length,
     booked: (availability?.bookings || []).length,
@@ -184,7 +178,6 @@ function PlanInteractiveView({ plan, onBack, hideBack = false }) {
     <Layout
       title={plan.name}
       fullBleed
-      breadcrumbs={crumbs}
       contentClassName="flex flex-col h-screen"
       actions={<DateStepper value={date} onChange={setDate}/>}
     >
@@ -340,7 +333,6 @@ export default function FloorLayoutPage() {
   if (!loading && sortedPlans.length === 0) {
     return (
       <Layout
-        breadcrumbs={[{ label: "Workspace Manager" }, { label: "Floor Layout" }]}
         contentClassName="flex flex-col"
       >
         <div className="flex flex-col items-center justify-center text-center min-h-[70vh] px-6" data-testid="floor-layout-empty-state">
@@ -359,7 +351,6 @@ export default function FloorLayoutPage() {
   return (
     <Layout
       title="Floor Layout"
-      breadcrumbs={[{ label: "Workspace Manager" }, { label: "Floor Layout" }]}
     >
       {loading ? (
         <div className="flex items-center justify-center py-20 text-gray-500">

@@ -415,7 +415,6 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
   return (
     <Layout
       title={pageTitle}
-      breadcrumbs={[{ label: "Workspace Manager" }, { label: pageTitle }]}
       fullBleed
       contentClassName="bg-gray-50"
       actions={

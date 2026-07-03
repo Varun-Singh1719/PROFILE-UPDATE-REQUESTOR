@@ -319,7 +319,6 @@ export default function PendingApprovalsPage() {
   return (
     <Layout
       title="Pending Approvals"
-      breadcrumbs={[{ label: "Workspace Manager" }, { label: "Pending Approvals" }]}
       fullBleed
       contentClassName="bg-gray-50"
       actions={

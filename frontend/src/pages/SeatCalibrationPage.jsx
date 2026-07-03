@@ -1110,11 +1110,6 @@ export default function SeatCalibrationPage() {
       title={plan?.name || "Calibration"}
       fullBleed
       contentClassName="h-screen flex flex-col bg-gray-50"
-      breadcrumbs={[
-        { label: "Workspace Manager" },
-        { label: "Floor Plans", to: "/workspace-manager/floor-plans" },
-        { label: (plan?.name || "Calibration") + (viewOnly ? " (View)" : "") },
-      ]}
     >
     <div className="flex-1 flex flex-row-reverse overflow-hidden">
       {/* ────────────────────────────── Right collapsible toolbar
