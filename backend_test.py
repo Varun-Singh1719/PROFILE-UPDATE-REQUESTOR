@@ -12,7 +12,7 @@ from typing import Dict, Any, Optional
 import uuid
 
 # Backend URL from frontend/.env
-BASE_URL = "https://floor-layout-fast.preview.emergentagent.com/api"
+BASE_URL = "https://desk-info-modernize.preview.emergentagent.com/api"
 
 # Test credentials
 ADMIN_EMAIL = "admin@ticketing.com"

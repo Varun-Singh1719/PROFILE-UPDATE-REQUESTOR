@@ -11,7 +11,7 @@ import time
 from typing import Optional, Dict, Any, List
 
 # Backend URL from environment
-BASE_URL = "https://floor-layout-fast.preview.emergentagent.com/api"
+BASE_URL = "https://desk-info-modernize.preview.emergentagent.com/api"
 
 # Test credentials (from /app/memory/test_credentials.md)
 SUPER_ADMIN_EMAIL = "admin@ticketing.com"

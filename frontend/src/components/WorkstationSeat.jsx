@@ -259,31 +259,73 @@ const WorkstationSeat = ({
             pointerEvents: 'none',
           }}
         >
-          <div className="relative bg-gray-900 text-white text-[11px] rounded-md px-2 py-1.5 whitespace-nowrap shadow-lg">
-            <div className="font-semibold">Workstation {seat.label}</div>
-            {isPending && request ? (
-              <>
-                <div>⏳ <span className="font-semibold">Pending Approval</span></div>
-                <div>👤 {(request.employee || {}).name || '—'}</div>
-                {request.team_name && <div>👥 {request.team_name}</div>}
-                <div className="opacity-80">📅 {request.date}</div>
-                <div className="opacity-60 italic text-[10px] mt-0.5">
-                  Requested by {(request.requested_by || {}).name || '—'}
+          <div
+            className="relative bg-slate-900/95 backdrop-blur-sm text-white text-[12px] rounded-lg shadow-xl ring-1 ring-white/10 min-w-[180px] max-w-[260px]"
+            style={{ fontFamily: 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' }}
+          >
+            {/* Header */}
+            <div className="px-3 pt-2 pb-1.5 border-b border-white/10 flex items-center justify-between gap-2">
+              <span className="font-semibold text-[13px] tracking-tight">
+                Workstation {seat.label}
+              </span>
+              {isPending && (
+                <span className="text-[9.5px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 ring-1 ring-amber-300/30">
+                  Pending
+                </span>
+              )}
+            </div>
+
+            {/* Body */}
+            <div className="px-3 py-2 space-y-1.5">
+              {isPending && request ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <PersonIcon size={14} color="#93c5fd" className="flex-shrink-0" />
+                    <span className="truncate">{(request.employee || {}).name || '—'}</span>
+                  </div>
+                  {request.team_name && (
+                    <div className="flex items-center gap-2">
+                      <WorkspacesIcon size={14} color="#93c5fd" className="flex-shrink-0" />
+                      <span className="truncate">{request.team_name}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <CalendarMonthIcon size={14} color="#93c5fd" className="flex-shrink-0" />
+                    <span className="opacity-90">{formatTipDate(request.date)}</span>
+                  </div>
+                  <div className="text-[10.5px] text-white/60 pt-1 border-t border-white/10 mt-1.5">
+                    Requested by {(request.requested_by || {}).name || '—'}
+                  </div>
+                </>
+              ) : isOccupied && booking ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <PersonIcon size={14} color="#93c5fd" className="flex-shrink-0" />
+                    <span className="truncate">{(booking.employee || {}).name || '—'}</span>
+                  </div>
+                  {booking.team_name && (
+                    <div className="flex items-center gap-2">
+                      <WorkspacesIcon size={14} color="#93c5fd" className="flex-shrink-0" />
+                      <span className="truncate">{booking.team_name}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <CalendarMonthIcon size={14} color="#93c5fd" className="flex-shrink-0" />
+                    <span className="opacity-90">{formatTipDate(booking.date)}</span>
+                  </div>
+                  <div className="text-[10.5px] text-white/60 pt-1 border-t border-white/10 mt-1.5">
+                    Click for details
+                  </div>
+                </>
+              ) : (
+                <div className="opacity-80 text-[11.5px]">
+                  {isPending ? 'Pending Approval' : isSelected ? 'Selected' : 'Available'}
                 </div>
-              </>
-            ) : isOccupied && booking ? (
-              <>
-                <div>👤 {(booking.employee || {}).name || '—'}</div>
-                {booking.team_name && <div>👥 {booking.team_name}</div>}
-                <div className="opacity-80">📅 {booking.date}</div>
-                <div className="opacity-60 italic text-[10px] mt-0.5">Click for details</div>
-              </>
-            ) : (
-              <div className="opacity-80">
-                {isPending ? 'Pending Approval' : isSelected ? 'Selected' : 'Available'}
-              </div>
-            )}
-            <div className="absolute left-1/2 -translate-x-1/2 -top-1 w-2 h-2 bg-gray-900 rotate-45" />
+              )}
+            </div>
+
+            {/* Arrow */}
+            <div className="absolute left-1/2 -translate-x-1/2 -top-1 w-2 h-2 bg-slate-900/95 rotate-45 ring-1 ring-white/10 ring-b-0 ring-r-0" />
           </div>
         </div>,
         document.body
