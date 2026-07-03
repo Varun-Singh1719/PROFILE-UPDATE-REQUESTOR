@@ -76,12 +76,10 @@ function FloorPlanCard({ plan, onOpen }) {
 }
 
 // ---------- Date stepper ----------
-// The native `<input type="date">` used to intercept clicks on the Next arrow
-// via its `::-webkit-calendar-picker-indicator` pseudo-element which, in some
-// Chromium builds, extends beyond the input's visible bounds. To completely
-// remove that failure mode we now render a plain button that mirrors the
-// date's label and open the calendar programmatically via `showPicker()` on
-// an off-screen input.
+// Compact date navigator used INSIDE the right panel (previously sat in the
+// topbar which caused layout crowding + click-interception on the Next arrow
+// depending on the viewport width). Rendered in an open panel container so
+// nothing can overlap it.
 function DateStepper({ value, onChange }) {
   const hiddenInputRef = React.useRef(null);
   const shift = (days) => {
@@ -103,72 +101,70 @@ function DateStepper({ value, onChange }) {
     if (!value) return "Select date";
     const d = new Date(value + "T00:00:00");
     if (Number.isNaN(d.getTime())) return value;
-    return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
+    return d.toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
   }, [value]);
+  // Show the "Today" shortcut only when the current selection isn't already today.
+  const isToday = value === todayIso();
 
   return (
-    <div className="flex items-center gap-2 relative" data-testid="floor-layout-date-stepper">
-      <button
-        type="button"
-        onClick={() => shift(-1)}
-        className="p-1.5 rounded-md border border-gray-300 hover:bg-gray-50 relative group/prev bg-white"
-        data-testid="floor-layout-prev-date"
-        aria-label="Previous Date"
-      >
-        <ChevronLeft size={14}/>
-        <span
-          role="tooltip"
-          className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1 z-30 px-1.5 py-0.5 rounded bg-gray-900 text-white text-[10px] font-medium whitespace-nowrap shadow opacity-0 group-hover/prev:opacity-100 transition-opacity"
-        >Previous Date</span>
-      </button>
+    <div className="w-full" data-testid="floor-layout-date-stepper">
+      <div className="flex items-stretch gap-1.5">
+        <button
+          type="button"
+          onClick={() => shift(-1)}
+          className="flex items-center justify-center w-8 rounded-md border border-gray-300 hover:bg-gray-50 hover:border-[#ec9324] bg-white flex-shrink-0 transition-colors"
+          data-testid="floor-layout-prev-date"
+          aria-label="Previous Date"
+          title="Previous Date"
+        >
+          <ChevronLeft size={16}/>
+        </button>
 
-      <button
-        type="button"
-        onClick={openPicker}
-        className="inline-flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-sm border border-gray-300 rounded-md focus:border-[#ec9324] focus:ring-1 focus:ring-[#ec9324] outline-none bg-white hover:bg-gray-50 cursor-pointer"
-        data-testid="floor-layout-date-picker-btn"
-        aria-label="Change date"
-      >
-        <CalendarIcon size={14} className="text-[#ec9324]"/>
-        <span className="tabular-nums">{displayLabel}</span>
-      </button>
-      {/* Off-screen native date input used purely to surface the OS/browser
-          date picker via showPicker(). Never receives layout space and cannot
-          overlap the neighbouring buttons. */}
-      <input
-        ref={hiddenInputRef}
-        type="date"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        aria-hidden="true"
-        tabIndex={-1}
-        className="sr-only pointer-events-none"
-        style={{ position: "absolute", left: 0, top: 0, width: 1, height: 1, opacity: 0 }}
-        data-testid="floor-layout-date-input"
-      />
+        <button
+          type="button"
+          onClick={openPicker}
+          className="flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-[13px] font-medium border border-gray-300 rounded-md focus:border-[#ec9324] focus:ring-1 focus:ring-[#ec9324] outline-none bg-white hover:bg-gray-50 cursor-pointer min-w-0"
+          data-testid="floor-layout-date-picker-btn"
+          aria-label="Change date"
+          title="Pick a date"
+        >
+          <CalendarIcon size={14} className="text-[#ec9324] flex-shrink-0"/>
+          <span className="tabular-nums truncate">{displayLabel}</span>
+        </button>
 
-      <button
-        type="button"
-        onClick={() => shift(1)}
-        className="p-1.5 rounded-md border border-gray-300 hover:bg-gray-50 relative group/next bg-white"
-        data-testid="floor-layout-next-date"
-        aria-label="Next Date"
-      >
-        <ChevronRight size={14}/>
-        <span
-          role="tooltip"
-          className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1 z-30 px-1.5 py-0.5 rounded bg-gray-900 text-white text-[10px] font-medium whitespace-nowrap shadow opacity-0 group-hover/next:opacity-100 transition-opacity"
-        >Next Date</span>
-      </button>
+        <input
+          ref={hiddenInputRef}
+          type="date"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          aria-hidden="true"
+          tabIndex={-1}
+          className="sr-only"
+          style={{ position: "absolute", left: -9999, top: -9999, width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+          data-testid="floor-layout-date-input"
+        />
 
-      <button
-        type="button"
-        onClick={() => onChange(todayIso())}
-        className="px-2 py-1 text-xs rounded-md border border-[#ec9324] text-[#ec9324] hover:bg-[#ec9324]/10 bg-white"
-        data-testid="floor-layout-today-btn"
-      >
-        Today
-      </button>
+        <button
+          type="button"
+          onClick={() => shift(1)}
+          className="flex items-center justify-center w-8 rounded-md border border-gray-300 hover:bg-gray-50 hover:border-[#ec9324] bg-white flex-shrink-0 transition-colors"
+          data-testid="floor-layout-next-date"
+          aria-label="Next Date"
+          title="Next Date"
+        >
+          <ChevronRight size={16}/>
+        </button>
+      </div>
+      {!isToday && (
+        <button
+          type="button"
+          onClick={() => onChange(todayIso())}
+          className="mt-1.5 w-full text-[11px] font-semibold text-[#ec9324] hover:underline"
+          data-testid="floor-layout-today-btn"
+        >
+          Jump to Today
+        </button>
+      )}
     </div>
   );
 }
@@ -314,75 +310,20 @@ function PlanInteractiveView({ plan, onBack, hideBack = false }) {
       title={plan.name}
       fullBleed
       contentClassName="flex flex-col h-screen"
-      actions={<DateStepper value={date} onChange={setDate}/>}
+      actions={!hideBack ? (
+        <button
+          onClick={onBack}
+          data-testid="floor-layout-back-btn"
+          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600 flex items-center gap-1 text-xs"
+          aria-label="Back to floor plans"
+          title="Back to floor plans"
+        >
+          <ArrowLeft size={14}/> Back
+        </button>
+      ) : null}
     >
       <div className="flex-1 relative flex overflow-hidden">
-        {/* LEFT PANEL — team filter + stats card + Meeting Bookings.
-            Kept narrow so the floor map (right) stays the primary focus. */}
-        <div className="w-80 border-r border-gray-200 bg-white flex-col hidden lg:flex flex-shrink-0" data-testid="floor-layout-side-panel">
-          {/* Panel header — back button + title + date label */}
-          <div className="px-4 py-3 border-b border-gray-200 flex items-start gap-2">
-            {!hideBack && (
-              <button
-                onClick={onBack}
-                data-testid="floor-layout-back-btn"
-                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600 flex-shrink-0"
-                aria-label="Back to floor plans"
-                title="Back to floor plans"
-              >
-                <ArrowLeft size={16}/>
-              </button>
-            )}
-            <div className="min-w-0 flex-1">
-              <div className="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Floor Layout</div>
-              <div className="text-sm font-bold text-gray-900 truncate" title={plan.name}>{plan.name}</div>
-              <div className="mt-1 text-[10px] text-gray-500" data-testid="floor-layout-date-label">
-                Showing bookings for <span className="font-semibold text-gray-700">{fmtDateLabel(date)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Team filter (multi-select) */}
-          <div className="px-4 pt-3 pb-2 border-b border-gray-100" data-testid="floor-layout-team-filter">
-            <div className="text-[11px] font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
-              <Users size={12} className="text-[#ec9324]"/>
-              Filter by Team
-            </div>
-            <TeamFilter
-              teams={teamsInBookings}
-              value={selectedTeamIds}
-              onChange={setSelectedTeamIds}
-            />
-            {selectedTeamIds.length === 1 && (
-              <div className="mt-1 text-[10px] text-[#ec9324]">Zoomed in on selected team.</div>
-            )}
-            {selectedTeamIds.length > 1 && (
-              <div className="mt-1 text-[10px] text-gray-500">Filtering {selectedTeamIds.length} teams — pan/zoom manually.</div>
-            )}
-          </div>
-
-          {/* Stats card */}
-          <div className="px-4 py-3" data-testid="floor-layout-stats-card">
-            <div className="rounded-lg border border-gray-200 overflow-hidden">
-              <div className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-[#ec9324]/10 to-transparent">
-                <div className="inline-flex items-center gap-2">
-                  <LayoutGrid size={14} className="text-[#ec9324]"/>
-                  <span className="text-[12px] font-semibold text-gray-800">Total Seats</span>
-                </div>
-                <span className="text-lg font-extrabold text-gray-900 tabular-nums" data-testid="floor-layout-stat-total">
-                  {stats.total}
-                </span>
-              </div>
-              <div className="divide-y divide-gray-100">
-                <StatRow label="Available" value={stats.available} color="#15B867" testId="floor-layout-stat-available"/>
-                <StatRow label="Pending"   value={stats.pending}   color="#111111" testId="floor-layout-stat-pending"/>
-                <StatRow label="Meetings"  value={stats.meetings}  color="#10b981" testId="floor-layout-stat-meetings"/>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* CENTER — full-height floor map. */}
+        {/* CENTER — full-width floor map. */}
         <div className="flex-1 relative min-w-0">
           {loading || !availability ? (
             <div className="absolute inset-0 flex items-center justify-center text-gray-500">
@@ -409,16 +350,17 @@ function PlanInteractiveView({ plan, onBack, hideBack = false }) {
           )}
         </div>
 
-        {/* RIGHT — Upcoming Meetings panel (collapsible). Positioned on the
-             opposite side of the left filter/stats panel. */}
+        {/* RIGHT panel — Date, Filter by Team, Total Seats, Upcoming Meetings.
+             This is the ONLY side panel (the previous left sidebar has been
+             removed). Collapsible via the header ChevronRight button. */}
         {meetingsCollapsed ? (
           <button
             type="button"
             onClick={() => setMeetingsCollapsed(false)}
             className="hidden lg:flex flex-col items-center justify-center w-7 border-l border-gray-200 bg-white hover:bg-gray-50 text-gray-500 flex-shrink-0 group"
             data-testid="floor-layout-meetings-expand"
-            aria-label="Expand Upcoming Meetings"
-            title="Show Upcoming Meetings"
+            aria-label="Expand panel"
+            title="Show panel"
           >
             <ChevronLeft size={14} className="text-[#ec9324]"/>
             <span className="mt-2 text-[10px] font-semibold tracking-wide text-gray-600 [writing-mode:vertical-rl] rotate-180 select-none whitespace-nowrap">
@@ -431,27 +373,77 @@ function PlanInteractiveView({ plan, onBack, hideBack = false }) {
             </span>
           </button>
         ) : (
-          <div className="w-72 border-l border-gray-200 bg-white flex-col hidden lg:flex flex-shrink-0" data-testid="floor-layout-meetings-side-panel">
-            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between gap-2 flex-shrink-0">
-              <div className="inline-flex items-center gap-2 text-sm font-semibold text-gray-700 min-w-0">
-                <Building2 size={14} className="text-emerald-600 flex-shrink-0"/>
-                <span className="truncate">Upcoming Meetings</span>
-                <span className="text-[11px] font-medium text-gray-500 ml-1">{filteredMeetings.length}</span>
-              </div>
+          <div className="w-80 border-l border-gray-200 bg-white flex-col hidden lg:flex flex-shrink-0" data-testid="floor-layout-meetings-side-panel">
+            {/* Collapse handle on top */}
+            <div className="px-3 pt-2 pb-1 flex items-center justify-between border-b border-gray-100 flex-shrink-0">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Floor Details</span>
               <button
                 type="button"
                 onClick={() => setMeetingsCollapsed(true)}
-                className="p-1 rounded-md hover:bg-gray-100 text-gray-500 flex-shrink-0"
+                className="p-1 rounded-md hover:bg-gray-100 text-gray-500"
                 data-testid="floor-layout-meetings-collapse"
-                aria-label="Collapse Upcoming Meetings"
+                aria-label="Collapse panel"
                 title="Collapse"
               >
                 <ChevronRight size={16}/>
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0" data-testid="floor-layout-meetings-panel">
+
+            {/* Date navigator */}
+            <div className="px-4 pt-3 pb-3 border-b border-gray-100" data-testid="floor-layout-date-section">
+              <DateStepper value={date} onChange={setDate}/>
+            </div>
+
+            {/* Filter by Team (multi-select) */}
+            <div className="px-4 pt-3 pb-3 border-b border-gray-100" data-testid="floor-layout-team-filter">
+              <div className="text-[11px] font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                <Users size={12} className="text-[#ec9324]"/>
+                Filter by Team
+              </div>
+              <TeamFilter
+                teams={teamsInBookings}
+                value={selectedTeamIds}
+                onChange={setSelectedTeamIds}
+              />
+              {selectedTeamIds.length === 1 && (
+                <div className="mt-1 text-[10px] text-[#ec9324]">Zoomed in on selected team.</div>
+              )}
+              {selectedTeamIds.length > 1 && (
+                <div className="mt-1 text-[10px] text-gray-500">Filtering {selectedTeamIds.length} teams — pan/zoom manually.</div>
+              )}
+            </div>
+
+            {/* Total Seats stats card */}
+            <div className="px-4 pt-3 pb-3 border-b border-gray-100" data-testid="floor-layout-stats-card">
+              <div className="rounded-lg border border-gray-200 overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-[#ec9324]/10 to-transparent">
+                  <div className="inline-flex items-center gap-2">
+                    <LayoutGrid size={14} className="text-[#ec9324]"/>
+                    <span className="text-[12px] font-semibold text-gray-800">Total Seats</span>
+                  </div>
+                  <span className="text-lg font-extrabold text-gray-900 tabular-nums" data-testid="floor-layout-stat-total">
+                    {stats.total}
+                  </span>
+                </div>
+                <div className="divide-y divide-gray-100">
+                  <StatRow label="Available" value={stats.available} color="#15B867" testId="floor-layout-stat-available"/>
+                  <StatRow label="Pending"   value={stats.pending}   color="#111111" testId="floor-layout-stat-pending"/>
+                  <StatRow label="Meetings"  value={stats.meetings}  color="#10b981" testId="floor-layout-stat-meetings"/>
+                </div>
+              </div>
+            </div>
+
+            {/* Upcoming Meetings */}
+            <div className="px-4 pt-3 pb-1 flex items-center justify-between flex-shrink-0">
+              <div className="inline-flex items-center gap-2 text-sm font-semibold text-gray-700 min-w-0">
+                <Building2 size={14} className="text-emerald-600 flex-shrink-0"/>
+                <span className="truncate">Upcoming Meetings</span>
+              </div>
+              <span className="text-[11px] font-medium text-gray-500">{filteredMeetings.length}</span>
+            </div>
+            <div className="flex-1 overflow-y-auto px-3 pt-1 pb-3 space-y-2 min-h-0" data-testid="floor-layout-meetings-panel">
               {filteredMeetings.length === 0 ? (
-                <div className="text-center text-xs text-gray-400 py-10">
+                <div className="text-center text-xs text-gray-400 py-8">
                   {selectedTeamIds.length > 0 && roomBookings.length > 0
                     ? "No upcoming meetings match the selected team(s)."
                     : "No upcoming meetings."}
