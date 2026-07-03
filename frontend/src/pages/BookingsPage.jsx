@@ -17,6 +17,7 @@ import {
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
+import DateFilter from "../components/DateFilter";
 import api from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Checkbox } from "../components/ui/checkbox";
@@ -28,6 +29,12 @@ import { confirm as confirmDialog } from '../lib/dialog';
 const todayIso = () => {
   const d = new Date(); const p = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+const todayIsoOf = (d) => {
+  if (!d) return "";
+  const dt = new Date(d);
+  const p = (n) => String(n).padStart(2, "0");
+  return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
 };
 const fmtDate = (iso) => {
   if (!iso) return "—";
@@ -299,6 +306,35 @@ export default function BookingsPage() {
     setPage(1); setSelected(new Set());
   };
 
+  // ---- Date filter adapter (feeds the shared <DateFilter/> popup) ------------
+  const dateFilterValue = useMemo(() => {
+    // ISO "YYYY-MM-DD" → local Date at midnight; empty → null
+    const parse = (iso) => (iso ? new Date(`${iso}T00:00:00`) : null);
+    const from = parse(dateFrom);
+    const to = parse(dateTo);
+    let mode = "between";
+    if (from && to) mode = from.getTime() === to.getTime() ? "on" : "between";
+    else if (from && !to) mode = "after";
+    else if (!from && to) mode = "before";
+    return { field: "date", mode, from, to };
+  }, [dateFrom, dateTo]);
+
+  const applyDateFilter = (next) => {
+    const iso = (d) => (d ? todayIsoOf(d) : "");
+    if (!next?.from && !next?.to) { setDateFrom(""); setDateTo(""); setPage(1); return; }
+    if (next.mode === "between") {
+      setDateFrom(iso(next.from));
+      setDateTo(iso(next.to || next.from));
+    } else if (next.mode === "on") {
+      setDateFrom(iso(next.from)); setDateTo(iso(next.from));
+    } else if (next.mode === "after") {
+      setDateFrom(iso(next.from)); setDateTo("");
+    } else if (next.mode === "before") {
+      setDateFrom(""); setDateTo(iso(next.from));
+    }
+    setPage(1);
+  };
+
   return (
     <Layout
       title="Bookings"
@@ -348,16 +384,14 @@ export default function BookingsPage() {
         <div className="bg-white border-b border-gray-200 px-6 py-3 sticky top-0 z-20" data-testid="bookings-filters">
           <div className="flex flex-wrap items-center gap-2">
             {/* Date range */}
-            <div className="flex items-center gap-1" data-testid="bookings-date-range">
-              <input type="date" value={dateFrom} onChange={e => onFilterChange(setDateFrom)(e.target.value)}
-                className="h-9 px-2 py-1 border border-gray-200 rounded-md text-xs focus:outline-none focus:border-[#ec9324]"
-                data-testid="bookings-date-from"
-                style={{ accentColor: "#ec9324" }}/>
-              <span className="text-gray-400 text-xs">→</span>
-              <input type="date" value={dateTo} onChange={e => onFilterChange(setDateTo)(e.target.value)}
-                className="h-9 px-2 py-1 border border-gray-200 rounded-md text-xs focus:outline-none focus:border-[#ec9324]"
-                data-testid="bookings-date-to"
-                style={{ accentColor: "#ec9324" }}/>
+            <div data-testid="bookings-date-range">
+              <DateFilter
+                value={dateFilterValue}
+                onChange={applyDateFilter}
+                fields={["date"]}
+                label="Date"
+                testId="bookings-date-filter"
+              />
             </div>
             {/* Search */}
             <div className="relative w-56">

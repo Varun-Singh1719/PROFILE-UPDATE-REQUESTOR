@@ -4,6 +4,7 @@ import api from "../lib/api";
 import Layout from "../components/Layout";
 import notify from "../lib/notify";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
+import DateFilter from "../components/DateFilter";
 import {
   ListChecks, Loader2, Eye, Pencil, Trash2, Plus, Filter, X, Search,
   Briefcase, Armchair, Copy,
@@ -202,24 +203,34 @@ export default function PermissionSetsListPage() {
                 />
               </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Created On (from)</label>
-              <input
-                type="date"
-                value={createdFrom}
-                onChange={(e) => setCreatedFrom(e.target.value)}
-                data-testid="pset-filter-from"
-                className="w-full px-2 py-2 text-sm rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Created On (to)</label>
-              <input
-                type="date"
-                value={createdTo}
-                onChange={(e) => setCreatedTo(e.target.value)}
-                data-testid="pset-filter-to"
-                className="w-full px-2 py-2 text-sm rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40"
+            <div className="lg:col-span-2">
+              <label className="block text-xs font-medium text-gray-600 mb-1">Created On</label>
+              <DateFilter
+                value={{
+                  field: "created_at",
+                  mode: createdFrom && createdTo && createdFrom === createdTo
+                    ? "on"
+                    : (createdFrom && createdTo ? "between" : (createdFrom ? "after" : (createdTo ? "before" : "between"))),
+                  from: createdFrom ? new Date(`${createdFrom}T00:00:00`) : null,
+                  to: createdTo ? new Date(`${createdTo}T00:00:00`) : null,
+                }}
+                onChange={(v) => {
+                  const iso = (d) => {
+                    if (!d) return "";
+                    const dt = new Date(d);
+                    const p = (n) => String(n).padStart(2, "0");
+                    return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
+                  };
+                  if (!v?.from && !v?.to) { setCreatedFrom(""); setCreatedTo(""); return; }
+                  if (v.mode === "between") { setCreatedFrom(iso(v.from)); setCreatedTo(iso(v.to || v.from)); }
+                  else if (v.mode === "on") { setCreatedFrom(iso(v.from)); setCreatedTo(iso(v.from)); }
+                  else if (v.mode === "after") { setCreatedFrom(iso(v.from)); setCreatedTo(""); }
+                  else if (v.mode === "before") { setCreatedFrom(""); setCreatedTo(iso(v.from)); }
+                }}
+                fields={["created_at"]}
+                label="Created On"
+                testId="pset-filter-created"
+                className="w-full h-[38px] justify-start"
               />
             </div>
             <div>

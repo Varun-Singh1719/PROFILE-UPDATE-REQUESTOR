@@ -30,83 +30,131 @@ export function getCurrentMonthRange() {
   return { field: "created_at", mode: "between", from, to };
 }
 
-const FIELD_LABEL = { created_at: "Created At", updated_at: "Updated At" };
+const FIELD_LABEL = { created_at: "Created At", updated_at: "Updated At", date: "Date" };
 const MODE_LABEL = { between: "Between", on: "On", before: "Before", after: "After" };
 
-export default function DateFilter({ value, onChange }) {
+/**
+ * DateFilter — Metabase-style date range picker in a modal popup.
+ *
+ * Trigger: compact button `[Label]: <value>` with a calendar icon and × clear
+ * (when a filter is active). Never shows two inline date inputs.
+ *
+ * Popup (matches screenshot):
+ *   • Optional field radio group (Updated At / Created At / …) at the top
+ *   • Tabs: Between · On · Before · After  (orange underline for active)
+ *   • Between → two side-by-side calendars (From / To) with labelled boxes above
+ *   • On/Before/After → single calendar
+ *   • Footer: Reset (left) · Cancel + Submit (right, orange)
+ *
+ * Props:
+ *   value              — { field, mode, from, to } (see getCurrentMonthRange)
+ *   onChange(next)     — fires when Submit is pressed with the new value
+ *   fields             — array of field keys to expose in the top radio group.
+ *                        Defaults to ["updated_at", "created_at"]. Pass a single
+ *                        entry to lock the field and auto-hide the group.
+ *   label              — trigger label prefix. Defaults to the current field's
+ *                        label (e.g. "Created At"), or "Date" if only one field.
+ *   testId             — data-testid prefix (defaults to "date-filter").
+ *   className          — extra classes for the trigger button.
+ */
+export default function DateFilter({
+  value,
+  onChange,
+  fields = ["updated_at", "created_at"],
+  label,
+  testId = "date-filter",
+  className = "",
+}) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
 
   useEffect(() => { if (open) setDraft(value); }, [open, value]);
 
+  const showFieldSelector = fields.length > 1;
+  // Ensure the value's field is always one of the allowed fields
+  const currentField = value?.field && fields.includes(value.field) ? value.field : fields[0];
+
   const trigger = useMemo(() => {
-    if (!value?.from && !value?.to) return "All time";
-    const f = FIELD_LABEL[value.field || "created_at"];
-    if (value.mode === "between") return `${f}: ${fmtShort(value.from)} → ${fmtShort(value.to)}`;
-    if (value.mode === "on") return `${f}: On ${fmtShort(value.from)}`;
-    if (value.mode === "before") return `${f}: Before ${fmtShort(value.from)}`;
-    if (value.mode === "after") return `${f}: After ${fmtShort(value.from)}`;
-    return "All time";
-  }, [value]);
+    const prefix = label || (showFieldSelector ? (FIELD_LABEL[currentField] || "Date") : (FIELD_LABEL[fields[0]] || "Date"));
+    if (!value?.from && !value?.to) return `${prefix}: All time`;
+    if (value.mode === "between") return `${prefix}: ${fmtShort(value.from)} → ${fmtShort(value.to)}`;
+    if (value.mode === "on") return `${prefix}: On ${fmtShort(value.from)}`;
+    if (value.mode === "before") return `${prefix}: Before ${fmtShort(value.from)}`;
+    if (value.mode === "after") return `${prefix}: After ${fmtShort(value.from)}`;
+    return `${prefix}: All time`;
+  }, [value, label, showFieldSelector, currentField, fields]);
 
   const submit = () => { onChange?.(draft); setOpen(false); };
-  const reset = () => { setDraft({ field: draft?.field || "created_at", mode: "between", from: null, to: null }); };
+  const reset = () => { setDraft({ field: draft?.field || fields[0], mode: "between", from: null, to: null }); };
 
   const clear = (e) => {
     e.stopPropagation();
-    const next = { field: "created_at", mode: "between", from: null, to: null };
+    e.preventDefault();
+    const next = { field: fields[0], mode: "between", from: null, to: null };
     onChange?.(next);
   };
 
-  const hasFilter = value?.from || value?.to;
-  const field = draft?.field || "created_at";
+  const hasFilter = !!(value?.from || value?.to);
+  const field = draft?.field && fields.includes(draft.field) ? draft.field : fields[0];
   const mode = draft?.mode || "between";
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" data-testid="date-filter-trigger"
-          className="h-10 border-gray-300 text-gray-700 font-medium gap-2">
-          <CalendarIcon size={15} className="text-[#ec9324]"/>
-          <span>{trigger}</span>
+        <button
+          type="button"
+          data-testid={`${testId}-trigger`}
+          className={`inline-flex items-center gap-2 h-9 px-3 rounded-md border border-gray-200 bg-white
+                      hover:border-gray-300 text-xs text-gray-700 focus:outline-none focus:ring-2
+                      focus:ring-[#ec9324]/30 ${className}`}
+        >
+          <CalendarIcon size={14} className="text-[#ec9324] shrink-0"/>
+          <span className="truncate max-w-[280px]">{trigger}</span>
           {hasFilter && (
-            <span onClick={clear} data-testid="date-filter-clear"
-              className="ml-1 inline-flex w-4 h-4 items-center justify-center rounded-full hover:bg-gray-200">
+            <span
+              onClick={clear}
+              role="button"
+              aria-label="Clear date filter"
+              data-testid={`${testId}-clear`}
+              className="ml-1 inline-flex w-4 h-4 items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+            >
               <X size={11}/>
             </span>
           )}
-        </Button>
+        </button>
       </DialogTrigger>
       <DialogContent className="max-w-4xl p-0 overflow-hidden">
-        {/* Field selector */}
-        <div className="flex items-center gap-8 px-8 pt-6 pb-5 border-b border-gray-100">
-          {(["updated_at", "created_at"]).map((f) => (
-            <label key={f} className="flex items-center gap-2 cursor-pointer" data-testid={`date-field-${f}`}>
-              <span
-                className={`inline-flex w-5 h-5 rounded-full border-2 items-center justify-center ${
-                  field === f ? "border-[#ec9324]" : "border-gray-300"
-                }`}
-                onClick={() => setDraft({ ...draft, field: f })}
-              >
-                {field === f && <span className="w-2.5 h-2.5 rounded-full bg-[#ec9324]" />}
-              </span>
-              <span
-                className={`text-base ${field === f ? "text-gray-900 font-medium" : "text-gray-600"}`}
-                onClick={() => setDraft({ ...draft, field: f })}
-              >
-                {FIELD_LABEL[f]}
-              </span>
-            </label>
-          ))}
-        </div>
+        {/* Field selector (hidden when only one field is exposed) */}
+        {showFieldSelector && (
+          <div className="flex items-center gap-8 px-8 pt-6 pb-5 border-b border-gray-100">
+            {fields.map((f) => (
+              <label key={f} className="flex items-center gap-2 cursor-pointer" data-testid={`${testId}-field-${f}`}>
+                <span
+                  className={`inline-flex w-5 h-5 rounded-full border-2 items-center justify-center ${
+                    field === f ? "border-[#ec9324]" : "border-gray-300"
+                  }`}
+                  onClick={() => setDraft({ ...draft, field: f })}
+                >
+                  {field === f && <span className="w-2.5 h-2.5 rounded-full bg-[#ec9324]" />}
+                </span>
+                <span
+                  className={`text-base ${field === f ? "text-gray-900 font-medium" : "text-gray-600"}`}
+                  onClick={() => setDraft({ ...draft, field: f })}
+                >
+                  {FIELD_LABEL[f] || f}
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
 
         {/* Mode tabs */}
-        <div className="flex gap-2 px-8 pt-4 border-b border-gray-100">
+        <div className={`flex gap-2 px-8 border-b border-gray-100 ${showFieldSelector ? "pt-4" : "pt-6"}`}>
           {(["between", "on", "before", "after"]).map((m) => (
             <button
               key={m}
               type="button"
-              data-testid={`date-mode-${m}`}
+              data-testid={`${testId}-mode-${m}`}
               onClick={() => setDraft({ ...draft, mode: m, to: m === "between" ? draft?.to : null })}
               className={`px-4 py-3 text-sm font-medium relative ${
                 mode === m ? "text-[#ec9324]" : "text-gray-500 hover:text-gray-800"
@@ -161,12 +209,12 @@ export default function DateFilter({ value, onChange }) {
 
         {/* Footer */}
         <div className="flex items-center justify-between px-8 py-4 border-t border-gray-100 bg-gray-50/50">
-          <Button variant="outline" onClick={reset} data-testid="date-filter-reset" className="rounded-full px-6">
+          <Button variant="outline" onClick={reset} data-testid={`${testId}-reset`} className="rounded-full px-6">
             Reset
           </Button>
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setOpen(false)} className="rounded-full px-6">Cancel</Button>
-            <Button onClick={submit} data-testid="date-filter-submit"
+            <Button onClick={submit} data-testid={`${testId}-submit`}
               className="bg-[#ec9324] hover:bg-[#d4811f] text-white rounded-full px-8">
               Submit
             </Button>
@@ -190,7 +238,7 @@ function DateInput({ label, value, onChange }) {
 export function dateFilterToParams(v) {
   if (!v || !v.from) return {};
   const from = toISODate(v.from);
-  const field = v.field === "updated_at" ? "updated_at" : "created_at";
+  const field = v.field === "updated_at" ? "updated_at" : (v.field === "date" ? "date" : "created_at");
   if (v.mode === "on") return { date_field: field, date_from: from, date_to: from };
   if (v.mode === "after") return { date_field: field, date_from: from };
   if (v.mode === "before") return { date_field: field, date_to: from };

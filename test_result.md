@@ -575,7 +575,16 @@ agent_communication:
 
     - agent: "main"
       message: |
-        Filter dropdowns + sticky bars pass (no testing agent run per user instruction).
+        Calendar filter (Metabase-style) rolled out.
+        Component: /app/frontend/src/components/DateFilter.jsx
+          - Trigger: single compact button "Label: <value>" + calendar icon + × clear (never two boxes).
+          - Popup: Between · On · Before · After tabs (orange underline for active). Between = two side-by-side calendars (From/To labels). On/Before/After = one calendar. Reset (left), Cancel + Submit (orange, right).
+          - New props: fields (locks/hides the field radio group when length===1), label, testId, className.
+        Callers updated:
+          - BookingsPage: replaced two <input type="date"> for dateFrom/dateTo with a single DateFilter (field="date"). Underlying state (dateFrom / dateTo ISO strings + `date_from`/`date_to` params) is unchanged — no backend change.
+          - PermissionSetsListPage: replaced "Created On (from)" + "Created On (to)" native date inputs with a single DateFilter (field="created_at"). Feeds the same `created_from` / `created_to` state — no backend change.
+        Existing Dashboard usages (Admin/Manager/RA/DQ) continue to use DateFilter unchanged.
+
         Env: switched backend/.env to user's MongoDB Atlas cluster (DB_NAME=app_db); recreated frontend/.env with REACT_APP_BACKEND_URL.
         UI changes:
           - MultiSelectFilter (components/ui/MultiSelectFilter.jsx): added optional `single` prop → radio-style row for filters where the backend only accepts one value.
