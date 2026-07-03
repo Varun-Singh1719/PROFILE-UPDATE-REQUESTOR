@@ -4,7 +4,7 @@ import {
   WorkstationIconSVG,
   WORKSTATION_SEAT_CENTER,
 } from './icons/workstationSilhouette';
-import { teamSolid } from '../lib/teamColors';
+import { teamSolid, paletteForTeam } from '../lib/teamColors';
 
 /**
  * Color-coded workstation seat used by the Workstation Booking floor map.
@@ -46,6 +46,11 @@ const WorkstationSeat = ({
   const fill = status === "team"
     ? (teamColor ? teamSolid(teamColor) : COLOR.occupied)
     : COLOR[status] || COLOR.available;
+  // For team-assigned seats, render the full two-stop gradient (mirrors the
+  // Teams tab's gradient chips instead of only showing the first stop as a
+  // solid color).
+  const gradientStops = status === "team" && teamColor ? paletteForTeam(teamColor) : null;
+  const gradientId = gradientStops ? `wsg-${String(seat.id).replace(/[^a-zA-Z0-9_-]/g, "_")}` : undefined;
   const isOccupied = status === "occupied" || status === "team";
   const isPending = status === "pending";
   const isSelected = status === "selected";
@@ -151,6 +156,8 @@ const WorkstationSeat = ({
           fill={isPending ? '#000000' : fill}
           stroke="#000000"
           strokeWidth={4}
+          gradientStops={gradientStops}
+          gradientId={gradientId}
           style={{
             position: 'absolute',
             inset: 0,

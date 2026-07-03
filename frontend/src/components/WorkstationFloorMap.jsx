@@ -42,6 +42,14 @@ const WorkstationFloorMap = ({
   centerOnSeatId = null,
   rooms = [],
   roomBookingsByRoom = {},
+  // Floor Layout view — only shows Available / Pending Approval / Teams
+  legendPreset,
+  // Multi-seat zoom target: when a single team filter is active, the parent
+  // passes the seat ids for that team and we pan+zoom to their bounding box.
+  zoomToSeatIds = null,
+  // Dims (opacity) any seat NOT in this set (used by the team filter to keep
+  // context but visually highlight the selected team's seats).
+  dimSeatsNotIn = null,
 }) => {
   const [pageWidth] = useState(1200);
   const [search, setSearch] = useState('');
@@ -102,6 +110,44 @@ const WorkstationFloorMap = ({
     return () => cancelAnimationFrame(id);
   }, [centerOnSeatId, pdfReady]);
 
+  // Bounding box of team-filtered seats — computed as %s so we can render a
+  // hidden anchor element inside the transform and call zoomToElement on it.
+  const zoomBBox = useMemo(() => {
+    if (!zoomToSeatIds || zoomToSeatIds.length === 0) return null;
+    const set = new Set(zoomToSeatIds);
+    const pts = seats.filter((s) => set.has(s.id));
+    if (pts.length === 0) return null;
+    const xs = pts.map((s) => s.x);
+    const ys = pts.map((s) => s.y);
+    const sizePct = 6; // seats occupy ~6% width visually; pad the bbox by half
+    const minX = Math.max(0, Math.min(...xs) - sizePct / 2);
+    const maxX = Math.min(100, Math.max(...xs) + sizePct / 2);
+    const minY = Math.max(0, Math.min(...ys) - sizePct / 2);
+    const maxY = Math.min(100, Math.max(...ys) + sizePct / 2);
+    return { minX, maxX, minY, maxY };
+  }, [zoomToSeatIds, seats]);
+
+  const bboxAnchorRef = useRef(null);
+
+  // Pan + zoom to the bbox anchor whenever the filtered team's seat set
+  // changes (single-team filter). Uses a stable key from seat ids so we don't
+  // re-zoom when the parent recomputes arrays with identical content.
+  const zoomKey = useMemo(
+    () => (zoomToSeatIds ? [...zoomToSeatIds].sort().join(",") : ""),
+    [zoomToSeatIds],
+  );
+  useEffect(() => {
+    if (!zoomBBox || !pdfReady || !bboxAnchorRef.current) return;
+    const raf = requestAnimationFrame(() => {
+      try {
+        transformRef.current?.zoomToElement?.(bboxAnchorRef.current, undefined, 500, 'easeOut');
+      } catch {
+        /* ignore */
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [zoomKey, zoomBBox, pdfReady]);
+
   return (
     <div className="w-full h-full bg-gray-100 relative overflow-hidden rounded-lg">
       {loading && (
@@ -160,21 +206,25 @@ const WorkstationFloorMap = ({
                     <div className="w-4 h-4 rounded-sm bg-white border-2 border-black" />
                     <span>Available</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded-sm bg-[#22C55E]" />
-                    <span>Selected</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded-sm bg-gray-400" />
-                    <span>Occupied</span>
-                  </div>
+                  {legendPreset !== "floor-layout" && (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded-sm bg-[#22C55E]" />
+                        <span>Selected</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded-sm bg-gray-400" />
+                        <span>Occupied</span>
+                      </div>
+                    </>
+                  )}
                   <div className="flex items-center gap-2">
                     <div className="w-4 h-4 rounded-sm bg-[#111111]" />
                     <span>Pending Approval</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-4 h-4 rounded-sm" style={{ background: 'linear-gradient(45deg, #6366F1 50%, #F59E0B 50%)' }} />
-                    <span>Team-assigned</span>
+                    <span>{legendPreset === "floor-layout" ? "Teams" : "Team-assigned"}</span>
                   </div>
                 </div>
               </div>
@@ -226,26 +276,49 @@ const WorkstationFloorMap = ({
                 {pdfReady && (
                   <div className="absolute inset-0 pointer-events-none">
                     <div className="relative w-full h-full pointer-events-auto">
-                      {enrichedSeats.map((seat) => (
-                        <WorkstationSeat
-                          key={seat.id}
-                          seat={seat}
-                          status={seat._status}
-                          teamColor={seat._teamColor}
-                          booking={seat._booking}
-                          request={seat._request}
-                          isClickable={!disabled}
-                          searchHighlight={seat._match}
-                          onClick={onToggleSeat}
-                          onOccupiedClick={(s, info) => {
-                            if (seat._status === 'pending') {
-                              if (onOpenRequestDetail) onOpenRequestDetail(s, info);
-                            } else if (onOpenBookingDetail) {
-                              onOpenBookingDetail(s, info);
-                            }
+                      {enrichedSeats.map((seat) => {
+                        const dimmed = dimSeatsNotIn && !dimSeatsNotIn.has(seat.id);
+                        return (
+                          <div
+                            key={seat.id}
+                            style={{ opacity: dimmed ? 0.25 : 1, transition: 'opacity 250ms' }}
+                          >
+                            <WorkstationSeat
+                              seat={seat}
+                              status={seat._status}
+                              teamColor={seat._teamColor}
+                              booking={seat._booking}
+                              request={seat._request}
+                              isClickable={!disabled}
+                              searchHighlight={seat._match}
+                              onClick={onToggleSeat}
+                              onOccupiedClick={(s, info) => {
+                                if (seat._status === 'pending') {
+                                  if (onOpenRequestDetail) onOpenRequestDetail(s, info);
+                                } else if (onOpenBookingDetail) {
+                                  onOpenBookingDetail(s, info);
+                                }
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
+                      {/* Invisible anchor for team-filter zoom-to-bbox */}
+                      {zoomBBox && (
+                        <div
+                          ref={bboxAnchorRef}
+                          aria-hidden="true"
+                          style={{
+                            position: 'absolute',
+                            left: `${zoomBBox.minX}%`,
+                            top: `${zoomBBox.minY}%`,
+                            width: `${Math.max(0.5, zoomBBox.maxX - zoomBBox.minX)}%`,
+                            height: `${Math.max(0.5, zoomBBox.maxY - zoomBBox.minY)}%`,
+                            pointerEvents: 'none',
                           }}
+                          data-testid="ws-map-zoom-anchor"
                         />
-                      ))}
+                      )}
                     </div>
                   </div>
                 )}

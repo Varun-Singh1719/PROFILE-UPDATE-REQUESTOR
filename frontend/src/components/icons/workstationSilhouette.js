@@ -93,24 +93,42 @@ export const WORKSTATION_MASK_URL =
 /**
  * Convenience wrapper: a complete <svg> for the chair, ready to drop
  * into a flex/absolute container. Caller controls fill/stroke.
+ *
+ * Pass `gradientStops=[colorA, colorB]` + a unique `gradientId` to render
+ * the silhouette with a linear-gradient fill (used to mirror the Teams tab's
+ * gradient chips on team-assigned workstations).
  */
 export const WorkstationIconSVG = ({
   fill = '#FFFFFF',
   stroke = '#000000',
   strokeWidth = 4,
+  gradientStops,
+  gradientId,
   style,
   className,
-}) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    viewBox={WORKSTATION_VIEWBOX}
-    width="100%"
-    height="100%"
-    preserveAspectRatio="xMidYMid meet"
-    style={style}
-    className={className}
-    shapeRendering="geometricPrecision"
-  >
-    <WorkstationShape fill={fill} stroke={stroke} strokeWidth={strokeWidth} />
-  </svg>
-);
+}) => {
+  const useGradient = Array.isArray(gradientStops) && gradientStops.length >= 2 && !!gradientId;
+  const actualFill = useGradient ? `url(#${gradientId})` : fill;
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox={WORKSTATION_VIEWBOX}
+      width="100%"
+      height="100%"
+      preserveAspectRatio="xMidYMid meet"
+      style={style}
+      className={className}
+      shapeRendering="geometricPrecision"
+    >
+      {useGradient && (
+        <defs>
+          <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor={gradientStops[0]} />
+            <stop offset="100%" stopColor={gradientStops[1]} />
+          </linearGradient>
+        </defs>
+      )}
+      <WorkstationShape fill={actualFill} stroke={stroke} strokeWidth={strokeWidth} />
+    </svg>
+  );
+};

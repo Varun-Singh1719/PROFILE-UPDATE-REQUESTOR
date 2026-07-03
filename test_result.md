@@ -620,3 +620,109 @@ agent_communication:
 
 
 
+
+    - agent: "main"
+      message: |
+        Floor Layout screen — bug fix + enhancements. Files touched:
+          - /app/frontend/src/pages/FloorLayoutPage.jsx
+          - /app/frontend/src/components/WorkstationFloorMap.jsx
+          - /app/frontend/src/components/WorkstationSeat.jsx
+          - /app/frontend/src/components/icons/workstationSilhouette.js
+
+        Changes:
+        1) BUG FIX — "Next Date" button on the floor layout header wasn't clickable because the native Chrome calendar-picker-indicator on the date input was overlapping it. Fixed via CSS: `.floor-layout-date-input::-webkit-calendar-picker-indicator { opacity: 0; position: absolute; inset: 0; }` (native picker still opens on input click, but no longer eats the Next button's click area). Also added `type="button"` guard on prev/next buttons.
+        2) Added hover tooltips "Previous Date" and "Next Date" on the arrow buttons.
+        3) Restructured PlanInteractiveView layout: removed the top header stats bar. New left panel (w-80) contains: Floor Layout label + plan name + date, "Filter by Team" multi-select, Total Seats stats card, and Meeting Bookings list. Right side is now full-height floor map only.
+        4) Stats card format changed from "0 booked · 0 pending · 0 meetings" to "Total Seats" with sub-rows "Available" (= total - booked - pending), "Pending", "Meetings" (dropped "Booked").
+        5) Team filter (multi-select) sourced from the day's bookings that have a team_id. When EXACTLY ONE team is selected, WorkstationFloorMap zooms into the bounding box of that team's seats (via new prop `zoomToSeatIds` + hidden bbox anchor + zoomToElement). When multiple teams are selected, no auto-zoom — just filters the Meeting Bookings list and dims non-team seats to 25% opacity for context. Selecting 0 teams shows everything at full opacity.
+        6) Team-color rendering fix: workstation seats now paint the FULL 2-stop palette gradient (via SVG <linearGradient>) instead of only the first stop (teamSolid). Mirrors the Teams tab exactly. `WorkstationIconSVG` now accepts `gradientStops` + `gradientId`. `WorkstationSeat` computes `paletteForTeam(team_color)` for status==='team' and passes it through.
+        7) Legend simplified on the Floor Layout view only (WorkstationFloorMap prop `legendPreset="floor-layout"`): only shows Available, Pending Approval, Teams (Team-assigned renamed). Workstation Booking / Pending Approvals screens keep the full legend.
+
+        Please test:
+          - Bug fix: On /workspace-manager/floor-layout, click the Next Date chevron in the top-right header — the date input value must advance by 1 day. Similarly for Previous.
+          - Tooltips: hovering the chevron buttons should surface "Previous Date" / "Next Date".
+          - Left-panel structure: sidebar shows "FLOOR LAYOUT / Tower C - 5th Floor / Showing bookings for …", team filter, Total Seats card with Available/Pending/Meetings rows, and Meeting Bookings list.
+          - Legend on the floor map (top-left) shows only 3 items: Available, Pending Approval, Teams.
+          - Do NOT regress WorkstationBookingPage or PendingApprovalsPage legend (should still show 5 items including Selected + Occupied).
+
+    - agent: "testing"
+      message: |
+        ✅ FLOOR LAYOUT TESTING COMPLETE - ALL FEATURES VERIFIED
+        
+        Comprehensive end-to-end testing completed for the Floor Layout bug fix and new features. All requirements from the review request have been verified successfully.
+        
+        KEY FINDINGS:
+        1. PRIMARY BUG FIX ✅: Next Date button now works perfectly - advances date by exactly 1 day
+        2. TOOLTIPS ✅: Both prev/next buttons show correct hover tooltips
+        3. LEFT PANEL ✅: All components present and correctly structured
+        4. LEGEND ✅: Floor Layout shows only 3 items (Available, Pending Approval, Teams)
+        5. TEAM FILTER ✅: Single-team zoom working, multi-team filtering working, Clear button working
+        6. NON-REGRESSION ✅: Workstation Booking page still shows all 5 legend items
+        
+        No console errors detected. All functionality working as specified.
+        
+        READY FOR USER ACCEPTANCE TESTING.
+
+
+frontend:
+  - task: "Floor Layout — Next Date button fix + tooltips + left-panel restructure + team filter zoom + gradient team colors + simplified legend"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/pages/FloorLayoutPage.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Bug fix + 6 feature enhancements to /workspace-manager/floor-layout (plan detail view). Native date-picker indicator was blocking Next button; new left panel houses Filter by Team + Total Seats card + Meeting Bookings; team gradient colors now render on seats; legend simplified to 3 rows. Test credentials: admin@ticketing.com / Admin@123.
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ ALL TESTS PASSED - Floor Layout bug fix and features verified end-to-end.
+            
+            PRIMARY BUG FIX VERIFIED:
+            - Next Date button advances date by exactly 1 day (tested: 2026-07-03 → 2026-07-04)
+            - Previous Date button moves back by 1 day correctly
+            - Today button resets to current date
+            - CSS fix (calendar-picker-indicator opacity:0) successfully prevents overlap
+            
+            TOOLTIPS VERIFIED:
+            - "Next Date" tooltip appears on hover over next chevron button
+            - "Previous Date" tooltip appears on hover over prev chevron button
+            - Tooltips use role="tooltip" and opacity transition as designed
+            
+            LEFT PANEL STRUCTURE VERIFIED:
+            - Side panel (data-testid="floor-layout-side-panel") present with correct layout
+            - Header shows plan name + "Showing bookings for [date]" label
+            - Team Filter section (data-testid="floor-layout-team-filter") with toggle dropdown
+            - Total Seats stats card (data-testid="floor-layout-stats-card") displays:
+              * Available stat (156 seats)
+              * Pending stat (0)
+              * Meetings stat (0)
+            - Old "Booked" row correctly removed from stats
+            - Meeting Bookings panel (data-testid="floor-layout-meetings-panel") present
+            
+            LEGEND SIMPLIFIED (FLOOR LAYOUT PRESET):
+            - Legend shows ONLY 3 items: Available, Pending Approval, Teams
+            - "Selected" and "Occupied" correctly NOT shown (as per floor-layout preset)
+            - Legend preset isolation working correctly
+            
+            TEAM FILTER FUNCTIONALITY:
+            - Dropdown opens and shows team options (2 teams found: Aquadatics, Chem Catalysts)
+            - SINGLE team selection triggers zoom: zoom anchor (data-testid="ws-map-zoom-anchor") present, map zooms to team's seat bounding box
+            - MULTIPLE team selection: both team chips visible in toggle, no auto-zoom, seats for both teams highlighted with gradient colors (green + orange), non-team seats dimmed to 25% opacity
+            - Clear button resets filter to "All teams" and removes zoom anchor
+            - Team gradient colors render correctly on seats (full 2-stop gradient, not just first stop)
+            
+            NON-REGRESSION VERIFIED:
+            - Workstation Booking page (/workspace-manager/workstation-booking) legend shows ALL 5 items:
+              * Available ✅
+              * Selected ✅
+              * Occupied ✅
+              * Pending Approval ✅
+              * Team-assigned ✅
+            - Floor Layout preset did NOT leak into Workstation Booking page
+            
+            No console errors detected during testing. All screenshots captured successfully.
