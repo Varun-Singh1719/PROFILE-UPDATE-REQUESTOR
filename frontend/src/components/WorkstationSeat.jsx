@@ -4,7 +4,25 @@ import {
   WorkstationIconSVG,
   WORKSTATION_SEAT_CENTER,
 } from './icons/workstationSilhouette';
+import PersonIcon from './icons/PersonIcon';
+import WorkspacesIcon from './icons/WorkspacesIcon';
+import CalendarMonthIcon from './icons/CalendarMonthIcon';
 import { teamSolid, paletteForTeam } from '../lib/teamColors';
+
+// Format an ISO date string (e.g. "2026-07-03") into a compact, human friendly
+// label like "Fri, 03 Jul 2026". Falls back to the raw string on parse errors.
+const formatTipDate = (iso) => {
+  if (!iso) return '';
+  try {
+    const d = new Date(String(iso).length === 10 ? `${iso}T00:00:00` : iso);
+    if (Number.isNaN(d.getTime())) return String(iso);
+    return d.toLocaleDateString(undefined, {
+      weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
+    });
+  } catch {
+    return String(iso);
+  }
+};
 
 /**
  * Color-coded workstation seat used by the Workstation Booking floor map.
