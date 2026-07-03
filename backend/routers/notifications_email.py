@@ -10,6 +10,23 @@ from core import (
 )
 
 
+def _csv_list(v):
+    """Parse a comma-separated string into a de-duplicated non-empty list."""
+    if not v:
+        return []
+    seen = set()
+    out = []
+    for part in str(v).split(","):
+        p = part.strip()
+        if not p or p.lower() == "all":
+            continue
+        if p in seen:
+            continue
+        seen.add(p)
+        out.append(p)
+    return out
+
+
 # ---------- Notifications Outbox ----------
 @api_router.get("/notifications/outbox")
 async def list_notifications(
@@ -20,8 +37,12 @@ async def list_notifications(
     limit: int = 200,
 ):
     query = {}
-    if kind: query["kind"] = kind
-    if status: query["status"] = status
+    kind_list = _csv_list(kind)
+    if kind_list:
+        query["kind"] = {"$in": kind_list} if len(kind_list) > 1 else kind_list[0]
+    status_list = _csv_list(status)
+    if status_list:
+        query["status"] = {"$in": status_list} if len(status_list) > 1 else status_list[0]
     if q:
         query["$or"] = [
             {"to_email": {"$regex": q, "$options": "i"}},
@@ -50,8 +71,12 @@ async def delete_notification(notif_id: str, user=Depends(require_role("Super Ad
 @api_router.get("/email-templates")
 async def list_email_templates(user=Depends(require_role("Super Admin", "Admin")), q: Optional[str] = None, category: Optional[str] = None, status: Optional[str] = None):
     query = {}
-    if category: query["category"] = category
-    if status: query["status"] = status
+    cat_list = _csv_list(category)
+    if cat_list:
+        query["category"] = {"$in": cat_list} if len(cat_list) > 1 else cat_list[0]
+    status_list = _csv_list(status)
+    if status_list:
+        query["status"] = {"$in": status_list} if len(status_list) > 1 else status_list[0]
     if q:
         query["$or"] = [
             {"name": {"$regex": q, "$options": "i"}},

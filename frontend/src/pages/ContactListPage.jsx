@@ -15,6 +15,7 @@ import {
 } from "../components/ui/dropdown-menu";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "../components/ui/tooltip";
 import MultiSelect from "../components/MultiSelect";
+import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import UserAvatar from "../components/UserAvatar";
 import Pagination from "../components/Pagination";
 import notify from "../lib/notify";
@@ -632,9 +633,9 @@ export default function ContactListPage() {
   const [sortBy, setSortBy] = useState("name");
   const [sortDir, setSortDir] = useState("asc");
   const [q, setQ] = useState("");
-  const [role, setRole] = useState("all");
-  const [status, setStatus] = useState("all");
-  const [psetFilter, setPsetFilter] = useState("all");
+  const [role, setRole] = useState([]);
+  const [status, setStatus] = useState([]);
+  const [psetFilter, setPsetFilter] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editing, setEditing] = useState(null);
@@ -663,9 +664,9 @@ export default function ContactListPage() {
     const r = await api.get("/contacts", {
       params: {
         q: q || undefined,
-        role: role === "all" ? undefined : role,
-        status: status === "all" ? undefined : status,
-        permission_set_id: psetFilter === "all" ? undefined : psetFilter,
+        role: role.length ? role.join(",") : undefined,
+        status: status.length ? status.join(",") : undefined,
+        permission_set_id: psetFilter.length ? psetFilter.join(",") : undefined,
         page, page_size: pageSize, sort_by: sortBy, sort_dir: sortDir,
       },
     });
@@ -719,8 +720,8 @@ export default function ContactListPage() {
     const token = localStorage.getItem("access_token") || "";
     const params = new URLSearchParams();
     if (q) params.set("q", q);
-    if (role !== "all") params.set("role", role);
-    if (status !== "all") params.set("status", status);
+    if (role.length) params.set("role", role.join(","));
+    if (status.length) params.set("status", status.join(","));
     const busyToken = __busyBridge.start("Exporting CSV…");
     fetch(`${API}/contacts/export.csv?${params.toString()}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -983,34 +984,33 @@ export default function ContactListPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
           <Input placeholder="Search name or email..." className="pl-9" value={q} onChange={(e) => setQ(e.target.value)} data-testid="contact-search"/>
         </div>
-        <Select value={role} onValueChange={setRole}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="Role"/></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Roles</SelectItem>
-            {ALL_ROLE_FILTERS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="w-40"><SelectValue placeholder="Status"/></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="Active">Active</SelectItem>
-            <SelectItem value="Inactive">Inactive</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={psetFilter} onValueChange={setPsetFilter}>
-          <SelectTrigger className="w-64" data-testid="contact-pset-filter">
-            <SelectValue placeholder="Permission Set"/>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Permission Sets</SelectItem>
-            {permissionSets.map((p) => (
-              <SelectItem key={p.id} value={p.id} data-testid={`pset-filter-${p.numeric_id}`}>
-                #{p.numeric_id} · {p.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <MultiSelectFilter
+          label="Role"
+          value={role}
+          onChange={setRole}
+          options={ALL_ROLE_FILTERS.map((r) => ({ value: r, label: r }))}
+          testIdPrefix="contact-role-filter"
+          className="w-48"
+        />
+        <MultiSelectFilter
+          label="Status"
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: "Active", label: "Active" },
+            { value: "Inactive", label: "Inactive" },
+          ]}
+          testIdPrefix="contact-status-filter"
+          className="w-40"
+        />
+        <MultiSelectFilter
+          label="Permission Set"
+          value={psetFilter}
+          onChange={setPsetFilter}
+          options={permissionSets.map((p) => ({ value: p.id, label: `#${p.numeric_id} · ${p.name}` }))}
+          testIdPrefix="contact-pset-filter"
+          className="w-64"
+        />
       </div>
 
       <div className="mt-6 flex-1 flex flex-col bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">

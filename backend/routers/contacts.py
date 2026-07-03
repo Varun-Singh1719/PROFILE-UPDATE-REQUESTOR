@@ -73,6 +73,23 @@ async def _enrich_contacts_with_team(contacts: List[dict]) -> List[dict]:
     return contacts
 
 
+def _csv_list(v):
+    """Parse a comma-separated string into a de-duplicated non-empty list."""
+    if not v:
+        return []
+    seen = set()
+    out = []
+    for part in str(v).split(","):
+        p = part.strip()
+        if not p or p.lower() == "all":
+            continue
+        if p in seen:
+            continue
+        seen.add(p)
+        out.append(p)
+    return out
+
+
 @api_router.get("/contacts")
 async def list_contacts(
     user=Depends(get_current_user),
@@ -91,20 +108,26 @@ async def list_contacts(
     query = {}
     if user["role"] not in ("Super Admin", "Admin"):
         query["role"] = {"$in": ["Super Admin", "Admin"]}
-    if role_filter:
-        query["role"] = role_filter
-    if status:
-        query["status"] = status
-    if permission_set_id:
-        target_id = permission_set_id
-        if permission_set_id.isdigit():
-            pset = await db.permission_sets.find_one(
-                {"$or": [{"id": permission_set_id}, {"numeric_id": int(permission_set_id)}]},
-                {"_id": 0, "id": 1},
-            )
-            if pset:
-                target_id = pset["id"]
-        query["permission_set_ids"] = target_id
+    role_list = _csv_list(role_filter)
+    if role_list:
+        query["role"] = {"$in": role_list} if len(role_list) > 1 else role_list[0]
+    status_list = _csv_list(status)
+    if status_list:
+        query["status"] = {"$in": status_list} if len(status_list) > 1 else status_list[0]
+    pset_list = _csv_list(permission_set_id)
+    if pset_list:
+        # Resolve numeric ids to uuid ids so both are supported
+        resolved: List[str] = []
+        for pid in pset_list:
+            if pid.isdigit():
+                pset = await db.permission_sets.find_one(
+                    {"$or": [{"id": pid}, {"numeric_id": int(pid)}]},
+                    {"_id": 0, "id": 1},
+                )
+                resolved.append(pset["id"] if pset else pid)
+            else:
+                resolved.append(pid)
+        query["permission_set_ids"] = {"$in": resolved} if len(resolved) > 1 else resolved[0]
     if q:
         query["$or"] = [{"name": {"$regex": q, "$options": "i"}}, {"email": {"$regex": q, "$options": "i"}}]
     if page is not None:
@@ -130,8 +153,12 @@ async def export_contacts_csv(
     status: Optional[str] = None,
 ):
     query = {}
-    if role: query["role"] = role
-    if status: query["status"] = status
+    role_list = _csv_list(role)
+    if role_list:
+        query["role"] = {"$in": role_list} if len(role_list) > 1 else role_list[0]
+    status_list = _csv_list(status)
+    if status_list:
+        query["status"] = {"$in": status_list} if len(status_list) > 1 else status_list[0]
     if q:
         query["$or"] = [{"name": {"$regex": q, "$options": "i"}}, {"email": {"$regex": q, "$options": "i"}}]
     items = await db.contacts.find(query, {"_id": 0, "password_hash": 0, "password_encrypted": 0}).to_list(10000)

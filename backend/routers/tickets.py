@@ -71,21 +71,54 @@ def _date_match(date_from, date_to, field="created_at"):
     return {db_field: cond}
 
 
+def _csv_list(v):
+    """Parse a comma-separated string into a de-duplicated non-empty list.
+    Empty / None / "all" returns []. Keeps original order minus dupes.
+    """
+    if not v:
+        return []
+    seen = set()
+    out = []
+    for part in str(v).split(","):
+        p = part.strip()
+        if not p or p.lower() == "all":
+            continue
+        if p in seen:
+            continue
+        seen.add(p)
+        out.append(p)
+    return out
+
+
 def parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date, date_from=None, date_to=None, date_field="created_at", team=None):
     query = {}
-    if status:
-        query["status"] = status
-    if priority:
-        query["priority"] = priority
-    if created_by:
-        query["created_by_id"] = created_by
-    if assigned_to is not None:
-        if assigned_to == "unassigned":
+    # status / priority / created_by / team support both single & comma-separated
+    st_list = _csv_list(status)
+    if st_list:
+        query["status"] = {"$in": st_list} if len(st_list) > 1 else st_list[0]
+    pr_list = _csv_list(priority)
+    if pr_list:
+        query["priority"] = {"$in": pr_list} if len(pr_list) > 1 else pr_list[0]
+    cb_list = _csv_list(created_by)
+    if cb_list:
+        query["created_by_id"] = {"$in": cb_list} if len(cb_list) > 1 else cb_list[0]
+    if assigned_to is not None and assigned_to != "":
+        at_list = _csv_list(assigned_to)
+        # "unassigned" is a pseudo-value that maps to null/empty
+        has_unassigned = any(x.lower() == "unassigned" for x in at_list)
+        concrete = [x for x in at_list if x.lower() != "unassigned"]
+        if has_unassigned and concrete:
+            query["$or"] = [
+                {"assigned_to_id": {"$in": [None, ""]}},
+                {"assigned_to_id": {"$in": concrete}},
+            ]
+        elif has_unassigned:
             query["assigned_to_id"] = {"$in": [None, ""]}
-        else:
-            query["assigned_to_id"] = assigned_to
-    if team:
-        query["team_id"] = team
+        elif concrete:
+            query["assigned_to_id"] = {"$in": concrete} if len(concrete) > 1 else concrete[0]
+    tm_list = _csv_list(team)
+    if tm_list:
+        query["team_id"] = {"$in": tm_list} if len(tm_list) > 1 else tm_list[0]
     if q:
         query["$or"] = [
             {"ticket_id": {"$regex": q, "$options": "i"}},

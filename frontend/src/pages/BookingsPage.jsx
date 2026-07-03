@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
+import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import api from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Checkbox } from "../components/ui/checkbox";
@@ -71,14 +72,14 @@ const useDebounced = (value, delay = 300) => {
 export default function BookingsPage() {
   const navigate = useNavigate();
 
-  // Filters
+  // Filters — all multi-select filters use arrays of ids
   const [dateFrom, setDateFrom] = useState(todayIso());
   const [dateTo, setDateTo] = useState(todayIso());
-  const [type] = useState("all"); // future: 'workstation' option
-  const [status, setStatus] = useState("all");
-  const [teamId, setTeamId] = useState("");
-  const [employeeId, setEmployeeId] = useState("");
-  const [createdById, setCreatedById] = useState("");
+  const [typeFilter, setTypeFilter] = useState([]);       // [] = all types
+  const [status, setStatus] = useState([]);               // [] = all statuses
+  const [teamId, setTeamId] = useState([]);               // [] = all teams
+  const [employeeId, setEmployeeId] = useState([]);       // [] = all employees
+  const [createdById, setCreatedById] = useState([]);     // [] = all
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search, 350);
 
@@ -153,15 +154,17 @@ export default function BookingsPage() {
   }, []);
 
   const buildParams = useCallback(() => {
-    const p = { page, page_size: pageSize, sort, direction, status, type };
+    const p = { page, page_size: pageSize, sort, direction };
+    p.type = typeFilter.length > 0 ? typeFilter.join(",") : "all";
+    p.status = status.length > 0 ? status.join(",") : "all";
     if (dateFrom) p.date_from = dateFrom;
     if (dateTo) p.date_to = dateTo;
-    if (teamId) p.team_id = teamId;
-    if (employeeId) p.employee_id = employeeId;
-    if (createdById) p.created_by_id = createdById;
+    if (teamId.length > 0) p.team_id = teamId.join(",");
+    if (employeeId.length > 0) p.employee_id = employeeId.join(",");
+    if (createdById.length > 0) p.created_by_id = createdById.join(",");
     if (debouncedSearch) p.search = debouncedSearch;
     return p;
-  }, [page, pageSize, sort, direction, status, type, dateFrom, dateTo, teamId, employeeId, createdById, debouncedSearch]);
+  }, [page, pageSize, sort, direction, status, typeFilter, dateFrom, dateTo, teamId, employeeId, createdById, debouncedSearch]);
 
   // Manual refresh button (no effect — caller can mark `refreshing` itself)
   const refreshNow = useCallback(() => {
@@ -291,7 +294,9 @@ export default function BookingsPage() {
   // ---- Reset filters ---------------------------------------------------------
   const resetFilters = () => {
     setDateFrom(todayIso()); setDateTo(todayIso());
-    setStatus("all"); setTeamId(""); setEmployeeId(""); setCreatedById(""); setSearch("");
+    setStatus([]); setTeamId([]); setEmployeeId([]); setCreatedById([]);
+    setTypeFilter([]); setSearch("");
+    setPage(1); setSelected(new Set());
   };
 
   return (
@@ -339,90 +344,95 @@ export default function BookingsPage() {
       }
     >
       <div className="flex-1 min-h-0 flex flex-col bg-gray-50 -mx-4 -mt-4 -mb-3">
-        {/* FILTERS */}
-        <div className="bg-white border-b border-gray-200 px-6 py-3" data-testid="bookings-filters">
-          <div className="grid grid-cols-12 gap-3">
+        {/* FILTERS — single row, sticky */}
+        <div className="bg-white border-b border-gray-200 px-6 py-3 sticky top-0 z-20" data-testid="bookings-filters">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Date range */}
-            <div className="col-span-12 md:col-span-3">
-              <FilterLabel>Booking Date</FilterLabel>
-              <div className="flex items-center gap-1">
-                <input type="date" value={dateFrom} onChange={e => onFilterChange(setDateFrom)(e.target.value)}
-                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:border-[#ec9324]"
-                  data-testid="bookings-date-from"
-                  style={{ accentColor: "#ec9324" }}/>
-                <span className="text-gray-400 text-xs">→</span>
-                <input type="date" value={dateTo} onChange={e => onFilterChange(setDateTo)(e.target.value)}
-                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:border-[#ec9324]"
-                  data-testid="bookings-date-to"
-                  style={{ accentColor: "#ec9324" }}/>
-              </div>
+            <div className="flex items-center gap-1" data-testid="bookings-date-range">
+              <input type="date" value={dateFrom} onChange={e => onFilterChange(setDateFrom)(e.target.value)}
+                className="h-9 px-2 py-1 border border-gray-200 rounded-md text-xs focus:outline-none focus:border-[#ec9324]"
+                data-testid="bookings-date-from"
+                style={{ accentColor: "#ec9324" }}/>
+              <span className="text-gray-400 text-xs">→</span>
+              <input type="date" value={dateTo} onChange={e => onFilterChange(setDateTo)(e.target.value)}
+                className="h-9 px-2 py-1 border border-gray-200 rounded-md text-xs focus:outline-none focus:border-[#ec9324]"
+                data-testid="bookings-date-to"
+                style={{ accentColor: "#ec9324" }}/>
             </div>
-            {/* Status */}
-            <div className="col-span-6 md:col-span-2">
-              <FilterLabel>Status</FilterLabel>
-              <select value={status} onChange={e => onFilterChange(setStatus)(e.target.value)}
-                className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:border-[#ec9324] bg-white"
-                data-testid="bookings-status-filter">
-                <option value="all">All</option>
-                <option value="active">Active</option>
-                <option value="cancelled">Cancelled</option>
-                <option value="completed">Completed</option>
-              </select>
-            </div>
-            {/* Team */}
-            <div className="col-span-6 md:col-span-2">
-              <FilterLabel>Team</FilterLabel>
-              <select value={teamId} onChange={e => onFilterChange(setTeamId)(e.target.value)}
-                className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:border-[#ec9324] bg-white"
-                data-testid="bookings-team-filter">
-                <option value="">All Teams</option>
-                {(filterOptions.teams || []).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            </div>
-            {/* Employee */}
-            <div className="col-span-6 md:col-span-2">
-              <FilterLabel>Employee</FilterLabel>
-              <select value={employeeId} onChange={e => onFilterChange(setEmployeeId)(e.target.value)}
-                className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:border-[#ec9324] bg-white"
-                data-testid="bookings-employee-filter">
-                <option value="">All Employees</option>
-                {(filterOptions.employees || []).map(e => (
-                  <option key={e.id} value={e.id}>{e.name}{e.emp_id ? ` (${e.emp_id})` : ""}</option>
-                ))}
-              </select>
-            </div>
-            {/* Created by */}
-            <div className="col-span-6 md:col-span-2">
-              <FilterLabel>Created By</FilterLabel>
-              <select value={createdById} onChange={e => onFilterChange(setCreatedById)(e.target.value)}
-                className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:border-[#ec9324] bg-white"
-                data-testid="bookings-creator-filter">
-                <option value="">All</option>
-                {(filterOptions.creators || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            {/* Reset */}
-            <div className="col-span-12 md:col-span-1 flex items-end">
-              <button
-                onClick={resetFilters}
-                className="text-[11px] text-gray-500 hover:text-[#ec9324] underline w-full text-center pb-1.5"
-                data-testid="bookings-reset-filters"
-              >Reset</button>
-            </div>
-          </div>
-          {/* Search row */}
-          <div className="mt-3 flex items-center gap-3">
-            <div className="relative flex-1 max-w-md">
+            {/* Search */}
+            <div className="relative w-56">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" size={14}/>
               <input
                 type="text"
-                placeholder="Search by seat / room name…"
+                placeholder="Search seat / room…"
                 value={search}
                 onChange={e => onFilterChange(setSearch)(e.target.value)}
                 data-testid="bookings-search"
-                className="w-full pl-7 pr-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:border-[#ec9324]"
+                className="w-full h-9 pl-7 pr-3 py-1.5 border border-gray-200 rounded-md text-xs focus:outline-none focus:border-[#ec9324]"
               />
             </div>
+            {/* Type */}
+            <MultiSelectFilter
+              label="Type"
+              value={typeFilter}
+              onChange={onFilterChange(setTypeFilter)}
+              options={[
+                { value: "workstation", label: "Workstation" },
+                { value: "meeting_room", label: "Meeting Room" },
+              ]}
+              testIdPrefix="bookings-type-filter"
+              className="w-40"
+            />
+            {/* Status */}
+            <MultiSelectFilter
+              label="Status"
+              value={status}
+              onChange={onFilterChange(setStatus)}
+              options={[
+                { value: "active", label: "Active" },
+                { value: "cancelled", label: "Cancelled" },
+                { value: "completed", label: "Completed" },
+              ]}
+              testIdPrefix="bookings-status-filter"
+              className="w-44"
+            />
+            {/* Team */}
+            <MultiSelectFilter
+              label="Team"
+              value={teamId}
+              onChange={onFilterChange(setTeamId)}
+              options={(filterOptions.teams || []).map(t => ({ value: t.id, label: t.name }))}
+              testIdPrefix="bookings-team-filter"
+              className="w-48"
+            />
+            {/* Employee */}
+            <MultiSelectFilter
+              label="Employee"
+              value={employeeId}
+              onChange={onFilterChange(setEmployeeId)}
+              options={(filterOptions.employees || []).map(e => ({
+                value: e.id,
+                label: e.name + (e.emp_id ? ` (${e.emp_id})` : ""),
+              }))}
+              testIdPrefix="bookings-employee-filter"
+              className="w-52"
+            />
+            {/* Created by */}
+            <MultiSelectFilter
+              label="Created By"
+              value={createdById}
+              onChange={onFilterChange(setCreatedById)}
+              options={(filterOptions.creators || []).map(c => ({ value: c.id, label: c.name }))}
+              testIdPrefix="bookings-creator-filter"
+              className="w-48"
+              align="right"
+            />
+            {/* Reset */}
+            <button
+              onClick={resetFilters}
+              className="ml-auto text-[11px] text-gray-500 hover:text-[#ec9324] underline"
+              data-testid="bookings-reset-filters"
+            >Reset</button>
             {refreshing && <Loader2 size={14} className="animate-spin text-gray-400"/>}
           </div>
         </div>

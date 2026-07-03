@@ -47,6 +47,31 @@ VALID_SORTS = {
 }
 
 
+def _csv_list(v: Optional[str]) -> List[str]:
+    """Parse a comma-separated query string into a de-duplicated non-empty list.
+    Empty / None / "all" returns []. Preserves original order minus dupes.
+    """
+    if not v:
+        return []
+    seen = set()
+    out: List[str] = []
+    for part in str(v).split(","):
+        p = part.strip()
+        if not p or p.lower() == "all":
+            continue
+        if p in seen:
+            continue
+        seen.add(p)
+        out.append(p)
+    return out
+
+
+def _statuses_from(csv_or_single: Optional[str]) -> List[str]:
+    """Normalize the `status` param. "all" or empty → []. Filters to VALID_STATUSES."""
+    items = _csv_list(csv_or_single)
+    return [s.lower() for s in items if s.lower() in VALID_STATUSES and s.lower() != "all"]
+
+
 # --------------------------------------------------------------------------- #
 # Helpers                                                                     #
 # --------------------------------------------------------------------------- #
@@ -163,12 +188,12 @@ def _parse_date(s: Optional[str], field: str) -> Optional[date]:
 async def _build_query(
     *,
     type_: str,
-    status: str,
+    statuses: List[str],
     date_from: Optional[date],
     date_to: Optional[date],
-    team_id: Optional[str],
-    employee_id: Optional[str],
-    created_by_id: Optional[str],
+    team_ids: List[str],
+    employee_ids: List[str],
+    created_by_ids: List[str],
     search: Optional[str],
 ) -> Dict[str, Any]:
     """Build the room_bookings query (MR side). Workstation side is handled separately."""
@@ -183,42 +208,46 @@ async def _build_query(
             rng["$lte"] = datetime.combine(date_to, datetime.max.time()).isoformat()
         q["start_at"] = rng
 
-    # Status
-    if status == "cancelled":
-        q["cancelled"] = True
-    elif status == "active":
-        q["cancelled"] = False
-        q["end_at"] = {"$gt": _now_utc_iso()}
-    elif status == "completed":
-        q["cancelled"] = False
-        # merge with existing end_at clause if any
-        end_q = q.get("end_at", {})
-        end_q["$lte"] = _now_utc_iso()
-        q["end_at"] = end_q
+    # Status — union of one or more selected statuses
+    # Each status maps to a set of filter clauses; we OR them together via $or.
+    status_clauses: List[Dict[str, Any]] = []
+    now_iso_str = _now_utc_iso()
+    for st in statuses:
+        if st == "cancelled":
+            status_clauses.append({"cancelled": True})
+        elif st == "active":
+            status_clauses.append({"cancelled": False, "end_at": {"$gt": now_iso_str}})
+        elif st == "completed":
+            status_clauses.append({"cancelled": False, "end_at": {"$lte": now_iso_str}})
+    if status_clauses:
+        q["$and"] = q.get("$and", []) + [{"$or": status_clauses}]
 
-    # Employee (organizer) — direct id match
-    if employee_id:
-        q["organizer.id"] = employee_id
+    # Organizer id union — Employee filter and Created-by filter both map to organizer.id
+    # (Meeting-room organizer IS the creator). We UNION employee + created_by.
+    organizer_ids_set = set(employee_ids) | set(created_by_ids)
 
-    # Created-by maps to organizer.id (in MR bookings the organizer IS the creator)
-    if created_by_id:
-        q["organizer.id"] = created_by_id
-
-    # Team — pull all member ids for the team, then match organizer.id ∈ members
-    if team_id:
-        team = await db.teams.find_one({"id": team_id}, {"_id": 0, "member_ids": 1})
-        member_ids = (team or {}).get("member_ids") or []
-        if not member_ids:
+    # Team — pull members for each team, union with organizer_ids_set
+    if team_ids:
+        team_docs = await db.teams.find({"id": {"$in": team_ids}}, {"_id": 0, "member_ids": 1}).to_list(200)
+        member_union: set = set()
+        for t in team_docs:
+            for m in (t.get("member_ids") or []):
+                member_union.add(m)
+        if not member_union:
+            # A team filter was applied but resolved to no members → no results.
             q["__none__"] = True
             return q
-        # If employee/created_by already constrained, intersect; otherwise just $in.
-        existing = q.get("organizer.id")
-        if isinstance(existing, str):
-            if existing not in member_ids:
+        # If organizer_ids_set is also constrained, intersect; else use team members.
+        if organizer_ids_set:
+            organizer_ids_set &= member_union
+            if not organizer_ids_set:
                 q["__none__"] = True
                 return q
         else:
-            q["organizer.id"] = {"$in": member_ids}
+            organizer_ids_set = member_union
+
+    if organizer_ids_set:
+        q["organizer.id"] = {"$in": list(organizer_ids_set)}
 
     # Search — case-insensitive partial on room_name OR title
     if search:
@@ -236,12 +265,12 @@ async def _build_query(
 
 async def _build_workstation_query(
     *,
-    status: str,
+    statuses: List[str],
     date_from: Optional[date],
     date_to: Optional[date],
-    team_id: Optional[str],
-    employee_id: Optional[str],
-    created_by_id: Optional[str],
+    team_ids: List[str],
+    employee_ids: List[str],
+    created_by_ids: List[str],
     search: Optional[str],
 ) -> Dict[str, Any]:
     """Build the workstation_bookings query. Dates are stored as 'YYYY-MM-DD' strings."""
@@ -254,24 +283,30 @@ async def _build_workstation_query(
         if date_to:
             rng["$lte"] = date_to.isoformat()
         q["date"] = rng
-    if status == "cancelled":
-        q["cancelled"] = True
-    elif status == "active":
-        q["cancelled"] = False
-        existing = q.get("date", {})
-        existing["$gte"] = max(existing.get("$gte", ""), today_iso) if existing.get("$gte") else today_iso
-        q["date"] = existing
-    elif status == "completed":
-        q["cancelled"] = False
-        existing = q.get("date", {})
-        existing["$lt"] = min(existing.get("$lt", "9999-12-31"), today_iso) if existing.get("$lt") else today_iso
-        q["date"] = existing
-    if employee_id:
-        q["employee.id"] = employee_id
-    if created_by_id:
-        q["created_by.id"] = created_by_id
-    if team_id:
-        q["team_id"] = team_id
+
+    # Status — union clauses
+    status_clauses: List[Dict[str, Any]] = []
+    for st in statuses:
+        if st == "cancelled":
+            status_clauses.append({"cancelled": True})
+        elif st == "active":
+            status_clauses.append({"cancelled": False, "date": {"$gte": today_iso}})
+        elif st == "completed":
+            status_clauses.append({"cancelled": False, "date": {"$lt": today_iso}})
+    if status_clauses:
+        q["$and"] = q.get("$and", []) + [{"$or": status_clauses}]
+
+    if employee_ids:
+        q["employee.id"] = {"$in": employee_ids}
+    if created_by_ids:
+        # If both employee and created_by filters set, AND them via $and
+        clause = {"created_by.id": {"$in": created_by_ids}}
+        if "employee.id" in q:
+            q["$and"] = q.get("$and", []) + [clause]
+        else:
+            q.update(clause)
+    if team_ids:
+        q["team_id"] = {"$in": team_ids}
     if search:
         s = search.strip()
         if s:
@@ -312,25 +347,30 @@ def _sort_tuple(sort: str, direction: str) -> List[Tuple[str, int]]:
 @api_router.get("/bookings")
 async def list_bookings(
     user=Depends(get_current_user),
-    type: str = Query("all", description="all | meeting_room | workstation"),
-    status: str = Query("all", description="all | active | cancelled | completed"),
+    type: str = Query("all", description="all | meeting_room | workstation | csv of these"),
+    status: str = Query("all", description="all | csv of: active,cancelled,completed"),
     date_from: Optional[str] = Query(None, description="YYYY-MM-DD inclusive"),
     date_to: Optional[str] = Query(None, description="YYYY-MM-DD inclusive"),
-    team_id: Optional[str] = Query(None),
-    employee_id: Optional[str] = Query(None),
-    created_by_id: Optional[str] = Query(None),
+    team_id: Optional[str] = Query(None, description="Single id OR comma-separated ids"),
+    employee_id: Optional[str] = Query(None, description="Single id OR comma-separated ids"),
+    created_by_id: Optional[str] = Query(None, description="Single id OR comma-separated ids"),
     search: Optional[str] = Query(None),
     sort: str = Query("date", description=f"one of {sorted(VALID_SORTS)}"),
     direction: str = Query("desc", description="asc | desc"),
     page: int = Query(1, ge=1),
     page_size: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
 ):
-    type_ = (type or "all").lower()
-    status_ = (status or "all").lower()
-    if type_ not in VALID_TYPES:
-        raise HTTPException(400, f"Invalid type. Use one of: {sorted(VALID_TYPES)}")
-    if status_ not in VALID_STATUSES:
-        raise HTTPException(400, f"Invalid status. Use one of: {sorted(VALID_STATUSES)}")
+    # Parse csv-capable filters
+    type_csv = _csv_list(type)
+    type_set = {t.lower() for t in type_csv if t.lower() in VALID_TYPES and t.lower() != "all"}
+    include_mr = (not type_set) or ("meeting_room" in type_set)
+    include_ws = (not type_set) or ("workstation" in type_set)
+
+    statuses = _statuses_from(status)
+    team_ids = _csv_list(team_id)
+    employee_ids = _csv_list(employee_id)
+    created_by_ids = _csv_list(created_by_id)
+
     if sort not in VALID_SORTS:
         raise HTTPException(400, f"Invalid sort. Use one of: {sorted(VALID_SORTS)}")
 
@@ -342,11 +382,11 @@ async def list_bookings(
     # tool) that this is acceptable — caps at 5k per source.
     rows: List[dict] = []
 
-    if type_ in ("all", "meeting_room"):
+    if include_mr:
         q_mr = await _build_query(
-            type_=type_, status=status_,
+            type_="meeting_room", statuses=statuses,
             date_from=df, date_to=dt,
-            team_id=team_id, employee_id=employee_id, created_by_id=created_by_id,
+            team_ids=team_ids, employee_ids=employee_ids, created_by_ids=created_by_ids,
             search=search,
         )
         if not q_mr.get("__none__"):
@@ -354,10 +394,10 @@ async def list_bookings(
             mr_docs = await _enrich_bookings_with_team(mr_docs)
             rows.extend(_booking_view(d) for d in mr_docs)
 
-    if type_ in ("all", "workstation"):
+    if include_ws:
         q_ws = await _build_workstation_query(
-            status=status_, date_from=df, date_to=dt,
-            team_id=team_id, employee_id=employee_id, created_by_id=created_by_id,
+            statuses=statuses, date_from=df, date_to=dt,
+            team_ids=team_ids, employee_ids=employee_ids, created_by_ids=created_by_ids,
             search=search,
         )
         ws_docs = await db.workstation_bookings.find(q_ws, {"_id": 0}).sort([("date", -1)]).limit(5000).to_list(5000)
@@ -482,15 +522,15 @@ async def export_bookings(
         id_list = [x.strip() for x in ids.split(",") if x.strip()]
         q = {"id": {"$in": id_list}} if id_list else {"__none__": True}
     else:
-        type_ = (type or "all").lower()
-        status_ = (status or "all").lower()
-        if type_ not in VALID_TYPES or status_ not in VALID_STATUSES:
-            raise HTTPException(400, "Invalid type/status")
+        statuses = _statuses_from(status)
+        team_ids = _csv_list(team_id)
+        employee_ids = _csv_list(employee_id)
+        created_by_ids = _csv_list(created_by_id)
         q = await _build_query(
-            type_=type_, status=status_,
+            type_="meeting_room", statuses=statuses,
             date_from=_parse_date(date_from, "date_from"),
             date_to=_parse_date(date_to, "date_to"),
-            team_id=team_id, employee_id=employee_id, created_by_id=created_by_id,
+            team_ids=team_ids, employee_ids=employee_ids, created_by_ids=created_by_ids,
             search=search,
         )
     if q.get("__none__"):

@@ -7,6 +7,7 @@ import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { Switch } from "../components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from "../components/ui/dialog";
@@ -216,8 +217,8 @@ export default function EmailTemplatesPage() {
   const isAdmin = user?.role === "Admin" || user?.role === "Super Admin";
   const [items, setItems] = useState([]);
   const [q, setQ] = useState("");
-  const [category, setCategory] = useState("all");
-  const [status, setStatus] = useState("all");
+  const [category, setCategory] = useState([]);
+  const [status, setStatus] = useState([]);
   const [editing, setEditing] = useState(null); // template or null
   const [form, setForm] = useState(EMPTY_FORM);
   const [open, setOpen] = useState(false);
@@ -239,8 +240,8 @@ export default function EmailTemplatesPage() {
     const r = await api.get("/email-templates", {
       params: {
         q: q || undefined,
-        category: category === "all" ? undefined : category,
-        status: status === "all" ? undefined : status,
+        category: category.length ? category.join(",") : undefined,
+        status: status.length ? status.join(",") : undefined,
       },
     });
     // Inject the 3 frontend-only meeting templates (with any localStorage overrides) and
@@ -404,21 +405,25 @@ export default function EmailTemplatesPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
           <Input placeholder="Search by name, kind or subject…" className="pl-9" value={q} onChange={(e) => setQ(e.target.value)} data-testid="template-search"/>
         </div>
-        <Select value={category} onValueChange={setCategory}>
-          <SelectTrigger className="w-44" data-testid="template-category-filter"><SelectValue placeholder="Category"/></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All categories</SelectItem>
-            {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="w-40" data-testid="template-status-filter"><SelectValue placeholder="Status"/></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="Active">Active</SelectItem>
-            <SelectItem value="Inactive">Inactive</SelectItem>
-          </SelectContent>
-        </Select>
+        <MultiSelectFilter
+          label="Category"
+          value={category}
+          onChange={setCategory}
+          options={CATEGORIES.map((c) => ({ value: c, label: c }))}
+          testIdPrefix="template-category-filter"
+          className="w-44"
+        />
+        <MultiSelectFilter
+          label="Status"
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: "Active", label: "Active" },
+            { value: "Inactive", label: "Inactive" },
+          ]}
+          testIdPrefix="template-status-filter"
+          className="w-40"
+        />
       </div>
 
       <div className="mt-6 bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">

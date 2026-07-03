@@ -4,6 +4,7 @@ import Layout from "../components/Layout";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from "../components/ui/dialog";
@@ -28,8 +29,8 @@ function fmt(iso) { if (!iso) return "—"; try { return new Date(iso).toLocaleS
 export default function NotificationsOutboxPage() {
   const [items, setItems] = useState([]);
   const [q, setQ] = useState("");
-  const [kind, setKind] = useState("all");
-  const [status, setStatus] = useState("all");
+  const [kind, setKind] = useState([]);
+  const [status, setStatus] = useState([]);
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState(null);
 
@@ -39,8 +40,8 @@ export default function NotificationsOutboxPage() {
       const r = await api.get("/notifications/outbox", {
         params: {
           q: q || undefined,
-          kind: kind === "all" ? undefined : kind,
-          status: status === "all" ? undefined : status,
+          kind: kind.length ? kind.join(",") : undefined,
+          status: status.length ? status.join(",") : undefined,
           limit: 200,
         },
       });
@@ -80,24 +81,30 @@ export default function NotificationsOutboxPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
           <Input placeholder="Search recipient or subject…" className="pl-9" value={q} onChange={(e) => setQ(e.target.value)} data-testid="outbox-search"/>
         </div>
-        <Select value={kind} onValueChange={setKind}>
-          <SelectTrigger className="w-56" data-testid="outbox-kind"><SelectValue placeholder="Kind"/></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All kinds</SelectItem>
-            <SelectItem value="new_employee">New employee credentials</SelectItem>
-            <SelectItem value="admin_password_reset">Admin password reset</SelectItem>
-            <SelectItem value="forgot_password">Forgot password</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="w-40" data-testid="outbox-status"><SelectValue placeholder="Status"/></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="queued">Queued</SelectItem>
-            <SelectItem value="sent">Sent</SelectItem>
-            <SelectItem value="error">Error</SelectItem>
-          </SelectContent>
-        </Select>
+        <MultiSelectFilter
+          label="Kind"
+          value={kind}
+          onChange={setKind}
+          options={[
+            { value: "new_employee", label: "New employee credentials" },
+            { value: "admin_password_reset", label: "Admin password reset" },
+            { value: "forgot_password", label: "Forgot password" },
+          ]}
+          testIdPrefix="outbox-kind"
+          className="w-56"
+        />
+        <MultiSelectFilter
+          label="Status"
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: "queued", label: "Queued" },
+            { value: "sent", label: "Sent" },
+            { value: "error", label: "Error" },
+          ]}
+          testIdPrefix="outbox-status"
+          className="w-40"
+        />
       </div>
 
       <div className="mt-6 bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">

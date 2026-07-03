@@ -6,7 +6,7 @@ import TicketTable from "../components/TicketTable";
 import { useAuth } from "../context/AuthContext";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import { Search, Plus, RefreshCw, Download, X } from "lucide-react";
 import Pagination from "../components/Pagination";
 import notify from "../lib/notify";
@@ -39,14 +39,21 @@ export default function TicketListPage({
   const [members, setMembers] = useState([]);
   const [creators, setCreators] = useState([]);
   const [teams, setTeams] = useState([]);
-  const [createdBy, setCreatedBy] = useState("");
-  const [assigneeFilter, setAssigneeFilter] = useState("");
-  const [teamFilter, setTeamFilter] = useState("");
+  const [createdBy, setCreatedBy] = useState([]);       // arrays for multi-select
+  const [assigneeFilter, setAssigneeFilter] = useState([]);
+  const [teamFilter, setTeamFilter] = useState([]);
   const [dateFilter, setDateFilter] = useState({ field: "created_at", mode: "between", from: null, to: null });
 
-  const status = lockedStatus || params.get("status") || "";
-  const priority = params.get("priority") || "";
-  const urlAssignedTo = params.get("assigned_to") || "";
+  // URL-backed multi-select filters (status / priority / assigned_to via URL param)
+  // Parse comma-separated URL params into arrays.
+  const parseCsv = (s) => (s ? s.split(",").filter(Boolean) : []);
+  const statusArr = lockedStatus ? [lockedStatus] : parseCsv(params.get("status"));
+  const priorityArr = parseCsv(params.get("priority"));
+  const urlAssignedToArr = parseCsv(params.get("assigned_to"));
+  // Keep legacy singletons for compat with the rest of the page & export code
+  const status = statusArr.join(",");
+  const priority = priorityArr.join(",");
+  const urlAssignedTo = urlAssignedToArr.join(",");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -57,9 +64,9 @@ export default function TicketListPage({
           scope,
           status: status || undefined,
           priority: priority || undefined,
-          assigned_to: assigneeFilter || urlAssignedTo || undefined,
-          created_by: createdBy || undefined,
-          team: teamFilter || undefined,
+          assigned_to: (assigneeFilter.length ? assigneeFilter.join(",") : "") || urlAssignedTo || undefined,
+          created_by: createdBy.length ? createdBy.join(",") : undefined,
+          team: teamFilter.length ? teamFilter.join(",") : undefined,
           q: search || undefined,
           page, page_size: pageSize,
           ...dateParams,
@@ -82,9 +89,10 @@ export default function TicketListPage({
     p.set("scope", scope);
     if (status) p.set("status", status);
     if (priority) p.set("priority", priority);
-    if (assigneeFilter || urlAssignedTo) p.set("assigned_to", assigneeFilter || urlAssignedTo);
-    if (createdBy) p.set("created_by", createdBy);
-    if (teamFilter) p.set("team", teamFilter);
+    const assignedCsv = (assigneeFilter.length ? assigneeFilter.join(",") : "") || urlAssignedTo;
+    if (assignedCsv) p.set("assigned_to", assignedCsv);
+    if (createdBy.length) p.set("created_by", createdBy.join(","));
+    if (teamFilter.length) p.set("team", teamFilter.join(","));
     if (search) p.set("q", search);
     const dateParams = dateFilterToParams(dateFilter);
     Object.entries(dateParams).forEach(([k, v]) => { if (v) p.set(k, v); });
@@ -126,12 +134,12 @@ export default function TicketListPage({
   // status counts as an active filter only when the user picked it; if the
   // route locks status (e.g. Open Requests) it should not show "Clear all".
   const userPickedStatus = !lockedStatus && !!status;
-  const hasActiveFilters = !!(search || userPickedStatus || priority || createdBy || assigneeFilter || teamFilter || urlAssignedTo || isDateFilterActive);
+  const hasActiveFilters = !!(search || userPickedStatus || priority || createdBy.length || assigneeFilter.length || teamFilter.length || urlAssignedTo || isDateFilterActive);
   const clearAllFilters = () => {
     setSearch("");
-    setCreatedBy("");
-    setAssigneeFilter("");
-    setTeamFilter("");
+    setCreatedBy([]);
+    setAssigneeFilter([]);
+    setTeamFilter([]);
     setDateFilter({ field: "created_at", mode: "between", from: null, to: null });
     const np = new URLSearchParams(params);
     np.delete("status"); np.delete("priority"); np.delete("assigned_to");
@@ -306,48 +314,59 @@ export default function TicketListPage({
             className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         {!lockedStatus && (
-          <Select value={status || "all"} onValueChange={(v) => setParam("status", v === "all" ? "" : v)}>
-            <SelectTrigger className="w-40" data-testid="filter-status"><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="Open">Open</SelectItem>
-              <SelectItem value="In Progress">In Progress</SelectItem>
-              <SelectItem value="Closed">Closed</SelectItem>
-            </SelectContent>
-          </Select>
+          <MultiSelectFilter
+            label="Status"
+            value={statusArr}
+            onChange={(arr) => setParam("status", arr.join(","))}
+            options={[
+              { value: "Open", label: "Open" },
+              { value: "In Progress", label: "In Progress" },
+              { value: "Closed", label: "Closed" },
+            ]}
+            testIdPrefix="filter-status"
+            className="w-40"
+          />
         )}
-        <Select value={priority || "all"} onValueChange={(v) => setParam("priority", v === "all" ? "" : v)}>
-          <SelectTrigger className="w-40" data-testid="filter-priority"><SelectValue placeholder="Priority" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Priorities</SelectItem>
-            <SelectItem value="High">High</SelectItem>
-            <SelectItem value="Medium">Medium</SelectItem>
-            <SelectItem value="Low">Low</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={teamFilter || "all"} onValueChange={(v) => setTeamFilter(v === "all" ? "" : v)}>
-          <SelectTrigger className="w-40" data-testid="filter-team"><SelectValue placeholder="Team" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Teams</SelectItem>
-            {teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={createdBy || "all"} onValueChange={(v) => setCreatedBy(v === "all" ? "" : v)}>
-          <SelectTrigger className="w-44" data-testid="filter-created-by"><SelectValue placeholder="Created By" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Creators</SelectItem>
-            {creators.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <MultiSelectFilter
+          label="Priority"
+          value={priorityArr}
+          onChange={(arr) => setParam("priority", arr.join(","))}
+          options={[
+            { value: "High", label: "High" },
+            { value: "Medium", label: "Medium" },
+            { value: "Low", label: "Low" },
+          ]}
+          testIdPrefix="filter-priority"
+          className="w-40"
+        />
+        <MultiSelectFilter
+          label="Team"
+          value={teamFilter}
+          onChange={setTeamFilter}
+          options={teams.map(t => ({ value: t.id, label: t.name }))}
+          testIdPrefix="filter-team"
+          className="w-40"
+        />
+        <MultiSelectFilter
+          label="Created By"
+          value={createdBy}
+          onChange={setCreatedBy}
+          options={creators.map(c => ({ value: c.id, label: c.name }))}
+          testIdPrefix="filter-created-by"
+          className="w-44"
+        />
         {!isDQ && (
-          <Select value={assigneeFilter || "all"} onValueChange={(v) => setAssigneeFilter(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-44" data-testid="filter-assigned-to"><SelectValue placeholder="Assigned To" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Assignees</SelectItem>
-              <SelectItem value="unassigned">Unassigned</SelectItem>
-              {members.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <MultiSelectFilter
+            label="Assigned To"
+            value={assigneeFilter}
+            onChange={setAssigneeFilter}
+            options={[
+              { value: "unassigned", label: "Unassigned" },
+              ...members.map(m => ({ value: m.id, label: m.name })),
+            ]}
+            testIdPrefix="filter-assigned-to"
+            className="w-44"
+          />
         )}
         <DateFilter value={dateFilter} onChange={setDateFilter} />
         {hasActiveFilters && (
