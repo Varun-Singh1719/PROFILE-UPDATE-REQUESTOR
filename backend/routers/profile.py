@@ -89,6 +89,44 @@ async def get_my_profile(user: dict = Depends(get_current_user)):
         "avatar_preset": user.get("avatar_preset"),
         "avatar_image": user.get("avatar_image"),
         "avatar_color": user.get("avatar_color"),
+        "preferences": {
+            "default_dashboard": (user.get("preferences") or {}).get("default_dashboard") or "workspace_manager",
+        },
+    }
+
+
+ALLOWED_DEFAULT_DASHBOARDS = {"workspace_manager", "profix"}
+
+
+class PreferencesIn(BaseModel):
+    default_dashboard: Optional[str] = None
+
+
+@api_router.patch("/profile/preferences")
+async def update_preferences(body: PreferencesIn, user: dict = Depends(get_current_user)):
+    """Update the current user's per-account preferences (currently just
+    `default_dashboard`). Fields left as None are ignored."""
+    updates = {}
+    if body.default_dashboard is not None:
+        if body.default_dashboard not in ALLOWED_DEFAULT_DASHBOARDS:
+            raise HTTPException(400, f"Unknown default_dashboard: {body.default_dashboard}")
+        updates["preferences.default_dashboard"] = body.default_dashboard
+    if not updates:
+        raise HTTPException(400, "Nothing to update")
+    await db.contacts.update_one({"id": user["id"]}, {"$set": updates})
+    await log_audit(
+        actor=user, action="profile.preferences_update", resource="profile",
+        resource_id=user["id"],
+        detail=f"{user.get('email')} updated preferences: {updates}",
+        severity="info",
+    )
+    fresh = await db.contacts.find_one({"id": user["id"]}, {"_id": 0, "preferences": 1})
+    prefs = (fresh or {}).get("preferences") or {}
+    return {
+        "ok": True,
+        "preferences": {
+            "default_dashboard": prefs.get("default_dashboard") or "workspace_manager",
+        },
     }
 
 

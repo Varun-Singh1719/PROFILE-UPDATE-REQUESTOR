@@ -1,40 +1,50 @@
 """Approval Settings — Auto-Approval configuration.
 
 Stored as a singleton document (id="singleton") in the `approval_settings`
-collection.  Shape:
+collection. Updated shape (Jul 2026):
 
     {
       "id": "singleton",
       "enabled": bool,                     # master ON/OFF switch
       "matrix": {
-        "workstation":  { "team_member": bool, "manager": bool, "recurring": bool },
-        "meeting_room": { "team_member": bool, "manager": bool, "recurring": bool },
+        "workstation":  {
+          "team_member": bool,
+          "manager": bool,
+          "date": { "enabled": bool, "mode": "on"|"before"|"after"|"between",
+                    "from": "YYYY-MM-DD"|null, "to": "YYYY-MM-DD"|null },
+          "time": { "enabled": bool, "operator": "on"|"before"|"after"|"between",
+                    "from": "HH:MM"|null, "to": "HH:MM"|null },
+        },
+        "meeting_room": { <same shape> },
       },
       "updated_at": ISO-8601,
       "updated_by": { id, email, name },
     }
 
-Phase-1 enforcement:
-  * Workstation requests → `matrix.workstation.team_member` / `.manager`
-    (recurring cell is stored but not applied since workstation *requests*
-    are single-day only today.)
-  * Meeting Room → config saved, no enforcement yet (workflow doesn't exist).
+Legacy shape:
+  * `recurring` bool cells are still accepted on read but are ignored on write.
 
-Rule evaluation (see `evaluate_workstation_request`):
+Rule evaluation
+===============
+When `enabled` is True and ANY configured cell matches the incoming request
+the request is auto-approved (OR semantics):
 
-    is_manager = submitter is listed in any team's `manager_ids`.
-    match = ((is_manager  AND matrix.workstation.manager) OR
-            (NOT is_manager AND matrix.workstation.team_member) OR
-            (request.recurring is truthy AND matrix.workstation.recurring))
+  * team_member: matches when submitter is NOT in any team's manager_ids.
+  * manager    : matches when submitter IS in some team's manager_ids.
+  * date       : compares booking date against the configured mode/from/to.
+  * time       : compares booking time-of-day (or submission time for
+                 workstation, since workstation requests are full-day) against
+                 the configured operator/from/to (24-h HH:MM).
 
-If `enabled` is False the settings are inert and every request goes to the
-manual queue.
+Empty / disabled cells simply don't participate — they neither auto-approve
+nor block the flow.
 """
 
 from __future__ import annotations
 
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+import datetime as _dt
+from typing import Any, Optional
+from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
 from core import api_router, db, require_role, now_iso, log_audit
@@ -46,11 +56,30 @@ from core import api_router, db, require_role, now_iso, log_audit
 
 SINGLETON_ID = "singleton"
 RESOURCES = ("workstation", "meeting_room")
-CRITERIA = ("team_member", "manager", "recurring")
+BOOL_CRITERIA = ("team_member", "manager")
+DATE_MODES = ("on", "before", "after", "between")
+TIME_OPS = ("on", "before", "after", "between")
+
+
+def _empty_date_rule() -> dict:
+    return {"enabled": False, "mode": "on", "from": None, "to": None}
+
+
+def _empty_time_rule() -> dict:
+    return {"enabled": False, "operator": "on", "from": None, "to": None}
+
+
+def _default_row() -> dict:
+    return {
+        "team_member": False,
+        "manager": False,
+        "date": _empty_date_rule(),
+        "time": _empty_time_rule(),
+    }
 
 
 def _default_matrix() -> dict:
-    return {r: {c: False for c in CRITERIA} for r in RESOURCES}
+    return {r: _default_row() for r in RESOURCES}
 
 
 def _default_settings() -> dict:
@@ -63,16 +92,47 @@ def _default_settings() -> dict:
     }
 
 
-def _sanitize(matrix: dict) -> dict:
-    """Return a matrix dict guaranteed to contain every resource × criterion cell."""
+def _sanitize_date_rule(v: Any) -> dict:
+    out = _empty_date_rule()
+    if not isinstance(v, dict):
+        return out
+    out["enabled"] = bool(v.get("enabled"))
+    mode = str(v.get("mode") or "on").lower()
+    out["mode"] = mode if mode in DATE_MODES else "on"
+    d_from = v.get("from")
+    d_to = v.get("to")
+    out["from"] = d_from if (isinstance(d_from, str) and d_from) else None
+    out["to"] = d_to if (isinstance(d_to, str) and d_to) else None
+    return out
+
+
+def _sanitize_time_rule(v: Any) -> dict:
+    out = _empty_time_rule()
+    if not isinstance(v, dict):
+        return out
+    out["enabled"] = bool(v.get("enabled"))
+    op = str(v.get("operator") or "on").lower()
+    out["operator"] = op if op in TIME_OPS else "on"
+    t_from = v.get("from")
+    t_to = v.get("to")
+    out["from"] = t_from if (isinstance(t_from, str) and t_from) else None
+    out["to"] = t_to if (isinstance(t_to, str) and t_to) else None
+    return out
+
+
+def _sanitize(matrix: Any) -> dict:
+    """Return a matrix dict guaranteed to have every resource + criterion cell."""
     clean = _default_matrix()
     if not isinstance(matrix, dict):
         return clean
     for r in RESOURCES:
         row = matrix.get(r) or {}
-        if isinstance(row, dict):
-            for c in CRITERIA:
-                clean[r][c] = bool(row.get(c))
+        if not isinstance(row, dict):
+            continue
+        for c in BOOL_CRITERIA:
+            clean[r][c] = bool(row.get(c))
+        clean[r]["date"] = _sanitize_date_rule(row.get("date"))
+        clean[r]["time"] = _sanitize_time_rule(row.get("time"))
     return clean
 
 
@@ -102,7 +162,6 @@ async def get_settings() -> dict:
         await db.approval_settings.insert_one({**doc})
         doc.pop("_id", None)
         return doc
-    # Backfill any missing cells so consumers never crash on absent keys.
     doc["enabled"] = bool(doc.get("enabled", False))
     doc["matrix"] = _sanitize(doc.get("matrix") or {})
     return doc
@@ -145,8 +204,7 @@ async def _write_settings(new_doc: dict, actor: dict, previous: dict) -> dict:
 
 @api_router.get("/approval-settings")
 async def read_approval_settings(user=Depends(require_role("Super Admin", "Admin"))):
-    """Any signed-in Admin can read the current settings (needed to show the
-    toggle state on the Pending Approvals page). Only Super Admin can write."""
+    """Any signed-in Admin can read the current settings. Only Super Admin can write."""
     return await get_settings()
 
 
@@ -169,9 +227,16 @@ async def update_approval_settings(
         for r in RESOURCES:
             incoming = getattr(payload.matrix, r, None)
             if isinstance(incoming, dict):
-                for c in CRITERIA:
+                # bool criteria
+                for c in BOOL_CRITERIA:
                     if c in incoming:
                         merged[r][c] = bool(incoming[c])
+                # date rule
+                if "date" in incoming:
+                    merged[r]["date"] = _sanitize_date_rule(incoming.get("date"))
+                # time rule
+                if "time" in incoming:
+                    merged[r]["time"] = _sanitize_time_rule(incoming.get("time"))
         new_doc["matrix"] = merged
 
     actor = {"id": user.get("id"), "email": user.get("email"), "name": user.get("name")}
@@ -192,8 +257,8 @@ async def reset_approval_settings(user=Depends(require_role("Super Admin"))):
 # --------------------------------------------------------------------------- #
 
 async def is_manager(submitter: dict) -> bool:
-    """A submitter is considered a Manager if their contact id (or email as
-    fallback) appears in any team's `manager_ids` list."""
+    """A submitter is a Manager if their contact id (or email fallback)
+    appears in any team's `manager_ids` list."""
     if not submitter:
         return False
     ids = [x for x in [submitter.get("id"), submitter.get("email")] if x]
@@ -203,19 +268,114 @@ async def is_manager(submitter: dict) -> bool:
     return hit is not None
 
 
-async def should_auto_approve_workstation(submitter: dict, is_recurring: bool = False) -> bool:
-    """Return True if the workstation request should be auto-approved based
-    on the current settings + the submitter's manager status."""
+def _parse_iso_date(s: Optional[str]) -> Optional[_dt.date]:
+    if not s or not isinstance(s, str):
+        return None
+    try:
+        return _dt.date.fromisoformat(s)
+    except Exception:
+        return None
+
+
+def _parse_hhmm(s: Optional[str]) -> Optional[_dt.time]:
+    if not s or not isinstance(s, str):
+        return None
+    try:
+        parts = s.split(":")
+        if len(parts) < 2:
+            return None
+        h = int(parts[0]); m = int(parts[1])
+        return _dt.time(hour=max(0, min(23, h)), minute=max(0, min(59, m)))
+    except Exception:
+        return None
+
+
+def matches_date_rule(rule: dict, booking_date: Optional[str]) -> bool:
+    """Return True iff `booking_date` (YYYY-MM-DD) satisfies the configured
+    date rule. Disabled or unconfigured rules return False (they don't match)."""
+    if not rule or not rule.get("enabled"):
+        return False
+    b = _parse_iso_date(booking_date)
+    if b is None:
+        return False
+    mode = (rule.get("mode") or "on").lower()
+    d_from = _parse_iso_date(rule.get("from"))
+    d_to = _parse_iso_date(rule.get("to"))
+    if mode == "on":
+        return d_from is not None and b == d_from
+    if mode == "before":
+        return d_from is not None and b < d_from
+    if mode == "after":
+        return d_from is not None and b > d_from
+    if mode == "between":
+        if d_from is None:
+            return False
+        end = d_to if d_to is not None else d_from
+        lo, hi = (d_from, end) if d_from <= end else (end, d_from)
+        return lo <= b <= hi
+    return False
+
+
+def matches_time_rule(rule: dict, booking_time: Optional[str]) -> bool:
+    """Return True iff `booking_time` (HH:MM 24-h) satisfies the time rule."""
+    if not rule or not rule.get("enabled"):
+        return False
+    bt = _parse_hhmm(booking_time)
+    if bt is None:
+        return False
+    op = (rule.get("operator") or "on").lower()
+    t_from = _parse_hhmm(rule.get("from"))
+    t_to = _parse_hhmm(rule.get("to"))
+    if op == "on":
+        return t_from is not None and bt == t_from
+    if op == "before":
+        return t_from is not None and bt < t_from
+    if op == "after":
+        return t_from is not None and bt > t_from
+    if op == "between":
+        if t_from is None:
+            return False
+        end = t_to if t_to is not None else t_from
+        lo, hi = (t_from, end) if t_from <= end else (end, t_from)
+        return lo <= bt <= hi
+    return False
+
+
+async def should_auto_approve_workstation(
+    submitter: dict,
+    is_recurring: bool = False,  # kept for signature compat; unused
+    booking_date: Optional[str] = None,
+    booking_time: Optional[str] = None,
+) -> bool:
+    """Return True if the workstation request should be auto-approved.
+
+    OR semantics — any configured criterion that matches triggers approval.
+    Date/Time rules must be independently enabled to participate.
+    """
     settings = await get_settings()
     if not settings.get("enabled"):
         return False
-    matrix = settings.get("matrix") or _default_matrix()
-    ws = matrix.get("workstation") or {}
+    ws = (settings.get("matrix") or {}).get("workstation") or {}
+
+    # Team-member / Manager
     submitter_is_manager = await is_manager(submitter)
     if submitter_is_manager and ws.get("manager"):
         return True
     if (not submitter_is_manager) and ws.get("team_member"):
         return True
-    if is_recurring and ws.get("recurring"):
+
+    # Date rule
+    if matches_date_rule(ws.get("date") or {}, booking_date):
         return True
+
+    # Time rule — for workstation, fall back to submission time-of-day
+    # (workstations are full-day so there's no booked time). Use the caller-
+    # provided `booking_time` if any (HH:MM), otherwise "now".
+    time_of_day = booking_time
+    if not time_of_day:
+        now = _dt.datetime.now()
+        time_of_day = f"{now.hour:02d}:{now.minute:02d}"
+    if matches_time_rule(ws.get("time") or {}, time_of_day):
+        return True
+
     return False

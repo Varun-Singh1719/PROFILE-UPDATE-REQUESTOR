@@ -555,7 +555,9 @@ async def create_workstation_request(
     auto_approved: List[dict] = []
     try:
         from routers.approval_settings import should_auto_approve_workstation
-        if await should_auto_approve_workstation(actor, is_recurring=False):
+        if await should_auto_approve_workstation(
+            actor, is_recurring=False, booking_date=target_date,
+        ):
             for req in inserted:
                 try:
                     result = await _auto_approve_request(req["id"], actor)

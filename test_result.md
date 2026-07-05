@@ -103,6 +103,164 @@
 #====================================================================================================
 
 user_problem_statement: |
+  Workspace Manager & Dashboard Enhancements (Jul 2026):
+  1. Auto Approval matrix: remove Recurring Request; add Date and Time criteria
+     with per-cell gear-icon configuration (Date Filter modes On/Before/After/Between,
+     Time operators On/Before/After/Between). Rules combine via OR with team_member
+     and manager criteria.
+  2. Dashboard: two tabs (Workspace Manager = default = Floor Layout view; Profix =
+     legacy stats). User can set their default; preference is persisted server-side
+     and re-loaded on every visit.
+
+backend:
+  - task: "Approval Settings — Date & Time criteria (+ removal of Recurring)"
+    implemented: true
+    working: "NA"
+    file: "backend/routers/approval_settings.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Rewrote approval_settings router. Matrix cells for team_member/manager
+            are still booleans; date/time are objects
+            ({enabled, mode|operator, from, to}). Removed `recurring` from CRITERIA.
+            Added matches_date_rule/matches_time_rule helpers and updated
+            should_auto_approve_workstation to evaluate date/time in addition to
+            team-member/manager (OR semantics). Verified via GET/PUT/reset with a
+            fresh Atlas Mongo instance — schema serializes correctly.
+
+  - task: "Profile preferences endpoint (default_dashboard)"
+    implemented: true
+    working: "NA"
+    file: "backend/routers/profile.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Added `preferences.default_dashboard` field on GET /profile/me (defaults
+            to "workspace_manager") plus new `PATCH /profile/preferences` endpoint
+            (allowed values: workspace_manager | profix). Stored under
+            contacts.preferences.default_dashboard. Verified via curl login flow.
+
+  - task: "Workstation auto-approval — pass booking_date to evaluator"
+    implemented: true
+    working: "NA"
+    file: "backend/routers/workstation_requests.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Passes `booking_date=target_date` to should_auto_approve_workstation so
+            the new Date rule is evaluated against the request's booking date.
+
+frontend:
+  - task: "ApprovalSettingsModal — new Date & Time rows"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/ApprovalSettingsModal.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Rewrote modal. Recurring row removed; added Date and Time criterion rows
+            with per-cell gear buttons that open sub-dialogs (DateRuleDialog uses
+            shadcn Calendar; TimeRuleDialog uses native HH:MM inputs). Configured
+            rules show summary chips next to the gear. Persisted via PUT
+            /approval-settings.
+
+  - task: "AdminDashboard — Workspace Manager / Profix tabs + default preference"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/AdminDashboard.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Split AdminDashboard into a tabbed shell. Loads preference from
+            /profile/me on mount. Workspace Manager tab embeds FloorLayoutView with
+            embedded=true (no nested Layout). Profix tab renders the legacy content.
+            A star icon indicates the current default; a "Set as default" button
+            appears when the active tab differs from the default (PATCHes
+            /profile/preferences).
+
+  - task: "FloorLayoutView — new named export supports embedded mode"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/FloorLayoutPage.jsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Refactored FloorLayoutPage to export `FloorLayoutView` named export
+            in addition to the default. Added an `embedded` prop that skips the
+            outer Layout wrapper so the interactive view can be rendered inside
+            AdminDashboard's tab shell.
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Approval Settings — Date & Time criteria (+ removal of Recurring)"
+    - "Profile preferences endpoint (default_dashboard)"
+    - "Workstation auto-approval — pass booking_date to evaluator"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    - agent: "main"
+      message: |
+        Two workspace/dashboard features shipped:
+        (1) Auto-Approval matrix now stores Date and Time rules alongside the
+        existing team-member/manager toggles; Recurring row removed.
+        should_auto_approve_workstation now evaluates OR semantics across all
+        rules. Backend routes: GET/PUT/POST /api/approval-settings (unchanged
+        surface, richer payload schema).
+        (2) Dashboard has two tabs (Workspace Manager default, Profix). User
+        preference stored via PATCH /api/profile/preferences and returned on
+        GET /api/profile/me.
+
+        Please test:
+          * GET /api/approval-settings — default doc creation, schema includes
+            date & time objects.
+          * PUT /api/approval-settings with workstation date rule
+            (mode="on", from="2026-12-25", enabled=true) — should round-trip.
+          * PUT /api/approval-settings with workstation time rule
+            (operator="between", from="09:00", to="17:00", enabled=true) —
+            round-trip.
+          * POST /api/approval-settings/reset — clears date/time back to
+            {enabled:false, ...}.
+          * GET /api/profile/me — includes preferences.default_dashboard
+            (default "workspace_manager").
+          * PATCH /api/profile/preferences {default_dashboard: "profix"} — 200,
+            persists, subsequent GET reflects change.
+          * PATCH /api/profile/preferences {default_dashboard: "invalid"} —
+            400.
+          * Auth-required: unauthenticated PATCH → 401/403.
+
+user_problem_statement: |
   Workstation Booking Module (continuation):
   Add full-day workstation booking that uses the Active (Live) Floor Layout.
   Sidebar: "Workstation Booking" placed immediately above "Meeting Room Booking" under Workspace Manager.
@@ -906,7 +1064,7 @@ frontend:
             - "View Booking" button navigates to /workspace-manager/bookings but without ?bookingId= parameter in URL (navigation works but query param missing). This is a minor issue that doesn't affect the core bug fix verification.
             
             **CONSOLE ERRORS:**
-            - 401 errors detected for PDF loading (https://desk-info-modernize.preview.emergentagent.com/api/floor-plans/pdf/...) - this is a backend PDF authentication issue, not related to the bug fixes
+            - 401 errors detected for PDF loading (https://auto-approval-setup.preview.emergentagent.com/api/floor-plans/pdf/...) - this is a backend PDF authentication issue, not related to the bug fixes
             - No critical JavaScript errors detected
             
             Test date used: 2026-07-03 (date with existing workstation bookings)

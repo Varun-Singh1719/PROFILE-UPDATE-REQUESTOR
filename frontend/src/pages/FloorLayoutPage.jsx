@@ -191,7 +191,7 @@ function DateStepper({ value, onChange }) {
 }
 
 // ---------- Interactive combined view (per plan) ----------
-function PlanInteractiveView({ plan, onBack, hideBack = false }) {
+function PlanInteractiveView({ plan, onBack, hideBack = false, embedded = false }) {
   const navigate = useNavigate();
   const [date, setDate] = useState(todayIso());
   const [availability, setAvailability] = useState(null);
@@ -341,23 +341,10 @@ function PlanInteractiveView({ plan, onBack, hideBack = false }) {
   // Right-side "Upcoming Meetings" panel — user-collapsible.
   const [meetingsCollapsed, setMeetingsCollapsed] = useState(false);
 
-  return (
-    <Layout
-      title={plan.name}
-      fullBleed
-      contentClassName="flex flex-col h-screen"
-      actions={!hideBack ? (
-        <button
-          onClick={onBack}
-          data-testid="floor-layout-back-btn"
-          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600 flex items-center gap-1 text-xs"
-          aria-label="Back to floor plans"
-          title="Back to floor plans"
-        >
-          <ArrowLeft size={14}/> Back
-        </button>
-      ) : null}
-    >
+  // Inner content (map + right side panel + detail modal) — reused whether
+  // embedded inside another shell or rendered as a full page inside Layout.
+  const innerContent = (
+    <>
       <div className="flex-1 relative flex overflow-hidden">
         {/* CENTER — full-width floor map. */}
         <div className="flex-1 relative min-w-0">
@@ -386,9 +373,7 @@ function PlanInteractiveView({ plan, onBack, hideBack = false }) {
           )}
         </div>
 
-        {/* RIGHT panel — Date, Filter by Team, Total Seats, Upcoming Meetings.
-             This is the ONLY side panel (the previous left sidebar has been
-             removed). Collapsible via the header ChevronRight button. */}
+        {/* RIGHT panel */}
         {meetingsCollapsed ? (
           <button
             type="button"
@@ -506,12 +491,37 @@ function PlanInteractiveView({ plan, onBack, hideBack = false }) {
         )}
       </div>
 
-      {/* Booking / Request detail modal — opens when the user clicks an
-          occupied (team-assigned / grey occupied) or pending (black)
-          workstation on the floor map.  Read-only summary that mirrors the
-          hover-tooltip data and adds a link to the centralized bookings
-          module for the full record. */}
+      {/* Booking / Request detail modal */}
       <SeatDetailDialog detail={detail} onClose={closeDetail} navigate={navigate} />
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div className="flex flex-col h-[calc(100vh-8.5rem)] min-h-[560px]" data-testid="floor-layout-embedded">
+        {innerContent}
+      </div>
+    );
+  }
+
+  return (
+    <Layout
+      title={plan.name}
+      fullBleed
+      contentClassName="flex flex-col h-screen"
+      actions={!hideBack ? (
+        <button
+          onClick={onBack}
+          data-testid="floor-layout-back-btn"
+          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600 flex items-center gap-1 text-xs"
+          aria-label="Back to floor plans"
+          title="Back to floor plans"
+        >
+          <ArrowLeft size={14}/> Back
+        </button>
+      ) : null}
+    >
+      {innerContent}
     </Layout>
   );
 }
@@ -771,7 +781,12 @@ function TeamFilter({ teams, value, onChange }) {
 // (rooms are rendered inside WorkstationFloorMap so they pan/zoom with the PDF)
 
 // ============================================================ MAIN
-export default function FloorLayoutPage() {
+export default function FloorLayoutPage(props) {
+  return <FloorLayoutView {...props} />;
+}
+
+// Reusable view — can be embedded (no Layout wrapper) inside the Dashboard.
+export function FloorLayoutView({ embedded = false } = {}) {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState(null);
@@ -822,33 +837,32 @@ export default function FloorLayoutPage() {
           if (autoOpened || sortedPlans.length <= 1) return;
           setActive(null);
         }}
-        hideBack={autoOpened || sortedPlans.length <= 1}
+        hideBack={autoOpened || sortedPlans.length <= 1 || embedded}
+        embedded={embedded}
       />
     );
   }
 
   if (!loading && sortedPlans.length === 0) {
+    const emptyBody = (
+      <div className="flex flex-col items-center justify-center text-center min-h-[70vh] px-6" data-testid="floor-layout-empty-state">
+        <LayoutGrid className="text-gray-300 mb-5" size={56} aria-hidden="true"/>
+        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-500" data-testid="floor-layout-empty-title">
+          NO FLOOR LAYOUT AVAILABLE
+        </h1>
+        <p className="mt-3 text-sm sm:text-base text-gray-500 max-w-md" data-testid="floor-layout-empty-subtitle">
+          No active floor calibration has been published yet.
+        </p>
+      </div>
+    );
+    if (embedded) return emptyBody;
     return (
-      <Layout
-        contentClassName="flex flex-col"
-      >
-        <div className="flex flex-col items-center justify-center text-center min-h-[70vh] px-6" data-testid="floor-layout-empty-state">
-          <LayoutGrid className="text-gray-300 mb-5" size={56} aria-hidden="true"/>
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-500" data-testid="floor-layout-empty-title">
-            NO FLOOR LAYOUT AVAILABLE
-          </h1>
-          <p className="mt-3 text-sm sm:text-base text-gray-500 max-w-md" data-testid="floor-layout-empty-subtitle">
-            No active floor calibration has been published yet.
-          </p>
-        </div>
-      </Layout>
+      <Layout contentClassName="flex flex-col">{emptyBody}</Layout>
     );
   }
 
-  return (
-    <Layout
-      title="Floor Layout"
-    >
+  const gridBody = (
+    <>
       {loading ? (
         <div className="flex items-center justify-center py-20 text-gray-500">
           <Loader2 className="animate-spin mr-2"/> Loading floor plans…
@@ -863,6 +877,9 @@ export default function FloorLayoutPage() {
           </div>
         </>
       )}
-    </Layout>
+    </>
   );
+
+  if (embedded) return <div className="p-4">{gridBody}</div>;
+  return <Layout title="Floor Layout">{gridBody}</Layout>;
 }

@@ -1,4 +1,12 @@
-import React, { useEffect, useState } from "react";
+/**
+ * AdminDashboard — Unified dashboard with two tabs:
+ *   • Workspace Manager (default) — Floor Layout view
+ *   • Profix                       — legacy stats + DQ + recent-updates dashboard
+ *
+ * Users can pick their preferred default tab; the preference is persisted
+ * server-side via /api/profile/preferences and re-loaded on every mount.
+ */
+import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import Layout from "../components/Layout";
@@ -7,14 +15,160 @@ import RecentUpdateCard from "../components/RecentUpdateCard";
 import DateFilter, { getCurrentMonthRange, dateFilterToParams } from "../components/DateFilter";
 import { Button } from "../components/ui/button";
 import UserAvatar from "../components/UserAvatar";
-import { Ticket, AlertCircle, CheckCircle2, Loader, Users, Plus } from "lucide-react";
+import { Ticket, AlertCircle, CheckCircle2, Loader, Users, Plus, LayoutGrid, ClipboardList, Star, Check } from "lucide-react";
+import { toast } from "../lib/notify";
+import { FloorLayoutView } from "./FloorLayoutPage";
+
+const TABS = [
+  { key: "workspace_manager", label: "Workspace Manager", icon: LayoutGrid },
+  { key: "profix",            label: "Profix",            icon: ClipboardList },
+];
 
 export default function AdminDashboard() {
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("workspace_manager");
+  const [defaultTab, setDefaultTab] = useState("workspace_manager");
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
+  const [savingPref, setSavingPref] = useState(false);
+
+  // Load user preference on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get("/profile/me");
+        if (cancelled) return;
+        const pref = (data?.preferences?.default_dashboard) || "workspace_manager";
+        setDefaultTab(pref);
+        setActiveTab(pref);
+      } catch {
+        // fallback silently — default is already "workspace_manager"
+      } finally {
+        if (!cancelled) setPrefsLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const setDefaultDashboard = useCallback(async (key) => {
+    if (savingPref || key === defaultTab) return;
+    setSavingPref(true);
+    try {
+      await api.patch("/profile/preferences", { default_dashboard: key });
+      setDefaultTab(key);
+      toast.success(`Default dashboard set to ${TABS.find(t => t.key === key)?.label}`);
+    } catch (e) {
+      toast.error("Could not save preference");
+    } finally {
+      setSavingPref(false);
+    }
+  }, [savingPref, defaultTab]);
+
+  // Tab bar renders inside the actions region so it stays at the top on all tabs.
+  const tabBar = (
+    <div className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-0.5" data-testid="dashboard-tabs">
+      {TABS.map((t) => {
+        const Icon = t.icon;
+        const active = activeTab === t.key;
+        const isDefault = defaultTab === t.key;
+        return (
+          <div key={t.key} className="relative">
+            <button
+              type="button"
+              onClick={() => setActiveTab(t.key)}
+              data-testid={`dashboard-tab-${t.key}`}
+              className={`inline-flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium transition-colors ${
+                active
+                  ? "bg-[#ec9324] text-white shadow-sm"
+                  : "text-gray-700 hover:bg-gray-50"
+              }`}
+              aria-pressed={active}
+            >
+              <Icon size={13} />
+              {t.label}
+              {isDefault && (
+                <Star size={11} className={active ? "text-white/90 fill-current" : "text-[#ec9324] fill-current"} />
+              )}
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // "Set as default" action (only relevant when the active tab isn't already default)
+  const setDefaultButton = (
+    activeTab !== defaultTab ? (
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setDefaultDashboard(activeTab)}
+        disabled={savingPref}
+        data-testid="set-default-dashboard-btn"
+        className="h-9 text-xs"
+        title="Make this tab the default dashboard view"
+      >
+        <Star size={13} className="mr-1" />
+        Set as default
+      </Button>
+    ) : (
+      <div className="inline-flex items-center gap-1 h-9 px-2 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-medium"
+           data-testid="default-dashboard-badge">
+        <Check size={12} /> Default
+      </div>
+    )
+  );
+
+  if (!prefsLoaded) {
+    return (
+      <Layout title="Dashboard">
+        <div className="flex items-center justify-center py-20 text-gray-400 text-sm">
+          <Loader className="animate-spin mr-2" size={16} /> Loading…
+        </div>
+      </Layout>
+    );
+  }
+
+  if (activeTab === "workspace_manager") {
+    return (
+      <Layout
+        title="Dashboard"
+        fullBleed
+        contentClassName="flex flex-col min-h-[calc(100vh-56px)]"
+        actions={
+          <>
+            {tabBar}
+            {setDefaultButton}
+          </>
+        }
+      >
+        <div className="flex-1 flex flex-col">
+          <FloorLayoutView embedded />
+        </div>
+      </Layout>
+    );
+  }
+
+  // Profix tab — legacy stats dashboard
+  return (
+    <ProfixDashboardBody
+      navigate={navigate}
+      headerActions={
+        <>
+          {tabBar}
+          {setDefaultButton}
+        </>
+      }
+    />
+  );
+}
+
+// ---------- Profix dashboard content ----------
+function ProfixDashboardBody({ navigate, headerActions }) {
   const [stats, setStats] = useState({});
   const [dqs, setDqs] = useState([]);
   const [recent, setRecent] = useState([]);
   const [dateFilter, setDateFilter] = useState(getCurrentMonthRange());
-  const navigate = useNavigate();
 
   useEffect(() => {
     const params = dateFilterToParams(dateFilter);
@@ -28,9 +182,10 @@ export default function AdminDashboard() {
 
   return (
     <Layout
-      title="Admin Dashboard"
+      title="Dashboard"
       actions={
         <>
+          {headerActions}
           <DateFilter value={dateFilter} onChange={setDateFilter} />
           <Button
             onClick={() => navigate("/admin/create")}
