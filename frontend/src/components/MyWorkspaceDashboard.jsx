@@ -153,7 +153,7 @@ export default function MyWorkspaceDashboard() {
   const isCheckedIn = !!mySeat && mySeat.status === "assigned";
 
   return (
-    <div className="w-full px-3 sm:px-4 pt-2 pb-4 space-y-4" data-testid="my-workspace-dashboard">
+    <div className="w-full px-9 sm:px-12 pt-2 pb-4 space-y-4" data-testid="my-workspace-dashboard">
       {/* Greeting */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>

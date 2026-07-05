@@ -212,7 +212,7 @@ function ProfixDashboardBody({ navigate, headerActions }) {
   return (
     <Layout
       title="Dashboard"
-      contentClassName="w-full px-3 sm:px-4 pt-2 pb-4 flex flex-col min-h-[calc(100vh-56px)]"
+      contentClassName="w-full px-9 sm:px-12 pt-2 pb-4 flex flex-col min-h-[calc(100vh-56px)]"
       actions={headerActions}
     >
       {/* Compact page header — greeting + inline actions (New Request,
