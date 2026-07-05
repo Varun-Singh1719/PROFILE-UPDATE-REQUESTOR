@@ -51,6 +51,14 @@ import { toast } from "../lib/notify";
 import Layout from "../components/Layout";
 import api, { formatApiError } from "../lib/api";
 import { Button } from "../components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../components/ui/dialog";
 import MultiSelect from "../components/MultiSelect";
 import WorkstationFloorMap from "../components/WorkstationFloorMap";
 import { useAuth } from "../context/AuthContext";
@@ -140,6 +148,16 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
   //            map. The system auto-selects N consecutive available seats
   //            (N = team size) following the seat-numbering sequence.
   const [bookingMode, setBookingMode] = useState("manual");
+  // The starting workstation the user clicked (or accepted from a suggestion).
+  // Kept alongside `selectedSeatIds` so the Proposed Selection card can label
+  // it explicitly, matching the spec's "Starting Workstation" summary field.
+  const [autoStartSeatId, setAutoStartSeatId] = useState(null);
+  // "Best available block" suggestion dialog state — set when the user's
+  // chosen starting workstation cannot accommodate the whole team but the
+  // system found a nearby block that can.
+  //   { chosenStart:{id,label}, suggestedStart:{id,label}, suggestedSeats:[...], required:N }
+  // null means the dialog is closed.
+  const [autoSuggestion, setAutoSuggestion] = useState(null);
 
   // -------------------------------------------------- Initial loads
   const loadPlans = useCallback(async () => {
@@ -375,6 +393,47 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
     return { seats: picked };
   }, [naturalSortSeats, allSeats, bookingsBySeat, requestsBySeat]);
 
+  // Best-available block finder — used when the user's chosen starting seat
+  // can't accommodate the whole team. Fans out (forward first, then backward)
+  // from the chosen index in the natural-sort order and returns the closest
+  // starting seat whose forward-walk yields `count` available workstations.
+  // Returns { startSeat, seats:[...] } or null when no block of size N exists.
+  const findNearestValidStart = useCallback((chosenStartId, count) => {
+    if (count <= 0) return null;
+    const sorted = naturalSortSeats(allSeats);
+    const chosenIdx = sorted.findIndex((s) => s.id === chosenStartId);
+    if (chosenIdx === -1) return null;
+
+    const tryFrom = (startIdx) => {
+      const start = sorted[startIdx];
+      if (!start) return null;
+      if (bookingsBySeat[start.id] || requestsBySeat[start.id]) return null;
+      const picked = [];
+      for (let i = startIdx; i < sorted.length && picked.length < count; i++) {
+        const s = sorted[i];
+        if (!bookingsBySeat[s.id] && !requestsBySeat[s.id]) picked.push(s);
+      }
+      return picked.length >= count ? picked : null;
+    };
+
+    const maxOffset = Math.max(chosenIdx, sorted.length - chosenIdx - 1);
+    for (let off = 1; off <= maxOffset; off++) {
+      // Forward first — usually more likely to succeed since a walk-forward
+      // algorithm favours starting closer to the beginning of a free block.
+      const fwd = chosenIdx + off;
+      if (fwd < sorted.length) {
+        const picked = tryFrom(fwd);
+        if (picked) return { startSeat: sorted[fwd], seats: picked };
+      }
+      const back = chosenIdx - off;
+      if (back >= 0) {
+        const picked = tryFrom(back);
+        if (picked) return { startSeat: sorted[back], seats: picked };
+      }
+    }
+    return null;
+  }, [naturalSortSeats, allSeats, bookingsBySeat, requestsBySeat]);
+
   // -------------------------------------------------- Handlers
   const toggleSeat = useCallback((seatId) => {
     // Auto Assignment: first available-seat click triggers the auto-select
@@ -392,12 +451,26 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
           return;
         }
         const result = computeAutoSelection(seatId, size);
-        if (result.error && result.seats.length === 0) {
-          toast.error(result.error);
+        if (result.error && result.seats.length < size) {
+          // Not enough consecutive available seats from this start — try to
+          // find the nearest block that CAN fit the whole team and offer it
+          // as a suggestion instead of silently failing / partial-picking.
+          const chosen = allSeats.find((s) => s.id === seatId);
+          const suggestion = findNearestValidStart(seatId, size);
+          if (suggestion) {
+            setAutoSuggestion({
+              chosenStart: { id: seatId, label: chosen?.label || seatId },
+              suggestedStart: { id: suggestion.startSeat.id, label: suggestion.startSeat.label || suggestion.startSeat.id },
+              suggestedSeats: suggestion.seats,
+              required: size,
+            });
+          } else {
+            toast.error(`No block of ${size} consecutive available workstations was found on this floor. Try booking on a different date or a smaller team.`);
+          }
           return;
         }
-        if (result.error) toast.error(result.error);
         setSelectedSeatIds(result.seats.map((s) => s.id));
+        setAutoStartSeatId(seatId);
         setAllocationMode("random");
         setManualEmpIds([]);
         return;
@@ -406,7 +479,19 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
       // can modify the selection before confirming.
     }
     setSelectedSeatIds((prev) => prev.includes(seatId) ? prev.filter((x) => x !== seatId) : [...prev, seatId]);
-  }, [bookingMode, teamId, selectedSeatIds, teamMemberCount, computeAutoSelection]);
+  }, [bookingMode, teamId, selectedSeatIds, teamMemberCount, computeAutoSelection, findNearestValidStart, allSeats]);
+
+  // Accept the "best available block" suggestion — replaces the current
+  // proposal (empty at this point) with the suggested seats and closes the
+  // dialog.
+  const acceptSuggestion = useCallback(() => {
+    if (!autoSuggestion) return;
+    setSelectedSeatIds(autoSuggestion.suggestedSeats.map((s) => s.id));
+    setAutoStartSeatId(autoSuggestion.suggestedStart.id);
+    setAllocationMode("random");
+    setManualEmpIds([]);
+    setAutoSuggestion(null);
+  }, [autoSuggestion]);
 
   // Switch between Manual and Team Auto Assignment. Any in-progress selection
   // is cleared so the two flows never contaminate each other.
@@ -417,6 +502,8 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
     setEmployeeId("");
     setManualEmpIds([]);
     setAllocationMode("random");
+    setAutoStartSeatId(null);
+    setAutoSuggestion(null);
     // teamId is intentionally kept — a Super Admin who already picked a team
     // and switches from Manual → Auto shouldn't have to pick it again.
   }, [bookingMode]);
@@ -435,6 +522,8 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
     setEmployeeId(""); setTeamId(""); setManualEmpIds([]);
     setAllocationMode("random");
     setRecurringOn(false); setRecurringDays([]); setRecurringEnd(date);
+    setAutoStartSeatId(null);
+    setAutoSuggestion(null);
   };
 
   // -------------------------------------------------- Validation + submit
@@ -631,6 +720,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                   onOpenBookingDetail={openBookingDetail}
                   loading={availLoading}
                   disabled={!canEdit}
+                  zoomToSeatIds={bookingMode === "auto" && autoPhase === "proposed" ? selectedSeatIds : null}
                 />
               ) : (
                 <div className="h-full flex items-center justify-center text-gray-400 text-sm">
@@ -708,6 +798,8 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                             setTeamId(e.target.value);
                             setSelectedSeatIds([]);
                             setManualEmpIds([]);
+                            setAutoStartSeatId(null);
+                            setAutoSuggestion(null);
                           }}
                           disabled={!canEdit || refLoading}
                           className="mt-1 w-full text-sm rounded-md border border-gray-300 px-2 py-2 bg-white disabled:bg-gray-50 disabled:text-gray-400"
@@ -787,6 +879,10 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                             <div className="text-gray-900 font-medium truncate">{selectedTeam?.name || "—"}</div>
                             <div className="text-gray-600">Team Size</div>
                             <div className="text-gray-900 font-medium">{teamMemberCount} member{teamMemberCount === 1 ? "" : "s"}</div>
+                            <div className="text-gray-600">Starting</div>
+                            <div className="text-gray-900 font-medium" data-testid="ws-auto-start-label">
+                              {autoStartSeatId ? (allSeats.find(s => s.id === autoStartSeatId)?.label || autoStartSeatId) : "—"}
+                            </div>
                             <div className="text-gray-600">Selected</div>
                             <div className={`font-medium ${seatCount < teamMemberCount ? "text-amber-700" : "text-gray-900"}`}>
                               {seatCount} workstation{seatCount === 1 ? "" : "s"}
@@ -1074,6 +1170,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                         onClick={() => {
                           setSelectedSeatIds([]);
                           setManualEmpIds([]);
+                          setAutoStartSeatId(null);
                           toast.info("Click a new starting workstation on the map.");
                         }}
                         disabled={!canEdit || saving}
@@ -1096,6 +1193,86 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
           </div>
         )}
       </div>
+
+      {/* ============================================================
+          Best-Available Block suggestion dialog.
+          Shown when the user's chosen starting workstation cannot fit the
+          entire team but the system found a nearby block that can.  Three
+          actions: use the suggestion, pick a different start, or cancel.
+      ============================================================ */}
+      <Dialog
+        open={!!autoSuggestion}
+        onOpenChange={(open) => { if (!open) setAutoSuggestion(null); }}
+      >
+        <DialogContent data-testid="ws-auto-suggestion-dialog" className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700">
+              <AlertTriangle size={18} /> Not enough consecutive seats
+            </DialogTitle>
+            <DialogDescription className="text-sm text-gray-700 pt-2">
+              {autoSuggestion && (
+                <>
+                  <span className="font-semibold">
+                    {autoSuggestion.required} consecutive workstations are not available from{" "}
+                    <span className="text-gray-900">{autoSuggestion.chosenStart.label}</span>.
+                  </span>
+                  <br />
+                  The nearest available block starts at{" "}
+                  <span className="font-semibold text-emerald-700">{autoSuggestion.suggestedStart.label}</span>.
+                  Would you like to use this instead?
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {autoSuggestion && (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 space-y-1.5">
+              <div className="text-[11px] font-semibold text-emerald-800">Suggested block</div>
+              <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
+                {autoSuggestion.suggestedSeats.map((s) => (
+                  <span
+                    key={s.id}
+                    className="inline-flex items-center px-2 py-0.5 rounded-full bg-white ring-1 ring-emerald-300 text-[11px] font-medium text-emerald-900"
+                  >
+                    {s.label || s.id}
+                  </span>
+                ))}
+              </div>
+              <div className="text-[11px] text-gray-600 pt-1">
+                {autoSuggestion.suggestedSeats.length} workstation{autoSuggestion.suggestedSeats.length === 1 ? "" : "s"} · starting at{" "}
+                <strong>{autoSuggestion.suggestedStart.label}</strong>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setAutoSuggestion(null)}
+              data-testid="ws-suggestion-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setAutoSuggestion(null);
+                toast.info("Click a different starting workstation on the map.");
+              }}
+              data-testid="ws-suggestion-choose-another"
+            >
+              Choose Another Starting Workstation
+            </Button>
+            <Button
+              onClick={acceptSuggestion}
+              className="bg-[#ec9324] hover:bg-[#d8821a] text-white"
+              data-testid="ws-suggestion-use"
+            >
+              <CheckCircle2 size={14} className="mr-1.5" /> Use Suggested Block
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
