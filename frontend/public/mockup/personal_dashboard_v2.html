@@ -1,0 +1,379 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>My Workspace — Alternate mockup (Floor-first)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  body{font-family:'Inter',system-ui,sans-serif;background:#0f172a}
+  .brand{color:#ec9324}
+  .bg-brand{background:#ec9324}
+  .ring-brand{--tw-ring-color:#ec9324}
+  .glass{background:rgba(255,255,255,.94);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+  .glass-dark{background:rgba(15,23,42,.55);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+  .pulse-dot::after{
+    content:"";position:absolute;inset:-6px;border-radius:9999px;
+    background:radial-gradient(circle,rgba(236,147,36,.4),transparent 70%);
+    animation:pulse 2s ease-out infinite;
+  }
+  @keyframes pulse{0%{transform:scale(.6);opacity:1}100%{transform:scale(1.9);opacity:0}}
+  .floor-bg{
+    background:
+      radial-gradient(1200px 600px at 30% 20%, rgba(236,147,36,.18), transparent 60%),
+      radial-gradient(900px 500px at 80% 80%, rgba(59,130,246,.14), transparent 60%),
+      linear-gradient(180deg,#0b1220 0%,#0f172a 100%);
+  }
+</style>
+</head>
+<body class="min-h-screen text-white floor-bg">
+
+<!-- Topbar -->
+<div class="h-14 border-b border-white/10 flex items-center px-6 gap-4">
+  <div class="flex items-center gap-2">
+    <div class="h-7 w-7 rounded-md bg-brand flex items-center justify-center text-white font-black">i</div>
+    <span class="font-bold">Infollion Utilities</span>
+  </div>
+  <span class="text-xs text-white/40">/ Dashboard</span>
+
+  <div class="ml-6 inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 p-0.5">
+    <button class="inline-flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-semibold text-white bg-brand shadow-sm">🏢 My Workspace ★</button>
+    <button class="inline-flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-white/70 hover:bg-white/5">🗺️ Workspace Manager</button>
+    <button class="inline-flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-white/70 hover:bg-white/5">📋 Profix</button>
+  </div>
+
+  <div class="ml-auto flex items-center gap-3 text-xs text-white/60">
+    <span>Mon · 15 Jul 2026</span>
+    <div class="h-8 w-8 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 text-white flex items-center justify-center font-bold text-xs">SS</div>
+  </div>
+</div>
+
+<div class="grid grid-cols-12 gap-0 min-h-[calc(100vh-3.5rem)]">
+
+  <!-- LEFT sidebar -->
+  <aside class="col-span-3 border-r border-white/10 p-5 space-y-4 glass-dark">
+    <!-- Personal identity -->
+    <div class="flex items-center gap-3">
+      <div class="h-14 w-14 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 text-white flex items-center justify-center font-black text-xl ring-4 ring-white/10">SS</div>
+      <div>
+        <div class="font-bold">Saksham Singhal</div>
+        <div class="text-xs text-white/60">Team InfraXcellence · Manager</div>
+      </div>
+    </div>
+
+    <!-- Live status -->
+    <div class="rounded-xl bg-emerald-500/10 border border-emerald-400/30 p-3.5">
+      <div class="flex items-center gap-2 text-emerald-300 text-[11px] font-bold uppercase tracking-wider">
+        <span class="relative inline-block h-2 w-2 rounded-full bg-emerald-400 pulse-dot"></span>
+        Checked in
+      </div>
+      <div class="mt-2 text-2xl font-black">Desk H-14</div>
+      <div class="text-xs text-white/60">Floor 3 · North Wing · since 09:14</div>
+      <div class="mt-3 flex gap-2">
+        <button class="text-[11px] font-semibold bg-emerald-400/20 text-emerald-200 px-2.5 py-1 rounded-md hover:bg-emerald-400/30">Check out</button>
+        <button class="text-[11px] font-semibold bg-white/5 text-white/80 px-2.5 py-1 rounded-md hover:bg-white/10">Report issue</button>
+      </div>
+    </div>
+
+    <!-- Next up (peek from schedule) -->
+    <div>
+      <div class="text-[11px] uppercase tracking-widest text-white/40 font-bold">Next up</div>
+      <div class="mt-2 rounded-xl bg-white/5 border border-white/10 p-3">
+        <div class="flex items-center gap-2">
+          <div class="text-[10px] font-bold text-orange-300 bg-orange-500/20 px-1.5 py-0.5 rounded uppercase">in 45m</div>
+          <div class="text-[11px] text-white/60">Focus Room 2</div>
+        </div>
+        <div class="mt-1.5 font-semibold text-sm">Design sync — H2 planning</div>
+        <div class="text-[11px] text-white/50 mt-0.5">10:30 – 11:15 · 5 people</div>
+        <div class="mt-2 flex gap-2">
+          <button class="text-[11px] font-semibold bg-brand text-white px-2.5 py-1 rounded-md">Join</button>
+          <button class="text-[11px] font-semibold text-white/70 border border-white/10 px-2.5 py-1 rounded-md hover:bg-white/5">Directions</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Week glance -->
+    <div>
+      <div class="flex items-center justify-between">
+        <div class="text-[11px] uppercase tracking-widest text-white/40 font-bold">This week</div>
+        <div class="text-[11px] font-bold text-emerald-300">🔥 3-day streak</div>
+      </div>
+      <div class="mt-2 flex gap-1.5">
+        <div class="flex-1 h-8 rounded-md bg-emerald-500/70 flex items-center justify-center text-[10px] font-bold text-white/95">M</div>
+        <div class="flex-1 h-8 rounded-md bg-emerald-500/70 flex items-center justify-center text-[10px] font-bold text-white/95">T</div>
+        <div class="flex-1 h-8 rounded-md bg-brand flex items-center justify-center text-[10px] font-black text-white shadow-lg shadow-orange-500/30">W</div>
+        <div class="flex-1 h-8 rounded-md bg-white/5 border border-dashed border-white/20 flex items-center justify-center text-[10px] font-semibold text-white/40">T</div>
+        <div class="flex-1 h-8 rounded-md bg-white/5 border border-dashed border-white/20 flex items-center justify-center text-[10px] font-semibold text-white/40">F</div>
+      </div>
+      <button class="mt-2 text-[11px] font-semibold text-brand hover:underline">Plan the rest →</button>
+    </div>
+
+    <!-- Quick actions -->
+    <div>
+      <div class="text-[11px] uppercase tracking-widest text-white/40 font-bold mb-2">Quick actions</div>
+      <div class="grid grid-cols-2 gap-2">
+        <button class="rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 py-3 text-[11px] font-semibold flex flex-col items-center gap-1">
+          <span class="text-lg">🪑</span> Book desk
+        </button>
+        <button class="rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 py-3 text-[11px] font-semibold flex flex-col items-center gap-1">
+          <span class="text-lg">📅</span> Book room
+        </button>
+        <button class="rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 py-3 text-[11px] font-semibold flex flex-col items-center gap-1">
+          <span class="text-lg">🧑‍💼</span> Request WS
+        </button>
+        <button class="rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 py-3 text-[11px] font-semibold flex flex-col items-center gap-1">
+          <span class="text-lg">🚗</span> Book parking
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- CENTER: floor plan is the hero -->
+  <main class="col-span-6 relative">
+    <!-- Header strip over the map -->
+    <div class="absolute top-4 left-4 right-4 z-20 flex items-center justify-between">
+      <div class="glass rounded-full px-4 py-1.5 text-slate-900 text-xs font-semibold shadow inline-flex items-center gap-2">
+        <span class="text-brand">📍</span> Floor 3 · North Wing
+        <span class="text-slate-400">·</span>
+        <span>Today, Mon 15 Jul</span>
+      </div>
+      <div class="glass rounded-full px-4 py-1.5 text-slate-900 text-xs font-semibold shadow inline-flex items-center gap-3">
+        <span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-emerald-500"></span> 43 available</span>
+        <span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-slate-400"></span> 61 booked</span>
+        <span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-brand"></span> You</span>
+      </div>
+    </div>
+
+    <!-- Fake floor plan svg -->
+    <svg viewBox="0 0 800 620" class="w-full h-full absolute inset-0 opacity-90">
+      <!-- corridor -->
+      <rect x="40" y="290" width="720" height="30" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+      <text x="60" y="310" fill="#64748b" font-size="10" font-family="Inter">Corridor</text>
+
+      <!-- meeting rooms -->
+      <g>
+        <rect x="40" y="40"  width="180" height="230" rx="6" fill="#1e293b" stroke="#334155"/>
+        <text x="130" y="70"  fill="#94a3b8" font-size="12" font-family="Inter" text-anchor="middle" font-weight="600">Boardroom</text>
+        <text x="130" y="88"  fill="#64748b" font-size="9"  font-family="Inter" text-anchor="middle">14:00 · Q3 review</text>
+        <rect x="40" y="40" width="180" height="4" fill="#ec9324"/>
+      </g>
+      <g>
+        <rect x="240" y="40" width="140" height="110" rx="6" fill="#1e293b" stroke="#334155"/>
+        <text x="310" y="90"  fill="#94a3b8" font-size="11" font-family="Inter" text-anchor="middle" font-weight="600">Focus Room 2</text>
+        <text x="310" y="108" fill="#fbbf24" font-size="9"  font-family="Inter" text-anchor="middle">10:30 · Your meeting</text>
+        <rect x="240" y="40" width="140" height="4" fill="#fbbf24"/>
+      </g>
+      <g>
+        <rect x="240" y="160" width="140" height="110" rx="6" fill="#1e293b" stroke="#334155"/>
+        <text x="310" y="220" fill="#94a3b8" font-size="11" font-family="Inter" text-anchor="middle" font-weight="600">Focus Room 3</text>
+        <text x="310" y="238" fill="#10b981" font-size="9"  font-family="Inter" text-anchor="middle">Available</text>
+        <rect x="240" y="160" width="140" height="4" fill="#10b981"/>
+      </g>
+      <g>
+        <rect x="600" y="40" width="160" height="230" rx="6" fill="#1e293b" stroke="#334155"/>
+        <text x="680" y="70"  fill="#94a3b8" font-size="12" font-family="Inter" text-anchor="middle" font-weight="600">Meeting Room 4</text>
+        <text x="680" y="88"  fill="#64748b" font-size="9"  font-family="Inter" text-anchor="middle">Tomorrow · Acme demo</text>
+        <rect x="600" y="40" width="160" height="4" fill="#334155"/>
+      </g>
+
+      <!-- desk clusters -->
+      <g id="seats">
+        <!-- helper positions -->
+        <!-- Cluster A -->
+        <g>
+          <text x="60" y="360" fill="#64748b" font-size="10" font-family="Inter">Team A</text>
+        </g>
+        <!-- rows of seats -->
+        <!-- draw a grid of seats with some booked/available/user -->
+        <!-- Row 1 -->
+        <g>
+          <!-- generic seat template shown many times; we hardcode -->
+          <!-- Available seat -->
+          <rect x="60"  y="380" width="26" height="26" rx="4" fill="#10b981" opacity="0.35"/>
+          <rect x="94"  y="380" width="26" height="26" rx="4" fill="#10b981" opacity="0.35"/>
+          <rect x="128" y="380" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="162" y="380" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="196" y="380" width="26" height="26" rx="4" fill="#10b981" opacity="0.35"/>
+          <rect x="230" y="380" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="264" y="380" width="26" height="26" rx="4" fill="#10b981" opacity="0.35"/>
+          <rect x="298" y="380" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+        </g>
+        <g>
+          <rect x="60"  y="415" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="94"  y="415" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="128" y="415" width="26" height="26" rx="4" fill="#10b981" opacity="0.35"/>
+          <!-- USER SEAT -->
+          <g>
+            <rect x="162" y="415" width="26" height="26" rx="4" fill="#ec9324" stroke="white" stroke-width="2"/>
+            <text x="175" y="432" text-anchor="middle" fill="white" font-size="9" font-weight="900" font-family="Inter">H14</text>
+            <!-- pulse ring -->
+            <circle cx="175" cy="428" r="26" fill="none" stroke="#ec9324" stroke-width="2" opacity="0.6">
+              <animate attributeName="r" from="18" to="40" dur="1.8s" repeatCount="indefinite"/>
+              <animate attributeName="opacity" from="0.7" to="0" dur="1.8s" repeatCount="indefinite"/>
+            </circle>
+          </g>
+          <rect x="196" y="415" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="230" y="415" width="26" height="26" rx="4" fill="#10b981" opacity="0.35"/>
+          <rect x="264" y="415" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="298" y="415" width="26" height="26" rx="4" fill="#10b981" opacity="0.35"/>
+        </g>
+        <g>
+          <rect x="60"  y="450" width="26" height="26" rx="4" fill="#10b981" opacity="0.35"/>
+          <rect x="94"  y="450" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="128" y="450" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="162" y="450" width="26" height="26" rx="4" fill="#10b981" opacity="0.35"/>
+          <rect x="196" y="450" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="230" y="450" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="264" y="450" width="26" height="26" rx="4" fill="#10b981" opacity="0.35"/>
+          <rect x="298" y="450" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+        </g>
+
+        <!-- Cluster B -->
+        <g>
+          <text x="410" y="360" fill="#64748b" font-size="10" font-family="Inter">Team B</text>
+        </g>
+        <g>
+          <rect x="410" y="380" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="444" y="380" width="26" height="26" rx="4" fill="#10b981" opacity="0.35"/>
+          <rect x="478" y="380" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="512" y="380" width="26" height="26" rx="4" fill="#10b981" opacity="0.35"/>
+          <rect x="546" y="380" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="580" y="380" width="26" height="26" rx="4" fill="#0f172a" stroke="#f59e0b" stroke-dasharray="3 2"/>
+          <rect x="614" y="380" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="648" y="380" width="26" height="26" rx="4" fill="#10b981" opacity="0.35"/>
+          <rect x="682" y="380" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+        </g>
+        <g>
+          <rect x="410" y="415" width="26" height="26" rx="4" fill="#10b981" opacity="0.35"/>
+          <rect x="444" y="415" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="478" y="415" width="26" height="26" rx="4" fill="#10b981" opacity="0.35"/>
+          <rect x="512" y="415" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="546" y="415" width="26" height="26" rx="4" fill="#10b981" opacity="0.35"/>
+          <rect x="580" y="415" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="614" y="415" width="26" height="26" rx="4" fill="#10b981" opacity="0.35"/>
+          <rect x="648" y="415" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="682" y="415" width="26" height="26" rx="4" fill="#10b981" opacity="0.35"/>
+        </g>
+        <g>
+          <rect x="410" y="450" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="444" y="450" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="478" y="450" width="26" height="26" rx="4" fill="#10b981" opacity="0.35"/>
+          <rect x="512" y="450" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="546" y="450" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="580" y="450" width="26" height="26" rx="4" fill="#10b981" opacity="0.35"/>
+          <rect x="614" y="450" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+          <rect x="648" y="450" width="26" height="26" rx="4" fill="#10b981" opacity="0.35"/>
+          <rect x="682" y="450" width="26" height="26" rx="4" fill="#64748b" opacity="0.6"/>
+        </g>
+
+        <!-- callout arrow to user seat -->
+        <path d="M 320 350 Q 260 380 195 415" stroke="#ec9324" stroke-width="1.5" fill="none" stroke-dasharray="4 3" opacity="0.7"/>
+        <foreignObject x="240" y="325" width="120" height="30">
+          <div xmlns="http://www.w3.org/1999/xhtml" style="font-family:Inter;font-size:10px;color:#ec9324;background:rgba(236,147,36,.12);border:1px solid rgba(236,147,36,.4);border-radius:9999px;padding:3px 8px;display:inline-block;font-weight:700">You're here → H-14</div>
+        </foreignObject>
+      </g>
+    </svg>
+
+    <!-- Bottom map controls -->
+    <div class="absolute bottom-4 left-4 right-4 z-20 flex items-center justify-between">
+      <div class="glass-dark rounded-full px-3 py-1.5 text-xs text-white/80 border border-white/10">
+        Tip: click any seat to book · hover a room to see today's schedule
+      </div>
+      <div class="glass rounded-full text-slate-800 text-xs font-semibold shadow inline-flex overflow-hidden">
+        <button class="px-3 py-1.5 hover:bg-slate-100">Today</button>
+        <button class="px-3 py-1.5 hover:bg-slate-100 bg-brand text-white">Live</button>
+        <button class="px-3 py-1.5 hover:bg-slate-100">Tomorrow</button>
+        <button class="px-3 py-1.5 hover:bg-slate-100">This week</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- RIGHT: today's timeline -->
+  <aside class="col-span-3 border-l border-white/10 glass-dark p-5">
+    <div class="flex items-center justify-between">
+      <h3 class="font-semibold">Today's timeline</h3>
+      <button class="text-[11px] font-semibold text-brand hover:underline">Full calendar →</button>
+    </div>
+
+    <div class="mt-4 relative pl-6">
+      <!-- vertical rail -->
+      <div class="absolute left-1.5 top-1 bottom-1 w-px bg-white/10"></div>
+
+      <!-- item: past check-in -->
+      <div class="relative mb-4">
+        <span class="absolute -left-[22px] top-1 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-emerald-400/30"></span>
+        <div class="text-[11px] font-bold text-white/50">09:14</div>
+        <div class="text-sm font-semibold">Checked in at Desk H-14</div>
+        <div class="text-[11px] text-white/50">Auto — badge scan</div>
+      </div>
+
+      <!-- item: now -->
+      <div class="relative mb-4">
+        <span class="absolute -left-[24px] top-0.5 h-4 w-4 rounded-full bg-brand ring-4 ring-orange-500/30 flex items-center justify-center text-[8px] font-black text-white">NOW</span>
+        <div class="text-[11px] font-bold text-brand">10:30 — 11:15</div>
+        <div class="text-sm font-semibold">Design sync — H2 planning</div>
+        <div class="text-[11px] text-white/60 inline-flex items-center gap-1.5"><span class="text-emerald-300">📍</span> Focus Room 2 · 5 people</div>
+        <div class="mt-2 flex gap-2">
+          <button class="text-[10px] font-bold bg-brand text-white px-2 py-1 rounded">Join</button>
+          <button class="text-[10px] font-semibold text-white/80 border border-white/15 px-2 py-1 rounded hover:bg-white/5">Directions</button>
+        </div>
+      </div>
+
+      <!-- item: lunch -->
+      <div class="relative mb-4 opacity-80">
+        <span class="absolute -left-[22px] top-1 h-3 w-3 rounded-full bg-yellow-400/70"></span>
+        <div class="text-[11px] font-bold text-white/50">12:30 — 13:15</div>
+        <div class="text-sm font-semibold">Lunch break 🍜</div>
+        <div class="text-[11px] text-white/50">Cafeteria — Floor 1</div>
+      </div>
+
+      <!-- item: Q3 review -->
+      <div class="relative mb-4">
+        <span class="absolute -left-[22px] top-1 h-3 w-3 rounded-full bg-white/30"></span>
+        <div class="text-[11px] font-bold text-white/50">14:00 — 15:00</div>
+        <div class="text-sm font-semibold">Q3 review with leadership</div>
+        <div class="text-[11px] text-white/60">Boardroom · organized by Maya K.</div>
+        <div class="mt-2 flex gap-2">
+          <button class="text-[10px] font-semibold text-white/80 border border-white/15 px-2 py-1 rounded hover:bg-white/5">Reschedule</button>
+        </div>
+      </div>
+
+      <!-- item: focus block -->
+      <div class="relative mb-4 opacity-80">
+        <span class="absolute -left-[22px] top-1 h-3 w-3 rounded-full bg-purple-400/70"></span>
+        <div class="text-[11px] font-bold text-white/50">16:00 — 18:00</div>
+        <div class="text-sm font-semibold">Focus block · no meetings</div>
+        <div class="text-[11px] text-white/50">Auto-declined incoming invites</div>
+      </div>
+
+      <!-- item: check-out ahead -->
+      <div class="relative">
+        <span class="absolute -left-[22px] top-1 h-3 w-3 rounded-full bg-white/15 border border-dashed border-white/30"></span>
+        <div class="text-[11px] font-bold text-white/40">~18:30</div>
+        <div class="text-sm font-medium text-white/70">Suggested check-out</div>
+        <div class="text-[11px] text-white/40">Based on your last-30-days pattern</div>
+      </div>
+    </div>
+
+    <!-- Team on floor -->
+    <div class="mt-6 pt-4 border-t border-white/10">
+      <div class="flex items-center justify-between">
+        <div class="text-[11px] uppercase tracking-widest text-white/40 font-bold">Team on floor</div>
+        <span class="text-[10px] font-bold text-emerald-300 bg-emerald-500/15 border border-emerald-400/30 px-1.5 py-0.5 rounded-full">7 of 16</span>
+      </div>
+      <div class="mt-3 flex flex-wrap gap-1.5">
+        <div class="h-7 w-7 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white text-[10px] font-bold ring-2 ring-white/10">RS</div>
+        <div class="h-7 w-7 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white text-[10px] font-bold ring-2 ring-white/10">DK</div>
+        <div class="h-7 w-7 rounded-full bg-gradient-to-br from-pink-400 to-pink-600 flex items-center justify-center text-white text-[10px] font-bold ring-2 ring-white/10">SM</div>
+        <div class="h-7 w-7 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-[10px] font-bold ring-2 ring-white/10">MK</div>
+        <div class="h-7 w-7 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-[10px] font-bold ring-2 ring-white/10">AK</div>
+        <div class="h-7 w-7 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white text-[10px] font-bold ring-2 ring-white/10">PP</div>
+        <div class="h-7 w-7 rounded-full bg-white/5 border border-dashed border-white/20 flex items-center justify-center text-[10px] font-bold text-white/60">+1</div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+</body>
+</html>
