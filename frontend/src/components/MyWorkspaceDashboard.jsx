@@ -36,6 +36,7 @@ import UserAvatar from "./UserAvatar";
 import { useAuth } from "../context/AuthContext";
 import MySeatMiniMap from "./MySeatMiniMap";
 import MySeatFloorDialog from "./MySeatFloorDialog";
+import MyTeamToday from "./MyTeamToday";
 import { teamSolid } from "../lib/teamColors";
 
 // -------------------------------------------------------------- Date helpers
@@ -298,6 +299,15 @@ export default function MyWorkspaceDashboard() {
 
         <TeamOnFloorCard team={dashboard?.team_on_floor || []} navigate={navigate} />
       </div>
+
+      {/* Row 2.5 — Manager-only "My Team Today" (renders only when
+          the current user is listed as a manager on ≥ 1 team). */}
+      {dashboard?.is_manager && (
+        <MyTeamToday
+          team={dashboard.my_team_today || []}
+          managedTeams={dashboard.managed_teams || []}
+        />
+      )}
 
       {/* Row 3 — Recent activity */}
       <RecentActivityCard activity={dashboard?.recent_activity || []} loading={loading} />

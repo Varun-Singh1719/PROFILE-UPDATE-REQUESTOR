@@ -181,12 +181,93 @@ async def my_workspace_dashboard(
         {"_id": 0, "action": 1, "detail": 1, "created_at": 1, "resource": 1, "resource_id": 1},
     ).sort("created_at", -1).limit(6).to_list(6)
 
+    # ---- Manager-only: "My Team Today"
+    # If the current user is listed as a manager on ≥ 1 team, aggregate the
+    # attendance status of every member of those teams for `the_date`.
+    managed_teams = await db.teams.find(
+        {"manager_ids": {"$in": [uid]}},
+        {"_id": 0, "id": 1, "name": 1, "color": 1, "member_ids": 1, "manager_ids": 1},
+    ).to_list(50)
+    is_manager_flag = len(managed_teams) > 0
+    my_team_today: List[dict] = []
+    if is_manager_flag:
+        # collect all member ids across managed teams (excluding self)
+        member_ids: List[str] = []
+        team_by_member: Dict[str, dict] = {}
+        for t in managed_teams:
+            for mid in (t.get("member_ids") or []):
+                if mid and mid != uid:
+                    member_ids.append(mid)
+                    team_by_member[mid] = t
+        member_ids = list(dict.fromkeys(member_ids))  # dedupe, preserve order
+
+        if member_ids:
+            # Contacts info
+            contacts = await db.contacts.find(
+                {"id": {"$in": member_ids}},
+                {"_id": 0, "id": 1, "name": 1, "email": 1, "emp_id": 1, "role": 1, "avatar_kind": 1, "avatar_image": 1, "avatar_color": 1, "avatar_preset": 1, "status": 1},
+            ).to_list(500)
+            contact_by_id = {c["id"]: c for c in contacts}
+
+            # Bookings for today
+            bookings = await db.workstation_bookings.find(
+                {"employee.id": {"$in": member_ids}, "date": the_date, "cancelled": False},
+                {"_id": 0, "employee": 1, "seat_label": 1, "plan_id": 1, "team_id": 1, "team_name": 1, "team_color": 1},
+            ).to_list(500)
+            booking_by_emp = {(b.get("employee") or {}).get("id"): b for b in bookings if (b.get("employee") or {}).get("id")}
+
+            # Pending requests for today
+            pending = await db.workstation_requests.find(
+                {"employee.id": {"$in": member_ids}, "date": the_date, "status": "Pending Approval"},
+                {"_id": 0, "employee": 1, "seat_label": 1, "team_id": 1, "team_name": 1, "team_color": 1},
+            ).to_list(500)
+            pending_by_emp = {(p.get("employee") or {}).get("id"): p for p in pending if (p.get("employee") or {}).get("id")}
+
+            for mid in member_ids:
+                c = contact_by_id.get(mid) or {"id": mid, "name": "Unknown"}
+                if (c.get("status") or "").lower() == "inactive":
+                    continue
+                t = team_by_member.get(mid) or {}
+                b = booking_by_emp.get(mid)
+                p = pending_by_emp.get(mid)
+                if b:
+                    status = "assigned"
+                    seat_label = b.get("seat_label")
+                elif p:
+                    status = "requested"
+                    seat_label = p.get("seat_label")
+                else:
+                    status = "off"
+                    seat_label = None
+                my_team_today.append({
+                    "id": mid,
+                    "name": c.get("name"),
+                    "email": c.get("email"),
+                    "role": c.get("role"),
+                    "emp_id": c.get("emp_id"),
+                    "avatar_kind": c.get("avatar_kind"),
+                    "avatar_image": c.get("avatar_image"),
+                    "avatar_color": c.get("avatar_color"),
+                    "avatar_preset": c.get("avatar_preset"),
+                    "team_id": t.get("id"),
+                    "team_name": t.get("name"),
+                    "team_color": t.get("color"),
+                    "status": status,
+                    "seat_label": seat_label,
+                })
+            # sort: assigned first, then requested, then off — alphabetical inside
+            order = {"assigned": 0, "requested": 1, "off": 2}
+            my_team_today.sort(key=lambda x: (order.get(x["status"], 9), (x.get("name") or "").lower()))
+
     return {
         "date": the_date,
         "my_seat": my_seat_payload,
         "upcoming_meetings": meetings,
         "team_on_floor": team_on_floor,
         "recent_activity": recent,
+        "is_manager": is_manager_flag,
+        "managed_teams": [{"id": t["id"], "name": t.get("name"), "color": t.get("color")} for t in managed_teams],
+        "my_team_today": my_team_today,
     }
 
 
