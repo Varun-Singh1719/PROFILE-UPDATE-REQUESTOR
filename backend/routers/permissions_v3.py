@@ -58,6 +58,44 @@ from core import (
 )
 
 
+# Scope precedence used when merging multiple assigned permission sets.
+# Broader scope wins.
+_SCOPE_RANK = {None: 0, "individual": 1, "team": 2, "overall": 3}
+
+
+def _merge_rw(a: Optional[dict], b: Optional[dict]) -> dict:
+    """Merge two {enabled, visible, scope} triples using OR semantics.
+
+    - `enabled` = OR of both
+    - `visible` = OR of both (a function is visible if ANY assigned set marks it visible)
+    - `scope`   = broader wins (overall > team > individual > None)
+    """
+    a = a or {}
+    b = b or {}
+    scope_a = a.get("scope")
+    scope_b = b.get("scope")
+    scope = scope_a if _SCOPE_RANK.get(scope_a, 0) >= _SCOPE_RANK.get(scope_b, 0) else scope_b
+    return {
+        "enabled": bool(a.get("enabled")) or bool(b.get("enabled")),
+        "visible": bool(a.get("visible")) or bool(b.get("visible")),
+        "scope": scope,
+    }
+
+
+def _merge_modules(target: Dict[str, dict], src: Dict[str, dict]) -> None:
+    """Merge `src` v3 modules dict into `target` in-place."""
+    for mkey, mdata in (src or {}).items():
+        t_mod = target.setdefault(mkey, {"pages": {}})
+        t_pages = t_mod.setdefault("pages", {})
+        for pkey, pdata in ((mdata or {}).get("pages") or {}).items():
+            t_page = t_pages.setdefault(pkey, {"view": {}, "edit": {}, "functions": {}})
+            t_page["view"] = _merge_rw(t_page.get("view"), pdata.get("view"))
+            t_page["edit"] = _merge_rw(t_page.get("edit"), pdata.get("edit"))
+            t_fns = t_page.setdefault("functions", {})
+            for fkey, fdata in (pdata.get("functions") or {}).items():
+                t_fns[fkey] = _merge_rw(t_fns.get(fkey), fdata)
+
+
 # --------------------------------------------------------------------------- #
 # Catalog                                                                      #
 # --------------------------------------------------------------------------- #
@@ -399,4 +437,71 @@ async def clone_payload(pset_id: str, user=Depends(require_role("Super Admin")))
         "description": doc.get("description") or "",
         "modules": doc.get("modules") or {},
         "copied_from_id": pset_id,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Effective permissions for the current user (Round 3 — client-side gating)   #
+# --------------------------------------------------------------------------- #
+
+@api_router.get("/me/permissions")
+async def my_effective_permissions(user=Depends(get_current_user)):
+    """Return the effective v3 permission matrix for the *current* user.
+
+    Semantics
+    ---------
+    - Super Admin → `is_super_admin: true`, no matrix needed (client shows/enables all).
+    - Otherwise → OR-union of every assigned Permission Set (via `permission_set_ids`
+      on the user record). Legacy v1/v2 sets are migrated on the fly to the v3 shape.
+    - Fallback (`has_any_set: false`) → empty matrix. Client treats this as
+      *permissive* (show + enable everything) so existing users aren't locked out
+      before permissions have been onboarded.
+
+    The response shape matches the v3 catalog for direct look-ups from the UI:
+        {
+          is_super_admin: bool,
+          has_any_set: bool,
+          set_ids: [str, ...],
+          modules: {
+            <mkey>: {
+              pages: {
+                <pkey>: {
+                  view:  {enabled, visible, scope},
+                  edit:  {enabled, visible, scope},
+                  functions: { <fkey>: {enabled, visible, scope} },
+                }
+              }
+            }
+          }
+        }
+    """
+    is_super = user.get("role") == "Super Admin"
+    if is_super:
+        return {
+            "is_super_admin": True,
+            "has_any_set": False,
+            "set_ids": [],
+            "modules": {},
+        }
+
+    set_ids: List[str] = list(user.get("permission_set_ids") or [])
+    merged: Dict[str, dict] = {}
+
+    if set_ids:
+        docs = await db.permission_sets.find(
+            {"id": {"$in": set_ids}}, {"_id": 0}
+        ).to_list(500)
+        for doc in docs:
+            modules = doc.get("modules") or {}
+            if doc.get("version") != 3:
+                # Migrate legacy set → v3 shape in-memory
+                migrated = _migrate_legacy_to_v3(doc)
+                modules = migrated.get("modules") or {}
+            _merge_modules(merged, modules)
+
+    return {
+        "is_super_admin": False,
+        "has_any_set": bool(set_ids),
+        "set_ids": set_ids,
+        "modules": merged,
     }

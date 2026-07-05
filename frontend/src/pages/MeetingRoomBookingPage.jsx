@@ -12,6 +12,7 @@ import { resolvePdfUrl } from "../lib/pdfUrl";
 import { Button } from "../components/ui/button";
 import { toast } from "../lib/notify";
 import { useAuth } from "../context/AuthContext";
+import { useEffectivePage } from "../context/EffectivePermissionsContext";
 import MRBCalendarView from "../components/MRBCalendarView";
 import TimePickerOrange from "../components/ui/TimePickerOrange";
 import SelectOrange from "../components/ui/SelectOrange";
@@ -43,6 +44,12 @@ const DOW = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 // ============================================================ MAIN
 export default function MeetingRoomBookingPage() {
   const { user } = useAuth();
+  // ── Permissions V3 (Round 3) ──
+  const { fn: permFn } = useEffectivePage("desk_booking", "meeting_room_bookings");
+  const permBook       = permFn("book");
+  const permCancel     = permFn("cancel_booking");
+  const permReschedule = permFn("reschedule");
+  const permRefresh    = permFn("refresh");
   // 'default' = existing split-panel view, 'calendar' = Check Availability schedule view.
   const [viewMode, setViewMode] = useState("default");
   const [rooms, setRooms] = useState([]);
@@ -350,14 +357,17 @@ export default function MeetingRoomBookingPage() {
       contentClassName="h-screen flex flex-col"
       actions={
         viewMode === "calendar" ? null : (
-          <Button
-            onClick={openBookingForm}
-            data-testid="mrb-book-meeting-room-btn"
-            className="bg-[#ec9324] hover:bg-[#d4811f] text-white shadow-sm flex-shrink-0 h-9"
-          >
-            <Plus size={16} className="mr-1.5" />
-            Book Meeting Room
-          </Button>
+          permBook.isVisible ? (
+            <Button
+              onClick={openBookingForm}
+              data-testid="mrb-book-meeting-room-btn"
+              className="bg-[#ec9324] hover:bg-[#d4811f] text-white shadow-sm flex-shrink-0 h-9"
+              disabled={!permBook.canUse}
+            >
+              <Plus size={16} className="mr-1.5" />
+              Book Meeting Room
+            </Button>
+          ) : null
         )
       }
     >

@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import api, { API } from "../lib/api";
 import Layout from "../components/Layout";
 import TicketTable from "../components/TicketTable";
 import { useAuth } from "../context/AuthContext";
+import { useEffectivePage } from "../context/EffectivePermissionsContext";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
@@ -201,6 +202,18 @@ export default function TicketListPage({
   const isAdmin = user?.role === "Super Admin" || user?.role === "Admin";
   const isRA = false;
 
+  // ── Client-side permission gating (Permissions V3, Round 3) ──────────────
+  const permPageKey = useMemo(() => {
+    if (scope === "unassigned") return "unassigned";
+    if (lockedStatus === "Open") return "open_requests";
+    return "all_requests";
+  }, [scope, lockedStatus]);
+  const { fn: permFn } = useEffectivePage("profix", permPageKey);
+  const permRefresh    = permFn("refresh_list");
+  const permExport     = permFn("export_tickets");
+  const permCreate     = permFn("create_ticket");
+  const permBulkAssign = permFn("bulk_assign");
+
   const rowActions = (t) => (
     <>
       {isDQ && !t.assigned_to_id && (
@@ -266,7 +279,7 @@ export default function TicketListPage({
               </DropdownMenu>
             </>
           )}
-          {selected.length > 0 && isAdmin && (
+          {selected.length > 0 && isAdmin && permBulkAssign.isVisible && (
             <>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -292,15 +305,19 @@ export default function TicketListPage({
               </DropdownMenu>
             </>
           )}
-          <Button variant="outline" onClick={load} data-testid="refresh-btn" size="icon" className="h-9 w-9" title="Refresh" aria-label="Refresh">
-            <RefreshCw size={16}/>
-          </Button>
-          <Button variant="outline" onClick={exportCsv} data-testid="export-tickets-csv" size="icon" className="h-9 w-9 border-gray-300" title="Export CSV" aria-label="Export CSV">
-            <Download size={16}/>
-          </Button>
-          {(isRA || isAdmin) && (
+          {permRefresh.isVisible && (
+            <Button variant="outline" onClick={load} data-testid="refresh-btn" size="icon" className="h-9 w-9" title="Refresh" aria-label="Refresh" disabled={!permRefresh.canUse}>
+              <RefreshCw size={16}/>
+            </Button>
+          )}
+          {permExport.isVisible && (
+            <Button variant="outline" onClick={exportCsv} data-testid="export-tickets-csv" size="icon" className="h-9 w-9 border-gray-300" title="Export CSV" aria-label="Export CSV" disabled={!permExport.canUse}>
+              <Download size={16}/>
+            </Button>
+          )}
+          {(isRA || isAdmin) && permCreate.isVisible && (
             <Button onClick={() => navigate(isAdmin ? "/admin/create" : "/ra/create")} data-testid="create-new-ticket-btn"
-              className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9">
+              className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9" disabled={!permCreate.canUse}>
               <Plus size={16} className="mr-1"/> New Request
             </Button>
           )}

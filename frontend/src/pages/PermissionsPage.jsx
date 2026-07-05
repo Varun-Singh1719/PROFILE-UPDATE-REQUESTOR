@@ -390,81 +390,272 @@ function ModuleAccordion({ mod, state, expanded, onToggle, search, onSelectAll, 
   );
 }
 
+// ------------- Diff helpers (Round 2)
+// Compute a flat diff between two `state`-shaped module trees. Returns rows of:
+//   { module, page, kind: "view"|"edit"|"function", label, before, after, change }
+// where change is "added", "removed", "changed", or "unchanged".
+function fmtRW(v) {
+  if (!v) return "—";
+  const bits = [];
+  bits.push(v.enabled ? "on" : "off");
+  bits.push(v.visible ? "shown" : "hidden");
+  if (v.scope) bits.push(v.scope);
+  return bits.join(" · ");
+}
+function sameRW(a, b) {
+  const va = a || emptyRW(), vb = b || emptyRW();
+  return !!va.enabled === !!vb.enabled && !!va.visible === !!vb.visible && (va.scope || null) === (vb.scope || null);
+}
+function computeDiff(catalog, before, after) {
+  const rows = [];
+  for (const m of catalog || []) {
+    for (const p of m.pages || []) {
+      const bp = ((before || {})[m.key]?.pages || {})[p.key];
+      const ap = ((after  || {})[m.key]?.pages || {})[p.key];
+      for (const kind of ["view", "edit"]) {
+        const bv = bp?.[kind], av = ap?.[kind];
+        if (!bv && !av) continue;
+        if (sameRW(bv, av)) continue;
+        rows.push({
+          module: m.label, page: p.label, kind, label: kind === "view" ? "View" : "Edit",
+          before: fmtRW(bv), after: fmtRW(av),
+          change: !bv?.enabled && av?.enabled ? "added" : (bv?.enabled && !av?.enabled ? "removed" : "changed"),
+        });
+      }
+      for (const f of p.functions || []) {
+        const bf = bp?.functions?.[f.key], af = ap?.functions?.[f.key];
+        if (!bf && !af) continue;
+        if (sameRW(bf, af)) continue;
+        rows.push({
+          module: m.label, page: p.label, kind: "function", label: f.label,
+          before: fmtRW(bf), after: fmtRW(af),
+          change: !bf?.enabled && af?.enabled ? "added" : (bf?.enabled && !af?.enabled ? "removed" : "changed"),
+        });
+      }
+    }
+  }
+  return rows;
+}
+function DiffTable({ rows }) {
+  if (!rows.length) {
+    return <div className="text-xs text-gray-400 text-center py-6">No changes — the two configurations match.</div>;
+  }
+  return (
+    <div className="rounded-lg border border-gray-200 overflow-hidden" data-testid="perm-diff-table">
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50">
+          <tr>
+            <th className="text-left px-3 py-2 font-semibold text-gray-700">Change</th>
+            <th className="text-left px-3 py-2 font-semibold text-gray-700">Where</th>
+            <th className="text-left px-3 py-2 font-semibold text-gray-700">Before</th>
+            <th className="text-left px-3 py-2 font-semibold text-gray-700">After</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => {
+            const badge = {
+              added:    "bg-emerald-50 text-emerald-700 border-emerald-200",
+              removed:  "bg-red-50 text-red-700 border-red-200",
+              changed:  "bg-amber-50 text-amber-700 border-amber-200",
+              unchanged:"bg-gray-50 text-gray-500 border-gray-200",
+            }[r.change] || "bg-gray-50 text-gray-500 border-gray-200";
+            return (
+              <tr key={i} className={i % 2 ? "bg-white" : "bg-gray-50/40"}>
+                <td className="px-3 py-2 align-top">
+                  <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${badge}`}>{r.change}</span>
+                </td>
+                <td className="px-3 py-2 align-top">
+                  <div className="text-[11px] text-gray-500">{r.module} ▸ {r.page}</div>
+                  <div className="text-sm font-medium text-gray-900">{r.label}</div>
+                </td>
+                <td className="px-3 py-2 align-top text-[11px] font-mono text-gray-700">{r.before}</td>
+                <td className="px-3 py-2 align-top text-[11px] font-mono text-gray-900">{r.after}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ------------- Copy / Preview / Audit dialogs (small)
-function CopyFromDialog({ open, onOpenChange, onCopy }) {
+function CopyFromDialog({ open, onOpenChange, onCopy, catalog, currentState }) {
   const [items, setItems] = useState([]); const [q, setQ] = useState(""); const [loading, setLoading] = useState(false);
-  useEffect(() => { if (!open) return; setLoading(true);
+  const [preview, setPreview] = useState(null); // { id, title, description, modules } once user picks a set
+  const [confirming, setConfirming] = useState(false);
+  useEffect(() => { if (!open) return; setLoading(true); setPreview(null);
     api.get("/permission-sets", { params: { q } }).then((r) => setItems(r.data || [])).finally(() => setLoading(false));
   }, [open, q]);
+
+  const pickSet = async (id) => {
+    try {
+      const { data } = await api.get(`/permission-sets-v3/${id}/clone-payload`);
+      // Normalize incoming modules against the catalog so unknown keys are stripped
+      const normalized = mergeStateWithCatalog(catalog || [], data.modules);
+      setPreview({ id, title: data.title, description: data.description || "", modules: normalized });
+    } catch (e) { notify.error(e, { what: "Load set for copy" }); }
+  };
+
+  const applyCopy = () => {
+    if (!preview) return;
+    setConfirming(true);
+    try { onCopy(preview); onOpenChange(false); } finally { setConfirming(false); }
+  };
+
+  const diffRows = useMemo(
+    () => preview ? computeDiff(catalog, currentState, preview.modules) : [],
+    [preview, catalog, currentState]
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl p-0 overflow-hidden" data-testid="perm-copy-dialog">
+      <DialogContent className="max-w-3xl p-0 overflow-hidden" data-testid="perm-copy-dialog">
         <div className="px-5 pt-4 pb-3 border-b border-gray-100 flex items-center gap-2">
           <Copy size={16} className="text-[#ec9324]" />
-          <div><div className="font-semibold text-gray-900">Copy from an existing Permission Set</div>
-          <div className="text-xs text-gray-500">Prefills the matrix. Tweak & save as new.</div></div>
-        </div>
-        <div className="px-5 py-3 border-b border-gray-100">
-          <div className="relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…"
-              className="w-full h-9 pl-9 pr-3 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]" /></div>
-        </div>
-        <div className="max-h-[420px] overflow-y-auto">
-          {loading && <div className="p-6 text-center text-xs text-gray-400"><Loader2 className="animate-spin inline mr-1.5" size={13} /> Loading…</div>}
-          {!loading && items.length === 0 && <div className="p-8 text-center text-xs text-gray-400">No permission sets found.</div>}
-          {!loading && items.map((p) => (
-            <button key={p.id} type="button" onClick={() => onCopy(p.id)}
-              className="w-full flex items-start gap-3 px-5 py-3 border-b border-gray-100 hover:bg-orange-50/60 text-left" data-testid={`perm-copy-item-${p.id}`}>
-              <span className="h-8 w-8 rounded-md bg-orange-50 border border-orange-200 inline-flex items-center justify-center text-[#ec9324]"><Copy size={14} /></span>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-gray-900">{p.title}</div>
-                <div className="text-[11px] text-gray-500 truncate">{p.description || "—"}<span className="ml-2 text-[10px] px-1 py-0.5 rounded bg-gray-100">v{p.version || 1}</span></div>
-              </div>
+          <div className="flex-1">
+            <div className="font-semibold text-gray-900">
+              {preview ? `Review changes — Copy from "${preview.title}"` : "Copy from an existing Permission Set"}
+            </div>
+            <div className="text-xs text-gray-500">
+              {preview
+                ? "Confirm the differences that will replace your current draft."
+                : "Pick a set to copy from. You'll see a diff before we apply anything."}
+            </div>
+          </div>
+          {preview && (
+            <button type="button" onClick={() => setPreview(null)} className="text-[11px] font-semibold text-gray-500 hover:underline">
+              ← Pick different set
             </button>
-          ))}
+          )}
         </div>
+
+        {!preview ? (
+          <>
+            <div className="px-5 py-3 border-b border-gray-100">
+              <div className="relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…"
+                  className="w-full h-9 pl-9 pr-3 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]" /></div>
+            </div>
+            <div className="max-h-[420px] overflow-y-auto">
+              {loading && <div className="p-6 text-center text-xs text-gray-400"><Loader2 className="animate-spin inline mr-1.5" size={13} /> Loading…</div>}
+              {!loading && items.length === 0 && <div className="p-8 text-center text-xs text-gray-400">No permission sets found.</div>}
+              {!loading && items.map((p) => (
+                <button key={p.id} type="button" onClick={() => pickSet(p.id)}
+                  className="w-full flex items-start gap-3 px-5 py-3 border-b border-gray-100 hover:bg-orange-50/60 text-left" data-testid={`perm-copy-item-${p.id}`}>
+                  <span className="h-8 w-8 rounded-md bg-orange-50 border border-orange-200 inline-flex items-center justify-center text-[#ec9324]"><Copy size={14} /></span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-gray-900">{p.title}</div>
+                    <div className="text-[11px] text-gray-500 truncate">{p.description || "—"}<span className="ml-2 text-[10px] px-1 py-0.5 rounded bg-gray-100">v{p.version || 1}</span></div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="p-5 max-h-[440px] overflow-y-auto">
+              <div className="text-[11px] uppercase tracking-widest text-gray-500 font-bold mb-2">
+                {diffRows.length} change{diffRows.length === 1 ? "" : "s"} will be applied
+              </div>
+              <DiffTable rows={diffRows} />
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/60 flex items-center justify-end gap-2">
+              <Button variant="outline" onClick={() => setPreview(null)} className="rounded-md">Cancel</Button>
+              <Button onClick={applyCopy} disabled={confirming} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="perm-copy-confirm">
+                {confirming ? <Loader2 className="animate-spin mr-1.5" size={13} /> : <CheckCircle2 size={13} className="mr-1.5" />}
+                Apply copy
+              </Button>
+            </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
 }
 
-function PreviewDialog({ open, onOpenChange, effective, title }) {
+function PreviewDialog({ open, onOpenChange, effective, beforeEffective, title, catalog, showDiff }) {
+  const [tab, setTab] = useState("effective"); // "effective" | "diff"
+  useEffect(() => { if (open) setTab(showDiff ? "diff" : "effective"); }, [open, showDiff]);
+  // Build a synthetic module-shaped tree from an "effective" preview so
+  // computeDiff (which walks the catalog) can consume it.
+  const effToState = (eff) => {
+    const out = {};
+    for (const [mkey, m] of Object.entries(eff || {})) {
+      const pages = {};
+      for (const [pkey, p] of Object.entries(m.pages || {})) {
+        const fns = {};
+        for (const [fkey, fv] of Object.entries(p.functions || {})) {
+          fns[fkey] = { enabled: !!fv.enabled, visible: true, scope: fv.scope || null };
+        }
+        pages[pkey] = {
+          view: p.view ? { enabled: !!p.view.enabled, visible: true, scope: p.view.scope || null } : emptyRW(),
+          edit: p.edit ? { enabled: !!p.edit.enabled, visible: true, scope: p.edit.scope || null } : emptyRW(),
+          functions: fns,
+        };
+      }
+      out[mkey] = { pages };
+    }
+    return out;
+  };
+  const diffRows = useMemo(() => {
+    if (!showDiff) return [];
+    return computeDiff(catalog || [], effToState(beforeEffective || {}), effToState(effective || {}));
+  }, [catalog, beforeEffective, effective, showDiff]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl p-0 overflow-hidden" data-testid="perm-preview-dialog">
         <div className="px-5 pt-4 pb-3 border-b border-gray-100 flex items-center gap-2">
           <Sparkles size={16} className="text-[#ec9324]" />
-          <div><div className="font-semibold text-gray-900">Effective permissions preview</div>
+          <div className="flex-1"><div className="font-semibold text-gray-900">Effective permissions preview</div>
           <div className="text-xs text-gray-500">What a user assigned to <b>{title || "this set"}</b> will actually see & do.</div></div>
-        </div>
-        <div className="p-5 max-h-[520px] overflow-y-auto space-y-3">
-          {Object.keys(effective || {}).length === 0 && <div className="text-xs text-gray-400 text-center py-6">Nothing enabled yet.</div>}
-          {Object.entries(effective || {}).map(([mkey, m]) => (
-            <div key={mkey} className="rounded-lg border border-gray-200">
-              <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 text-sm font-bold text-gray-800">{mkey}</div>
-              <div className="p-3 space-y-2">
-                {Object.entries(m.pages || {}).map(([pkey, p]) => (
-                  <div key={pkey} className="rounded border border-gray-100 p-2">
-                    <div className="text-sm font-semibold text-gray-900">{pkey}</div>
-                    <div className="text-[11px] text-gray-600 mt-0.5">
-                      {p.view?.enabled ? `View (${p.view.scope || "—"})` : "View ✗"}{" · "}
-                      {p.edit?.enabled ? `Edit (${p.edit.scope || "—"})` : "Edit ✗"}
-                    </div>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {Object.entries(p.functions || {}).filter(([, v]) => v.enabled).map(([fkey, v]) => (
-                        <span key={fkey} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          {fkey}{v.scope ? ` · ${v.scope}` : ""}
-                        </span>
-                      ))}
-                      {Object.entries(p.functions || {}).filter(([, v]) => v.enabled).length === 0 && (
-                        <span className="text-[10px] text-gray-400">No functions enabled.</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+          {showDiff && (
+            <div className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white p-0.5">
+              <button type="button" onClick={() => setTab("effective")} data-testid="preview-tab-effective"
+                className={`h-7 px-2.5 rounded text-[11px] font-semibold ${tab === "effective" ? "bg-[#ec9324] text-white" : "text-gray-700 hover:bg-gray-50"}`}>Effective</button>
+              <button type="button" onClick={() => setTab("diff")} data-testid="preview-tab-diff"
+                className={`h-7 px-2.5 rounded text-[11px] font-semibold ${tab === "diff" ? "bg-[#ec9324] text-white" : "text-gray-700 hover:bg-gray-50"}`}>What changes ({diffRows.length})</button>
             </div>
-          ))}
+          )}
+        </div>
+
+        <div className="p-5 max-h-[520px] overflow-y-auto space-y-3">
+          {tab === "diff" ? (
+            <>
+              <div className="text-[11px] uppercase tracking-widest text-gray-500 font-bold mb-1">Changes since last save</div>
+              <DiffTable rows={diffRows} />
+            </>
+          ) : (
+            <>
+              {Object.keys(effective || {}).length === 0 && <div className="text-xs text-gray-400 text-center py-6">Nothing enabled yet.</div>}
+              {Object.entries(effective || {}).map(([mkey, m]) => (
+                <div key={mkey} className="rounded-lg border border-gray-200">
+                  <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 text-sm font-bold text-gray-800">{mkey}</div>
+                  <div className="p-3 space-y-2">
+                    {Object.entries(m.pages || {}).map(([pkey, p]) => (
+                      <div key={pkey} className="rounded border border-gray-100 p-2">
+                        <div className="text-sm font-semibold text-gray-900">{pkey}</div>
+                        <div className="text-[11px] text-gray-600 mt-0.5">
+                          {p.view?.enabled ? `View (${p.view.scope || "—"})` : "View ✗"}{" · "}
+                          {p.edit?.enabled ? `Edit (${p.edit.scope || "—"})` : "Edit ✗"}
+                        </div>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {Object.entries(p.functions || {}).filter(([, v]) => v.enabled).map(([fkey, v]) => (
+                            <span key={fkey} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              {fkey}{v.scope ? ` · ${v.scope}` : ""}
+                            </span>
+                          ))}
+                          {Object.entries(p.functions || {}).filter(([, v]) => v.enabled).length === 0 && (
+                            <span className="text-[10px] text-gray-400">No functions enabled.</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>
@@ -519,6 +710,7 @@ export default function PermissionsPage() {
   const [copyOpen, setCopyOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [effective, setEffective] = useState({});
+  const [beforeEffective, setBeforeEffective] = useState(null);
   const [auditOpen, setAuditOpen] = useState(false);
   const [copiedFromId, setCopiedFromId] = useState(null);
 
@@ -571,43 +763,46 @@ export default function PermissionsPage() {
     });
   }, [catalog]);
 
-  const doCopyFrom = async (id) => {
-    try {
-      const { data } = await api.get(`/permission-sets-v3/${id}/clone-payload`);
-      setTitle(data.title || "");
-      setDescription(data.description || "");
-      setState(mergeStateWithCatalog(catalog, data.modules));
-      setCopiedFromId(id); setCopyOpen(false);
-      notify.success("Permissions copied — you can now tweak & save.");
-    } catch (e) { notify.error(e, { what: "Copy permission set" }); }
+  const doCopyFrom = async (previewPayload) => {
+    // previewPayload: { id, title, description, modules } already normalized
+    setTitle(previewPayload.title || "");
+    setDescription(previewPayload.description || "");
+    setState(previewPayload.modules);
+    setCopiedFromId(previewPayload.id);
+    setCopyOpen(false);
+    notify.success("Permissions copied — you can now tweak & save.");
   };
 
   const doPreview = async () => {
+    // Fetch the saved effective (before) whenever we're editing an existing set
     if (editingId) {
-      try { const { data } = await api.get(`/permissions/preview/${editingId}`); setEffective(data.effective || {}); }
-      catch { setEffective({}); }
+      try {
+        const { data } = await api.get(`/permissions/preview/${editingId}`);
+        setBeforeEffective(data.effective || {});
+      } catch { setBeforeEffective({}); }
     } else {
-      // Compute preview locally from draft
-      const out = {};
-      for (const [mkey, m] of Object.entries(state)) {
-        const pages = {};
-        for (const [pkey, pdata] of Object.entries(m.pages || {})) {
-          if (!pdata.view.visible && !pdata.edit.visible) continue;
-          const fns = {};
-          for (const [fkey, fdata] of Object.entries(pdata.functions || {})) {
-            if (!fdata.visible) continue;
-            fns[fkey] = { enabled: fdata.enabled, scope: fdata.scope };
-          }
-          pages[pkey] = {
-            view: pdata.view.visible ? { enabled: pdata.view.enabled, scope: pdata.view.scope } : null,
-            edit: pdata.edit.visible ? { enabled: pdata.edit.enabled, scope: pdata.edit.scope } : null,
-            functions: fns,
-          };
-        }
-        if (Object.keys(pages).length) out[mkey] = { pages };
-      }
-      setEffective(out);
+      setBeforeEffective(null);
     }
+    // Compute draft effective locally so it also reflects unsaved edits
+    const out = {};
+    for (const [mkey, m] of Object.entries(state)) {
+      const pages = {};
+      for (const [pkey, pdata] of Object.entries(m.pages || {})) {
+        if (!pdata.view.visible && !pdata.edit.visible) continue;
+        const fns = {};
+        for (const [fkey, fdata] of Object.entries(pdata.functions || {})) {
+          if (!fdata.visible) continue;
+          fns[fkey] = { enabled: fdata.enabled, scope: fdata.scope };
+        }
+        pages[pkey] = {
+          view: pdata.view.visible ? { enabled: pdata.view.enabled, scope: pdata.view.scope } : null,
+          edit: pdata.edit.visible ? { enabled: pdata.edit.enabled, scope: pdata.edit.scope } : null,
+          functions: fns,
+        };
+      }
+      if (Object.keys(pages).length) out[mkey] = { pages };
+    }
+    setEffective(out);
     setPreviewOpen(true);
   };
 
@@ -697,8 +892,8 @@ export default function PermissionsPage() {
         ))}
       </div>
 
-      <CopyFromDialog open={copyOpen} onOpenChange={setCopyOpen} onCopy={doCopyFrom} />
-      <PreviewDialog open={previewOpen} onOpenChange={setPreviewOpen} effective={effective} title={title} />
+      <CopyFromDialog open={copyOpen} onOpenChange={setCopyOpen} onCopy={doCopyFrom} catalog={catalog} currentState={state} />
+      <PreviewDialog open={previewOpen} onOpenChange={setPreviewOpen} effective={effective} beforeEffective={beforeEffective} title={title} catalog={catalog} showDiff={!!editingId} />
       <AuditDialog open={auditOpen} onOpenChange={setAuditOpen} resourceId={editingId} />
     </Layout>
   );

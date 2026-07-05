@@ -3,6 +3,7 @@ import "./App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { BusyProvider } from "./context/BusyContext";
+import { EffectivePermissionsProvider } from "./context/EffectivePermissionsContext";
 import BusyOverlay from "./components/BusyOverlay";
 import GlobalToaster from "./components/GlobalToaster";
 import DialogHost from "./components/DialogHost";
@@ -65,6 +66,7 @@ function App() {
     <div className="App">
       <BusyProvider>
         <AuthProvider>
+          <EffectivePermissionsProvider>
           <GlobalToaster>
           <BrowserRouter>
             <Routes>
@@ -127,6 +129,7 @@ function App() {
           <DialogHost />
         </BrowserRouter>
         </GlobalToaster>
+        </EffectivePermissionsProvider>
       </AuthProvider>
       </BusyProvider>
     </div>
