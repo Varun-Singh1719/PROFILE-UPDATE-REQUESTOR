@@ -214,6 +214,35 @@ frontend:
             outer Layout wrapper so the interactive view can be rendered inside
             AdminDashboard's tab shell.
 
+  - task: "MyWorkspaceDashboard — personal dashboard inside Workspace Manager tab"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/MyWorkspaceDashboard.jsx, frontend/src/components/MySeatMiniMap.jsx, frontend/src/components/MySeatFloorDialog.jsx, frontend/src/pages/AdminDashboard.jsx, backend/routers/my_workspace.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Replaced FloorLayoutView inside the Workspace Manager tab with a new
+            personal dashboard that renders:
+              • My Seat Today hero card (seat label, plan/team, mini map)
+              • This Week strip: 7-day grid, orange highlights (assigned solid,
+                requested dashed) + prev/next week arrows w/ hover tooltips
+              • Upcoming Meetings list (organizer+attendee+team-scoped)
+              • Quick Actions using lucide (material-style) icons (Armchair,
+                CalendarPlus, UserPlus2, Map)
+              • Team on floor + Recent activity
+              • MySeatFloorDialog popup with red user seat, team-colour
+                teammates, grey occupied, white available (via seat_meta
+                colour mapping fed to WorkstationFloorMap).
+            Backend added routes:
+              GET /api/my-workspace/dashboard  → my_seat + meetings + team + activity
+              GET /api/my-workspace/week       → 7 days assigned/requested/none
+              GET /api/my-workspace/floor      → coloured floor plan for popup
+            NOTE: Not yet tested by any agent — awaiting user approval.
+
 metadata:
   created_by: "main_agent"
   version: "1.0"

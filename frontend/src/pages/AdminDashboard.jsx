@@ -17,7 +17,7 @@ import { Button } from "../components/ui/button";
 import UserAvatar from "../components/UserAvatar";
 import { Ticket, AlertCircle, CheckCircle2, Loader, Users, Plus, LayoutGrid, ClipboardList, Star, Check } from "lucide-react";
 import { toast } from "../lib/notify";
-import { FloorLayoutView } from "./FloorLayoutPage";
+import MyWorkspaceDashboard from "../components/MyWorkspaceDashboard";
 
 const TABS = [
   { key: "workspace_manager", label: "Workspace Manager", icon: LayoutGrid },
@@ -133,8 +133,6 @@ export default function AdminDashboard() {
     return (
       <Layout
         title="Dashboard"
-        fullBleed
-        contentClassName="flex flex-col min-h-[calc(100vh-56px)]"
         actions={
           <>
             {tabBar}
@@ -142,9 +140,7 @@ export default function AdminDashboard() {
           </>
         }
       >
-        <div className="flex-1 flex flex-col">
-          <FloorLayoutView embedded />
-        </div>
+        <MyWorkspaceDashboard />
       </Layout>
     );
   }
