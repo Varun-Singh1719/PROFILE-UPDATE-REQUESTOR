@@ -92,15 +92,18 @@ function FloorPlanCard({ plan, onOpen }) {
 // depending on the viewport width). Rendered in an open panel container so
 // nothing can overlap it.
 //
-// Implementation note (bug fix Jul 2026): the previous version tried to open
-// a natively-hidden `<input type=date>` via `showPicker()` / `focus() + click()`
-// but browsers block `showPicker()` on `sr-only` / `pointer-events:none`
-// inputs and silently no-op it, which is why the calendar never appeared.
-// The fixed version overlays a fully-clickable (but visually transparent)
-// `<input type=date>` on top of the display pill, so a real user click IS the
-// input's activation gesture and the native picker opens reliably.
+// Implementation note (bug fix Jul 2026, round 4 — after troubleshoot_agent):
+// Chrome's Transient-User-Activation model requires the click that triggers
+// `input.showPicker()` to land DIRECTLY on the <input type=date> element
+// itself. Every earlier attempt (sr-only off-screen input, hidden input +
+// button.showPicker(), overlay input + button underneath) failed because the
+// user gesture was consumed by the button on top / the input was invisible
+// to the layout engine. Fixed version: the visual display is a plain <div>
+// (with `pointer-events:none`), and the ONLY interactive layer is the
+// transparent native <input type=date> laid on top with `z-10 opacity-0
+// cursor-pointer`.  The browser opens its own date picker for the direct
+// click, no `showPicker()` call needed.
 function DateStepper({ value, onChange }) {
-  const inputRef = React.useRef(null);
   const shift = (days) => {
     if (!value) return;
     const d = new Date(value + "T00:00:00");
@@ -108,15 +111,6 @@ function DateStepper({ value, onChange }) {
     d.setDate(d.getDate() + days);
     const out = d.toISOString().slice(0, 10);
     onChange(out);
-  };
-  const openPicker = () => {
-    const el = inputRef.current;
-    if (!el) return;
-    try {
-      if (typeof el.showPicker === "function") { el.showPicker(); return; }
-    } catch { /* fall through */ }
-    el.focus();
-    el.click();
   };
   const displayLabel = React.useMemo(() => {
     if (!value) return "Select date";
@@ -141,28 +135,31 @@ function DateStepper({ value, onChange }) {
           <ChevronLeft size={16}/>
         </button>
 
-        {/* Date pill — visual display sits underneath a fully-clickable
-            transparent native date input. Clicking anywhere on the pill
-            triggers the native picker (as long as the input is on-screen
-            and not `pointer-events:none`, which was the previous bug). */}
-        <div className="relative flex-1 min-w-0">
-          <button
-            type="button"
-            onClick={openPicker}
-            className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-[13px] font-medium border border-gray-300 rounded-md focus:border-[#ec9324] focus:ring-1 focus:ring-[#ec9324] outline-none bg-white hover:bg-gray-50 cursor-pointer min-w-0"
-            data-testid="floor-layout-date-picker-btn"
-            aria-label="Change date"
-            title="Pick a date"
-          >
+        {/* Date pill.
+            The visible display is a NON-INTERACTIVE div (`pointer-events:none`).
+            The only element that receives clicks is the native <input type=date>
+            overlaid on top (`z-10`, transparent, full-size, cursor:pointer).
+            This is the industry-standard pattern for custom-styled native
+            date pickers because Chrome requires a DIRECT user gesture on the
+            input itself in order to open its picker.  Any wrapping button
+            that captured the click first would trip Chrome's
+            Transient-User-Activation guard and silently block the picker. */}
+        <div
+          className="relative flex-1 min-w-0"
+          data-testid="floor-layout-date-picker-btn"
+          role="group"
+          aria-label="Change date"
+          title="Pick a date"
+        >
+          <div className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-[13px] font-medium border border-gray-300 rounded-md bg-white min-w-0 pointer-events-none">
             <CalendarIcon size={14} className="text-[#ec9324] flex-shrink-0"/>
             <span className="tabular-nums truncate">{displayLabel}</span>
-          </button>
+          </div>
           <input
-            ref={inputRef}
             type="date"
             value={value}
             onChange={(e) => e.target.value && onChange(e.target.value)}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
             data-testid="floor-layout-date-input"
             aria-label="Date picker"
           />
