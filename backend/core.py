@@ -237,10 +237,10 @@ def feature_actions(module_key: str, feature_key: str) -> List[str]:
 
 
 # ============================================================================
-#  Permissions v3 catalog — Jul 2026
-#  Products, rows (features/pages/tables), and action-buttons that appear in
-#  the redesigned /admin/permissions matrix. Additive to the v1/v2 catalog —
-#  legacy code paths stay intact.
+#  Permissions v3 catalog — Jul 2026 (Module → Page → Functions)
+#  Two products, each with a list of pages. Each page has its own View / Edit
+#  toggles + a list of function-buttons that live on that page. Adding a new
+#  page is a code-only change here — the UI picks it up automatically.
 # ============================================================================
 PERMISSION_MODULES_V3 = [
     {
@@ -248,93 +248,204 @@ PERMISSION_MODULES_V3 = [
         "label": "Profix",
         "icon": "Briefcase",
         "color": "#ec9324",
-        "features": [
-            {"key": "dashboard",       "label": "Dashboard"},
-            {"key": "employees",       "label": "Employees"},
-            {"key": "teams",           "label": "Teams"},
-            {"key": "tickets",         "label": "Requests / Tickets"},
-            {"key": "comments",        "label": "Comments"},
-            {"key": "attachments",     "label": "Attachments"},
-            {"key": "notifications",   "label": "Notifications"},
-            {"key": "reports",         "label": "Reports"},
-            {"key": "audit_logs",      "label": "Audit Logs"},
-            {"key": "settings",        "label": "Settings"},
-            {"key": "email_templates", "label": "Email Templates"},
-        ],
-        # Action-buttons pool for Profix. Each is configured with
-        # {enabled, visible, scope?} in the matrix.
-        "actions": [
-            {"key": "create",            "label": "Create",             "scoped": True},
-            {"key": "edit",              "label": "Edit",               "scoped": True},
-            {"key": "delete",            "label": "Delete",             "scoped": True},
-            {"key": "approve",           "label": "Approve",            "scoped": True},
-            {"key": "reject",            "label": "Reject",             "scoped": True},
-            {"key": "assign",            "label": "Assign",             "scoped": True},
-            {"key": "unassign",          "label": "Unassign",           "scoped": True},
-            {"key": "upload",            "label": "Upload",             "scoped": False},
-            {"key": "download",          "label": "Download",           "scoped": False},
-            {"key": "export",            "label": "Export",             "scoped": False},
-            {"key": "import",            "label": "Import",             "scoped": False},
-            {"key": "invite",            "label": "Invite",             "scoped": False},
-            {"key": "send_notification", "label": "Send Notification",  "scoped": False},
-            {"key": "save",              "label": "Save",               "scoped": False},
-            {"key": "submit",            "label": "Submit",             "scoped": False},
-            {"key": "reset",             "label": "Reset",              "scoped": False},
-            {"key": "clear",             "label": "Clear",              "scoped": False},
+        "pages": [
+            {
+                "key": "dashboard", "label": "Dashboard", "route": "/admin",
+                "functions": [
+                    {"key": "refresh", "label": "Refresh", "scoped": False},
+                    {"key": "export",  "label": "Export",  "scoped": False},
+                    {"key": "change_default_view", "label": "Change Default View", "scoped": False},
+                ],
+            },
+            {
+                "key": "all_requests", "label": "All Requests", "route": "/admin/open-tickets",
+                "functions": [
+                    {"key": "create_ticket",   "label": "New Request",    "scoped": True},
+                    {"key": "export_tickets",  "label": "Export CSV",     "scoped": False},
+                    {"key": "refresh_list",    "label": "Refresh",        "scoped": False},
+                    {"key": "filter",          "label": "Filter",         "scoped": False},
+                    {"key": "bulk_assign",     "label": "Bulk Assign",    "scoped": True},
+                ],
+            },
+            {
+                "key": "open_requests", "label": "Open Requests", "route": "/admin/open-tickets?status=Open",
+                "functions": [
+                    {"key": "create_ticket",  "label": "New Request", "scoped": True},
+                    {"key": "export_tickets", "label": "Export CSV",  "scoped": False},
+                    {"key": "refresh_list",   "label": "Refresh",     "scoped": False},
+                    {"key": "assign_to_me",   "label": "Assign to Me","scoped": False},
+                ],
+            },
+            {
+                "key": "unassigned", "label": "Unassigned Requests", "route": "/admin/open-tickets?assigned_to=none",
+                "functions": [
+                    {"key": "assign",       "label": "Assign",       "scoped": True},
+                    {"key": "refresh_list", "label": "Refresh",      "scoped": False},
+                    {"key": "export_tickets","label": "Export CSV",  "scoped": False},
+                ],
+            },
+            {
+                "key": "ticket_detail", "label": "Request Details", "route": "/admin/tickets/:id",
+                "functions": [
+                    {"key": "edit",          "label": "Edit",           "scoped": True},
+                    {"key": "delete",        "label": "Delete",         "scoped": True},
+                    {"key": "assign",        "label": "Assign",         "scoped": True},
+                    {"key": "add_comment",   "label": "Add Comment",    "scoped": True},
+                    {"key": "upload_attach", "label": "Upload Attachment","scoped": False},
+                    {"key": "download_attach","label":"Download Attachment","scoped": False},
+                    {"key": "change_status", "label": "Change Status",  "scoped": True},
+                ],
+            },
+            {
+                "key": "employees", "label": "Employees", "route": "/admin/employees",
+                "functions": [
+                    {"key": "create",  "label": "Add Employee",  "scoped": True},
+                    {"key": "edit",    "label": "Edit",          "scoped": True},
+                    {"key": "delete",  "label": "Delete",        "scoped": True},
+                    {"key": "invite",  "label": "Invite",        "scoped": False},
+                    {"key": "import",  "label": "Import CSV",    "scoped": False},
+                    {"key": "export",  "label": "Export CSV",    "scoped": False},
+                ],
+            },
+            {
+                "key": "teams", "label": "Teams", "route": "/admin/teams",
+                "functions": [
+                    {"key": "create", "label": "New Team",     "scoped": True},
+                    {"key": "edit",   "label": "Edit Team",    "scoped": True},
+                    {"key": "delete", "label": "Delete Team",  "scoped": True},
+                    {"key": "assign_members", "label": "Assign Members", "scoped": True},
+                ],
+            },
+            {
+                "key": "notifications", "label": "Notifications", "route": "/admin/notifications",
+                "functions": [
+                    {"key": "mark_read", "label": "Mark as Read", "scoped": False},
+                    {"key": "delete",    "label": "Delete",        "scoped": False},
+                    {"key": "send_notification", "label": "Send Notification", "scoped": True},
+                ],
+            },
+            {
+                "key": "email_templates", "label": "Email Templates", "route": "/admin/email-templates",
+                "functions": [
+                    {"key": "create",    "label": "New Template",  "scoped": False},
+                    {"key": "edit",      "label": "Edit",          "scoped": False},
+                    {"key": "delete",    "label": "Delete",        "scoped": False},
+                    {"key": "test_send", "label": "Send Test",     "scoped": False},
+                ],
+            },
+            {
+                "key": "reports", "label": "Reports", "route": "/admin/reports",
+                "functions": [
+                    {"key": "export",  "label": "Export",  "scoped": False},
+                    {"key": "refresh", "label": "Refresh", "scoped": False},
+                ],
+            },
+            {
+                "key": "audit_logs", "label": "Audit Logs", "route": "/admin/audit-logs",
+                "functions": [
+                    {"key": "export",  "label": "Export",  "scoped": False},
+                    {"key": "filter",  "label": "Filter",  "scoped": False},
+                    {"key": "refresh", "label": "Refresh", "scoped": False},
+                ],
+            },
+            {
+                "key": "settings", "label": "Settings", "route": "/admin/settings",
+                "functions": [
+                    {"key": "save",  "label": "Save",  "scoped": False},
+                    {"key": "reset", "label": "Reset", "scoped": False},
+                ],
+            },
         ],
     },
     {
-        # Internal key stays `desk_booking` for backward compatibility.
         "key": "desk_booking",
         "label": "Workspace Manager",
         "icon": "Armchair",
         "color": "#3b82f6",
-        "features": [
-            {"key": "dashboard",              "label": "Dashboard"},
-            {"key": "workstation_bookings",   "label": "Workstation Bookings"},
-            {"key": "meeting_room_bookings",  "label": "Meeting Room Bookings"},
-            {"key": "workstation_requests",   "label": "Workstation Requests"},
-            {"key": "floor_layout",           "label": "Floor Layout"},
-            {"key": "floor_plans",            "label": "Floor Plans"},
-            {"key": "workstations",           "label": "Workstations / Seats"},
-            {"key": "meeting_rooms",          "label": "Meeting Rooms"},
-            {"key": "pending_approvals",      "label": "Pending Approvals"},
-            {"key": "auto_approval_settings", "label": "Auto-Approval Settings"},
-            {"key": "notifications",          "label": "Notifications"},
-            {"key": "reports",                "label": "Reports"},
-            {"key": "audit_logs",             "label": "Audit Logs"},
-        ],
-        "actions": [
-            {"key": "create",            "label": "Create",             "scoped": True},
-            {"key": "edit",              "label": "Edit",               "scoped": True},
-            {"key": "delete",            "label": "Delete",             "scoped": True},
-            {"key": "approve",           "label": "Approve",            "scoped": True},
-            {"key": "reject",            "label": "Reject",             "scoped": True},
-            {"key": "book",              "label": "Book",               "scoped": True},
-            {"key": "cancel_booking",    "label": "Cancel Booking",     "scoped": True},
-            {"key": "reschedule",        "label": "Reschedule",         "scoped": True},
-            {"key": "assign",            "label": "Assign",             "scoped": True},
-            {"key": "unassign",          "label": "Unassign",           "scoped": True},
-            {"key": "upload",            "label": "Upload",             "scoped": False},
-            {"key": "download",          "label": "Download",           "scoped": False},
-            {"key": "export",            "label": "Export",             "scoped": False},
-            {"key": "import",            "label": "Import",             "scoped": False},
-            {"key": "invite",            "label": "Invite",             "scoped": False},
-            {"key": "send_notification", "label": "Send Notification",  "scoped": False},
-            {"key": "save",              "label": "Save",               "scoped": False},
-            {"key": "submit",            "label": "Submit",             "scoped": False},
-            {"key": "reset",             "label": "Reset",              "scoped": False},
-            {"key": "clear",             "label": "Clear",              "scoped": False},
+        "pages": [
+            {
+                "key": "my_workspace", "label": "My Workspace (Dashboard)", "route": "/admin",
+                "functions": [
+                    {"key": "refresh",           "label": "Refresh",              "scoped": False},
+                    {"key": "view_floor_plan",   "label": "View Floor Plan",      "scoped": False},
+                    {"key": "book_desk",         "label": "Book a Desk",          "scoped": False},
+                    {"key": "book_meeting",      "label": "Book Meeting Room",    "scoped": False},
+                    {"key": "request_workstation","label": "Request Workstation", "scoped": False},
+                ],
+            },
+            {
+                "key": "workstation_bookings", "label": "Workstation Bookings", "route": "/workspace-manager/workstation-booking",
+                "functions": [
+                    {"key": "book",            "label": "Book",           "scoped": True},
+                    {"key": "cancel_booking",  "label": "Cancel Booking", "scoped": True},
+                    {"key": "reschedule",      "label": "Reschedule",     "scoped": True},
+                    {"key": "export",          "label": "Export",         "scoped": False},
+                    {"key": "refresh",         "label": "Refresh",        "scoped": False},
+                ],
+            },
+            {
+                "key": "meeting_room_bookings", "label": "Meeting Room Bookings", "route": "/workspace-manager/meeting-room-booking",
+                "functions": [
+                    {"key": "book",            "label": "Book",           "scoped": True},
+                    {"key": "cancel_booking",  "label": "Cancel Booking", "scoped": True},
+                    {"key": "reschedule",      "label": "Reschedule",     "scoped": True},
+                    {"key": "refresh",         "label": "Refresh",        "scoped": False},
+                ],
+            },
+            {
+                "key": "workstation_requests", "label": "Request Workstation", "route": "/workspace-manager/request-workstation",
+                "functions": [
+                    {"key": "create", "label": "Submit Request", "scoped": False},
+                    {"key": "cancel", "label": "Cancel Request", "scoped": True},
+                ],
+            },
+            {
+                "key": "pending_approvals", "label": "Pending Approvals", "route": "/workspace-manager/pending-approvals",
+                "functions": [
+                    {"key": "approve", "label": "Approve", "scoped": True},
+                    {"key": "reject",  "label": "Reject",  "scoped": True},
+                    {"key": "configure_auto_approval", "label": "Configure Auto-Approval", "scoped": False},
+                    {"key": "refresh", "label": "Refresh", "scoped": False},
+                ],
+            },
+            {
+                "key": "floor_layout", "label": "Floor Layout", "route": "/workspace-manager/floor-layout",
+                "functions": [
+                    {"key": "refresh", "label": "Refresh", "scoped": False},
+                    {"key": "export",  "label": "Export",  "scoped": False},
+                ],
+            },
+            {
+                "key": "floor_plans", "label": "Floor Plans", "route": "/workspace-manager/floor-plans",
+                "functions": [
+                    {"key": "create",  "label": "New Plan",   "scoped": False},
+                    {"key": "edit",    "label": "Edit",       "scoped": False},
+                    {"key": "delete",  "label": "Delete",     "scoped": False},
+                    {"key": "upload",  "label": "Upload PDF", "scoped": False},
+                    {"key": "publish", "label": "Publish",    "scoped": False},
+                ],
+            },
+            {
+                "key": "meeting_rooms", "label": "Meeting Rooms", "route": "/workspace-manager/meeting-rooms",
+                "functions": [
+                    {"key": "create", "label": "New Room", "scoped": False},
+                    {"key": "edit",   "label": "Edit",     "scoped": False},
+                    {"key": "delete", "label": "Delete",   "scoped": False},
+                ],
+            },
+            {
+                "key": "workstations", "label": "Workstations / Seats", "route": "/workspace-manager/workstations",
+                "functions": [
+                    {"key": "assign_team", "label": "Assign to Team", "scoped": False},
+                    {"key": "unassign",    "label": "Unassign",       "scoped": False},
+                    {"key": "edit",        "label": "Edit",           "scoped": False},
+                ],
+            },
         ],
     },
 ]
 
-# Scope taxonomy for v3 UI. Internal storage stays "individual" / "team" /
-# "overall" and is mapped to the legacy v2 "respective" / "team" / "all"
-# semantics at effective-permission compute time so v2 rule engine keeps
-# working. Kept as a separate list here because v3 uses "individual" wording.
 SCOPE_V3_VALUES = ("individual", "team", "overall")
-
 V3_TO_V2_SCOPE = {"individual": "respective", "team": "team", "overall": "all"}
 V2_TO_V3_SCOPE = {"respective": "individual", "team": "team", "all": "overall"}
 

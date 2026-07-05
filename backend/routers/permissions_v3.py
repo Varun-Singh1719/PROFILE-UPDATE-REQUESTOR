@@ -100,39 +100,44 @@ def _sanitize_rw(v: Any, scoped: bool = True) -> dict:
 
 
 def _normalize_v3_modules(modules: Any) -> Dict[str, dict]:
-    """Validate & normalize the modules tree against the v3 catalog."""
+    """Validate & normalize the modules tree against the v3 catalog.
+
+    New shape (Aug 2026):
+      modules[<mkey>].pages[<pkey>] = {
+        view: {enabled, visible, scope},
+        edit: {enabled, visible, scope},
+        functions: { <fkey>: {enabled, visible, scope} }
+      }
+    """
     catalog = {m["key"]: m for m in PERMISSION_MODULES_V3}
     out: Dict[str, dict] = {}
     for mkey, mdata in (modules or {}).items():
         if mkey not in catalog:
             continue
         catalog_m = catalog[mkey]
-        valid_features = {f["key"]: f for f in catalog_m["features"]}
-        valid_actions = {a["key"]: a for a in catalog_m["actions"]}
+        valid_pages = {p["key"]: p for p in catalog_m["pages"]}
 
-        # ---- Features
-        raw_features = (mdata or {}).get("features") or {}
-        feature_out: Dict[str, dict] = {}
-        for fkey, fdata in raw_features.items():
-            if fkey not in valid_features:
+        raw_pages = (mdata or {}).get("pages") or {}
+        pages_out: Dict[str, dict] = {}
+        for pkey, pdata in raw_pages.items():
+            if pkey not in valid_pages:
                 continue
-            fdata = fdata if isinstance(fdata, dict) else {}
-            feature_out[fkey] = {
-                "view": _sanitize_rw(fdata.get("view")),
-                "edit": _sanitize_rw(fdata.get("edit")),
+            pdata = pdata if isinstance(pdata, dict) else {}
+            valid_functions = {f["key"]: f for f in (valid_pages[pkey].get("functions") or [])}
+            fn_out: Dict[str, dict] = {}
+            for fkey, fdata in (pdata.get("functions") or {}).items():
+                if fkey not in valid_functions:
+                    continue
+                scoped = bool(valid_functions[fkey].get("scoped", False))
+                fn_out[fkey] = _sanitize_rw(fdata, scoped=scoped)
+            pages_out[pkey] = {
+                "view": _sanitize_rw(pdata.get("view")),
+                "edit": _sanitize_rw(pdata.get("edit")),
+                "functions": fn_out,
             }
 
-        # ---- Actions
-        raw_actions = (mdata or {}).get("actions") or {}
-        action_out: Dict[str, dict] = {}
-        for akey, adata in raw_actions.items():
-            if akey not in valid_actions:
-                continue
-            scoped = bool(valid_actions[akey].get("scoped", False))
-            action_out[akey] = _sanitize_rw(adata, scoped=scoped)
-
-        if feature_out or action_out:
-            out[mkey] = {"features": feature_out, "actions": action_out}
+        if pages_out:
+            out[mkey] = {"pages": pages_out}
     return out
 
 
@@ -180,9 +185,13 @@ async def get_v3_set(pset_id: str, user=Depends(get_current_user)):
 
 async def _next_seq() -> int:
     last = await db.permission_sets.find_one(
-        {}, {"_id": 0, "seq_no": 1}, sort=[("seq_no", -1)],
+        {}, {"_id": 0, "seq_no": 1, "numeric_id": 1}, sort=[("seq_no", -1)],
     )
-    return int((last or {}).get("seq_no") or 0) + 1
+    if not last:
+        last = await db.permission_sets.find_one(
+            {}, {"_id": 0, "numeric_id": 1}, sort=[("numeric_id", -1)],
+        )
+    return int((last or {}).get("seq_no") or (last or {}).get("numeric_id") or 0) + 1
 
 
 def _actor(user: dict) -> dict:
@@ -192,9 +201,11 @@ def _actor(user: dict) -> dict:
 @api_router.post("/permission-sets-v3")
 async def create_v3_set(body: PermissionSetV3In, user=Depends(require_role("Super Admin"))):
     modules = _normalize_v3_modules(body.modules or {})
+    seq = await _next_seq()
     doc = {
         "id": f"pset-{uuid.uuid4()}",
-        "seq_no": await _next_seq(),
+        "seq_no": seq,
+        "numeric_id": seq,   # keep legacy unique-index happy
         "title": body.title.strip(),
         "description": (body.description or "").strip(),
         "version": 3,
@@ -276,36 +287,37 @@ def _migrate_legacy_to_v3(legacy: dict) -> dict:
     """
     catalog = {m["key"]: m for m in PERMISSION_MODULES_V3}
     modules_out: Dict[str, dict] = {}
+
+    def _v(x):
+        if x in ("respective", "team", "all"):
+            return {"enabled": True, "visible": True, "scope": {"respective": "individual", "team": "team", "all": "overall"}[x]}
+        return {"enabled": bool(x), "visible": True, "scope": None}
+
     for mkey, feats in (legacy.get("modules") or {}).items():
         if mkey not in catalog:
             continue
-        c_features = {f["key"]: f for f in catalog[mkey]["features"]}
-        c_actions = {a["key"]: a for a in catalog[mkey]["actions"]}
-        feat_out: Dict[str, dict] = {}
-        act_out: Dict[str, dict] = {}
+        pages_by_key = {p["key"]: p for p in catalog[mkey]["pages"]}
+        pages_out: Dict[str, dict] = {}
         for fkey, actions in (feats or {}).items():
-            if not isinstance(actions, dict):
+            if fkey not in pages_by_key or not isinstance(actions, dict):
                 continue
-            # Read legacy view/edit into v3 shape when the feature is a catalog row
-            if fkey in c_features:
-                view_val = actions.get("view")
-                edit_val = actions.get("edit")
-                def _v(x):
-                    if x in ("respective", "team", "all"):
-                        return {"enabled": True, "visible": True, "scope": {"respective": "individual", "team": "team", "all": "overall"}[x]}
-                    return {"enabled": bool(x), "visible": True, "scope": None}
-                feat_out[fkey] = {"view": _v(view_val), "edit": _v(edit_val)}
-            # Sweep leftover action verbs into action-button state
+            fn_catalog = {f["key"]: f for f in (pages_by_key[fkey].get("functions") or [])}
+            fn_out: Dict[str, dict] = {}
             for a, v in actions.items():
                 if a in ("view", "edit"):
                     continue
-                if a in c_actions:
+                if a in fn_catalog:
                     if v in ("respective", "team", "all"):
-                        act_out[a] = {"enabled": True, "visible": True, "scope": {"respective": "individual", "team": "team", "all": "overall"}[v]}
+                        fn_out[a] = {"enabled": True, "visible": True, "scope": {"respective": "individual", "team": "team", "all": "overall"}[v]}
                     else:
-                        act_out[a] = {"enabled": bool(v), "visible": True, "scope": None}
-        if feat_out or act_out:
-            modules_out[mkey] = {"features": feat_out, "actions": act_out}
+                        fn_out[a] = {"enabled": bool(v), "visible": True, "scope": None}
+            pages_out[fkey] = {
+                "view": _v(actions.get("view")),
+                "edit": _v(actions.get("edit")),
+                "functions": fn_out,
+            }
+        if pages_out:
+            modules_out[mkey] = {"pages": pages_out}
     return {**legacy, "modules": modules_out, "version": 3, "migrated_from_legacy": True}
 
 
@@ -331,30 +343,28 @@ async def permissions_audit(
 # --------------------------------------------------------------------------- #
 
 def _effective_from_set(set_modules: dict) -> dict:
-    """Given a v3 modules dict, return a flat 'effective' view — the same
-    data, but with the visibility rule applied (hidden rows are stripped).
-    Useful for the Preview modal."""
+    """Return a flat 'effective' view for the preview modal — hidden pages
+    and functions are stripped."""
     out: Dict[str, dict] = {}
     for mkey, mdata in (set_modules or {}).items():
-        feats = {}
-        for fkey, fdata in (mdata.get("features") or {}).items():
-            view = fdata.get("view") or {}
-            edit = fdata.get("edit") or {}
-            # Hidden rows do not appear in the effective view — mirror what
-            # the enforcement layer will do at runtime once Round 3 lands.
+        pages_out = {}
+        for pkey, pdata in (mdata.get("pages") or {}).items():
+            view = pdata.get("view") or {}
+            edit = pdata.get("edit") or {}
             if not view.get("visible") and not edit.get("visible"):
                 continue
-            feats[fkey] = {
+            fns_out = {}
+            for fkey, fdata in (pdata.get("functions") or {}).items():
+                if not fdata.get("visible"):
+                    continue
+                fns_out[fkey] = {"enabled": bool(fdata.get("enabled")), "scope": fdata.get("scope")}
+            pages_out[pkey] = {
                 "view": {"enabled": bool(view.get("enabled")), "scope": view.get("scope")} if view.get("visible") else None,
                 "edit": {"enabled": bool(edit.get("enabled")), "scope": edit.get("scope")} if edit.get("visible") else None,
+                "functions": fns_out,
             }
-        acts = {}
-        for akey, adata in (mdata.get("actions") or {}).items():
-            if not adata.get("visible"):
-                continue
-            acts[akey] = {"enabled": bool(adata.get("enabled")), "scope": adata.get("scope")}
-        if feats or acts:
-            out[mkey] = {"features": feats, "actions": acts}
+        if pages_out:
+            out[mkey] = {"pages": pages_out}
     return out
 
 
