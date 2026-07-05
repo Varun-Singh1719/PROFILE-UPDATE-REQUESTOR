@@ -45,6 +45,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Armchair, Calendar as CalendarIcon, Loader2, Users, AlertTriangle,
   Repeat, RefreshCw, Trash2, ChevronDown, X, ShieldAlert,
+  MousePointerClick, Wand2, CheckCircle2, Pencil,
 } from "lucide-react";
 import { toast } from "../lib/notify";
 import Layout from "../components/Layout";
@@ -132,6 +133,13 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
   const [recurringDays, setRecurringDays] = useState([]);         // ['Su','M',...]
   const [saving, setSaving] = useState(false);
   const formRef = useRef(null);
+
+  // --------- Booking mode (Manual vs Team Auto Assignment) ---------
+  // 'manual' — user picks each seat manually (existing behaviour)
+  // 'auto'   — user picks a team, then clicks a STARTING workstation on the
+  //            map. The system auto-selects N consecutive available seats
+  //            (N = team size) following the seat-numbering sequence.
+  const [bookingMode, setBookingMode] = useState("manual");
 
   // -------------------------------------------------- Initial loads
   const loadPlans = useCallback(async () => {
@@ -302,14 +310,116 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
     return employees.filter((e) => allIds.has(e.id) && !bookedEmpIds.has(e.id));
   }, [selectedTeam, employees, bookedEmpIds]);
 
+  // Total distinct team-member count (union of member_ids + manager_ids).
+  // Drives the "Team Size" shown in the Auto Assignment sidebar and the
+  // number of seats picked when the user clicks a starting workstation.
+  const teamMemberCount = useMemo(() => {
+    if (!selectedTeam) return 0;
+    const allIds = new Set([
+      ...(selectedTeam.member_ids || []),
+      ...(selectedTeam.manager_ids || []),
+    ]);
+    return allIds.size;
+  }, [selectedTeam]);
+
+  // Auto Assignment phase — derived from the mode + form state.
+  //   awaiting-team  : mode='auto' & no team picked
+  //   awaiting-start : mode='auto' & team picked, no seats yet
+  //   proposed       : mode='auto' & seats have been auto-selected
+  const autoPhase = useMemo(() => {
+    if (bookingMode !== "auto") return null;
+    if (!teamId) return "awaiting-team";
+    if (selectedSeatIds.length === 0) return "awaiting-start";
+    return "proposed";
+  }, [bookingMode, teamId, selectedSeatIds]);
+
   const isSingle = selectedSeatIds.length === 1;
   const isMulti  = selectedSeatIds.length > 1;
   const seatCount = selectedSeatIds.length;
 
+  // -------------------------------------------------- Auto-selection helpers
+  // Natural (alphanumeric) sort of seats by label, e.g. G1, G2 … G20, H1, H2 …
+  const naturalSortSeats = useCallback((list) => {
+    return [...list].sort((a, b) =>
+      String(a.label || a.id).localeCompare(
+        String(b.label || b.id),
+        undefined,
+        { numeric: true, sensitivity: "base" }
+      )
+    );
+  }, []);
+
+  // From a starting seat, walk forward through the natural-sort sequence
+  // and pick the next `count` AVAILABLE workstations (skipping booked /
+  // pending seats). Returns { seats:[...], error?:string }.
+  const computeAutoSelection = useCallback((startSeatId, count) => {
+    if (count <= 0) return { seats: [], error: "Team has no members." };
+    const sorted = naturalSortSeats(allSeats);
+    const startIdx = sorted.findIndex((s) => s.id === startSeatId);
+    if (startIdx === -1) return { seats: [], error: "Starting workstation not found on this plan." };
+    const first = sorted[startIdx];
+    if (bookingsBySeat[first.id] || requestsBySeat[first.id]) {
+      return { seats: [], error: "The starting workstation is not available. Pick a free (white) seat." };
+    }
+    const picked = [];
+    for (let i = startIdx; i < sorted.length && picked.length < count; i++) {
+      const s = sorted[i];
+      if (!bookingsBySeat[s.id] && !requestsBySeat[s.id]) picked.push(s);
+    }
+    if (picked.length < count) {
+      return {
+        seats: picked,
+        error: `Only ${picked.length} available workstation${picked.length === 1 ? "" : "s"} from this starting point. ${count} required. Try a different starting workstation.`,
+      };
+    }
+    return { seats: picked };
+  }, [naturalSortSeats, allSeats, bookingsBySeat, requestsBySeat]);
+
   // -------------------------------------------------- Handlers
   const toggleSeat = useCallback((seatId) => {
+    // Auto Assignment: first available-seat click triggers the auto-select
+    // algorithm. Subsequent clicks toggle individual seats — this doubles as
+    // the "Modify" action so users can add/remove seats from the proposal.
+    if (bookingMode === "auto") {
+      if (!teamId) {
+        toast.error("Select a team first to auto-assign workstations.");
+        return;
+      }
+      if (selectedSeatIds.length === 0) {
+        const size = teamMemberCount;
+        if (size <= 0) {
+          toast.error("Selected team has no members.");
+          return;
+        }
+        const result = computeAutoSelection(seatId, size);
+        if (result.error && result.seats.length === 0) {
+          toast.error(result.error);
+          return;
+        }
+        if (result.error) toast.error(result.error);
+        setSelectedSeatIds(result.seats.map((s) => s.id));
+        setAllocationMode("random");
+        setManualEmpIds([]);
+        return;
+      }
+      // seats already proposed — fall through to normal toggle so the user
+      // can modify the selection before confirming.
+    }
     setSelectedSeatIds((prev) => prev.includes(seatId) ? prev.filter((x) => x !== seatId) : [...prev, seatId]);
-  }, []);
+  }, [bookingMode, teamId, selectedSeatIds, teamMemberCount, computeAutoSelection]);
+
+  // Switch between Manual and Team Auto Assignment. Any in-progress selection
+  // is cleared so the two flows never contaminate each other.
+  const switchMode = useCallback((next) => {
+    if (next === bookingMode) return;
+    setBookingMode(next);
+    setSelectedSeatIds([]);
+    setEmployeeId("");
+    setManualEmpIds([]);
+    setAllocationMode("random");
+    // teamId is intentionally kept — a Super Admin who already picked a team
+    // and switches from Manual → Auto shouldn't have to pick it again.
+  }, [bookingMode]);
 
   const openBookingDetail = useCallback((seat, booking) => {
     if (!booking) return;
@@ -331,10 +441,19 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
   const validate = () => {
     if (!selectedPlanId)         return "Select a floor plan first.";
     if (seatCount === 0)         return "Select at least one workstation.";
-    if (isSingle && !employeeId) return "Choose an employee for this workstation.";
-    if (isMulti && !teamId)      return "Choose a team to assign the workstations to.";
-    if (isMulti && allocationMode === "manual" && manualEmpIds.length !== seatCount)
-      return `Pick exactly ${seatCount} team member(s) for the selected workstations.`;
+    // Auto Assignment always assigns via the selected team, even when the
+    // user has modified the proposal down to a single seat.
+    if (bookingMode === "auto") {
+      if (!teamId) return "Choose a team for auto-assignment.";
+      if (teamPool.length < seatCount) {
+        return `Team has only ${teamPool.length} available member(s) but ${seatCount} workstation(s) selected.`;
+      }
+    } else {
+      if (isSingle && !employeeId) return "Choose an employee for this workstation.";
+      if (isMulti && !teamId)      return "Choose a team to assign the workstations to.";
+      if (isMulti && allocationMode === "manual" && manualEmpIds.length !== seatCount)
+        return `Pick exactly ${seatCount} team member(s) for the selected workstations.`;
+    }
     if (recurringOn) {
       if (!recurringEnd)         return "Select a recurring end date.";
       if (recurringEnd < date)   return "Recurring end date must be on or after the booking date.";
@@ -371,7 +490,18 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
     if (!isRequestMode) {
       payload.recurring = recurringOn ? { end_date: recurringEnd, days: recurringDays } : null;
     }
-    if (isSingle) {
+    if (bookingMode === "auto") {
+      // Auto Assignment path — always books via team, even when the modified
+      // proposal ends up as a single seat. Employees are drawn randomly from
+      // the team's available pool so the user doesn't have to hand-pick.
+      const teamEmps = pickRandom(teamPool.map((e) => e.id), seatCount);
+      if (isSingle) {
+        payload.employee_id = teamEmps[0];
+      } else {
+        payload.team_id = teamId;
+        payload.team_employee_ids = teamEmps;
+      }
+    } else if (isSingle) {
       payload.employee_id = employeeId;
     } else {
       payload.team_id = teamId;
@@ -525,119 +655,306 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                     <Armchair size={16} /> Booking Form
                   </h2>
 
-                  {/* Workstation multi-select */}
-                  <div>
-                    <label className="text-xs font-medium text-gray-700">Workstation(s)</label>
-                    <div className="mt-1">
-                      <MultiSelect
-                        options={availableSeatOptions}
-                        value={selectedSeatIds}
-                        onChange={setSelectedSeatIds}
-                        placeholder={availLoading ? "Loading…" : "Select workstation(s)"}
-                        testId="ws-workstation-select"
-                        disabled={!canEdit || availLoading}
-                      />
+                  {/* Booking Mode toggle — Manual Selection vs Team Auto Assignment.
+                      Both flows share the same submit endpoint and Booking Date /
+                      Recurring controls below. Switching modes clears the seat
+                      selection so the two flows never contaminate each other. */}
+                  {!isRequestMode && (
+                    <div
+                      className="rounded-lg border border-gray-200 bg-gray-50 p-1 grid grid-cols-2 gap-1"
+                      data-testid="ws-booking-mode-toggle"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => switchMode("manual")}
+                        disabled={!canEdit || saving}
+                        className={`text-[12px] font-semibold py-1.5 rounded-md transition flex items-center justify-center gap-1.5 ${
+                          bookingMode === "manual"
+                            ? "bg-white text-[#ec9324] shadow-sm ring-1 ring-[#ec9324]/30"
+                            : "text-gray-600 hover:text-gray-900"
+                        }`}
+                        data-testid="ws-mode-manual"
+                      >
+                        <MousePointerClick size={13} /> Manual Selection
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => switchMode("auto")}
+                        disabled={!canEdit || saving}
+                        className={`text-[12px] font-semibold py-1.5 rounded-md transition flex items-center justify-center gap-1.5 ${
+                          bookingMode === "auto"
+                            ? "bg-white text-[#ec9324] shadow-sm ring-1 ring-[#ec9324]/30"
+                            : "text-gray-600 hover:text-gray-900"
+                        }`}
+                        data-testid="ws-mode-auto"
+                      >
+                        <Wand2 size={13} /> Team Auto Assignment
+                      </button>
                     </div>
-                    <div className="mt-1 text-[11px] text-gray-500 flex items-center gap-2">
-                      <span>{availableSeatOptions.length} available</span>
-                      {selectedSeatIds.length > 0 && (
-                        <span className="text-[#22C55E]">· {selectedSeatIds.length} selected</span>
+                  )}
+
+                  {/* ============ AUTO ASSIGNMENT (team-first flow) ============ */}
+                  {bookingMode === "auto" && (
+                    <>
+                      {/* Team selector — required before the user can click a
+                          starting seat. Changing team resets any proposal. */}
+                      <div>
+                        <label className="text-xs font-medium text-gray-700">
+                          Team <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={teamId}
+                          onChange={(e) => {
+                            setTeamId(e.target.value);
+                            setSelectedSeatIds([]);
+                            setManualEmpIds([]);
+                          }}
+                          disabled={!canEdit || refLoading}
+                          className="mt-1 w-full text-sm rounded-md border border-gray-300 px-2 py-2 bg-white disabled:bg-gray-50 disabled:text-gray-400"
+                          data-testid="ws-auto-team-select"
+                        >
+                          <option value="">{refLoading ? "Loading…" : "Select team"}</option>
+                          {teams.map((t) => (
+                            <option key={t.id} value={t.id}>{t.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Team info card — shows total team size + how many are
+                          available for booking on the selected date. */}
+                      {selectedTeam && (
+                        <div
+                          className="rounded-md border border-[#ec9324]/30 bg-[#ec9324]/5 p-3 space-y-1.5"
+                          data-testid="ws-auto-team-info"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-sm font-semibold text-gray-900 truncate">
+                              {selectedTeam.name}
+                            </div>
+                            <span
+                              className="text-[11px] font-semibold bg-white px-2 py-0.5 rounded-full ring-1 ring-[#ec9324]/40 text-[#ec9324] whitespace-nowrap"
+                              data-testid="ws-auto-team-size"
+                            >
+                              {teamMemberCount} member{teamMemberCount === 1 ? "" : "s"}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-gray-600 flex items-center gap-1">
+                            <Users size={11} />
+                            {teamPool.length} available for booking on {fmtDate(date)}
+                          </div>
+                        </div>
                       )}
-                    </div>
-                  </div>
 
-                  {/* Employee (single) */}
-                  <div>
-                    <label className="text-xs font-medium text-gray-700">
-                      Employee Name {isSingle ? <span className="text-red-500">*</span> : <span className="text-gray-400">(single seat)</span>}
-                    </label>
-                    <select
-                      value={employeeId}
-                      onChange={(e) => setEmployeeId(e.target.value)}
-                      disabled={!canEdit || !isSingle || refLoading}
-                      className="mt-1 w-full text-sm rounded-md border border-gray-300 px-2 py-2 bg-white disabled:bg-gray-50 disabled:text-gray-400"
-                      data-testid="ws-employee-select"
-                    >
-                      <option value="">{refLoading ? "Loading…" : "Select employee"}</option>
-                      {availableEmployees.map((e) => (
-                        <option key={e.id} value={e.id}>{e.name} {e.emp_id ? `· ${e.emp_id}` : ""}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Team (multi) */}
-                  <div>
-                    <label className="text-xs font-medium text-gray-700">
-                      Team Name {isMulti ? <span className="text-red-500">*</span> : <span className="text-gray-400">(multi-seat)</span>}
-                    </label>
-                    <select
-                      value={teamId}
-                      onChange={(e) => { setTeamId(e.target.value); setManualEmpIds([]); }}
-                      disabled={!canEdit || !isMulti || refLoading}
-                      className="mt-1 w-full text-sm rounded-md border border-gray-300 px-2 py-2 bg-white disabled:bg-gray-50 disabled:text-gray-400"
-                      data-testid="ws-team-select"
-                    >
-                      <option value="">{refLoading ? "Loading…" : "Select team"}</option>
-                      {teams.map((t) => (
-                        <option key={t.id} value={t.id}>{t.name}</option>
-                      ))}
-                    </select>
-
-                    {isMulti && teamId && (
-                      <div className="mt-3 rounded-md border border-gray-200 p-2 bg-gray-50">
-                        <div className="text-[11px] font-medium text-gray-700 mb-1">Allocation</div>
-                        <div className="flex gap-2 text-xs">
-                          <button
-                            onClick={() => setAllocationMode("random")}
-                            disabled={!canEdit}
-                            className={`flex-1 px-2 py-1.5 rounded-md border transition ${
-                              allocationMode === "random"
-                                ? "bg-[#ec9324] text-white border-[#ec9324]"
-                                : "bg-white border-gray-300 hover:bg-gray-100"
-                            }`}
-                            data-testid="ws-alloc-random"
-                          >Random</button>
-                          <button
-                            onClick={() => setAllocationMode("manual")}
-                            disabled={!canEdit}
-                            className={`flex-1 px-2 py-1.5 rounded-md border transition ${
-                              allocationMode === "manual"
-                                ? "bg-[#ec9324] text-white border-[#ec9324]"
-                                : "bg-white border-gray-300 hover:bg-gray-100"
-                            }`}
-                            data-testid="ws-alloc-manual"
-                          >Manual</button>
+                      {/* Awaiting-team hint */}
+                      {autoPhase === "awaiting-team" && (
+                        <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-[12px] text-gray-600 flex items-start gap-2">
+                          <AlertTriangle size={13} className="mt-[1px] flex-shrink-0" />
+                          <span>Pick a team above to enable auto-assignment.</span>
                         </div>
+                      )}
 
-                        <div className="mt-2 text-[11px] text-gray-600 flex items-center gap-1">
-                          <Users size={12} /> Team pool: {teamPool.length} available · {seatCount} required
+                      {/* Awaiting-start hint */}
+                      {autoPhase === "awaiting-start" && (
+                        <div
+                          className="rounded-md border border-blue-100 bg-blue-50 p-3 text-[12px] text-blue-900 flex items-start gap-2"
+                          data-testid="ws-auto-instruction"
+                        >
+                          <MousePointerClick size={14} className="mt-[1px] flex-shrink-0" />
+                          <div>
+                            Click a <strong>starting workstation</strong> on the floor map.
+                            {teamMemberCount > 0 && (
+                              <>
+                                {" "}The system will auto-select the next{" "}
+                                <strong>{teamMemberCount}</strong> consecutive
+                                available seat{teamMemberCount === 1 ? "" : "s"}.
+                              </>
+                            )}
+                          </div>
                         </div>
+                      )}
 
-                        {allocationMode === "manual" && (
-                          <div className="mt-2">
-                            <MultiSelect
-                              options={teamPool.map((e) => ({ value: e.id, label: e.name, sublabel: e.emp_id || "" }))}
-                              value={manualEmpIds}
-                              onChange={(vals) => setManualEmpIds(vals.slice(0, seatCount))}
-                              placeholder={`Pick ${seatCount} member(s)`}
-                              testId="ws-manual-allocation"
-                              disabled={!canEdit}
-                            />
-                            <div className="mt-1 text-[10px] text-gray-500">
-                              {manualEmpIds.length}/{seatCount} selected. Workstations are assigned in the order of selection.
+                      {/* Proposed selection summary */}
+                      {autoPhase === "proposed" && (
+                        <div
+                          className="rounded-md border border-emerald-200 bg-emerald-50 p-3 space-y-2"
+                          data-testid="ws-auto-proposed"
+                        >
+                          <div className="flex items-center gap-1.5 text-emerald-800 text-sm font-semibold">
+                            <CheckCircle2 size={15} /> Proposed Selection
+                          </div>
+                          <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11.5px]">
+                            <div className="text-gray-600">Team</div>
+                            <div className="text-gray-900 font-medium truncate">{selectedTeam?.name || "—"}</div>
+                            <div className="text-gray-600">Team Size</div>
+                            <div className="text-gray-900 font-medium">{teamMemberCount} member{teamMemberCount === 1 ? "" : "s"}</div>
+                            <div className="text-gray-600">Selected</div>
+                            <div className={`font-medium ${seatCount < teamMemberCount ? "text-amber-700" : "text-gray-900"}`}>
+                              {seatCount} workstation{seatCount === 1 ? "" : "s"}
+                              {seatCount !== teamMemberCount && (
+                                <span className="ml-1 text-[10px] text-amber-700">
+                                  (modified)
+                                </span>
+                              )}
                             </div>
                           </div>
-                        )}
+                          <div className="pt-1.5 border-t border-emerald-100">
+                            <div className="text-[11px] text-gray-600 mb-1.5">Workstations</div>
+                            <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto">
+                              {selectedSeatIds
+                                .map((sid) => allSeats.find((x) => x.id === sid) || { id: sid, label: sid })
+                                .sort((a, b) =>
+                                  String(a.label || a.id).localeCompare(
+                                    String(b.label || b.id),
+                                    undefined,
+                                    { numeric: true, sensitivity: "base" }
+                                  )
+                                )
+                                .map((s) => (
+                                  <span
+                                    key={s.id}
+                                    className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-white ring-1 ring-emerald-300 text-[11px] font-medium text-emerald-900"
+                                    data-testid={`ws-auto-chip-${s.id}`}
+                                  >
+                                    {s.label || s.id}
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleSeat(s.id)}
+                                      disabled={!canEdit || saving}
+                                      className="text-emerald-500 hover:text-emerald-800 rounded-full hover:bg-emerald-100 w-4 h-4 flex items-center justify-center"
+                                      aria-label={`Remove ${s.label || s.id}`}
+                                    >
+                                      <X size={10} />
+                                    </button>
+                                  </span>
+                                ))}
+                            </div>
+                            <div className="mt-2 text-[10.5px] text-emerald-800/80 flex items-center gap-1">
+                              <Pencil size={10} /> Click Modify (or seats on the map) to add / remove workstations.
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
 
-                        {teamPool.length < seatCount && (
-                          <div className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-1.5 flex items-start gap-1">
-                            <AlertTriangle size={12} className="mt-[1px]" />
-                            <span>Not enough available team members ({teamPool.length}) for {seatCount} workstation(s).</span>
+                  {/* ============ MANUAL SELECTION (existing flow) ============ */}
+                  {bookingMode === "manual" && (
+                    <>
+                      {/* Workstation multi-select */}
+                      <div>
+                        <label className="text-xs font-medium text-gray-700">Workstation(s)</label>
+                        <div className="mt-1">
+                          <MultiSelect
+                            options={availableSeatOptions}
+                            value={selectedSeatIds}
+                            onChange={setSelectedSeatIds}
+                            placeholder={availLoading ? "Loading…" : "Select workstation(s)"}
+                            testId="ws-workstation-select"
+                            disabled={!canEdit || availLoading}
+                          />
+                        </div>
+                        <div className="mt-1 text-[11px] text-gray-500 flex items-center gap-2">
+                          <span>{availableSeatOptions.length} available</span>
+                          {selectedSeatIds.length > 0 && (
+                            <span className="text-[#22C55E]">· {selectedSeatIds.length} selected</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Employee (single) */}
+                      <div>
+                        <label className="text-xs font-medium text-gray-700">
+                          Employee Name {isSingle ? <span className="text-red-500">*</span> : <span className="text-gray-400">(single seat)</span>}
+                        </label>
+                        <select
+                          value={employeeId}
+                          onChange={(e) => setEmployeeId(e.target.value)}
+                          disabled={!canEdit || !isSingle || refLoading}
+                          className="mt-1 w-full text-sm rounded-md border border-gray-300 px-2 py-2 bg-white disabled:bg-gray-50 disabled:text-gray-400"
+                          data-testid="ws-employee-select"
+                        >
+                          <option value="">{refLoading ? "Loading…" : "Select employee"}</option>
+                          {availableEmployees.map((e) => (
+                            <option key={e.id} value={e.id}>{e.name} {e.emp_id ? `· ${e.emp_id}` : ""}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Team (multi) */}
+                      <div>
+                        <label className="text-xs font-medium text-gray-700">
+                          Team Name {isMulti ? <span className="text-red-500">*</span> : <span className="text-gray-400">(multi-seat)</span>}
+                        </label>
+                        <select
+                          value={teamId}
+                          onChange={(e) => { setTeamId(e.target.value); setManualEmpIds([]); }}
+                          disabled={!canEdit || !isMulti || refLoading}
+                          className="mt-1 w-full text-sm rounded-md border border-gray-300 px-2 py-2 bg-white disabled:bg-gray-50 disabled:text-gray-400"
+                          data-testid="ws-team-select"
+                        >
+                          <option value="">{refLoading ? "Loading…" : "Select team"}</option>
+                          {teams.map((t) => (
+                            <option key={t.id} value={t.id}>{t.name}</option>
+                          ))}
+                        </select>
+
+                        {isMulti && teamId && (
+                          <div className="mt-3 rounded-md border border-gray-200 p-2 bg-gray-50">
+                            <div className="text-[11px] font-medium text-gray-700 mb-1">Allocation</div>
+                            <div className="flex gap-2 text-xs">
+                              <button
+                                onClick={() => setAllocationMode("random")}
+                                disabled={!canEdit}
+                                className={`flex-1 px-2 py-1.5 rounded-md border transition ${
+                                  allocationMode === "random"
+                                    ? "bg-[#ec9324] text-white border-[#ec9324]"
+                                    : "bg-white border-gray-300 hover:bg-gray-100"
+                                }`}
+                                data-testid="ws-alloc-random"
+                              >Random</button>
+                              <button
+                                onClick={() => setAllocationMode("manual")}
+                                disabled={!canEdit}
+                                className={`flex-1 px-2 py-1.5 rounded-md border transition ${
+                                  allocationMode === "manual"
+                                    ? "bg-[#ec9324] text-white border-[#ec9324]"
+                                    : "bg-white border-gray-300 hover:bg-gray-100"
+                                }`}
+                                data-testid="ws-alloc-manual"
+                              >Manual</button>
+                            </div>
+
+                            <div className="mt-2 text-[11px] text-gray-600 flex items-center gap-1">
+                              <Users size={12} /> Team pool: {teamPool.length} available · {seatCount} required
+                            </div>
+
+                            {allocationMode === "manual" && (
+                              <div className="mt-2">
+                                <MultiSelect
+                                  options={teamPool.map((e) => ({ value: e.id, label: e.name, sublabel: e.emp_id || "" }))}
+                                  value={manualEmpIds}
+                                  onChange={(vals) => setManualEmpIds(vals.slice(0, seatCount))}
+                                  placeholder={`Pick ${seatCount} member(s)`}
+                                  testId="ws-manual-allocation"
+                                  disabled={!canEdit}
+                                />
+                                <div className="mt-1 text-[10px] text-gray-500">
+                                  {manualEmpIds.length}/{seatCount} selected. Workstations are assigned in the order of selection.
+                                </div>
+                              </div>
+                            )}
+
+                            {teamPool.length < seatCount && (
+                              <div className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-1.5 flex items-start gap-1">
+                                <AlertTriangle size={12} className="mt-[1px]" />
+                                <span>Not enough available team members ({teamPool.length}) for {seatCount} workstation(s).</span>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
-                    )}
-                  </div>
+                    </>
+                  )}
 
                   {/* Booking Date — duplicate of header date for clarity, kept in sync */}
                   <div>
@@ -716,25 +1033,56 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
 
                   {/* Summary line */}
                   <div className="text-[11px] text-gray-500 bg-blue-50 border border-blue-100 rounded p-2">
-                    {seatCount === 0 && "Click a workstation on the map (or use the dropdown) to start."}
-                    {isSingle && employeeId && (isRequestMode
+                    {bookingMode === "auto" && autoPhase === "awaiting-team" && "Pick a team, then click a starting workstation on the map."}
+                    {bookingMode === "auto" && autoPhase === "awaiting-start" && `Click any available workstation to auto-select ${teamMemberCount} seats for ${selectedTeam?.name || "the team"}.`}
+                    {bookingMode === "auto" && autoPhase === "proposed" && (isRequestMode
+                      ? `Requesting ${seatCount} workstation${seatCount === 1 ? "" : "s"} for team "${selectedTeam?.name}" on ${fmtDate(date)}.`
+                      : `Booking ${seatCount} workstation${seatCount === 1 ? "" : "s"} for team "${selectedTeam?.name}" on ${fmtDate(date)}.`)}
+                    {bookingMode === "manual" && seatCount === 0 && "Click a workstation on the map (or use the dropdown) to start."}
+                    {bookingMode === "manual" && isSingle && employeeId && (isRequestMode
                       ? `Requesting 1 workstation for ${employees.find(e => e.id === employeeId)?.name || "employee"} on ${fmtDate(date)}.`
                       : `Booking 1 workstation for ${employees.find(e => e.id === employeeId)?.name || "employee"} on ${fmtDate(date)}.`)}
-                    {isMulti && teamId && (isRequestMode
+                    {bookingMode === "manual" && isMulti && teamId && (isRequestMode
                       ? `Requesting ${seatCount} workstations for team "${selectedTeam?.name}" on ${fmtDate(date)} (${allocationMode}).`
                       : `Booking ${seatCount} workstations for team "${selectedTeam?.name}" on ${fmtDate(date)} (${allocationMode}).`)}
                   </div>
 
-                  {/* Actions */}
+                  {/* Actions.
+                      Auto Assignment shows an extra "Modify" button when a
+                      proposal exists — it clears just the seats so the user
+                      can click a new starting workstation while keeping the
+                      picked team + date intact.  "Cancel" clears everything.
+                  */}
                   <div className="flex gap-2 pt-2 border-t border-gray-200 sticky bottom-0 bg-white">
                     <Button
                       onClick={handleSave}
-                      disabled={!canEdit || saving || !selectedPlanId || noSeats}
+                      disabled={!canEdit || saving || !selectedPlanId || noSeats || (bookingMode === "auto" && autoPhase !== "proposed")}
                       className="flex-1 bg-[#ec9324] hover:bg-[#d8821a] text-white"
                       data-testid="ws-save-button"
                     >
-                      {saving ? <><Loader2 className="animate-spin mr-2" size={14}/>{submitInProgressLabel}</> : submitLabel}
+                      {saving ? (
+                        <><Loader2 className="animate-spin mr-2" size={14}/>{submitInProgressLabel}</>
+                      ) : bookingMode === "auto" ? (
+                        <><CheckCircle2 size={14} className="mr-1.5"/>Confirm Booking</>
+                      ) : (
+                        submitLabel
+                      )}
                     </Button>
+                    {bookingMode === "auto" && autoPhase === "proposed" && (
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedSeatIds([]);
+                          setManualEmpIds([]);
+                          toast.info("Click a new starting workstation on the map.");
+                        }}
+                        disabled={!canEdit || saving}
+                        data-testid="ws-modify-button"
+                        title="Clear the current proposal and pick a new starting workstation"
+                      >
+                        <Pencil size={13} className="mr-1"/> Modify
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       onClick={resetForm}
