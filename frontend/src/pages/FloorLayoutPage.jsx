@@ -1,9 +1,20 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { ArrowLeft, LayoutGrid, MapPin, Clock, Loader2, FileText, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Users, Building2, Check, X } from "lucide-react";
+import { ArrowLeft, LayoutGrid, MapPin, Clock, Loader2, FileText, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Users, Building2, Check, X, ExternalLink } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import Layout from "../components/Layout";
 import WorkstationFloorMap from "../components/WorkstationFloorMap";
-import { paletteForTeam } from "../lib/teamColors";
+import { paletteForTeam, teamBackground } from "../lib/teamColors";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "../components/ui/dialog";
+import { Button } from "../components/ui/button";
+import PersonIcon from "../components/icons/PersonIcon";
+import WorkspacesIcon from "../components/icons/WorkspacesIcon";
+import CalendarMonthIcon from "../components/icons/CalendarMonthIcon";
 
 // Local wrapper used by the team-filter chips/menu; guards against palette
 // lookups that might return a single stop for legacy hex team colors.
@@ -80,20 +91,30 @@ function FloorPlanCard({ plan, onOpen }) {
 // topbar which caused layout crowding + click-interception on the Next arrow
 // depending on the viewport width). Rendered in an open panel container so
 // nothing can overlap it.
+//
+// Implementation note (bug fix Jul 2026): the previous version tried to open
+// a natively-hidden `<input type=date>` via `showPicker()` / `focus() + click()`
+// but browsers block `showPicker()` on `sr-only` / `pointer-events:none`
+// inputs and silently no-op it, which is why the calendar never appeared.
+// The fixed version overlays a fully-clickable (but visually transparent)
+// `<input type=date>` on top of the display pill, so a real user click IS the
+// input's activation gesture and the native picker opens reliably.
 function DateStepper({ value, onChange }) {
-  const hiddenInputRef = React.useRef(null);
+  const inputRef = React.useRef(null);
   const shift = (days) => {
+    if (!value) return;
     const d = new Date(value + "T00:00:00");
+    if (Number.isNaN(d.getTime())) return;
     d.setDate(d.getDate() + days);
     const out = d.toISOString().slice(0, 10);
     onChange(out);
   };
   const openPicker = () => {
-    const el = hiddenInputRef.current;
+    const el = inputRef.current;
     if (!el) return;
-    if (typeof el.showPicker === "function") {
-      try { el.showPicker(); return; } catch { /* fall through */ }
-    }
+    try {
+      if (typeof el.showPicker === "function") { el.showPicker(); return; }
+    } catch { /* fall through */ }
     el.focus();
     el.click();
   };
@@ -120,29 +141,32 @@ function DateStepper({ value, onChange }) {
           <ChevronLeft size={16}/>
         </button>
 
-        <button
-          type="button"
-          onClick={openPicker}
-          className="flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-[13px] font-medium border border-gray-300 rounded-md focus:border-[#ec9324] focus:ring-1 focus:ring-[#ec9324] outline-none bg-white hover:bg-gray-50 cursor-pointer min-w-0"
-          data-testid="floor-layout-date-picker-btn"
-          aria-label="Change date"
-          title="Pick a date"
-        >
-          <CalendarIcon size={14} className="text-[#ec9324] flex-shrink-0"/>
-          <span className="tabular-nums truncate">{displayLabel}</span>
-        </button>
-
-        <input
-          ref={hiddenInputRef}
-          type="date"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          aria-hidden="true"
-          tabIndex={-1}
-          className="sr-only"
-          style={{ position: "absolute", left: -9999, top: -9999, width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
-          data-testid="floor-layout-date-input"
-        />
+        {/* Date pill — visual display sits underneath a fully-clickable
+            transparent native date input. Clicking anywhere on the pill
+            triggers the native picker (as long as the input is on-screen
+            and not `pointer-events:none`, which was the previous bug). */}
+        <div className="relative flex-1 min-w-0">
+          <button
+            type="button"
+            onClick={openPicker}
+            className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-[13px] font-medium border border-gray-300 rounded-md focus:border-[#ec9324] focus:ring-1 focus:ring-[#ec9324] outline-none bg-white hover:bg-gray-50 cursor-pointer min-w-0"
+            data-testid="floor-layout-date-picker-btn"
+            aria-label="Change date"
+            title="Pick a date"
+          >
+            <CalendarIcon size={14} className="text-[#ec9324] flex-shrink-0"/>
+            <span className="tabular-nums truncate">{displayLabel}</span>
+          </button>
+          <input
+            ref={inputRef}
+            type="date"
+            value={value}
+            onChange={(e) => e.target.value && onChange(e.target.value)}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            data-testid="floor-layout-date-input"
+            aria-label="Date picker"
+          />
+        </div>
 
         <button
           type="button"
@@ -171,10 +195,25 @@ function DateStepper({ value, onChange }) {
 
 // ---------- Interactive combined view (per plan) ----------
 function PlanInteractiveView({ plan, onBack, hideBack = false }) {
+  const navigate = useNavigate();
   const [date, setDate] = useState(todayIso());
   const [availability, setAvailability] = useState(null);
   const [roomBookings, setRoomBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Detail modal state — populated when the user clicks a booked (or pending)
+  // workstation on the floor map. `kind` distinguishes an active booking from
+  // a pending workstation request so the modal can label & link accordingly.
+  const [detail, setDetail] = useState(null); // { kind:'booking'|'request', seat, data }
+
+  const openBookingDetail = useCallback((seat, booking) => {
+    if (!booking) return;
+    setDetail({ kind: "booking", seat, data: booking });
+  }, []);
+  const openRequestDetail = useCallback((seat, request) => {
+    if (!request) return;
+    setDetail({ kind: "request", seat, data: request });
+  }, []);
+  const closeDetail = useCallback(() => setDetail(null), []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -336,11 +375,11 @@ function PlanInteractiveView({ plan, onBack, hideBack = false }) {
               bookingsBySeat={bookingsBySeat}
               requestsBySeat={requestsBySeat}
               selectedSeatIds={[]}
-              onToggleSeat={() => { /* read-only */ }}
-              onOpenBookingDetail={() => { /* no detail dialog in layout view */ }}
-              onOpenRequestDetail={() => { /* no detail dialog */ }}
+              onToggleSeat={() => { /* read-only — available seats do nothing */ }}
+              onOpenBookingDetail={openBookingDetail}
+              onOpenRequestDetail={openRequestDetail}
               loading={false}
-              disabled={true}
+              disabled={false}
               rooms={availability.rooms || []}
               roomBookingsByRoom={roomBookingsByRoom}
               legendPreset="floor-layout"
@@ -469,7 +508,166 @@ function PlanInteractiveView({ plan, onBack, hideBack = false }) {
           </div>
         )}
       </div>
+
+      {/* Booking / Request detail modal — opens when the user clicks an
+          occupied (team-assigned / grey occupied) or pending (black)
+          workstation on the floor map.  Read-only summary that mirrors the
+          hover-tooltip data and adds a link to the centralized bookings
+          module for the full record. */}
+      <SeatDetailDialog detail={detail} onClose={closeDetail} navigate={navigate} />
     </Layout>
+  );
+}
+
+// -----------------------------------------------------------------------
+// Booking / Request detail modal
+// -----------------------------------------------------------------------
+function SeatDetailDialog({ detail, onClose, navigate }) {
+  if (!detail) return null;
+  const { kind, seat, data } = detail;
+  const isPending = kind === "request";
+  const employee = data.employee || {};
+  const teamColor = data.team_color;
+  const teamBg = teamColor ? teamBackground(teamColor) : "#ec9324";
+  const teamName = data.team_name || "—";
+
+  const fmtIsoDate = (iso) => {
+    if (!iso) return "—";
+    try {
+      const d = new Date(String(iso).length === 10 ? `${iso}T00:00:00` : iso);
+      if (Number.isNaN(d.getTime())) return String(iso);
+      return d.toLocaleDateString(undefined, {
+        weekday: "short", day: "2-digit", month: "short", year: "numeric",
+      });
+    } catch { return String(iso); }
+  };
+  const fmtIsoDateTime = (iso) => {
+    if (!iso) return "—";
+    try {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return String(iso);
+      return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+    } catch { return String(iso); }
+  };
+
+  const gotoFullDetail = () => {
+    if (kind === "booking" && data.id) {
+      navigate(`/workspace-manager/bookings?bookingId=${encodeURIComponent(data.id)}`);
+    } else if (kind === "request" && data.id) {
+      navigate(`/workspace-manager/pending-approvals?requestId=${encodeURIComponent(data.id)}`);
+    }
+  };
+
+  return (
+    <Dialog open={!!detail} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent
+        className="sm:max-w-md"
+        data-testid={isPending ? "floor-request-detail-dialog" : "floor-booking-detail-dialog"}
+      >
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-gray-900">
+            <div
+              className="w-2.5 h-2.5 rounded-full ring-1 ring-black/10 flex-shrink-0"
+              style={{ background: isPending ? "#111111" : teamBg }}
+            />
+            Workstation {seat.label}
+            {isPending && (
+              <span className="ml-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 ring-1 ring-amber-200">
+                Pending
+              </span>
+            )}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3 pt-1">
+          {/* Employee */}
+          <div className="flex items-start gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 text-slate-600">
+              <PersonIcon size={16} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] text-gray-500">Employee</div>
+              <div className="text-sm font-medium text-gray-900 truncate" data-testid="floor-detail-employee">
+                {employee.name || "—"}
+              </div>
+              {employee.emp_id && (
+                <div className="text-[11px] text-gray-500 truncate">
+                  {employee.emp_id}{employee.email ? ` · ${employee.email}` : ""}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Team */}
+          {(data.team_name || data.team_id) && (
+            <div className="flex items-start gap-2.5">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white ring-1 ring-black/5"
+                style={{ background: teamBg }}
+              >
+                <WorkspacesIcon size={16} color="#ffffff" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] text-gray-500">Team</div>
+                <div className="text-sm font-medium text-gray-900 truncate" data-testid="floor-detail-team">
+                  {teamName}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Date */}
+          <div className="flex items-start gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 text-slate-600">
+              <CalendarMonthIcon size={16} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] text-gray-500">Booking Date</div>
+              <div className="text-sm font-medium text-gray-900" data-testid="floor-detail-date">
+                {fmtIsoDate(data.date)}
+              </div>
+            </div>
+          </div>
+
+          {/* Meta — booked by / created */}
+          {(data.created_at || (data.requested_by || {}).name) && (
+            <div className="pt-2 mt-1 border-t border-gray-100 text-[11.5px] text-gray-500 space-y-1">
+              {isPending && (data.requested_by || {}).name && (
+                <div>
+                  Requested by <span className="text-gray-800 font-medium">{(data.requested_by || {}).name}</span>
+                </div>
+              )}
+              {data.created_at && (
+                <div>
+                  Booked on <span className="text-gray-800">{fmtIsoDateTime(data.created_at)}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2 pt-3 border-t border-gray-100 mt-1">
+          <Button
+            variant="outline"
+            onClick={onClose}
+            className="flex-1"
+            data-testid="floor-detail-close"
+          >
+            Close
+          </Button>
+          {data.id && (
+            <Button
+              onClick={gotoFullDetail}
+              className="flex-1 bg-[#ec9324] hover:bg-[#d8821a] text-white"
+              data-testid="floor-detail-open-full"
+            >
+              <ExternalLink size={14} className="mr-1.5"/>
+              {isPending ? "View Request" : "View Booking"}
+            </Button>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
