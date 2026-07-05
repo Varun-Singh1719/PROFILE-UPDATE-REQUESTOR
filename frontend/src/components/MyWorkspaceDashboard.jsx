@@ -153,7 +153,7 @@ export default function MyWorkspaceDashboard() {
   const isCheckedIn = !!mySeat && mySeat.status === "assigned";
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6 space-y-5" data-testid="my-workspace-dashboard">
+    <div className="w-full px-3 sm:px-4 pt-2 pb-4 space-y-4" data-testid="my-workspace-dashboard">
       {/* Greeting */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
@@ -185,7 +185,7 @@ export default function MyWorkspaceDashboard() {
       </div>
 
       {/* Row 1 — My Seat Today (hero) + This Week */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* My Seat Today */}
         <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-gradient-to-br from-orange-50 via-white to-white p-5 shadow-sm"
              data-testid="my-seat-today-card">
@@ -292,7 +292,7 @@ export default function MyWorkspaceDashboard() {
       </div>
 
       {/* Row 2 — Upcoming Meetings + Quick Actions + Team on Floor */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <UpcomingMeetingsCard meetings={dashboard?.upcoming_meetings || []} loading={loading} />
 
         <QuickActionsCard navigate={navigate} openFloor={openFloor} />

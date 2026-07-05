@@ -1,12 +1,15 @@
 /**
  * AdminDashboard — Unified dashboard with two tabs:
- *   • Workspace Manager (default) — Floor Layout view
- *   • Profix                       — legacy stats + DQ + recent-updates dashboard
+ *   • Workspace Manager (default) — personal workspace dashboard
+ *   • Profix                       — ticketing stats + DQ team + recent updates
  *
- * Users can pick their preferred default tab; the preference is persisted
- * server-side via /api/profile/preferences and re-loaded on every mount.
+ * The star icon INSIDE each tab is the toggle for the default view:
+ *   • filled star (orange when inactive, white when active) = current default
+ *   • outlined star = "Set as Default" — clicking makes that tab the default
+ * Hover tooltips: "Default View" (when it's the default) / "Set as Default"
+ * (when it isn't). Preference is persisted via /api/profile/preferences.
  */
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import Layout from "../components/Layout";
@@ -15,14 +18,21 @@ import RecentUpdateCard from "../components/RecentUpdateCard";
 import DateFilter, { getCurrentMonthRange, dateFilterToParams } from "../components/DateFilter";
 import { Button } from "../components/ui/button";
 import UserAvatar from "../components/UserAvatar";
-import { Ticket, AlertCircle, CheckCircle2, Loader, Users, Plus, LayoutGrid, ClipboardList, Star, Check } from "lucide-react";
+import { Ticket, AlertCircle, CheckCircle2, Loader, Users, Plus, LayoutGrid, ClipboardList, Star, RefreshCw } from "lucide-react";
 import { toast } from "../lib/notify";
+import { useAuth } from "../context/AuthContext";
 import MyWorkspaceDashboard from "../components/MyWorkspaceDashboard";
 
 const TABS = [
   { key: "workspace_manager", label: "Workspace Manager", icon: LayoutGrid },
   { key: "profix",            label: "Profix",            icon: ClipboardList },
 ];
+
+function longDate(d = new Date()) {
+  return d.toLocaleDateString(undefined, {
+    weekday: "long", day: "2-digit", month: "long", year: "numeric",
+  });
+}
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -64,7 +74,10 @@ export default function AdminDashboard() {
     }
   }, [savingPref, defaultTab]);
 
-  // Tab bar renders inside the actions region so it stays at the top on all tabs.
+  // Tab bar — each tab has an inline, clickable star that toggles the "default"
+  // dashboard for the current user. Star + tab-label share the same button-row
+  // but are separate clickable regions (nested buttons are avoided by using two
+  // adjacent buttons inside the tab container).
   const tabBar = (
     <div className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-0.5" data-testid="dashboard-tabs">
       {TABS.map((t) => {
@@ -72,51 +85,62 @@ export default function AdminDashboard() {
         const active = activeTab === t.key;
         const isDefault = defaultTab === t.key;
         return (
-          <div key={t.key} className="relative">
+          <div
+            key={t.key}
+            className={`inline-flex items-center rounded-md overflow-hidden ${
+              active ? "bg-[#ec9324] shadow-sm" : "hover:bg-gray-50"
+            }`}
+          >
             <button
               type="button"
               onClick={() => setActiveTab(t.key)}
               data-testid={`dashboard-tab-${t.key}`}
-              className={`inline-flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium transition-colors ${
-                active
-                  ? "bg-[#ec9324] text-white shadow-sm"
-                  : "text-gray-700 hover:bg-gray-50"
+              className={`inline-flex items-center gap-1.5 pl-3 pr-2 h-8 text-xs font-medium transition-colors ${
+                active ? "text-white" : "text-gray-700"
               }`}
               aria-pressed={active}
             >
               <Icon size={13} />
               {t.label}
-              {isDefault && (
-                <Star size={11} className={active ? "text-white/90 fill-current" : "text-[#ec9324] fill-current"} />
-              )}
+            </button>
+            {/* Clickable star — toggles default */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setDefaultDashboard(t.key);
+              }}
+              disabled={savingPref || isDefault}
+              data-testid={`dashboard-tab-star-${t.key}`}
+              title={isDefault ? "Default View" : "Set as Default"}
+              aria-label={isDefault ? "Default View" : "Set as Default"}
+              className={`group relative h-8 w-7 inline-flex items-center justify-center transition-colors ${
+                isDefault
+                  ? "cursor-default"
+                  : (active
+                      ? "hover:bg-white/15 cursor-pointer"
+                      : "hover:bg-orange-50 cursor-pointer")
+              }`}
+            >
+              <Star
+                size={13}
+                className={`transition-all ${
+                  isDefault
+                    ? (active ? "text-white fill-current" : "text-[#ec9324] fill-current")
+                    : (active ? "text-white/70" : "text-gray-400 group-hover:text-[#ec9324]")
+                }`}
+              />
+              {/* Tooltip */}
+              <span
+                className="pointer-events-none absolute top-full mt-1 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded bg-gray-800 text-white text-[10px] font-semibold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20 shadow-md"
+              >
+                {isDefault ? "Default View" : "Set as Default"}
+              </span>
             </button>
           </div>
         );
       })}
     </div>
-  );
-
-  // "Set as default" action (only relevant when the active tab isn't already default)
-  const setDefaultButton = (
-    activeTab !== defaultTab ? (
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => setDefaultDashboard(activeTab)}
-        disabled={savingPref}
-        data-testid="set-default-dashboard-btn"
-        className="h-9 text-xs"
-        title="Make this tab the default dashboard view"
-      >
-        <Star size={13} className="mr-1" />
-        Set as default
-      </Button>
-    ) : (
-      <div className="inline-flex items-center gap-1 h-9 px-2 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-medium"
-           data-testid="default-dashboard-badge">
-        <Check size={12} /> Default
-      </div>
-    )
   );
 
   if (!prefsLoaded) {
@@ -133,56 +157,76 @@ export default function AdminDashboard() {
     return (
       <Layout
         title="Dashboard"
-        actions={
-          <>
-            {tabBar}
-            {setDefaultButton}
-          </>
-        }
+        contentClassName="w-full px-0 pt-0 pb-3 flex flex-col min-h-[calc(100vh-56px)]"
+        actions={tabBar}
       >
         <MyWorkspaceDashboard />
       </Layout>
     );
   }
 
-  // Profix tab — legacy stats dashboard
+  // Profix tab — legacy stats dashboard with new compact header
   return (
     <ProfixDashboardBody
       navigate={navigate}
-      headerActions={
-        <>
-          {tabBar}
-          {setDefaultButton}
-        </>
-      }
+      headerActions={tabBar}
     />
   );
 }
 
 // ---------- Profix dashboard content ----------
 function ProfixDashboardBody({ navigate, headerActions }) {
+  const { user } = useAuth();
   const [stats, setStats] = useState({});
   const [dqs, setDqs] = useState([]);
   const [recent, setRecent] = useState([]);
   const [dateFilter, setDateFilter] = useState(getCurrentMonthRange());
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  const params = useMemo(() => dateFilterToParams(dateFilter), [dateFilter]);
 
   useEffect(() => {
-    const params = dateFilterToParams(dateFilter);
-    api.get("/dashboard/stats", { params }).then((r) => setStats(r.data));
-    api.get("/dashboard/dq-performance", { params }).then((r) => setDqs(r.data));
-    api.get("/dashboard/recent", { params: { kind: "updated", limit: 6, ...params } }).then((r) => setRecent(r.data));
-  }, [dateFilter]);
+    let cancelled = false;
+    setLoading(true);
+    Promise.allSettled([
+      api.get("/dashboard/stats", { params }),
+      api.get("/dashboard/dq-performance", { params }),
+      api.get("/dashboard/recent", { params: { kind: "updated", limit: 6, ...params } }),
+    ]).then(([s, d, r]) => {
+      if (cancelled) return;
+      if (s.status === "fulfilled") setStats(s.value.data);
+      if (d.status === "fulfilled") setDqs(d.value.data);
+      if (r.status === "fulfilled") setRecent(r.value.data);
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [params, refreshTick]);
 
   const goto = (status) => navigate(`/admin/open-tickets${status ? `?status=${encodeURIComponent(status)}` : ""}`);
   const gotoMember = (id) => navigate(`/admin/open-tickets?assigned_to=${id}`);
 
+  const firstName = (user?.name || "").split(" ")[0] || "there";
+
   return (
     <Layout
       title="Dashboard"
-      actions={
-        <>
-          {headerActions}
-          <DateFilter value={dateFilter} onChange={setDateFilter} />
+      contentClassName="w-full px-3 sm:px-4 pt-2 pb-4 flex flex-col min-h-[calc(100vh-56px)]"
+      actions={headerActions}
+    >
+      {/* Compact page header — greeting + inline actions (New Request,
+          DateFilter, Refresh) sit together on one row, matching the
+          personal-dashboard pattern. */}
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-4" data-testid="profix-header">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900" data-testid="profix-greeting">
+            Hi {firstName} 👋
+          </h1>
+          <p className="text-sm text-gray-500 mt-0.5">{longDate()}</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <DateFilter value={dateFilter} onChange={setDateFilter} className="h-9" />
           <Button
             onClick={() => navigate("/admin/create")}
             data-testid="create-new-ticket-btn"
@@ -190,27 +234,36 @@ function ProfixDashboardBody({ navigate, headerActions }) {
           >
             <Plus size={16} className="mr-1.5" /> New Request
           </Button>
-        </>
-      }
-    >
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <button
+            type="button"
+            onClick={() => setRefreshTick((v) => v + 1)}
+            className="h-9 w-9 rounded-md border border-gray-200 bg-white text-gray-500 hover:text-[#ec9324] hover:border-[#ec9324] inline-flex items-center justify-center"
+            title="Refresh"
+            data-testid="profix-refresh"
+          >
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard label="Total Requests" value={stats.total} icon={Ticket} onClick={() => goto()} />
         <MetricCard label="Open" value={stats.open} color="#ec9324" icon={AlertCircle} onClick={() => goto("Open")} />
         <MetricCard label="In Progress" value={stats.in_progress} color="#22c55e" icon={Loader} onClick={() => goto("In Progress")} />
         <MetricCard label="Closed" value={stats.closed} color="#b2b2b2" icon={CheckCircle2} onClick={() => goto("Closed")} />
       </div>
 
-      <h2 className="text-xl font-semibold text-gray-900 mt-12 mb-4 flex items-center gap-2">
-        <Users size={20} className="text-[#ec9324]"/> DQ Team Performance
+      <h2 className="text-lg font-semibold text-gray-900 mt-8 mb-3 flex items-center gap-2">
+        <Users size={18} className="text-[#ec9324]"/> DQ Team Performance
       </h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {dqs.length === 0 && <div className="text-sm text-gray-400">No DQ members yet.</div>}
         {dqs.map((m) => (
           <button
             key={m.id}
             onClick={() => gotoMember(m.id)}
             data-testid={`dq-perf-${m.email}`}
-            className="text-left bg-white rounded-xl p-5 border border-gray-100 shadow-soft hover:shadow-soft-hover transition-all duration-200"
+            className="text-left bg-white rounded-xl p-4 border border-gray-100 shadow-soft hover:shadow-soft-hover transition-all duration-200"
           >
             <div className="flex items-center gap-3">
               <UserAvatar user={m} size={40} showStatusDot={false}/>
@@ -247,8 +300,8 @@ function ProfixDashboardBody({ navigate, headerActions }) {
         ))}
       </div>
 
-      <h2 className="text-xl font-semibold text-gray-900 mt-12 mb-4">Recent Updates</h2>
-      <div className="grid grid-cols-1 gap-4">
+      <h2 className="text-lg font-semibold text-gray-900 mt-8 mb-3">Recent Updates</h2>
+      <div className="grid grid-cols-1 gap-3">
         {recent.length === 0 && <div className="text-sm text-gray-400">No recent updates.</div>}
         {recent.map((t) => <RecentUpdateCard key={t.id} ticket={t} basePath="/admin/tickets" />)}
       </div>
