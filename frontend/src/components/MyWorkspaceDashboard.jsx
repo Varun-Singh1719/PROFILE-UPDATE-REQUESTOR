@@ -20,7 +20,6 @@ import { useNavigate } from "react-router-dom";
 import {
   Armchair,
   CalendarPlus,
-  UserPlus2,
   Map as MapIcon,
   ChevronLeft,
   ChevronRight,
@@ -37,6 +36,7 @@ import { useAuth } from "../context/AuthContext";
 import MySeatMiniMap from "./MySeatMiniMap";
 import MySeatFloorDialog from "./MySeatFloorDialog";
 import MyTeamToday from "./MyTeamToday";
+import EventSeatRoundedIcon from "./icons/EventSeatRoundedIcon";
 import { teamSolid } from "../lib/teamColors";
 
 // -------------------------------------------------------------- Date helpers
@@ -488,17 +488,16 @@ function UpcomingMeetingsCard({ meetings, loading }) {
 // ============================================================ QuickActionsCard
 function QuickActionsCard({ navigate, openFloor }) {
   const items = [
-    { key: "desk",   label: "Book a desk",       sub: "for tomorrow · this week", Icon: Armchair,     onClick: () => navigate("/workspace-manager/workstation-booking") },
-    { key: "room",   label: "Book meeting room", sub: "check availability",       Icon: CalendarPlus, onClick: () => navigate("/workspace-manager/meeting-room-booking") },
-    { key: "req",    label: "Request workstation", sub: "needs manager approval", Icon: UserPlus2,    onClick: () => navigate("/workspace-manager/pending-approvals") },
-    { key: "floor",  label: "View floor plan",   sub: "who's on site today",      Icon: MapIcon,      onClick: openFloor },
+    { key: "room",   label: "Book meeting room", sub: "check availability",       Icon: CalendarPlus,        onClick: () => navigate("/workspace-manager/meeting-room-booking") },
+    { key: "req",    label: "Request workstation", sub: "needs manager approval", Icon: EventSeatRoundedIcon, onClick: () => navigate("/workspace-manager/request-workstation") },
+    { key: "floor",  label: "View floor plan",   sub: "who's on site today",      Icon: MapIcon,             onClick: openFloor },
   ];
   return (
     <div className="lg:col-span-4 rounded-2xl border border-gray-200 bg-white shadow-sm p-5"
          data-testid="my-workspace-quick-actions-card">
       <h3 className="font-semibold text-gray-900">Quick actions</h3>
       <p className="text-xs text-gray-500 mt-0.5">Everything you need in one tap.</p>
-      <div className="grid grid-cols-2 gap-3 mt-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
         {items.map(({ key, label, sub, Icon, onClick }) => (
           <button
             key={key}
