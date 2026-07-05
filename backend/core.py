@@ -235,6 +235,109 @@ def feature_actions(module_key: str, feature_key: str) -> List[str]:
                     return f["actions"]
     return []
 
+
+# ============================================================================
+#  Permissions v3 catalog — Jul 2026
+#  Products, rows (features/pages/tables), and action-buttons that appear in
+#  the redesigned /admin/permissions matrix. Additive to the v1/v2 catalog —
+#  legacy code paths stay intact.
+# ============================================================================
+PERMISSION_MODULES_V3 = [
+    {
+        "key": "profix",
+        "label": "Profix",
+        "icon": "Briefcase",
+        "color": "#ec9324",
+        "features": [
+            {"key": "dashboard",       "label": "Dashboard"},
+            {"key": "employees",       "label": "Employees"},
+            {"key": "teams",           "label": "Teams"},
+            {"key": "tickets",         "label": "Requests / Tickets"},
+            {"key": "comments",        "label": "Comments"},
+            {"key": "attachments",     "label": "Attachments"},
+            {"key": "notifications",   "label": "Notifications"},
+            {"key": "reports",         "label": "Reports"},
+            {"key": "audit_logs",      "label": "Audit Logs"},
+            {"key": "settings",        "label": "Settings"},
+            {"key": "email_templates", "label": "Email Templates"},
+        ],
+        # Action-buttons pool for Profix. Each is configured with
+        # {enabled, visible, scope?} in the matrix.
+        "actions": [
+            {"key": "create",            "label": "Create",             "scoped": True},
+            {"key": "edit",              "label": "Edit",               "scoped": True},
+            {"key": "delete",            "label": "Delete",             "scoped": True},
+            {"key": "approve",           "label": "Approve",            "scoped": True},
+            {"key": "reject",            "label": "Reject",             "scoped": True},
+            {"key": "assign",            "label": "Assign",             "scoped": True},
+            {"key": "unassign",          "label": "Unassign",           "scoped": True},
+            {"key": "upload",            "label": "Upload",             "scoped": False},
+            {"key": "download",          "label": "Download",           "scoped": False},
+            {"key": "export",            "label": "Export",             "scoped": False},
+            {"key": "import",            "label": "Import",             "scoped": False},
+            {"key": "invite",            "label": "Invite",             "scoped": False},
+            {"key": "send_notification", "label": "Send Notification",  "scoped": False},
+            {"key": "save",              "label": "Save",               "scoped": False},
+            {"key": "submit",            "label": "Submit",             "scoped": False},
+            {"key": "reset",             "label": "Reset",              "scoped": False},
+            {"key": "clear",             "label": "Clear",              "scoped": False},
+        ],
+    },
+    {
+        # Internal key stays `desk_booking` for backward compatibility.
+        "key": "desk_booking",
+        "label": "Workspace Manager",
+        "icon": "Armchair",
+        "color": "#3b82f6",
+        "features": [
+            {"key": "dashboard",              "label": "Dashboard"},
+            {"key": "workstation_bookings",   "label": "Workstation Bookings"},
+            {"key": "meeting_room_bookings",  "label": "Meeting Room Bookings"},
+            {"key": "workstation_requests",   "label": "Workstation Requests"},
+            {"key": "floor_layout",           "label": "Floor Layout"},
+            {"key": "floor_plans",            "label": "Floor Plans"},
+            {"key": "workstations",           "label": "Workstations / Seats"},
+            {"key": "meeting_rooms",          "label": "Meeting Rooms"},
+            {"key": "pending_approvals",      "label": "Pending Approvals"},
+            {"key": "auto_approval_settings", "label": "Auto-Approval Settings"},
+            {"key": "notifications",          "label": "Notifications"},
+            {"key": "reports",                "label": "Reports"},
+            {"key": "audit_logs",             "label": "Audit Logs"},
+        ],
+        "actions": [
+            {"key": "create",            "label": "Create",             "scoped": True},
+            {"key": "edit",              "label": "Edit",               "scoped": True},
+            {"key": "delete",            "label": "Delete",             "scoped": True},
+            {"key": "approve",           "label": "Approve",            "scoped": True},
+            {"key": "reject",            "label": "Reject",             "scoped": True},
+            {"key": "book",              "label": "Book",               "scoped": True},
+            {"key": "cancel_booking",    "label": "Cancel Booking",     "scoped": True},
+            {"key": "reschedule",        "label": "Reschedule",         "scoped": True},
+            {"key": "assign",            "label": "Assign",             "scoped": True},
+            {"key": "unassign",          "label": "Unassign",           "scoped": True},
+            {"key": "upload",            "label": "Upload",             "scoped": False},
+            {"key": "download",          "label": "Download",           "scoped": False},
+            {"key": "export",            "label": "Export",             "scoped": False},
+            {"key": "import",            "label": "Import",             "scoped": False},
+            {"key": "invite",            "label": "Invite",             "scoped": False},
+            {"key": "send_notification", "label": "Send Notification",  "scoped": False},
+            {"key": "save",              "label": "Save",               "scoped": False},
+            {"key": "submit",            "label": "Submit",             "scoped": False},
+            {"key": "reset",             "label": "Reset",              "scoped": False},
+            {"key": "clear",             "label": "Clear",              "scoped": False},
+        ],
+    },
+]
+
+# Scope taxonomy for v3 UI. Internal storage stays "individual" / "team" /
+# "overall" and is mapped to the legacy v2 "respective" / "team" / "all"
+# semantics at effective-permission compute time so v2 rule engine keeps
+# working. Kept as a separate list here because v3 uses "individual" wording.
+SCOPE_V3_VALUES = ("individual", "team", "overall")
+
+V3_TO_V2_SCOPE = {"individual": "respective", "team": "team", "overall": "all"}
+V2_TO_V3_SCOPE = {"respective": "individual", "team": "team", "all": "overall"}
+
 # ---------- Default Permission Presets (legacy) ----------
 DEFAULT_PRESETS = [
     {

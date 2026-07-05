@@ -254,11 +254,54 @@ test_plan:
     - "Approval Settings — Date & Time criteria (+ removal of Recurring)"
     - "Profile preferences endpoint (default_dashboard)"
     - "Workstation auto-approval — pass booking_date to evaluator"
+    - "Permissions v3 — catalog + CRUD + preview + audit"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
+    - agent: "main"
+      message: |
+        Round 1 of Permissions redesign shipped:
+        (1) Backend: PERMISSION_MODULES_V3 catalog (2 products × 11-13 features
+            × 17-20 action buttons) added to core.py. New router
+            permissions_v3.py exposes:
+              GET  /api/permissions/schema/v3
+              GET  /api/permission-sets-v3
+              GET  /api/permission-sets-v3/{id}
+              GET  /api/permission-sets-v3/{id}/clone-payload
+              POST /api/permission-sets-v3
+              PUT  /api/permission-sets-v3/{id}
+              DELETE /api/permission-sets-v3/{id}
+              GET  /api/permissions/preview/{id}
+              GET  /api/permissions/audit
+            Legacy v1/v2 endpoints untouched — full backward compat.
+        (2) Frontend: /admin/permissions rewritten. Product accordions (Profix +
+            Workspace Manager). Per-feature-row independent View + Edit cells,
+            each with Enable + Show/Hide + Scope select. Separate Action-Buttons
+            table beneath the features matrix. Search + expand/collapse-all +
+            select/deselect-all per product. Modals: Copy from set / Preview /
+            Audit.
+
+        Please test the new v3 endpoints:
+          * GET /api/permissions/schema/v3 — modules[0].label == "Profix";
+            modules[1].label == "Workspace Manager"; scope_values == ["individual","team","overall"].
+          * POST /api/permission-sets-v3 with a payload including bogus module
+            keys and bogus feature/action keys → normalization strips them.
+          * PUT round-trip preserves shape.
+          * DELETE removes doc.
+          * /api/permissions/preview/{id} returns effective; hidden rows are
+            NOT returned; disabled visible rows are returned with enabled=false.
+          * /api/permission-sets-v3/{id}/clone-payload works for a legacy v1
+            set too (migration path). Create a legacy pset via POST
+            /api/permission-sets first, then request clone-payload.
+          * /api/permissions/audit filters to permission_set.* actions only,
+            and resource_id filter narrows to a single set.
+          * Access control: unauthenticated POST → 401; non-Super-Admin
+            (manager@ticketing.com/Test@123) POST → 403.
+
+        Round 2 (Copy/Preview polish) is largely done; Round 3 (enforcement
+        + audit tab UX) is next.
     - agent: "main"
       message: |
         Two workspace/dashboard features shipped:

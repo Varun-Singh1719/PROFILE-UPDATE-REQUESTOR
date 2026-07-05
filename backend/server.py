@@ -42,6 +42,7 @@ from routers import workstation_requests as _workstation_requests  # noqa: F401
 from routers import approval_settings as _approval_settings  # noqa: F401
 from routers import bookings as _bookings  # noqa: F401
 from routers import my_workspace as _my_workspace  # noqa: F401
+from routers import permissions_v3 as _permissions_v3  # noqa: F401
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
