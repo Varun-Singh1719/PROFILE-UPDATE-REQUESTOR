@@ -10,6 +10,7 @@ import {
 } from "../components/ui/dropdown-menu";
 import notify from "../lib/notify";
 import { useAuth } from "../context/AuthContext";
+import { useEffectivePage } from "../context/EffectivePermissionsContext";
 import { ArrowLeft, Paperclip, Calendar, User, Hash, Activity } from "lucide-react";
 
 function fmt(iso) { if (!iso) return "-"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
@@ -18,6 +19,13 @@ export default function TicketDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  // ── Permissions V3 (Round 3) ──
+  const { fn: permFn } = useEffectivePage("profix", "ticket_detail");
+  const permChangeStatus = permFn("change_status");
+  const permAssign       = permFn("assign");
+  const permComment      = permFn("add_comment");
+  const permEdit         = permFn("edit");
+  const permDelete       = permFn("delete");
   const [ticket, setTicket] = useState(null);
   const [activity, setActivity] = useState([]);
   const [comments, setComments] = useState([]);
@@ -59,10 +67,10 @@ export default function TicketDetailPage() {
       title={ticket.subject}
       actions={
         <div className="flex gap-2">
-          {canUpdateStatus && (
+          {canUpdateStatus && permChangeStatus.isVisible && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" data-testid="detail-status-btn" className="h-9">Update Status</Button>
+                <Button variant="outline" data-testid="detail-status-btn" className="h-9" disabled={!permChangeStatus.canUse}>Update Status</Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => update({ status: "Open" })}>Open</DropdownMenuItem>
@@ -71,10 +79,10 @@ export default function TicketDetailPage() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          {isAdmin && (
+          {isAdmin && permAssign.isVisible && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9" data-testid="detail-assign-btn">
+                <Button className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9" data-testid="detail-assign-btn" disabled={!permAssign.canUse}>
                   {ticket.assigned_to_id ? "Reassign" : "Assign"}
                 </Button>
               </DropdownMenuTrigger>
@@ -143,8 +151,10 @@ export default function TicketDetailPage() {
         <div className="bg-white rounded-xl shadow-soft border border-gray-100 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Comments</h2>
           <form onSubmit={postComment} className="space-y-2">
-            <Textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Add a comment..." data-testid="comment-input"/>
-            <Button type="submit" className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="post-comment-btn">Post</Button>
+            <Textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Add a comment..." data-testid="comment-input" disabled={!permComment.canUse}/>
+            {permComment.isVisible && (
+              <Button type="submit" className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="post-comment-btn" disabled={!permComment.canUse}>Post</Button>
+            )}
           </form>
           <div className="mt-6 space-y-3">
             {comments.length === 0 && <div className="text-sm text-gray-400">No comments yet.</div>}

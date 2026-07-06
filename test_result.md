@@ -113,6 +113,25 @@ user_problem_statement: |
      and re-loaded on every visit.
 
 backend:
+  - task: "Permissions v3 — /api/permissions/audit paged + filtered + enriched"
+    implemented: true
+    working: "NA"
+    file: "backend/routers/permissions_v3.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Rewrote /api/permissions/audit. New response shape:
+            { rows: [...], total, skip, limit }. Added query params
+            skip / q (searches actor.name, actor.email, detail, resource_id) /
+            date_from / date_to. Rows are enriched with `target_title` (looked
+            up from permission_sets.title using the row's resource_id;
+            best-effort — null when the set has been deleted). Requires
+            Super Admin (require_role("Super Admin")).
+
   - task: "Approval Settings — Date & Time criteria (+ removal of Recurring)"
     implemented: true
     working: "NA"
@@ -251,10 +270,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Approval Settings — Date & Time criteria (+ removal of Recurring)"
-    - "Profile preferences endpoint (default_dashboard)"
-    - "Workstation auto-approval — pass booking_date to evaluator"
-    - "Permissions v3 — catalog + CRUD + preview + audit"
+    - "Permissions v3 — Audit endpoint (paged + filtered + enriched)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -262,7 +278,82 @@ test_plan:
 agent_communication:
     - agent: "main"
       message: |
-        Round 1 of Permissions redesign shipped:
+        Permissions Round 2 & Round 3 completed (Jul 6, 2026):
+
+        Round 2 (Power tools) — was already implemented, kept as-is:
+          * "Copy from set" dialog with catalog-aware DIFF preview (added/removed/changed chips).
+          * "Preview" dialog with "Effective" and "What changes" tabs.
+
+        Round 3 (Audit + Enforcement):
+          BACKEND — /api/permissions/audit rewrite:
+            * Response shape: { rows: [...], total, skip, limit } (was: plain array).
+            * New filters: q (searches actor + detail + resource_id), date_from,
+              date_to, resource_id, skip, limit (paging).
+            * Rows now enriched with `target_title` (current title of the target
+              permission set, best-effort — null if set was deleted).
+          FRONTEND — /admin/permissions is now tabbed:
+            * "Editor" tab (existing editor) and new "Audit log" tab (?tab=audit).
+            * Audit tab shows a chronological timeline with search / set-filter /
+              date-range / refresh. Each row is expandable to reveal a catalog-
+              aware BEFORE/AFTER diff (uses the same DiffTable component).
+            * Title-rename callout displayed alongside the module diff.
+            * The old dialog-based audit was removed; the "History" header button
+              now switches tabs via ?tab=audit.
+          FRONTEND retrofit — respect `visible` (Show/Hide) throughout:
+            * Sidebar: v3 { module, page } gating added to every catalog-mapped
+              nav item. Sidebar entries hide when page-level view is HIDDEN.
+              (Existing action-based visibility still applies.)
+            * Retrofitted pages (hide when isVisible=false, disable when
+              canUse=false): ContactListPage (profix.employees),
+              TeamsPage (profix.teams), NotificationsOutboxPage (profix.notifications),
+              EmailTemplatesPage (profix.email_templates),
+              WorkstationBookingPage (desk_booking.workstation_bookings &
+              workstation_requests via mode-switched page key),
+              PendingApprovalsPage (desk_booking.pending_approvals),
+              FloorPlansListPage (desk_booking.floor_plans),
+              TicketDetailPage (profix.ticket_detail).
+              FloorLayoutPage catalog visibility drives sidebar only (no top-bar
+              actions to gate on that page).
+            * New `useEffectivePermissionsState` context helper added for cheap
+              module/page lookups without a hook per row.
+
+        DB / env: backend/.env now points at the user's MongoDB Atlas cluster
+        (cluster0.vmgql1i, db=app_db). Frontend/.env re-created with the
+        existing REACT_APP_BACKEND_URL preview URL. Login verified for
+        admin@ticketing.com / Admin@123 (Super Admin).
+
+        Please test the BACKEND changes ONLY this round:
+
+          1. GET /api/permissions/audit as Super Admin (admin@ticketing.com):
+             - Default call: response shape must be
+               { rows: [...], total: <int>, skip: 0, limit: 50 }
+             - `rows[].target_title` populated when the target permission set
+               still exists (null when it was deleted).
+             - `rows[].metadata.previous` and `rows[].metadata.next` still
+               present for update entries (used by the UI diff).
+
+          2. Filters:
+             - `?limit=5` returns at most 5 rows and total >= rows.length.
+             - `?skip=1&limit=1` returns row #2.
+             - `?q=<partial_email>` matches on actor.email / actor.name /
+               detail / resource_id (case-insensitive regex).
+             - `?resource_id=<pset_id>` narrows to that set only.
+             - `?date_from=YYYY-MM-DD` and `?date_to=YYYY-MM-DD` respect
+               created_at ISO strings (date_to inclusive to end-of-day).
+
+          3. Access control:
+             - Admin (manager@ticketing.com / Test@123) calling
+               GET /api/permissions/audit → 403.
+             - Unauthenticated → 401.
+
+          4. Non-regression: create + update + delete a v3 permission set via
+             POST/PUT/DELETE /api/permission-sets-v3, then confirm 3 new rows
+             appear in /api/permissions/audit with action fields
+             `permission_set.create` / `update` / `delete` and correct
+             metadata.previous vs metadata.next payloads.
+
+        Test creds: /app/memory/test_credentials.md.
+        No frontend testing this round — I will ask the user for approval first.
         (1) Backend: PERMISSION_MODULES_V3 catalog (2 products × 11-13 features
             × 17-20 action buttons) added to core.py. New router
             permissions_v3.py exposes:

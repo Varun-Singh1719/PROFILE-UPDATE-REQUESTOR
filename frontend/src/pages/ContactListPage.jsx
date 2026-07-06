@@ -19,6 +19,7 @@ import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import UserAvatar from "../components/UserAvatar";
 import Pagination from "../components/Pagination";
 import notify from "../lib/notify";
+import { useEffectivePage } from "../context/EffectivePermissionsContext";
 import { __busyBridge } from "../context/BusyContext";
 import { Search, UserPlus, Pencil, Eye, EyeOff, Copy, RefreshCw, KeyRound, X, Mail, Phone, Calendar, IdCard, Briefcase, UsersRound, Download, ChevronLeft, ChevronRight, MoreHorizontal, ShieldCheck, Upload, FileSpreadsheet, History, CheckCircle2, AlertTriangle, FileDown, Loader2 } from "lucide-react";
 import { teamBackground } from "../lib/teamColors";
@@ -626,6 +627,14 @@ function GeneratedPasswordModal({ password, email, onClose }) {
 }
 
 export default function ContactListPage() {
+  // ── Permissions V3 (Round 3) ──
+  const { fn: permFn } = useEffectivePage("profix", "employees");
+  const permCreate = permFn("create");
+  const permEdit   = permFn("edit");
+  const permInvite = permFn("invite");
+  const permImport = permFn("import");
+  const permExport = permFn("export");
+
   const [contacts, setContacts] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -831,46 +840,57 @@ export default function ContactListPage() {
             </DropdownMenu>
           )}
           <TooltipProvider delayDuration={150}>
+            {permExport.isVisible && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="outline" onClick={exportCsv} data-testid="export-csv-btn"
                   size="icon" className="h-9 w-9 border-gray-300"
                   aria-label="Export CSV"
+                  disabled={!permExport.canUse}
                 >
                   <Download size={16}/>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Export CSV</TooltipContent>
             </Tooltip>
+            )}
+            {permImport.isVisible && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="outline" onClick={() => setHistoryOpen(true)} data-testid="upload-history-btn"
                   size="icon" className="h-9 w-9 border-gray-300"
                   aria-label="Upload History"
+                  disabled={!permImport.canUse}
                 >
                   <History size={16}/>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Upload History</TooltipContent>
             </Tooltip>
+            )}
+            {permImport.isVisible && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="outline" onClick={() => setUploadOpen(true)} data-testid="open-bulk-upload-btn"
                   size="icon" className="h-9 w-9 border-[#ec9324] text-[#ec9324] hover:bg-[#ec9324]/10"
                   aria-label="Upload Employees"
+                  disabled={!permImport.canUse}
                 >
                   <Upload size={16}/>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Upload Employees</TooltipContent>
             </Tooltip>
+            )}
           </TooltipProvider>
-          <Button onClick={openCreate} className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9" data-testid="add-contact-btn">
+          {permCreate.isVisible && (
+          <Button onClick={openCreate} className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9" data-testid="add-contact-btn" disabled={!permCreate.canUse}>
             <UserPlus size={16} className="mr-2"/> Add Employee
           </Button>
+          )}
         </div>
       }
     >
@@ -1112,14 +1132,17 @@ export default function ContactListPage() {
                     />
                   </td>
                   <td className="px-4 py-3 text-right">
+                    {permEdit.isVisible && (
                     <Button
                       size="sm" variant="outline" onClick={() => openEdit(c)}
                       data-testid={`edit-${c.email}`}
                       className="border-gray-300 text-gray-700 hover:bg-[#ec9324]/10 hover:text-[#ec9324] hover:border-[#ec9324] h-8 w-8 p-0"
                       aria-label="Edit employee"
+                      disabled={!permEdit.canUse}
                     >
                       <Pencil size={14}/>
                     </Button>
+                    )}
                   </td>
                 </tr>
               ))}

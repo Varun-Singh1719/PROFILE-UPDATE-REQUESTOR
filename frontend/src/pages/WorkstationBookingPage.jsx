@@ -62,6 +62,7 @@ import {
 import MultiSelect from "../components/MultiSelect";
 import WorkstationFloorMap from "../components/WorkstationFloorMap";
 import { useAuth } from "../context/AuthContext";
+import { useEffectivePage } from "../context/EffectivePermissionsContext";
 
 // ---------- date helpers (IST is the local timezone for this module) ----------
 const todayIso = () => {
@@ -111,6 +112,15 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
   const submitLabel = isRequestMode ? "Submit Request" : "Save";
   const submitInProgressLabel = isRequestMode ? "Submitting…" : "Saving…";
   const { user } = useAuth();
+  // ── Permissions V3 (Round 3) ──
+  // In "request" mode the page maps to `workstation_requests`; in booking mode to
+  // `workstation_bookings`. The catalog defines different function keys per page.
+  const permPageKey = isRequestMode ? "workstation_requests" : "workstation_bookings";
+  const { fn: permFn } = useEffectivePage("desk_booking", permPageKey);
+  const permBook    = permFn(isRequestMode ? "create" : "book");
+  const permCancel  = permFn(isRequestMode ? "cancel" : "cancel_booking");
+  const permRefresh = permFn("refresh");
+  const permExport  = permFn("export");
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const canEdit = user?.role === "Super Admin";
@@ -637,17 +647,19 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
       fullBleed
       contentClassName="bg-gray-50"
       actions={
+        permRefresh.isVisible ? (
         <Button
           variant="outline"
           size="icon"
           className="h-9 w-9"
           onClick={() => loadAvailability(selectedPlanId, date)}
-          disabled={availLoading || !selectedPlanId}
+          disabled={availLoading || !selectedPlanId || !permRefresh.canUse}
           title="Refresh availability"
           aria-label="Refresh availability"
         >
           <RefreshCw size={16} className={availLoading ? "animate-spin" : ""} />
         </Button>
+        ) : null
       }
     >
       <div className="flex flex-col h-[calc(100vh-4rem)] min-h-[560px]">
@@ -1150,9 +1162,10 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                       picked team + date intact.  "Cancel" clears everything.
                   */}
                   <div className="flex gap-2 pt-2 border-t border-gray-200 sticky bottom-0 bg-white">
+                    {permBook.isVisible && (
                     <Button
                       onClick={handleSave}
-                      disabled={!canEdit || saving || !selectedPlanId || noSeats || (bookingMode === "auto" && autoPhase !== "proposed")}
+                      disabled={!canEdit || saving || !selectedPlanId || noSeats || (bookingMode === "auto" && autoPhase !== "proposed") || !permBook.canUse}
                       className="flex-1 bg-[#ec9324] hover:bg-[#d8821a] text-white"
                       data-testid="ws-save-button"
                     >
@@ -1164,6 +1177,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                         submitLabel
                       )}
                     </Button>
+                    )}
                     {bookingMode === "auto" && autoPhase === "proposed" && (
                       <Button
                         variant="outline"

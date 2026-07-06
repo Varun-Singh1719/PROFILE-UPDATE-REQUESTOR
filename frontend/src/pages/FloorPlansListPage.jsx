@@ -8,6 +8,7 @@ import api from "../lib/api";
 import Layout from "../components/Layout";
 import notify from '../lib/notify';
 import { confirm as confirmDialog } from '../lib/dialog';
+import { useEffectivePage } from "../context/EffectivePermissionsContext";
 
 function fmtDate(iso) {
   if (!iso) return "—";
@@ -18,6 +19,13 @@ function fmtDate(iso) {
 
 export default function FloorPlansListPage() {
   const navigate = useNavigate();
+  // ── Permissions V3 (Round 3) ──
+  const { fn: permFn } = useEffectivePage("desk_booking", "floor_plans");
+  const permCreate  = permFn("create");
+  const permEdit    = permFn("edit");
+  const permDelete  = permFn("delete");
+  const permUpload  = permFn("upload");
+  const permPublish = permFn("publish");
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -134,13 +142,16 @@ export default function FloorPlansListPage() {
     <Layout
       title="Floor Plans"
       actions={
+        permCreate.isVisible ? (
         <button
           onClick={() => { setCreateName(""); setShowCreate(true); }}
           data-testid="new-floor-plan-btn"
-          className="px-4 h-9 bg-[#ec9324] hover:bg-[#d6831f] text-white rounded-md flex items-center gap-2 font-semibold shadow-sm transition-colors"
+          className="px-4 h-9 bg-[#ec9324] hover:bg-[#d6831f] text-white rounded-md flex items-center gap-2 font-semibold shadow-sm transition-colors disabled:opacity-50"
+          disabled={!permCreate.canUse}
         >
           <Plus size={16} /> New Floor Plan
         </button>
+        ) : null
       }
     >
 
@@ -162,6 +173,7 @@ export default function FloorPlansListPage() {
                 onClone={() => { setCloneName(`${p.name} (copy)`); setShowClone({ id: p.id, name: p.name }); }}
                 onDelete={() => deletePlan(p)}
                 onToggleLive={() => togglePlanLive(p)}
+                perms={{ edit: permEdit, delete: permDelete, publish: permPublish }}
               />
             ))}
           </div>
@@ -365,7 +377,7 @@ function CardLiveToggle({ plan, onToggle }) {
 }
 
 // -------------------- Plan card ----------------------------------------- //
-function PlanCard({ plan: p, onClone, onDelete, onToggleLive }) {
+function PlanCard({ plan: p, onClone, onDelete, onToggleLive, perms = {} }) {
   return (
     <div
       data-testid={`plan-card-${p.id}`}
@@ -428,17 +440,19 @@ function PlanCard({ plan: p, onClone, onDelete, onToggleLive }) {
               {p.status === "live" ? "View" : "No live version"}
             </span>
           </Link>
+          {perms.edit?.isVisible !== false && (
           <Link
             to={`/workspace-manager/calibration/${p.id}`}
-            className={`${ICON_BTN_BASE} text-gray-600 hover:bg-gray-200 hover:text-gray-900`}
+            className={`${ICON_BTN_BASE} text-gray-600 hover:bg-gray-200 hover:text-gray-900 ${perms.edit?.canUse === false ? "pointer-events-none opacity-50" : ""}`}
             aria-label="Edit"
             data-testid={`open-plan-${p.id}`}
           >
             <Pencil size={15} />
             <span className={TOOLTIP_CLASS}>Edit</span>
           </Link>
-          <IconBtn icon={Copy} label="Clone" onClick={onClone} testId={`clone-plan-${p.id}`} />
-          <IconBtn icon={Trash2} label="Delete" onClick={onDelete} danger testId={`delete-plan-${p.id}`} />
+          )}
+          {perms.edit?.isVisible !== false && <IconBtn icon={Copy} label="Clone" onClick={onClone} testId={`clone-plan-${p.id}`} disabled={perms.edit?.canUse === false} />}
+          {perms.delete?.isVisible !== false && <IconBtn icon={Trash2} label="Delete" onClick={onDelete} danger testId={`delete-plan-${p.id}`} disabled={perms.delete?.canUse === false} />}
         </div>
       </div>
     </div>

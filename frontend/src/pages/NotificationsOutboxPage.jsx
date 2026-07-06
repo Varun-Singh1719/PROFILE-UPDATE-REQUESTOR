@@ -11,6 +11,7 @@ import {
 import { Search, Mail, RefreshCw, Trash2, Eye, AlertCircle, Clock, CheckCircle2 } from "lucide-react";
 import notify from "../lib/notify";
 import { confirm as confirmDialog } from '../lib/dialog';
+import { useEffectivePage } from "../context/EffectivePermissionsContext";
 
 const KIND_LABEL = {
   new_employee: "New employee credentials",
@@ -27,6 +28,9 @@ const STATUS_STYLES = {
 function fmt(iso) { if (!iso) return "—"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
 
 export default function NotificationsOutboxPage() {
+  // ── Permissions V3 (Round 3) ──
+  const { fn: permFn } = useEffectivePage("profix", "notifications");
+  const permDelete = permFn("delete");
   const [items, setItems] = useState([]);
   const [q, setQ] = useState("");
   const [kind, setKind] = useState([]);
@@ -150,10 +154,12 @@ export default function NotificationsOutboxPage() {
                           className="h-8 w-8 p-0 border-gray-300 hover:bg-[#ec9324]/10 hover:text-[#ec9324] hover:border-[#ec9324]" aria-label="View">
                           <Eye size={14}/>
                         </Button>
+                        {permDelete.isVisible && (
                         <Button size="sm" variant="outline" onClick={() => remove(n)} data-testid={`delete-outbox-${n.id}`}
-                          className="h-8 w-8 p-0 border-gray-300 hover:bg-red-50 hover:text-red-600 hover:border-red-300" aria-label="Delete">
+                          className="h-8 w-8 p-0 border-gray-300 hover:bg-red-50 hover:text-red-600 hover:border-red-300" aria-label="Delete" disabled={!permDelete.canUse}>
                           <Trash2 size={14}/>
                         </Button>
+                        )}
                       </div>
                     </td>
                   </tr>

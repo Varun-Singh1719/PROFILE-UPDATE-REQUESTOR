@@ -32,6 +32,7 @@ import {
 import WorkstationFloorMap from "../components/WorkstationFloorMap";
 import ApprovalSettingsModal from "../components/ApprovalSettingsModal";
 import { useAuth } from "../context/AuthContext";
+import { useEffectivePage } from "../context/EffectivePermissionsContext";
 
 // ----- helpers -----
 const fmtDate = (iso) => {
@@ -56,6 +57,12 @@ export default function PendingApprovalsPage() {
   const { user } = useAuth();
   // Until the Permissions module lands, gate to Super Admin (mirrors WS Booking).
   const canApprove = user?.role === "Super Admin";
+  // ── Permissions V3 (Round 3) ──
+  const { fn: permFn } = useEffectivePage("desk_booking", "pending_approvals");
+  const permApprove   = permFn("approve");
+  const permReject    = permFn("reject");
+  const permConfigure = permFn("configure_auto_approval");
+  const permRefresh   = permFn("refresh");
 
   // ----- floor plans -----
   const [plans, setPlans] = useState([]);
@@ -337,10 +344,12 @@ export default function PendingApprovalsPage() {
           )}
           <button
             onClick={loadRequests}
-            className="h-9 w-9 inline-flex items-center justify-center rounded-md border border-gray-200 hover:bg-gray-50"
+            className="h-9 w-9 inline-flex items-center justify-center rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
             title="Refresh"
             aria-label="Refresh"
             data-testid="pa-refresh"
+            disabled={!permRefresh.canUse}
+            hidden={!permRefresh.isVisible}
           >
             <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
           </button>
@@ -381,10 +390,11 @@ export default function PendingApprovalsPage() {
                 {approvalSettings?.enabled ? "ON" : "OFF"}
               </span>
             </div>
+            {permConfigure.isVisible && (
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
-              disabled={!canApprove}
+              disabled={!canApprove || !permConfigure.canUse}
               className="h-9 w-9 inline-flex items-center justify-center rounded-md border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50"
               title={canApprove ? "Approval settings" : "Only Super Admin can configure"}
               aria-label="Approval settings"
@@ -392,6 +402,7 @@ export default function PendingApprovalsPage() {
             >
               <Settings size={16} />
             </button>
+            )}
           </div>
         </div>
 
@@ -467,25 +478,29 @@ export default function PendingApprovalsPage() {
                   <span className="text-[11px] text-gray-500" data-testid="pa-selected-count">
                     {effectiveSelectedIds.size} selected
                   </span>
+                  {permApprove.isVisible && (
                   <Button
                     size="sm"
-                    disabled={effectiveSelectedIds.size === 0 || bulkProcessing}
+                    disabled={effectiveSelectedIds.size === 0 || bulkProcessing || !permApprove.canUse}
                     onClick={() => setBulkAction("approve")}
                     className="h-7 px-2 bg-green-600 hover:bg-green-700 text-white text-[11px]"
                     data-testid="pa-bulk-approve"
                   >
                     <Check size={12} className="mr-1"/> Approve
                   </Button>
+                  )}
+                  {permReject.isVisible && (
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={effectiveSelectedIds.size === 0 || bulkProcessing}
+                    disabled={effectiveSelectedIds.size === 0 || bulkProcessing || !permReject.canUse}
                     onClick={() => setBulkAction("decline")}
                     className="h-7 px-2 text-red-600 border-red-200 hover:bg-red-50 text-[11px]"
                     data-testid="pa-bulk-decline"
                   >
                     <X size={12} className="mr-1"/> Decline
                   </Button>
+                  )}
                 </div>
               </div>
             )}
@@ -560,25 +575,29 @@ export default function PendingApprovalsPage() {
                           </div>
 
                           <div className="mt-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
+                            {permApprove.isVisible && (
                             <Button
                               size="sm"
-                              disabled={!canApprove || busy}
+                              disabled={!canApprove || busy || !permApprove.canUse}
                               onClick={() => approve(req)}
                               className="flex-1 bg-green-600 hover:bg-green-700 text-white"
                               data-testid={`pa-approve-${req.id}`}
                             >
                               {busy ? <Loader2 className="animate-spin" size={14} /> : <><Check size={14} className="mr-1" /> Approve</>}
                             </Button>
+                            )}
+                            {permReject.isVisible && (
                             <Button
                               size="sm"
                               variant="outline"
-                              disabled={!canApprove || busy}
+                              disabled={!canApprove || busy || !permReject.canUse}
                               onClick={() => decline(req)}
                               className="flex-1 text-red-600 border-red-200 hover:bg-red-50"
                               data-testid={`pa-decline-${req.id}`}
                             >
                               {busy ? <Loader2 className="animate-spin" size={14} /> : <><X size={14} className="mr-1" /> Decline</>}
                             </Button>
+                            )}
                           </div>
                         </div>
                       );

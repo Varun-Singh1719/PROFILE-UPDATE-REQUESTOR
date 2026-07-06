@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo, useContext } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { usePermissions } from "../hooks/usePermissions";
+import { useEffectivePermissionsState } from "../context/EffectivePermissionsContext";
 import {
   LayoutDashboard, Ticket, Users, Inbox, LogOut, Mail,
   ChevronDown, ChevronRight, Briefcase, Settings, Shield,
@@ -15,36 +16,39 @@ import EventSeatRoundedIcon from "./icons/EventSeatRoundedIcon";
 // --------------------------------------------------------------------------
 // Navigation config (single source of truth)
 // --------------------------------------------------------------------------
+// `v3` = { module, page } — when the current user's effective page-level view
+// is HIDDEN (visible=false), the link is dropped from the sidebar. Absent means
+// the item isn't gated by v3 visibility.
 const NAV_CONFIG = [
   { kind: "link",  to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
   {
     kind: "group", label: "ProfiX", icon: Briefcase,
     children: [
-      { to: "/admin/open-tickets", label: "All Requests", icon: Ticket,  perm: { module: "profix", feature: "ticket", action: "view" } },
-      { to: "/admin/open-requests", label: "Open Requests", icon: CircleDot, perm: { module: "profix", feature: "ticket", action: "view" } },
-      { to: "/admin/unassigned",   label: "Unassigned",    icon: Inbox,   perm: { module: "profix", feature: "ticket", action: "assign" } },
+      { to: "/admin/open-tickets", label: "All Requests", icon: Ticket,  perm: { module: "profix", feature: "ticket", action: "view" }, v3: { module: "profix", page: "all_requests" } },
+      { to: "/admin/open-requests", label: "Open Requests", icon: CircleDot, perm: { module: "profix", feature: "ticket", action: "view" }, v3: { module: "profix", page: "open_requests" } },
+      { to: "/admin/unassigned",   label: "Unassigned",    icon: Inbox,   perm: { module: "profix", feature: "ticket", action: "assign" }, v3: { module: "profix", page: "unassigned" } },
     ],
   },
   {
     kind: "group", label: "Workspace Manager", icon: Armchair,
     children: [
-      { to: "/workspace-manager/floor-layout", label: "Floor Layout",     icon: Map, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
-      { to: "/workspace-manager/workstation-booking", label: "Workstation Booking", icon: Armchair, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
-      { to: "/workspace-manager/request-workstation", label: "Request Workstation", icon: EventSeatRoundedIcon, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
-      { to: "/workspace-manager/meeting-room-booking", label: "Meeting Room Booking", icon: CalendarClock, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
-      { to: "/workspace-manager/pending-approvals", label: "Pending Approvals", icon: AddTaskIcon, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
+      { to: "/workspace-manager/floor-layout", label: "Floor Layout",     icon: Map, perm: { module: "desk_booking", feature: "seat_request", action: "view" }, v3: { module: "desk_booking", page: "floor_layout" } },
+      { to: "/workspace-manager/workstation-booking", label: "Workstation Booking", icon: Armchair, perm: { module: "desk_booking", feature: "seat_request", action: "view" }, v3: { module: "desk_booking", page: "workstation_bookings" } },
+      { to: "/workspace-manager/request-workstation", label: "Request Workstation", icon: EventSeatRoundedIcon, perm: { module: "desk_booking", feature: "seat_request", action: "view" }, v3: { module: "desk_booking", page: "workstation_requests" } },
+      { to: "/workspace-manager/meeting-room-booking", label: "Meeting Room Booking", icon: CalendarClock, perm: { module: "desk_booking", feature: "seat_request", action: "view" }, v3: { module: "desk_booking", page: "meeting_room_bookings" } },
+      { to: "/workspace-manager/pending-approvals", label: "Pending Approvals", icon: AddTaskIcon, perm: { module: "desk_booking", feature: "seat_request", action: "view" }, v3: { module: "desk_booking", page: "pending_approvals" } },
       { to: "/workspace-manager/bookings",     label: "Bookings",          icon: ClipboardList, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
-      { to: "/workspace-manager/floor-plans",  label: "Floor Calibration", icon: Crosshair,   perm: { module: "desk_booking", feature: "seat_request", action: "edit" } },
+      { to: "/workspace-manager/floor-plans",  label: "Floor Calibration", icon: Crosshair,   perm: { module: "desk_booking", feature: "seat_request", action: "edit" }, v3: { module: "desk_booking", page: "floor_plans" } },
     ],
   },
   {
     kind: "group", label: "Manage", icon: Settings, superAdminOnly: true,
     children: [
-      { to: "/admin/teams",           label: "Teams",           icon: Users },
+      { to: "/admin/teams",           label: "Teams",           icon: Users,    v3: { module: "profix", page: "teams" } },
       { to: "/admin/permissions",     label: "Permissions",     icon: Shield },
-      { to: "/admin/email-templates", label: "Email Templates", icon: MailPlus },
-      { to: "/admin/notifications",   label: "Notifications",   icon: Send },
-      { to: "/admin/contacts",        label: "Employee List",   icon: BookUser },
+      { to: "/admin/email-templates", label: "Email Templates", icon: MailPlus, v3: { module: "profix", page: "email_templates" } },
+      { to: "/admin/notifications",   label: "Notifications",   icon: Send,     v3: { module: "profix", page: "notifications" } },
+      { to: "/admin/contacts",        label: "Employee List",   icon: BookUser, v3: { module: "profix", page: "employees" } },
     ],
   },
 ];
@@ -83,11 +87,13 @@ function Tip({ label, children, show }) {
 // --------------------------------------------------------------------------
 // Collapsible group (sub-nav)
 // --------------------------------------------------------------------------
-function NavGroup({ item, collapsed, currentPath, can, isSuperAdmin, onNavigate }) {
-  const allowed = item.children.filter(c =>
-    item.superAdminOnly ? isSuperAdmin
-      : (!c.perm || can(c.perm.module, c.perm.feature, c.perm.action))
-  );
+function NavGroup({ item, collapsed, currentPath, can, isSuperAdmin, isPageViewVisible, onNavigate }) {
+  const allowed = item.children.filter(c => {
+    if (item.superAdminOnly && !isSuperAdmin) return false;
+    if (c.perm && !isSuperAdmin && !can(c.perm.module, c.perm.feature, c.perm.action)) return false;
+    if (c.v3 && !isPageViewVisible(c.v3.module, c.v3.page)) return false;
+    return true;
+  });
   const isChildActive = allowed.some(c => currentPath.startsWith(c.to));
   const [open, setOpen] = useState(isChildActive);
   useEffect(() => { if (isChildActive) setOpen(true); }, [isChildActive]);
@@ -241,6 +247,7 @@ function SearchPalette({ open, onClose, items }) {
 export default function Sidebar() {
   const { user } = useAuth();
   const { can } = usePermissions();
+  const { isPageViewVisible } = useEffectivePermissionsState();
   const navigate = useNavigate();
   const location = useLocation();
   const isSuperAdmin = user?.role === "Super Admin";
@@ -294,10 +301,12 @@ export default function Sidebar() {
   const handleLogout = async () => { navigate("/login"); }; // legacy — logout now lives in TopBar
   const onNavigateMobile = () => setMobileOpen(false);
 
-  const flatItems = useMemo(() => flattenForSearch(NAV_CONFIG).filter(it =>
-    it.superAdminOnly ? isSuperAdmin
-      : (!it.perm || can(it.perm.module, it.perm.feature, it.perm.action))
-  ), [isSuperAdmin, can]);
+  const flatItems = useMemo(() => flattenForSearch(NAV_CONFIG).filter(it => {
+    if (it.superAdminOnly && !isSuperAdmin) return false;
+    if (it.perm && !isSuperAdmin && !can(it.perm.module, it.perm.feature, it.perm.action)) return false;
+    if (it.v3 && !isPageViewVisible(it.v3.module, it.v3.page)) return false;
+    return true;
+  }), [isSuperAdmin, can, isPageViewVisible]);
 
   // Mobile: hamburger button + drawer
   if (isMobile) {
@@ -315,7 +324,7 @@ export default function Sidebar() {
             <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)}/>
             <aside className="relative w-64 bg-white h-full flex flex-col shadow-2xl">
               <SidebarHeader collapsed={false} user={user} onToggle={() => setMobileOpen(false)} mobile onSearch={() => setSearchOpen(true)}/>
-              <SidebarNav collapsed={false} currentPath={location.pathname} can={can} isSuperAdmin={isSuperAdmin} onNavigate={onNavigateMobile}/>
+              <SidebarNav collapsed={false} currentPath={location.pathname} can={can} isSuperAdmin={isSuperAdmin} isPageViewVisible={isPageViewVisible} onNavigate={onNavigateMobile}/>
             </aside>
           </div>
         )}
@@ -332,7 +341,7 @@ export default function Sidebar() {
         className={`bg-white border-r border-gray-200 flex flex-col fixed top-0 left-0 h-screen z-30 transition-all duration-200 ${collapsed ? "w-16" : "w-64"}`}
       >
         <SidebarHeader collapsed={collapsed} user={user} onToggle={toggle} onSearch={() => setSearchOpen(true)}/>
-        <SidebarNav collapsed={collapsed} currentPath={location.pathname} can={can} isSuperAdmin={isSuperAdmin}/>
+        <SidebarNav collapsed={collapsed} currentPath={location.pathname} can={can} isSuperAdmin={isSuperAdmin} isPageViewVisible={isPageViewVisible}/>
       </aside>
       <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} items={flatItems}/>
     </>
@@ -386,7 +395,7 @@ function SidebarHeader({ collapsed, user, onToggle, mobile, onSearch }) {
 // --------------------------------------------------------------------------
 // Nav list
 // --------------------------------------------------------------------------
-function SidebarNav({ collapsed, currentPath, can, isSuperAdmin, onNavigate }) {
+function SidebarNav({ collapsed, currentPath, can, isSuperAdmin, isPageViewVisible, onNavigate }) {
   // CSS quirk: setting overflow-y on one axis coerces the other to non-visible too.
   // For the collapsed icon-only view we keep `overflow-visible` so hover tooltips
   // (which extend to the right of the sidebar) are not clipped.
@@ -395,6 +404,7 @@ function SidebarNav({ collapsed, currentPath, can, isSuperAdmin, onNavigate }) {
       {NAV_CONFIG.map(item => {
         if (item.kind === "link") {
           if (item.perm && !isSuperAdmin && !can(item.perm.module, item.perm.feature, item.perm.action)) return null;
+          if (item.v3 && !isPageViewVisible(item.v3.module, item.v3.page)) return null;
           const { to, label, icon: Icon, end } = item;
           const testid = `sidebar-link-${label.toLowerCase().replace(/\s+/g, "-")}`;
           if (collapsed) {
@@ -426,6 +436,7 @@ function SidebarNav({ collapsed, currentPath, can, isSuperAdmin, onNavigate }) {
             currentPath={currentPath}
             can={can}
             isSuperAdmin={isSuperAdmin}
+            isPageViewVisible={isPageViewVisible}
             onNavigate={onNavigate}
           />
         );

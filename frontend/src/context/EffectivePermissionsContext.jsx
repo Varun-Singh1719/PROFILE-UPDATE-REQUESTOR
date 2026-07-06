@@ -86,6 +86,22 @@ function _lookup(state, moduleKey, pageKey, functionKey) {
   return (page.functions || {})[functionKey] || null;
 }
 
+export function useEffectivePermissionsState() {
+  const ctx = useContext(EffectivePermissionsContext) || EMPTY;
+  const ready = !!ctx?.ready;
+  const isPermissive = ctx.is_super_admin || !ctx.has_any_set;
+  /** Returns true when the given (module, page) page-level view is visible for
+   * the current user. Permissive (Super Admin or no assigned sets) = always true.
+   * Non-permissive with no entry for this page → hidden. */
+  const isPageViewVisible = (moduleKey, pageKey) => {
+    if (isPermissive) return true;
+    const p = ((ctx.modules || {})[moduleKey] || {}).pages?.[pageKey];
+    if (!p) return false;
+    return !!p.view?.visible;
+  };
+  return { ready, isPermissive, isSuperAdmin: !!ctx.is_super_admin, isPageViewVisible, state: ctx };
+}
+
 /**
  * Look up permission for (module, page, function).
  *

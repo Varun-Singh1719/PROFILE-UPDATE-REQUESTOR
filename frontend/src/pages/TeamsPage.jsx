@@ -11,6 +11,7 @@ import notify from "../lib/notify";
 import MultiSelect from "../components/MultiSelect";
 import { Plus, Pencil, Users, Trash2, Search, Sparkles, Check } from "lucide-react";
 import { confirm as confirmDialog } from '../lib/dialog';
+import { useEffectivePage } from "../context/EffectivePermissionsContext";
 import {
   TEAM_PALETTES,
   teamBackground,
@@ -24,6 +25,11 @@ const EMPTY_FORM = { name: "", manager_ids: [], member_ids: [], color: "", initi
 const sanitizeInitials = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 2);
 
 export default function TeamsPage() {
+  // ── Permissions V3 (Round 3) ──
+  const { fn: permFn } = useEffectivePage("profix", "teams");
+  const permCreate = permFn("create");
+  const permEdit   = permFn("edit");
+  const permDelete = permFn("delete");
   const [teams, setTeams] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [open, setOpen] = useState(false);
@@ -170,13 +176,16 @@ export default function TeamsPage() {
     <Layout
       title="Teams"
       actions={
+        permCreate.isVisible ? (
         <Button
           onClick={openCreate}
           className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9"
           data-testid="add-team-btn"
+          disabled={!permCreate.canUse}
         >
           <Plus size={16} className="mr-2" /> Add New Team
         </Button>
+        ) : null
       }
     >
       <div className="sticky top-14 z-30 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
@@ -246,6 +255,7 @@ export default function TeamsPage() {
                   <td className="px-4 py-3 text-gray-500 text-xs">{t.created_on?.slice(0, 10)}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="inline-flex gap-2">
+                      {permEdit.isVisible && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -253,9 +263,12 @@ export default function TeamsPage() {
                         data-testid={`edit-team-${t.name}`}
                         className="border-gray-300 text-gray-700 hover:bg-[#ec9324]/10 hover:text-[#ec9324] hover:border-[#ec9324] h-8 w-8 p-0"
                         aria-label="Edit team"
+                        disabled={!permEdit.canUse}
                       >
                         <Pencil size={14} />
                       </Button>
+                      )}
+                      {permDelete.isVisible && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -263,9 +276,11 @@ export default function TeamsPage() {
                         data-testid={`delete-team-${t.name}`}
                         className="border-gray-300 text-gray-700 hover:bg-red-50 hover:text-red-600 hover:border-red-300 h-8 w-8 p-0"
                         aria-label="Delete team"
+                        disabled={!permDelete.canUse}
                       >
                         <Trash2 size={14} />
                       </Button>
+                      )}
                     </div>
                   </td>
                 </tr>

@@ -18,6 +18,7 @@ import {
   ArrowUp, ArrowDown, ChevronsUpDown,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useEffectivePage } from "../context/EffectivePermissionsContext";
 import { confirm as confirmDialog, prompt as promptDialog } from '../lib/dialog';
 
 function fmt(iso) { if (!iso) return "—"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
@@ -215,6 +216,12 @@ export default function EmailTemplatesPage() {
   // Both Admin and Super Admin can edit templates. (Previous code only checked "Admin"
   // which excluded Super Admin — fixed here so the seeded admin can edit meeting templates.)
   const isAdmin = user?.role === "Admin" || user?.role === "Super Admin";
+  // ── Permissions V3 (Round 3) ──
+  const { fn: permFn } = useEffectivePage("profix", "email_templates");
+  const permCreate  = permFn("create");
+  const permEdit    = permFn("edit");
+  const permDelete  = permFn("delete");
+  const permTestSend = permFn("test_send");
   const [items, setItems] = useState([]);
   const [q, setQ] = useState("");
   const [category, setCategory] = useState([]);
@@ -393,8 +400,8 @@ export default function EmailTemplatesPage() {
   return (
     <Layout
       title="Email Templates"
-      actions={isAdmin && (
-        <Button onClick={openCreate} className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9" data-testid="add-template-btn">
+      actions={isAdmin && permCreate.isVisible && (
+        <Button onClick={openCreate} className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9" data-testid="add-template-btn" disabled={!permCreate.canUse}>
           <Plus size={16} className="mr-2"/> New Template
         </Button>
       )}
@@ -491,13 +498,17 @@ export default function EmailTemplatesPage() {
                       </IconAction>
                       {isAdmin && (
                         <>
+                          {permEdit.isVisible && (
                           <IconAction label="Edit" onClick={() => openEdit(t)} testId={`edit-${t.kind}`}>
                             <Pencil size={14}/>
                           </IconAction>
+                          )}
+                          {permEdit.isVisible && (
                           <IconAction label="Duplicate" onClick={() => duplicate(t)} testId={`duplicate-${t.kind}`}>
                             <Copy size={14}/>
                           </IconAction>
-                          {(!t.system || t.local) && (
+                          )}
+                          {(!t.system || t.local) && permDelete.isVisible && (
                             <IconAction
                               label={t.local ? "Reset to default" : "Delete"}
                               onClick={() => remove(t)}

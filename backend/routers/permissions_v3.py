@@ -366,14 +366,54 @@ def _migrate_legacy_to_v3(legacy: dict) -> dict:
 @api_router.get("/permissions/audit")
 async def permissions_audit(
     limit: int = Query(50, ge=1, le=500),
+    skip: int = Query(0, ge=0),
     resource_id: Optional[str] = None,
+    q: Optional[str] = Query(None, description="Search by detail / actor name/email"),
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
     user=Depends(require_role("Super Admin")),
 ):
-    q: Dict[str, Any] = {"action": {"$regex": "^permission_set\\."}}
+    """Return permission_set.* audit rows for the Round 3 Audit Log tab.
+
+    Each row is enriched with the target permission set's current title
+    (if it still exists) so the UI doesn't have to N+1 lookup.
+    """
+    query: Dict[str, Any] = {"action": {"$regex": "^permission_set\\."}}
     if resource_id:
-        q["resource_id"] = resource_id
-    rows = await db.audit_log.find(q, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
-    return rows
+        query["resource_id"] = resource_id
+    if date_from or date_to:
+        rng: Dict[str, Any] = {}
+        if date_from:
+            rng["$gte"] = date_from
+        if date_to:
+            # inclusive upper bound: bump by one day worth of ISO if just a date is passed
+            rng["$lte"] = date_to if "T" in (date_to or "") else f"{date_to}T23:59:59.999999+00:00"
+        query["created_at"] = rng
+    if q:
+        query["$or"] = [
+            {"detail":       {"$regex": q, "$options": "i"}},
+            {"actor.name":   {"$regex": q, "$options": "i"}},
+            {"actor.email":  {"$regex": q, "$options": "i"}},
+            {"resource_id":  {"$regex": q, "$options": "i"}},
+        ]
+
+    cursor = db.audit_log.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit)
+    rows = await cursor.to_list(limit)
+    total = await db.audit_log.count_documents(query)
+
+    # Enrich with target set's current title (best-effort — set may have been deleted)
+    resource_ids = list({r.get("resource_id") for r in rows if r.get("resource_id")})
+    titles: Dict[str, str] = {}
+    if resource_ids:
+        async for doc in db.permission_sets.find(
+            {"id": {"$in": resource_ids}}, {"_id": 0, "id": 1, "title": 1}
+        ):
+            titles[doc["id"]] = doc.get("title") or ""
+    for r in rows:
+        rid = r.get("resource_id")
+        if rid:
+            r["target_title"] = titles.get(rid)
+    return {"rows": rows, "total": total, "skip": skip, "limit": limit}
 
 
 # --------------------------------------------------------------------------- #

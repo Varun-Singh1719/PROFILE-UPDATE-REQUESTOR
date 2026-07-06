@@ -662,43 +662,171 @@ function PreviewDialog({ open, onOpenChange, effective, beforeEffective, title, 
   );
 }
 
-function AuditDialog({ open, onOpenChange, resourceId }) {
-  const [rows, setRows] = useState([]); const [loading, setLoading] = useState(false);
-  useEffect(() => { if (!open) return; setLoading(true);
-    const params = resourceId ? { resource_id: resourceId, limit: 50 } : { limit: 50 };
-    api.get("/permissions/audit", { params }).then((r) => setRows(r.data || [])).finally(() => setLoading(false));
-  }, [open, resourceId]);
+function AuditLogTab({ resourceId, catalog, focusResourceId, onClearResource }) {
+  const [rows, setRows] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [q, setQ] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [expanded, setExpanded] = useState({}); // rowIndex -> bool
+  const [setFilter, setSetFilter] = useState(focusResourceId || "");
+  const [sets, setSets] = useState([]);
+
+  useEffect(() => { if (focusResourceId) setSetFilter(focusResourceId); }, [focusResourceId]);
+
+  // Load list of permission sets for the filter dropdown
+  useEffect(() => {
+    api.get("/permission-sets").then((r) => setSets(r.data || [])).catch(() => setSets([]));
+  }, []);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = { limit: 200 };
+      if (setFilter) params.resource_id = setFilter;
+      if (q) params.q = q;
+      if (dateFrom) params.date_from = dateFrom;
+      if (dateTo) params.date_to = dateTo;
+      const { data } = await api.get("/permissions/audit", { params });
+      setRows(data.rows || []);
+      setTotal(data.total || 0);
+    } catch (e) {
+      notify.error(e, { what: "Load audit log" });
+      setRows([]); setTotal(0);
+    } finally { setLoading(false); }
+  }, [setFilter, q, dateFrom, dateTo]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const actionMeta = (action) => {
+    if (action === "permission_set.create") return { label: "Created", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" };
+    if (action === "permission_set.update") return { label: "Updated", cls: "bg-amber-50 text-amber-700 border-amber-200" };
+    if (action === "permission_set.delete") return { label: "Deleted", cls: "bg-red-50 text-red-700 border-red-200" };
+    return { label: action, cls: "bg-gray-50 text-gray-700 border-gray-200" };
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl p-0 overflow-hidden" data-testid="perm-audit-dialog">
-        <div className="px-5 pt-4 pb-3 border-b border-gray-100 flex items-center gap-2">
-          <History size={16} className="text-[#ec9324]" />
-          <div><div className="font-semibold text-gray-900">Permission changes — audit log</div>
-          <div className="text-xs text-gray-500">{resourceId ? "History for this permission set." : "Recent activity across all sets."}</div></div>
+    <div className="mt-3 rounded-2xl border border-gray-200 bg-white shadow-sm" data-testid="perm-audit-tab">
+      {/* Filter bar */}
+      <div className="p-3 border-b border-gray-100 flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[220px] max-w-xs">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search actor, detail or id…"
+            className="w-full h-9 pl-9 pr-3 rounded-md border border-gray-300 text-xs focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]"
+            data-testid="perm-audit-search" />
         </div>
-        <div className="max-h-[520px] overflow-y-auto p-3 space-y-2">
-          {loading && <div className="text-center text-xs text-gray-400 py-6"><Loader2 className="animate-spin inline mr-1.5" size={13} /> Loading…</div>}
-          {!loading && rows.length === 0 && <div className="text-center text-xs text-gray-400 py-6">No changes yet.</div>}
-          {rows.map((r, i) => (
-            <div key={i} className="rounded-lg border border-gray-200 p-3">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold text-gray-900">{r.detail || r.action}</div>
-                <div className="text-[11px] text-gray-500">{new Date(r.created_at).toLocaleString()}</div>
-              </div>
-              <div className="text-[11px] text-gray-500 mt-0.5">by {r.actor?.name || r.actor?.email || "—"}</div>
-            </div>
-          ))}
-        </div>
-      </DialogContent>
-    </Dialog>
+        <select value={setFilter} onChange={(e) => setSetFilter(e.target.value)}
+          className="h-9 px-2 rounded-md border border-gray-300 bg-white text-xs text-gray-800"
+          data-testid="perm-audit-set-filter">
+          <option value="">All permission sets</option>
+          {sets.map((s) => <option key={s.id} value={s.id}>#{s.numeric_id || s.seq_no || "?"} · {s.title}</option>)}
+        </select>
+        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+          className="h-9 px-2 rounded-md border border-gray-300 bg-white text-xs text-gray-800" data-testid="perm-audit-from" />
+        <span className="text-[10px] text-gray-400">to</span>
+        <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+          className="h-9 px-2 rounded-md border border-gray-300 bg-white text-xs text-gray-800" data-testid="perm-audit-to" />
+        {(q || setFilter || dateFrom || dateTo) && (
+          <button type="button" onClick={() => { setQ(""); setSetFilter(""); setDateFrom(""); setDateTo(""); onClearResource?.(); }}
+            className="h-9 px-2 rounded-md border border-gray-200 text-[11px] font-semibold text-gray-600 hover:border-[#ec9324] hover:text-[#ec9324]"
+            data-testid="perm-audit-clear">Clear filters</button>
+        )}
+        <button type="button" onClick={load}
+          className="ml-auto h-9 px-3 rounded-md border border-gray-200 text-[11px] font-semibold text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] inline-flex items-center gap-1.5"
+          data-testid="perm-audit-refresh"><RefreshCw size={12} /> Refresh</button>
+        <div className="text-[10px] text-gray-500 ml-1">{total} entr{total === 1 ? "y" : "ies"}</div>
+      </div>
+
+      {/* Timeline body */}
+      <div className="p-3 max-h-[calc(100vh-260px)] overflow-y-auto">
+        {loading && (
+          <div className="text-center text-xs text-gray-400 py-10">
+            <Loader2 className="animate-spin inline mr-1.5" size={13} /> Loading audit history…
+          </div>
+        )}
+        {!loading && rows.length === 0 && (
+          <div className="text-center text-xs text-gray-400 py-14">No permission changes match these filters.</div>
+        )}
+
+        {!loading && rows.length > 0 && (
+          <ol className="relative border-l-2 border-gray-100 ml-3 space-y-3">
+            {rows.map((r, i) => {
+              const meta = actionMeta(r.action);
+              const beforeMods = r.metadata?.previous?.modules || null;
+              const afterMods  = r.metadata?.next?.modules || null;
+              const beforeTitle = r.metadata?.previous?.title;
+              const afterTitle  = r.metadata?.next?.title;
+              const rows2 = beforeMods || afterMods
+                ? computeDiff(catalog, mergeStateWithCatalog(catalog, beforeMods || {}), mergeStateWithCatalog(catalog, afterMods || {}))
+                : [];
+              const isOpen = !!expanded[i];
+              const setLabel = r.target_title || afterTitle || beforeTitle || "(deleted set)";
+              return (
+                <li key={`${r.created_at}-${i}`} className="ml-4 relative" data-testid={`perm-audit-row-${i}`}>
+                  <span className={`absolute -left-[27px] top-2 h-3 w-3 rounded-full border-2 border-white ring-2 ${
+                    r.action === "permission_set.create" ? "bg-emerald-500 ring-emerald-200" :
+                    r.action === "permission_set.delete" ? "bg-red-500 ring-red-200" :
+                    "bg-amber-500 ring-amber-200"
+                  }`} />
+                  <div className="rounded-lg border border-gray-200 bg-white p-3 hover:border-gray-300">
+                    <div className="flex items-start gap-2">
+                      <span className={`inline-flex items-center text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${meta.cls}`}>{meta.label}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold text-gray-900 truncate">
+                          {setLabel}
+                          {r.resource_id && (
+                            <span className="ml-1.5 text-[10px] font-mono text-gray-400">{r.resource_id.slice(0, 12)}…</span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-gray-500 truncate">{r.detail || r.action}</div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-[11px] text-gray-500">{new Date(r.created_at).toLocaleString()}</div>
+                        <div className="text-[10px] text-gray-400">by {r.actor?.name || r.actor?.email || "—"}</div>
+                      </div>
+                    </div>
+                    {(rows2.length > 0 || (beforeTitle && afterTitle && beforeTitle !== afterTitle)) && (
+                      <button type="button" onClick={() => setExpanded((e) => ({ ...e, [i]: !e[i] }))}
+                        className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-[#ec9324] hover:underline"
+                        data-testid={`perm-audit-expand-${i}`}>
+                        {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                        {isOpen ? "Hide" : "Show"} before/after diff{rows2.length ? ` (${rows2.length})` : ""}
+                      </button>
+                    )}
+                    {isOpen && (
+                      <div className="mt-2 space-y-2">
+                        {beforeTitle && afterTitle && beforeTitle !== afterTitle && (
+                          <div className="rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2 text-[11px]">
+                            <span className="font-semibold text-amber-800">Title renamed:</span>
+                            <span className="ml-1 line-through text-gray-500">{beforeTitle}</span>
+                            <span className="mx-1 text-gray-400">→</span>
+                            <span className="text-gray-900 font-medium">{afterTitle}</span>
+                          </div>
+                        )}
+                        {rows2.length > 0 && <DiffTable rows={rows2} />}
+                      </div>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </div>
+    </div>
   );
 }
 
 // ------------- Main
 export default function PermissionsPage() {
   const navigate = useNavigate();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const editingId = params.get("set");
+  const tabParam = params.get("tab") === "audit" ? "audit" : "editor";
+
+  const [tab, setTab] = useState(tabParam);
+  useEffect(() => { setTab(tabParam); }, [tabParam]);
 
   const [catalog, setCatalog] = useState(null);
   const [state, setState] = useState({});
@@ -711,8 +839,13 @@ export default function PermissionsPage() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [effective, setEffective] = useState({});
   const [beforeEffective, setBeforeEffective] = useState(null);
-  const [auditOpen, setAuditOpen] = useState(false);
   const [copiedFromId, setCopiedFromId] = useState(null);
+
+  const goToTab = (next) => {
+    const p = new URLSearchParams(params);
+    if (next === "audit") p.set("tab", "audit"); else p.delete("tab");
+    setParams(p);
+  };
 
   useEffect(() => {
     (async () => {
@@ -837,64 +970,98 @@ export default function PermissionsPage() {
       contentClassName="w-full px-9 sm:px-12 pt-2 pb-6 flex flex-col min-h-[calc(100vh-56px)]"
       actions={
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => setAuditOpen(true)} className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-audit-btn"><History size={13} /> Audit</button>
-          <button type="button" onClick={() => setCopyOpen(true)}  className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-copy-btn"><Copy size={13} /> Copy from set</button>
-          <button type="button" onClick={doPreview}                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-preview-btn"><Sparkles size={13} /> Preview</button>
-          <Button onClick={doSave} disabled={saving} className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9 text-xs font-semibold" data-testid="perm-save-btn">
-            {saving ? <Loader2 className="animate-spin mr-1.5" size={13} /> : <Save size={13} className="mr-1.5" />}
-            {editingId ? "Update set" : "Save as new set"}
-          </Button>
+          <button type="button" onClick={() => goToTab("audit")} className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-audit-btn"><History size={13} /> Audit log</button>
+          {tab === "editor" && (
+            <>
+              <button type="button" onClick={() => setCopyOpen(true)}  className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-copy-btn"><Copy size={13} /> Copy from set</button>
+              <button type="button" onClick={doPreview}                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-preview-btn"><Sparkles size={13} /> Preview</button>
+              <Button onClick={doSave} disabled={saving} className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9 text-xs font-semibold" data-testid="perm-save-btn">
+                {saving ? <Loader2 className="animate-spin mr-1.5" size={13} /> : <Save size={13} className="mr-1.5" />}
+                {editingId ? "Update set" : "Save as new set"}
+              </Button>
+            </>
+          )}
         </div>
       }
     >
-      <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <label className="block">
-            <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Title *</span>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Team Manager — Workspace"
-              className="mt-1 w-full h-9 px-3 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]" data-testid="perm-title" />
-          </label>
-          <label className="block">
-            <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Description</span>
-            <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What this permission set is for"
-              className="mt-1 w-full h-9 px-3 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]" data-testid="perm-description" />
-          </label>
-        </div>
+      {/* Tab bar */}
+      <div className="mt-1 mb-3 flex items-end gap-1 border-b border-gray-200" data-testid="perm-tabbar">
+        <button type="button" onClick={() => goToTab("editor")} data-testid="perm-tab-editor"
+          className={`h-9 px-4 rounded-t-md text-xs font-semibold inline-flex items-center gap-1.5 border border-b-0 ${
+            tab === "editor" ? "bg-white border-gray-200 text-[#ec9324]" : "bg-transparent border-transparent text-gray-500 hover:text-gray-800"
+          }`}>
+          <Sparkles size={13} /> Editor
+        </button>
+        <button type="button" onClick={() => goToTab("audit")} data-testid="perm-tab-audit"
+          className={`h-9 px-4 rounded-t-md text-xs font-semibold inline-flex items-center gap-1.5 border border-b-0 ${
+            tab === "audit" ? "bg-white border-gray-200 text-[#ec9324]" : "bg-transparent border-transparent text-gray-500 hover:text-gray-800"
+          }`}>
+          <History size={13} /> Audit log
+        </button>
+        <div className="flex-1 border-b border-gray-200 -mb-px" />
       </div>
 
-      <div className="mt-3 flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[240px] max-w-md">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search modules, pages, functions…"
-            className="w-full h-9 pl-9 pr-3 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]" data-testid="perm-search" />
-        </div>
-        <button type="button" onClick={() => setExpanded(Object.fromEntries(catalog.map((m) => [m.key, true])))}
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-expand-all"><ChevronsDown size={13} /> Expand all</button>
-        <button type="button" onClick={() => setExpanded(Object.fromEntries(catalog.map((m) => [m.key, false])))}
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-collapse-all"><ChevronsUp size={13} /> Collapse all</button>
-        <div className="ml-auto text-[11px] text-gray-500 inline-flex items-center gap-1">
-          <Info size={12} /> Hidden items disappear from the user's UI. Disabled items are read-only.
-        </div>
-      </div>
+      {tab === "audit" ? (
+        <AuditLogTab
+          catalog={catalog}
+          focusResourceId={editingId}
+          onClearResource={() => {
+            const p = new URLSearchParams(params);
+            p.delete("set");
+            setParams(p);
+          }}
+        />
+      ) : (
+        <>
+          <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Title *</span>
+                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Team Manager — Workspace"
+                  className="mt-1 w-full h-9 px-3 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]" data-testid="perm-title" />
+              </label>
+              <label className="block">
+                <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Description</span>
+                <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What this permission set is for"
+                  className="mt-1 w-full h-9 px-3 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]" data-testid="perm-description" />
+              </label>
+            </div>
+          </div>
 
-      <div className="mt-3 space-y-3">
-        {catalog.map((m) => (
-          <ModuleAccordion
-            key={m.key} mod={m}
-            state={state[m.key] || emptyModuleState(m)}
-            expanded={!!expanded[m.key]}
-            onToggle={() => setExpanded((e) => ({ ...e, [m.key]: !e[m.key] }))}
-            search={search}
-            onSelectAll={() => selectAllInModule(m.key)}
-            onClear={() => clearModule(m.key)}
-            updateState={setState}
-          />
-        ))}
-      </div>
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[240px] max-w-md">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search modules, pages, functions…"
+                className="w-full h-9 pl-9 pr-3 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]" data-testid="perm-search" />
+            </div>
+            <button type="button" onClick={() => setExpanded(Object.fromEntries(catalog.map((m) => [m.key, true])))}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-expand-all"><ChevronsDown size={13} /> Expand all</button>
+            <button type="button" onClick={() => setExpanded(Object.fromEntries(catalog.map((m) => [m.key, false])))}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-collapse-all"><ChevronsUp size={13} /> Collapse all</button>
+            <div className="ml-auto text-[11px] text-gray-500 inline-flex items-center gap-1">
+              <Info size={12} /> Hidden items disappear from the user's UI. Disabled items are read-only.
+            </div>
+          </div>
+
+          <div className="mt-3 space-y-3">
+            {catalog.map((m) => (
+              <ModuleAccordion
+                key={m.key} mod={m}
+                state={state[m.key] || emptyModuleState(m)}
+                expanded={!!expanded[m.key]}
+                onToggle={() => setExpanded((e) => ({ ...e, [m.key]: !e[m.key] }))}
+                search={search}
+                onSelectAll={() => selectAllInModule(m.key)}
+                onClear={() => clearModule(m.key)}
+                updateState={setState}
+              />
+            ))}
+          </div>
+        </>
+      )}
 
       <CopyFromDialog open={copyOpen} onOpenChange={setCopyOpen} onCopy={doCopyFrom} catalog={catalog} currentState={state} />
       <PreviewDialog open={previewOpen} onOpenChange={setPreviewOpen} effective={effective} beforeEffective={beforeEffective} title={title} catalog={catalog} showDiff={!!editingId} />
-      <AuditDialog open={auditOpen} onOpenChange={setAuditOpen} resourceId={editingId} />
     </Layout>
   );
 }
