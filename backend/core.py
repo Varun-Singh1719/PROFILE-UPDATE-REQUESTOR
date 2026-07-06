@@ -268,7 +268,7 @@ PERMISSION_MODULES_V3 = [
                 ],
             },
             {
-                "key": "open_requests", "label": "Open Requests", "route": "/admin/open-tickets?status=Open",
+                "key": "open_requests", "label": "Open Requests", "route": "/admin/open-requests",
                 "functions": [
                     {"key": "create_ticket",  "label": "New Request", "scoped": True},
                     {"key": "export_tickets", "label": "Export CSV",  "scoped": False},
@@ -277,7 +277,7 @@ PERMISSION_MODULES_V3 = [
                 ],
             },
             {
-                "key": "unassigned", "label": "Unassigned Requests", "route": "/admin/open-tickets?assigned_to=none",
+                "key": "unassigned", "label": "Unassigned Requests", "route": "/admin/unassigned",
                 "functions": [
                     {"key": "assign",       "label": "Assign",       "scoped": True},
                     {"key": "refresh_list", "label": "Refresh",      "scoped": False},
