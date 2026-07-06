@@ -140,6 +140,11 @@ def _sanitize_rw(v: Any, scoped: bool = True) -> dict:
 def _normalize_v3_modules(modules: Any) -> Dict[str, dict]:
     """Validate & normalize the modules tree against the v3 catalog.
 
+    Also transparently re-maps legacy keys that lived under ``profix`` before
+    the "Manage" module was split out (Jul 6, 2026). E.g. an incoming payload
+    with ``profix.employees.…`` is rewritten to ``manage.employees.…`` so
+    existing permission sets keep working after the catalog reshuffle.
+
     New shape (Aug 2026):
       modules[<mkey>].pages[<pkey>] = {
         view: {enabled, visible, scope},
@@ -147,9 +152,40 @@ def _normalize_v3_modules(modules: Any) -> Dict[str, dict]:
         functions: { <fkey>: {enabled, visible, scope} }
       }
     """
+    # Pages that migrated from profix → manage (Jul 6, 2026)
+    _PROFIX_TO_MANAGE_PAGES = {
+        "employees", "teams", "notifications", "email_templates",
+        "reports", "audit_logs", "settings",
+    }
+
+    # First pass — key remap: hoist any legacy profix.<manage_page> into manage.<page>
+    remapped_input: Dict[str, Any] = {}
+    for mkey, mdata in (modules or {}).items():
+        if mkey == "profix" and isinstance(mdata, dict):
+            pages_src = (mdata or {}).get("pages") or {}
+            keep_pages: Dict[str, Any] = {}
+            hoist_pages: Dict[str, Any] = {}
+            for pkey, pdata in pages_src.items():
+                if pkey in _PROFIX_TO_MANAGE_PAGES:
+                    hoist_pages[pkey] = pdata
+                else:
+                    keep_pages[pkey] = pdata
+            if keep_pages:
+                remapped_input["profix"] = {"pages": keep_pages}
+            if hoist_pages:
+                existing_manage = (modules or {}).get("manage") or {}
+                existing_pages = (existing_manage.get("pages") if isinstance(existing_manage, dict) else {}) or {}
+                merged = {**existing_pages, **hoist_pages}  # incoming manage overrides
+                remapped_input["manage"] = {"pages": merged}
+        elif mkey == "manage" and "manage" in remapped_input:
+            # Already merged above; skip (avoid overwriting the merge result)
+            continue
+        else:
+            remapped_input[mkey] = mdata
+
     catalog = {m["key"]: m for m in PERMISSION_MODULES_V3}
     out: Dict[str, dict] = {}
-    for mkey, mdata in (modules or {}).items():
+    for mkey, mdata in remapped_input.items():
         if mkey not in catalog:
             continue
         catalog_m = catalog[mkey]
@@ -218,6 +254,9 @@ async def get_v3_set(pset_id: str, user=Depends(get_current_user)):
         if legacy:
             return _migrate_legacy_to_v3(legacy)
         raise HTTPException(404, "Permission set not found")
+    # Re-normalize modules so pre-Jul-2026 sets (where Manage pages lived under
+    # profix) surface under the new `manage` module without any DB migration.
+    doc["modules"] = _normalize_v3_modules(doc.get("modules") or {})
     return doc
 
 
@@ -322,7 +361,15 @@ async def delete_v3_set(pset_id: str, user=Depends(require_role("Super Admin")))
 def _migrate_legacy_to_v3(legacy: dict) -> dict:
     """Read a v1/v2 permission-set doc and materialize it in v3 shape so the UI
     can display it. Purely in-memory — the doc on disk is not touched.
+
+    Also handles the Jul 6, 2026 catalog re-shuffle: legacy sets that stored
+    Employees/Teams/etc. under ``profix`` are hoisted into the new ``manage``
+    module.
     """
+    _PROFIX_TO_MANAGE_PAGES = {
+        "employees", "teams", "notifications", "email_templates",
+        "reports", "audit_logs", "settings",
+    }
     catalog = {m["key"]: m for m in PERMISSION_MODULES_V3}
     modules_out: Dict[str, dict] = {}
 
@@ -332,11 +379,14 @@ def _migrate_legacy_to_v3(legacy: dict) -> dict:
         return {"enabled": bool(x), "visible": True, "scope": None}
 
     for mkey, feats in (legacy.get("modules") or {}).items():
-        if mkey not in catalog:
-            continue
-        pages_by_key = {p["key"]: p for p in catalog[mkey]["pages"]}
-        pages_out: Dict[str, dict] = {}
         for fkey, actions in (feats or {}).items():
+            # Route legacy profix.<manage_page> into the new manage module
+            target_mkey = mkey
+            if mkey == "profix" and fkey in _PROFIX_TO_MANAGE_PAGES:
+                target_mkey = "manage"
+            if target_mkey not in catalog:
+                continue
+            pages_by_key = {p["key"]: p for p in catalog[target_mkey]["pages"]}
             if fkey not in pages_by_key or not isinstance(actions, dict):
                 continue
             fn_catalog = {f["key"]: f for f in (pages_by_key[fkey].get("functions") or [])}
@@ -349,13 +399,12 @@ def _migrate_legacy_to_v3(legacy: dict) -> dict:
                         fn_out[a] = {"enabled": True, "visible": True, "scope": {"respective": "individual", "team": "team", "all": "overall"}[v]}
                     else:
                         fn_out[a] = {"enabled": bool(v), "visible": True, "scope": None}
-            pages_out[fkey] = {
+            target_module = modules_out.setdefault(target_mkey, {"pages": {}})
+            target_module["pages"][fkey] = {
                 "view": _v(actions.get("view")),
                 "edit": _v(actions.get("edit")),
                 "functions": fn_out,
             }
-        if pages_out:
-            modules_out[mkey] = {"pages": pages_out}
     return {**legacy, "modules": modules_out, "version": 3, "migrated_from_legacy": True}
 
 
@@ -537,6 +586,10 @@ async def my_effective_permissions(user=Depends(get_current_user)):
                 # Migrate legacy set → v3 shape in-memory
                 migrated = _migrate_legacy_to_v3(doc)
                 modules = migrated.get("modules") or {}
+            else:
+                # Re-normalize v3 sets so pre-Jul-2026 docs (Manage pages under
+                # profix) surface under the new manage module.
+                modules = _normalize_v3_modules(modules)
             _merge_modules(merged, modules)
 
     return {

@@ -217,7 +217,7 @@ export default function EmailTemplatesPage() {
   // which excluded Super Admin — fixed here so the seeded admin can edit meeting templates.)
   const isAdmin = user?.role === "Admin" || user?.role === "Super Admin";
   // ── Permissions V3 (Round 3) ──
-  const { fn: permFn } = useEffectivePage("profix", "email_templates");
+  const { fn: permFn } = useEffectivePage("manage", "email_templates");
   const permCreate  = permFn("create");
   const permEdit    = permFn("edit");
   const permDelete  = permFn("delete");

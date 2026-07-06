@@ -296,8 +296,19 @@ PERMISSION_MODULES_V3 = [
                     {"key": "change_status", "label": "Change Status",  "scoped": True},
                 ],
             },
+        ],
+    },
+    {
+        # ─── Organization-wide "Manage" module ──────────────────────────────
+        # Cross-cutting admin screens that apply to BOTH Profix and Workspace
+        # Manager. Introduced Jul 6, 2026 (previously these lived under Profix).
+        "key": "manage",
+        "label": "Manage",
+        "icon": "Settings",
+        "color": "#6366f1",
+        "pages": [
             {
-                "key": "employees", "label": "Employees", "route": "/admin/employees",
+                "key": "employees", "label": "Employees", "route": "/admin/contacts",
                 "functions": [
                     {"key": "create",  "label": "Add Employee",  "scoped": True},
                     {"key": "edit",    "label": "Edit",          "scoped": True},

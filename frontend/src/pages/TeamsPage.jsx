@@ -26,7 +26,7 @@ const sanitizeInitials = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]
 
 export default function TeamsPage() {
   // ── Permissions V3 (Round 3) ──
-  const { fn: permFn } = useEffectivePage("profix", "teams");
+  const { fn: permFn } = useEffectivePage("manage", "teams");
   const permCreate = permFn("create");
   const permEdit   = permFn("edit");
   const permDelete = permFn("delete");

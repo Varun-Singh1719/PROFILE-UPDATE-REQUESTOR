@@ -1,0 +1,80 @@
+Module,Module Label,Page,Page Label,App Route,Function Key,Function Label,Scoped?,What It Controls
+profix,Profix,dashboard,Dashboard,/admin,refresh,Refresh,No,Reloads the dashboard KPIs and widgets.
+profix,Profix,dashboard,Dashboard,/admin,export,Export,No,Exports current dashboard metrics as CSV.
+profix,Profix,dashboard,Dashboard,/admin,change_default_view,Change Default View,No,Lets the user switch between the Profix and Workspace Manager tabs and set a default.
+profix,Profix,all_requests,All Requests,/admin/open-tickets,create_ticket,New Request,Yes,Shows/enables the top-right ""New Request"" button on the ticket list.
+profix,Profix,all_requests,All Requests,/admin/open-tickets,export_tickets,Export CSV,No,Shows/enables the CSV export icon in the header.
+profix,Profix,all_requests,All Requests,/admin/open-tickets,refresh_list,Refresh,No,Shows/enables the refresh icon on the ticket list.
+profix,Profix,all_requests,All Requests,/admin/open-tickets,filter,Filter,No,Shows/enables the filter bar (status/priority/team/etc.).
+profix,Profix,all_requests,All Requests,/admin/open-tickets,bulk_assign,Bulk Assign,Yes,Shows/enables the Assign Selected dropdown for multi-select rows.
+profix,Profix,open_requests,Open Requests,/admin/open-tickets?status=Open,create_ticket,New Request,Yes,New Request button on the Open-only view.
+profix,Profix,open_requests,Open Requests,/admin/open-tickets?status=Open,export_tickets,Export CSV,No,CSV export on the Open view.
+profix,Profix,open_requests,Open Requests,/admin/open-tickets?status=Open,refresh_list,Refresh,No,Refresh icon on the Open view.
+profix,Profix,open_requests,Open Requests,/admin/open-tickets?status=Open,assign_to_me,Assign to Me,No,Row-level ""Assign to Me"" button (Delivery/DQ workflow).
+profix,Profix,unassigned,Unassigned Requests,/admin/open-tickets?assigned_to=none,assign,Assign,Yes,Row-level Assign dropdown on unassigned tickets.
+profix,Profix,unassigned,Unassigned Requests,/admin/open-tickets?assigned_to=none,refresh_list,Refresh,No,Refresh icon on the unassigned view.
+profix,Profix,unassigned,Unassigned Requests,/admin/open-tickets?assigned_to=none,export_tickets,Export CSV,No,CSV export on the unassigned view.
+profix,Profix,ticket_detail,Request Details,/admin/tickets/:id,edit,Edit,Yes,""Edit"" button on a single ticket page (title/description/priority).
+profix,Profix,ticket_detail,Request Details,/admin/tickets/:id,delete,Delete,Yes,Delete a ticket from its detail page.
+profix,Profix,ticket_detail,Request Details,/admin/tickets/:id,assign,Assign,Yes,Assign/Reassign dropdown in the detail header.
+profix,Profix,ticket_detail,Request Details,/admin/tickets/:id,add_comment,Add Comment,Yes,Post-comment form on the ticket detail.
+profix,Profix,ticket_detail,Request Details,/admin/tickets/:id,upload_attach,Upload Attachment,No,Attach-file button on the ticket detail.
+profix,Profix,ticket_detail,Request Details,/admin/tickets/:id,download_attach,Download Attachment,No,Download-file links for existing attachments.
+profix,Profix,ticket_detail,Request Details,/admin/tickets/:id,change_status,Change Status,Yes,Update Status dropdown (Open / In Progress / Closed).
+manage,Manage,employees,Employees,/admin/contacts,create,Add Employee,Yes,""Add Employee"" button on the Employee List page.
+manage,Manage,employees,Employees,/admin/contacts,edit,Edit,Yes,Row-level Edit pencil on the employee table.
+manage,Manage,employees,Employees,/admin/contacts,delete,Delete,Yes,Deactivate / delete an employee (via Bulk Actions).
+manage,Manage,employees,Employees,/admin/contacts,invite,Invite,No,Send login-invite email to an employee.
+manage,Manage,employees,Employees,/admin/contacts,import,Import CSV,No,Bulk-upload + Upload History icons in the header.
+manage,Manage,employees,Employees,/admin/contacts,export,Export CSV,No,Export-CSV icon in the header.
+manage,Manage,teams,Teams,/admin/teams,create,New Team,Yes,""Add New Team"" button.
+manage,Manage,teams,Teams,/admin/teams,edit,Edit Team,Yes,Row-level Edit pencil on the team table.
+manage,Manage,teams,Teams,/admin/teams,delete,Delete Team,Yes,Row-level Delete on the team table.
+manage,Manage,teams,Teams,/admin/teams,assign_members,Assign Members,Yes,Adding/removing employees inside the team edit modal.
+manage,Manage,notifications,Notifications,/admin/notifications,mark_read,Mark as Read,No,Marks notification-log entries as read.
+manage,Manage,notifications,Notifications,/admin/notifications,delete,Delete,No,Row-level delete on the outbox log.
+manage,Manage,notifications,Notifications,/admin/notifications,send_notification,Send Notification,Yes,Trigger an ad-hoc notification send (planned).
+manage,Manage,email_templates,Email Templates,/admin/email-templates,create,New Template,No,""New Template"" button.
+manage,Manage,email_templates,Email Templates,/admin/email-templates,edit,Edit,No,Row-level Edit pencil (and Duplicate).
+manage,Manage,email_templates,Email Templates,/admin/email-templates,delete,Delete,No,Row-level Delete / Reset-to-default icon.
+manage,Manage,email_templates,Email Templates,/admin/email-templates,test_send,Send Test,No,""Send test email"" action inside the editor.
+manage,Manage,reports,Reports,/admin/reports,export,Export,No,Export report data as CSV/PDF.
+manage,Manage,reports,Reports,/admin/reports,refresh,Refresh,No,Refresh the report widgets.
+manage,Manage,audit_logs,Audit Logs,/admin/audit-logs,export,Export,No,Export audit log rows as CSV.
+manage,Manage,audit_logs,Audit Logs,/admin/audit-logs,filter,Filter,No,Show/enable the audit log filter bar.
+manage,Manage,audit_logs,Audit Logs,/admin/audit-logs,refresh,Refresh,No,Refresh the audit log list.
+manage,Manage,settings,Settings,/admin/settings,save,Save,No,Save changes on the org-wide Settings page.
+manage,Manage,settings,Settings,/admin/settings,reset,Reset,No,Reset settings to defaults.
+desk_booking,Workspace Manager,my_workspace,My Workspace (Dashboard),/admin,refresh,Refresh,No,Reload the personal Workspace dashboard.
+desk_booking,Workspace Manager,my_workspace,My Workspace (Dashboard),/admin,view_floor_plan,View Floor Plan,No,Open the floor-plan preview from the dashboard card.
+desk_booking,Workspace Manager,my_workspace,My Workspace (Dashboard),/admin,book_desk,Book a Desk,No,Quick-action ""Book a Desk"" button on the dashboard.
+desk_booking,Workspace Manager,my_workspace,My Workspace (Dashboard),/admin,book_meeting,Book Meeting Room,No,Quick-action ""Book Meeting Room"" button on the dashboard.
+desk_booking,Workspace Manager,my_workspace,My Workspace (Dashboard),/admin,request_workstation,Request Workstation,No,Quick-action ""Request Workstation"" button (self-service).
+desk_booking,Workspace Manager,workstation_bookings,Workstation Bookings,/workspace-manager/workstation-booking,book,Book,Yes,""Save"" button on the Workstation Booking form (admin books for others).
+desk_booking,Workspace Manager,workstation_bookings,Workstation Bookings,/workspace-manager/workstation-booking,cancel_booking,Cancel Booking,Yes,Cancel a workstation booking from the booking detail drawer.
+desk_booking,Workspace Manager,workstation_bookings,Workstation Bookings,/workspace-manager/workstation-booking,reschedule,Reschedule,Yes,Reschedule (change date) an existing booking.
+desk_booking,Workspace Manager,workstation_bookings,Workstation Bookings,/workspace-manager/workstation-booking,export,Export,No,Export booking data (planned).
+desk_booking,Workspace Manager,workstation_bookings,Workstation Bookings,/workspace-manager/workstation-booking,refresh,Refresh,No,Refresh availability on the map.
+desk_booking,Workspace Manager,meeting_room_bookings,Meeting Room Bookings,/workspace-manager/meeting-room-booking,book,Book,Yes,""Book"" button on the meeting-room booking form.
+desk_booking,Workspace Manager,meeting_room_bookings,Meeting Room Bookings,/workspace-manager/meeting-room-booking,cancel_booking,Cancel Booking,Yes,Cancel a meeting-room booking.
+desk_booking,Workspace Manager,meeting_room_bookings,Meeting Room Bookings,/workspace-manager/meeting-room-booking,reschedule,Reschedule,Yes,Reschedule (change date/time) an MR booking.
+desk_booking,Workspace Manager,meeting_room_bookings,Meeting Room Bookings,/workspace-manager/meeting-room-booking,refresh,Refresh,No,Refresh the room availability grid.
+desk_booking,Workspace Manager,workstation_requests,Request Workstation,/workspace-manager/request-workstation,create,Submit Request,No,""Submit Request"" button on the self-service form (goes to Pending Approvals).
+desk_booking,Workspace Manager,workstation_requests,Request Workstation,/workspace-manager/request-workstation,cancel,Cancel Request,Yes,Cancel one's own pending request.
+desk_booking,Workspace Manager,pending_approvals,Pending Approvals,/workspace-manager/pending-approvals,approve,Approve,Yes,""Approve"" button on each pending request card (single + bulk).
+desk_booking,Workspace Manager,pending_approvals,Pending Approvals,/workspace-manager/pending-approvals,reject,Reject,Yes,""Decline"" button on each pending request card (single + bulk).
+desk_booking,Workspace Manager,pending_approvals,Pending Approvals,/workspace-manager/pending-approvals,configure_auto_approval,Configure Auto-Approval,No,Gear icon that opens the Approval Settings modal (matrix rules).
+desk_booking,Workspace Manager,pending_approvals,Pending Approvals,/workspace-manager/pending-approvals,refresh,Refresh,No,Refresh the approval queue.
+desk_booking,Workspace Manager,floor_layout,Floor Layout,/workspace-manager/floor-layout,refresh,Refresh,No,Refresh seat/booking data on the read-only day view.
+desk_booking,Workspace Manager,floor_layout,Floor Layout,/workspace-manager/floor-layout,export,Export,No,Export the day's layout data (planned).
+desk_booking,Workspace Manager,floor_plans,Floor Plans,/workspace-manager/floor-plans,create,New Plan,No,""New Floor Plan"" button (admin CRUD).
+desk_booking,Workspace Manager,floor_plans,Floor Plans,/workspace-manager/floor-plans,edit,Edit,No,Row-level Edit pencil on the plan card (opens calibration).
+desk_booking,Workspace Manager,floor_plans,Floor Plans,/workspace-manager/floor-plans,delete,Delete,No,Delete a floor plan from its card.
+desk_booking,Workspace Manager,floor_plans,Floor Plans,/workspace-manager/floor-plans,upload,Upload PDF,No,Upload a new PDF for the plan.
+desk_booking,Workspace Manager,floor_plans,Floor Plans,/workspace-manager/floor-plans,publish,Publish,No,Toggle the Draft/Live status on a plan.
+desk_booking,Workspace Manager,meeting_rooms,Meeting Rooms,/workspace-manager/meeting-rooms,create,New Room,No,Add a new meeting room definition.
+desk_booking,Workspace Manager,meeting_rooms,Meeting Rooms,/workspace-manager/meeting-rooms,edit,Edit,No,Edit an existing meeting room.
+desk_booking,Workspace Manager,meeting_rooms,Meeting Rooms,/workspace-manager/meeting-rooms,delete,Delete,No,Delete a meeting room definition.
+desk_booking,Workspace Manager,workstations,Workstations / Seats,/workspace-manager/workstations,assign_team,Assign to Team,No,Assign a seat to a team (colors it with the team gradient).
+desk_booking,Workspace Manager,workstations,Workstations / Seats,/workspace-manager/workstations,unassign,Unassign,No,Remove a seat's team assignment.
+desk_booking,Workspace Manager,workstations,Workstations / Seats,/workspace-manager/workstations,edit,Edit,No,Edit a seat's label / attributes.

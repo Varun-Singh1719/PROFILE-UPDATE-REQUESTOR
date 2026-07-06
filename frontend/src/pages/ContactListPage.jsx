@@ -628,7 +628,7 @@ function GeneratedPasswordModal({ password, email, onClose }) {
 
 export default function ContactListPage() {
   // ── Permissions V3 (Round 3) ──
-  const { fn: permFn } = useEffectivePage("profix", "employees");
+  const { fn: permFn } = useEffectivePage("manage", "employees");
   const permCreate = permFn("create");
   const permEdit   = permFn("edit");
   const permInvite = permFn("invite");

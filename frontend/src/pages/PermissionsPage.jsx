@@ -18,7 +18,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Save, Loader2, Search, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp,
   Copy, Eye, EyeOff, Info, Briefcase, Armchair, History, Sparkles, Plus,
-  RefreshCw, CheckCircle2,
+  RefreshCw, CheckCircle2, Settings,
 } from "lucide-react";
 import api from "../lib/api";
 import Layout from "../components/Layout";
@@ -245,7 +245,7 @@ function PageDetail({ page, state, onView, onEdit, onFunction, onEnableAll, onHi
 
 // ------------- ModuleAccordion (master-detail)
 function ModuleAccordion({ mod, state, expanded, onToggle, search, onSelectAll, onClear, updateState }) {
-  const Icon = mod.key === "profix" ? Briefcase : Armchair;
+  const Icon = mod.key === "profix" ? Briefcase : (mod.key === "manage" ? Settings : Armchair);
   const [selectedPageKey, setSelectedPageKey] = useState((mod.pages || [])[0]?.key);
   const q = search.trim().toLowerCase();
 

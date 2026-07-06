@@ -44,11 +44,11 @@ const NAV_CONFIG = [
   {
     kind: "group", label: "Manage", icon: Settings, superAdminOnly: true,
     children: [
-      { to: "/admin/teams",           label: "Teams",           icon: Users,    v3: { module: "profix", page: "teams" } },
+      { to: "/admin/teams",           label: "Teams",           icon: Users,    v3: { module: "manage", page: "teams" } },
       { to: "/admin/permissions",     label: "Permissions",     icon: Shield },
-      { to: "/admin/email-templates", label: "Email Templates", icon: MailPlus, v3: { module: "profix", page: "email_templates" } },
-      { to: "/admin/notifications",   label: "Notifications",   icon: Send,     v3: { module: "profix", page: "notifications" } },
-      { to: "/admin/contacts",        label: "Employee List",   icon: BookUser, v3: { module: "profix", page: "employees" } },
+      { to: "/admin/email-templates", label: "Email Templates", icon: MailPlus, v3: { module: "manage", page: "email_templates" } },
+      { to: "/admin/notifications",   label: "Notifications",   icon: Send,     v3: { module: "manage", page: "notifications" } },
+      { to: "/admin/contacts",        label: "Employee List",   icon: BookUser, v3: { module: "manage", page: "employees" } },
     ],
   },
 ];

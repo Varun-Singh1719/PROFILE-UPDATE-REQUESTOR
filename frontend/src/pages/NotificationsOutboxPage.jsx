@@ -29,7 +29,7 @@ function fmt(iso) { if (!iso) return "—"; try { return new Date(iso).toLocaleS
 
 export default function NotificationsOutboxPage() {
   // ── Permissions V3 (Round 3) ──
-  const { fn: permFn } = useEffectivePage("profix", "notifications");
+  const { fn: permFn } = useEffectivePage("manage", "notifications");
   const permDelete = permFn("delete");
   const [items, setItems] = useState([]);
   const [q, setQ] = useState("");
