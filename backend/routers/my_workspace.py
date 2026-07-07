@@ -446,3 +446,255 @@ async def my_workspace_floor(
         "team_name": team_name,
         "seat_meta": seat_meta,
     }
+
+
+
+# --------------------------------------------------------------------------- #
+#  OVERALL (organisation-wide) dashboard endpoint                              #
+# --------------------------------------------------------------------------- #
+
+def _seat_label_key(lbl: str):
+    """Sortable key for seat labels like 'A1', 'AA9', 'G12'."""
+    import re
+    m = re.match(r"^([A-Za-z]+)(\d+)$", str(lbl or ""))
+    if not m:
+        return (str(lbl or ""), 0)
+    letters, number = m.group(1), int(m.group(2))
+    # left-pad letters so 'A' < 'AA' < 'B'
+    return (len(letters), letters.upper(), number)
+
+
+def _fmt_ago(ts) -> str:
+    """Return a compact "X m/h/d ago" string from ISO ts."""
+    if not ts:
+        return ""
+    try:
+        if isinstance(ts, str):
+            # strip trailing timezone info naïvely
+            dt = _dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        else:
+            dt = ts
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(_dt.timezone.utc).replace(tzinfo=None)
+        delta = _dt.datetime.utcnow() - dt
+        secs = int(delta.total_seconds())
+        if secs < 60:   return f"{secs}s ago"
+        if secs < 3600: return f"{secs // 60}m ago"
+        if secs < 86400:return f"{secs // 3600}h ago"
+        return f"{secs // 86400}d ago"
+    except Exception:
+        return ""
+
+
+@api_router.get("/my-workspace/overall-dashboard")
+async def my_workspace_overall_dashboard(
+    date: Optional[str] = Query(None, description="YYYY-MM-DD (default: today)"),
+    user=Depends(get_current_user),
+):
+    """Organisation-wide workspace dashboard.
+
+    Aggregates:
+      * my_seat            – same shape as `/my-workspace/dashboard`
+      * org_occupancy      – total seats vs. present today
+      * org_week           – 7-day rolling attendance counts
+      * meeting_rooms_today– top rooms booked today
+      * all_teams          – every team with its seat range
+      * recent_activity    – latest bookings/cancellations org-wide
+    """
+    the_date = date or _today_iso()
+    try:
+        _dt.date.fromisoformat(the_date)
+    except Exception:
+        raise HTTPException(400, "date must be YYYY-MM-DD")
+
+    uid = user.get("id")
+
+    # ── My seat today (reuse the same logic block from /dashboard) ──────────
+    my_booking = await db.workstation_bookings.find_one(
+        {"employee.id": uid, "date": the_date, "cancelled": False}, {"_id": 0},
+    )
+    my_request = None
+    if not my_booking:
+        my_request = await db.workstation_requests.find_one(
+            {"employee.id": uid, "date": the_date, "status": "Pending Approval"},
+            {"_id": 0},
+        )
+    my_seat_payload: Optional[dict] = None
+    ctx_source = my_booking or my_request
+    plan_name: Optional[str] = None
+    if ctx_source and ctx_source.get("plan_id"):
+        plan_doc = await db.floor_plans.find_one(
+            {"id": ctx_source["plan_id"]}, {"_id": 0, "name": 1},
+        )
+        plan_name = (plan_doc or {}).get("name")
+    if ctx_source:
+        my_seat_payload = {
+            "status": "assigned" if my_booking else "requested",
+            "date": the_date,
+            "plan_id": ctx_source.get("plan_id"),
+            "plan_name": plan_name,
+            "seat_id": ctx_source.get("seat_id"),
+            "seat_label": ctx_source.get("seat_label"),
+            "team_id": ctx_source.get("team_id"),
+            "team_name": ctx_source.get("team_name"),
+            "team_color": ctx_source.get("team_color"),
+            "booking_id": (my_booking or {}).get("id"),
+            "request_id": (my_request or {}).get("id"),
+        }
+
+    # ── Total seats from all live floor plans ───────────────────────────────
+    total_seats = 0
+    plans = await db.floor_plans.find(
+        {}, {"_id": 0, "id": 1, "name": 1, "live_version_id": 1},
+    ).to_list(50)
+    for p in plans:
+        vid = p.get("live_version_id")
+        if not vid:
+            continue
+        v = await db.floor_plan_versions.find_one({"id": vid}, {"_id": 0, "seats": 1})
+        total_seats += len(((v or {}).get("seats") or []))
+
+    # ── Present today = number of confirmed bookings today ──────────────────
+    present_today = await db.workstation_bookings.count_documents(
+        {"date": the_date, "cancelled": False},
+    )
+    free_today = max(0, total_seats - present_today)
+    occ_pct = int(round((present_today / total_seats) * 100)) if total_seats else 0
+
+    # ── 7-day rolling attendance ────────────────────────────────────────────
+    the_date_obj = _dt.date.fromisoformat(the_date)
+    start = the_date_obj - _dt.timedelta(days=6)
+    date_strs = [(start + _dt.timedelta(days=i)).isoformat() for i in range(7)]
+    counts_map = {ds: 0 for ds in date_strs}
+    cur = db.workstation_bookings.aggregate([
+        {"$match": {"date": {"$in": date_strs}, "cancelled": False}},
+        {"$group": {"_id": "$date", "n": {"$sum": 1}}},
+    ])
+    async for row in cur:
+        counts_map[row["_id"]] = row["n"]
+    day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    org_week: List[dict] = []
+    for ds in date_strs:
+        d = _dt.date.fromisoformat(ds)
+        org_week.append({
+            "date": ds,
+            "day": day_names[d.weekday()],
+            "n": d.day,
+            "count": counts_map[ds],
+            "today": ds == the_date,
+        })
+
+    # ── Meeting rooms today (aggregate room_bookings by room) ───────────────
+    day_start = _dt.datetime.combine(the_date_obj, _dt.time.min).isoformat()
+    day_end   = _dt.datetime.combine(the_date_obj, _dt.time.max).isoformat()
+    rooms_agg: Dict[str, dict] = {}
+    total_room_bookings_today = 0
+    async for rb in db.room_bookings.find(
+        {"cancelled": False, "start_at": {"$lte": day_end}, "end_at": {"$gte": day_start}},
+        {"_id": 0, "room_id": 1, "room_name": 1, "plan_id": 1, "plan_name": 1,
+         "start_at": 1, "end_at": 1},
+    ):
+        total_room_bookings_today += 1
+        key = rb.get("room_id") or rb.get("room_name")
+        if not key:
+            continue
+        try:
+            start_dt = max(_dt.datetime.fromisoformat(rb["start_at"].replace("Z", "+00:00")),
+                           _dt.datetime.combine(the_date_obj, _dt.time.min))
+            end_dt   = min(_dt.datetime.fromisoformat(rb["end_at"].replace("Z", "+00:00")),
+                           _dt.datetime.combine(the_date_obj, _dt.time.max))
+            minutes = max(0, int((end_dt - start_dt).total_seconds() // 60))
+        except Exception:
+            minutes = 0
+        entry = rooms_agg.setdefault(key, {
+            "room_id": rb.get("room_id"),
+            "room_name": rb.get("room_name"),
+            "plan_name": rb.get("plan_name"),
+            "minutes_used": 0,
+            "bookings": 0,
+        })
+        entry["minutes_used"] += minutes
+        entry["bookings"] += 1
+    total_rooms = await db.floor_plan_versions.aggregate([
+        {"$project": {"rooms": {"$ifNull": ["$rooms", []]}}},
+        {"$project": {"count": {"$size": "$rooms"}}},
+        {"$group": {"_id": None, "total": {"$sum": "$count"}}},
+    ]).to_list(1)
+    total_rooms_count = (total_rooms[0]["total"] if total_rooms else 0) or len(rooms_agg)
+    meeting_rooms_today = sorted(
+        rooms_agg.values(), key=lambda r: r["minutes_used"], reverse=True,
+    )[:6]
+    # Format used time as "Xh Ym" and pct of 8h
+    day_capacity_min = 8 * 60
+    for r in meeting_rooms_today:
+        m = r.pop("minutes_used", 0)
+        h, mm = divmod(m, 60)
+        r["used"] = (f"{h}h {mm:02d}m" if h else f"{mm}m")
+        r["pct"] = min(100, int(round((m / day_capacity_min) * 100)))
+
+    # ── All teams: seat range derived from ALL bookings (any date) ──────────
+    seats_per_team: Dict[str, List[str]] = {}
+    async for b in db.workstation_bookings.find(
+        {"cancelled": False, "team_id": {"$ne": None}},
+        {"_id": 0, "team_id": 1, "seat_label": 1},
+    ):
+        tid = b.get("team_id")
+        seat = b.get("seat_label")
+        if not tid or not seat:
+            continue
+        seats_per_team.setdefault(tid, []).append(seat)
+
+    team_docs = await db.teams.find(
+        {}, {"_id": 0, "id": 1, "name": 1, "color": 1, "member_ids": 1},
+    ).to_list(200)
+    all_teams: List[dict] = []
+    for t in team_docs:
+        tid = t["id"]
+        seats = sorted(set(seats_per_team.get(tid, [])), key=_seat_label_key)
+        all_teams.append({
+            "id": tid,
+            "name": t.get("name"),
+            "color": t.get("color") or "tp1",
+            "member_count": len(t.get("member_ids") or []),
+            "seat_count": len(seats),
+            "seat_from": seats[0]  if seats else None,
+            "seat_to":   seats[-1] if seats else None,
+        })
+    # Show teams with real seat assignments first
+    all_teams.sort(key=lambda x: (0 if x["seat_count"] else 1, -x["seat_count"], x["name"] or ""))
+
+    # ── Recent activity (last 6 org-wide booking events) ────────────────────
+    recent_activity: List[dict] = []
+    async for b in db.workstation_bookings.find(
+        {}, {"_id": 0, "employee": 1, "seat_label": 1, "team_name": 1, "date": 1,
+             "cancelled": 1, "updated_at": 1, "created_at": 1},
+    ).sort("updated_at", -1).limit(6):
+        emp = (b.get("employee") or {})
+        who = emp.get("name") or emp.get("email") or "Someone"
+        verb = "cancelled" if b.get("cancelled") else "booked"
+        seat = b.get("seat_label") or "a seat"
+        team = b.get("team_name")
+        target = f"{seat}" + (f" · {team}" if team else "")
+        recent_activity.append({
+            "who":    who,
+            "what":   verb,
+            "target": target,
+            "when":   _fmt_ago(b.get("updated_at") or b.get("created_at")),
+        })
+
+    return {
+        "date": the_date,
+        "my_seat": my_seat_payload,
+        "org_occupancy": {
+            "total_seats": total_seats,
+            "present":     present_today,
+            "free":        free_today,
+            "occupancy_pct": occ_pct,
+        },
+        "org_week": org_week,
+        "meeting_rooms_today": meeting_rooms_today,
+        "meeting_rooms_total": total_rooms_count,
+        "meeting_rooms_bookings_today": total_room_bookings_today,
+        "all_teams": all_teams,
+        "recent_activity": recent_activity,
+    }

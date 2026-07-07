@@ -22,6 +22,7 @@ import { Ticket, AlertCircle, CheckCircle2, Loader, Users, Plus, LayoutGrid, Cli
 import { toast } from "../lib/notify";
 import { useAuth } from "../context/AuthContext";
 import MyWorkspaceDashboard from "../components/MyWorkspaceDashboard";
+import WorkspaceOverallDashboard from "../components/WorkspaceOverallDashboard";
 
 const TABS = [
   { key: "workspace_manager", label: "Workspace Manager", icon: LayoutGrid },
@@ -36,10 +37,15 @@ function longDate(d = new Date()) {
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("workspace_manager");
   const [defaultTab, setDefaultTab] = useState("workspace_manager");
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [savingPref, setSavingPref] = useState(false);
+
+  // Users whose role has organisation-wide workspace visibility see the
+  // "Overall" dashboard in place of the Individual/Team-Manager variants.
+  const isOverallUser = ["Super Admin", "Admin"].includes(user?.role || "");
 
   // Load user preference on mount
   useEffect(() => {
@@ -160,7 +166,7 @@ export default function AdminDashboard() {
         contentClassName="w-full px-0 pt-0 pb-3 flex flex-col min-h-[calc(100vh-56px)]"
         actions={tabBar}
       >
-        <MyWorkspaceDashboard />
+        {isOverallUser ? <WorkspaceOverallDashboard /> : <MyWorkspaceDashboard />}
       </Layout>
     );
   }
