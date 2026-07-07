@@ -223,56 +223,88 @@ export default function WorkspaceOverallDashboard() {
         <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden flex flex-col">
           {/* This Week */}
           <div className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-[11px] uppercase tracking-widest text-gray-500 font-bold">This week</div>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[11px] uppercase tracking-widest text-gray-500 font-bold">This week</div>
+                <div className="text-xs text-gray-500 mt-0.5">{(() => {
+                  if (!weekData?.week_start && !weekData?.start) return "";
+                  const startISO = weekData.week_start || weekData.start;
+                  const start = new Date(startISO + "T00:00:00");
+                  const end = new Date(start.getTime() + 6 * 86400000);
+                  const sameMonth = start.getMonth() === end.getMonth();
+                  const fmtStart = start.toLocaleDateString(undefined, { day: "2-digit", month: sameMonth ? undefined : "short" });
+                  const fmtEnd = end.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+                  return `${fmtStart} – ${fmtEnd}`;
+                })()}</div>
+              </div>
               <div className="inline-flex items-center gap-1">
                 <button
-                  className="p-1 rounded hover:bg-gray-100"
+                  type="button"
                   onClick={() => setWeekStart(toISO(new Date(new Date(weekStart).getTime() - 7 * 86400000)))}
+                  className="h-8 w-8 rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#ec9324] hover:border-[#ec9324] inline-flex items-center justify-center relative group"
+                  title="Previous Week"
+                  aria-label="Previous Week"
                 >
-                  <ChevronLeft size={13}/>
+                  <ChevronLeft size={15} />
                 </button>
                 <button
+                  type="button"
                   onClick={() => setWeekStart(isoWeekMondayFor(toISO(new Date())))}
-                  className="text-[10px] font-semibold text-[#ec9324] px-2 py-0.5 rounded hover:bg-orange-50"
-                >Today</button>
-                <button
-                  className="p-1 rounded hover:bg-gray-100"
-                  onClick={() => setWeekStart(toISO(new Date(new Date(weekStart).getTime() + 7 * 86400000)))}
+                  className="h-8 px-2 rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#ec9324] hover:border-[#ec9324] text-[11px] font-semibold"
+                  title="Jump to current week"
                 >
-                  <ChevronRight size={13}/>
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWeekStart(toISO(new Date(new Date(weekStart).getTime() + 7 * 86400000)))}
+                  className="h-8 w-8 rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#ec9324] hover:border-[#ec9324] inline-flex items-center justify-center relative group"
+                  title="Next Week"
+                  aria-label="Next Week"
+                >
+                  <ChevronRight size={15} />
                 </button>
               </div>
             </div>
-            <div className="text-[10px] text-gray-500 mb-2 flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500"/>Assigned</span>
-              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400"/>Requested</span>
-              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-gray-300"/>None</span>
-            </div>
-            <div className="grid grid-cols-7 gap-1.5">
-              {(myWeekDays.length ? myWeekDays : Array.from({ length: 7 }).map((_, i) => ({}))).slice(0, 7).map((w, i) => {
-                const dtStr = w.date || "";
-                const isToday = dtStr === today;
-                const day = dtStr ? new Date(dtStr).toLocaleDateString(undefined, { weekday: "short" }).slice(0, 3) : ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][i];
-                const n = dtStr ? new Date(dtStr).getDate() : "—";
-                const status = w.status || "none";
-                const dot =
-                  status === "assigned"  ? "bg-emerald-500" :
-                  status === "requested" ? "bg-amber-400"   :
-                                           "bg-gray-300";
+            <div className="mt-4 grid grid-cols-7 gap-1.5">
+              {(myWeekDays.length ? myWeekDays : Array.from({ length: 7 }).map((_, i) => ({}))).slice(0, 7).map((d, i) => {
+                const isToday = d?.date === today;
+                const status = d?.status || "none";
+                let cls = "bg-white border border-gray-200 text-gray-500";
+                if (status === "assigned") cls = "bg-[#ec9324] border-[#ec9324] text-white shadow-sm";
+                else if (status === "requested") cls = "bg-orange-50 border-2 border-dashed border-[#ec9324] text-[#ec9324]";
+                const dayLabel = d?.date
+                  ? new Date(d.date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short" }).slice(0, 3)
+                  : "—";
+                const dayNum = d?.date ? new Date(d.date + "T00:00:00").getDate() : "";
                 return (
-                  <div key={i} className={`rounded-lg border p-1.5 text-center ${isToday ? "border-[#ec9324] bg-orange-50" : "border-gray-200"}`}>
-                    <div className="text-[10px] font-semibold text-gray-500">{day}</div>
-                    <div className={`text-sm font-bold ${isToday ? "text-[#ec9324]" : "text-gray-900"}`}>{n}</div>
-                    <div className="mt-1 inline-flex items-center justify-center">
-                      <span className={`h-2 w-2 rounded-full ${dot}`} />
+                  <div
+                    key={d?.date || i}
+                    className={`flex flex-col items-center justify-center rounded-lg h-16 relative ${cls} ${isToday ? "ring-2 ring-[#ec9324]/40 ring-offset-2 ring-offset-white" : ""}`}
+                    title={d?.date ? `${dayLabel} ${d.date}${status !== "none" && d.seat_label ? " · " + d.seat_label : ""}${status !== "none" ? " · " + (status === "assigned" ? "Assigned" : "Requested") : ""}` : undefined}
+                  >
+                    <div className={`text-[10px] font-semibold uppercase tracking-wide ${status === "assigned" ? "text-white/90" : status === "requested" ? "text-[#ec9324]" : "text-gray-400"}`}>
+                      {dayLabel}
                     </div>
+                    <div className={`text-lg font-bold ${status === "assigned" ? "text-white" : status === "requested" ? "text-[#ec9324]" : "text-gray-700"}`}>
+                      {dayNum}
+                    </div>
+                    {d?.seat_label && status !== "none" && (
+                      <div className={`text-[9px] font-bold ${status === "assigned" ? "text-white/95" : "text-[#ec9324]"} leading-none`}>
+                        {d.seat_label}
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
+            <div className="mt-4 flex items-center gap-3 text-[10px] text-gray-500">
+              <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-[#ec9324]" /> Assigned</span>
+              <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm border-2 border-dashed border-[#ec9324] bg-orange-50" /> Requested</span>
+              <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm border border-gray-300 bg-white" /> None</span>
+            </div>
             {weekLoading && (
-              <div className="mt-2 text-[10px] text-gray-400">Loading week…</div>
+              <div className="mt-2 text-[10px] text-gray-400 inline-flex items-center gap-1"><RefreshCw size={11} className="animate-spin" /> Updating…</div>
             )}
           </div>
 
