@@ -32,6 +32,7 @@ import RequestWorkstationPage from "./pages/RequestWorkstationPage";
 import PendingApprovalsPage from "./pages/PendingApprovalsPage";
 import BookingsPage from "./pages/BookingsPage";
 import ProfilePage from "./pages/ProfilePage";
+import WMOverallPreview from "./pages/WMOverallPreview";
 import { Loader2 } from "lucide-react";
 
 // v3 role model — every authenticated user (Super Admin or Admin) lands at /admin.
