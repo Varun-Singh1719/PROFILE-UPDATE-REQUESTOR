@@ -244,19 +244,31 @@ def feature_actions(module_key: str, feature_key: str) -> List[str]:
 # ============================================================================
 PERMISSION_MODULES_V3 = [
     {
+        # ─── Dashboard access module ────────────────────────────────────────
+        # Introduced Jul 2026. Provides mutually-exclusive dashboard visibility
+        # (Individual / Manager / Overall) per product. Replaces the legacy
+        # profix.dashboard and desk_booking.my_workspace pages.
+        "key": "dashboard",
+        "label": "Dashboard",
+        "icon": "LayoutDashboard",
+        "color": "#10b981",
+        "type": "access_level",
+        "access_levels": [
+            {"key": "individual", "label": "Individual", "description": "Sees only their own dashboard (personal bookings, workstation, meetings, requests)."},
+            {"key": "manager",    "label": "Manager",    "description": "Sees the Team Manager dashboard — personal info + details of the team they are mapped to."},
+            {"key": "overall",    "label": "Overall",    "description": "Sees the organization-wide dashboard with unrestricted visibility."},
+        ],
+        "pages": [
+            {"key": "workspace_manager", "label": "Workspace Manager", "route": "/admin", "type": "access_level"},
+            {"key": "profix",            "label": "Profix",            "route": "/admin", "type": "access_level"},
+        ],
+    },
+    {
         "key": "profix",
         "label": "Profix",
         "icon": "Briefcase",
         "color": "#ec9324",
         "pages": [
-            {
-                "key": "dashboard", "label": "Dashboard", "route": "/admin",
-                "functions": [
-                    {"key": "refresh", "label": "Refresh", "scoped": False},
-                    {"key": "export",  "label": "Export",  "scoped": False},
-                    {"key": "change_default_view", "label": "Change Default View", "scoped": False},
-                ],
-            },
             {
                 "key": "all_requests", "label": "All Requests", "route": "/admin/open-tickets",
                 "functions": [
@@ -374,16 +386,6 @@ PERMISSION_MODULES_V3 = [
         "icon": "Armchair",
         "color": "#3b82f6",
         "pages": [
-            {
-                "key": "my_workspace", "label": "My Workspace (Dashboard)", "route": "/admin",
-                "functions": [
-                    {"key": "refresh",           "label": "Refresh",              "scoped": False},
-                    {"key": "view_floor_plan",   "label": "View Floor Plan",      "scoped": False},
-                    {"key": "book_desk",         "label": "Book a Desk",          "scoped": False},
-                    {"key": "book_meeting",      "label": "Book Meeting Room",    "scoped": False},
-                    {"key": "request_workstation","label": "Request Workstation", "scoped": False},
-                ],
-            },
             {
                 "key": "workstation_bookings", "label": "Workstation Bookings", "route": "/workspace-manager/workstation-booking",
                 "functions": [

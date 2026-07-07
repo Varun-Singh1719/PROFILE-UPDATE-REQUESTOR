@@ -181,24 +181,29 @@ async def my_workspace_dashboard(
         {"_id": 0, "action": 1, "detail": 1, "created_at": 1, "resource": 1, "resource_id": 1},
     ).sort("created_at", -1).limit(6).to_list(6)
 
-    # ---- Manager-only: "My Team Today"
-    # If the current user is listed as a manager on ≥ 1 team, aggregate the
-    # attendance status of every member of those teams for `the_date`.
-    managed_teams = await db.teams.find(
-        {"manager_ids": {"$in": [uid]}},
+    # ---- Team data: fetch teams where user is a member OR manager
+    # (Dashboard type is now driven by permission-set, not team-manager role.
+    # We still populate team data so the frontend can render "My Team Today"
+    # when the user's permission grants Manager-level dashboard.)
+    user_teams = await db.teams.find(
+        {"$or": [{"manager_ids": {"$in": [uid]}}, {"member_ids": {"$in": [uid]}}]},
         {"_id": 0, "id": 1, "name": 1, "color": 1, "member_ids": 1, "manager_ids": 1},
     ).to_list(50)
-    is_manager_flag = len(managed_teams) > 0
+    # Retain `is_manager` field for backwards compatibility, but its meaning is
+    # now "user is listed as a manager on ≥ 1 team". It NO LONGER drives which
+    # dashboard is shown — that's determined by the assigned Permission Set.
+    is_manager_flag = any(uid in (t.get("manager_ids") or []) for t in user_teams)
+    managed_teams = user_teams
     my_team_today: List[dict] = []
-    if is_manager_flag:
-        # collect all member ids across managed teams (excluding self)
+    if user_teams:
+        # collect all member+manager ids across the user's teams (excluding self)
         member_ids: List[str] = []
         team_by_member: Dict[str, dict] = {}
-        for t in managed_teams:
-            for mid in (t.get("member_ids") or []):
+        for t in user_teams:
+            for mid in ((t.get("member_ids") or []) + (t.get("manager_ids") or [])):
                 if mid and mid != uid:
                     member_ids.append(mid)
-                    team_by_member[mid] = t
+                    team_by_member.setdefault(mid, t)
         member_ids = list(dict.fromkeys(member_ids))  # dedupe, preserve order
 
         if member_ids:

@@ -89,7 +89,19 @@ function relativeAgo(iso) {
 }
 
 // -------------------------------------------------------------- Main component
-export default function MyWorkspaceDashboard() {
+/**
+ * MyWorkspaceDashboard
+ *
+ * Props:
+ *   showTeamSection (boolean, default = false)
+ *     — When TRUE, renders the "My Team Today" section (populated from the
+ *       user's team mapping, whether the user is a member or manager).
+ *     — When FALSE, hides the team section entirely (Individual view).
+ *
+ *   The prop is driven by the caller (AdminDashboard.jsx) based on the
+ *   assigned Permission Set — NOT by any team-role check on the user record.
+ */
+export default function MyWorkspaceDashboard({ showTeamSection = false } = {}) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const today = toISO(new Date());
@@ -300,12 +312,12 @@ export default function MyWorkspaceDashboard() {
         <TeamOnFloorCard team={dashboard?.team_on_floor || []} navigate={navigate} />
       </div>
 
-      {/* Row 2.5 — Manager-only "My Team Today" (renders only when
-          the current user is listed as a manager on ≥ 1 team). */}
-      {dashboard?.is_manager && (
+      {/* Row 2.5 — "My Team Today" (renders only when the caller sets
+          showTeamSection=true — driven by Dashboard permission = Manager). */}
+      {showTeamSection && (
         <MyTeamToday
-          team={dashboard.my_team_today || []}
-          managedTeams={dashboard.managed_teams || []}
+          team={dashboard?.my_team_today || []}
+          managedTeams={dashboard?.managed_teams || []}
         />
       )}
 

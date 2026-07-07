@@ -18,9 +18,10 @@ import RecentUpdateCard from "../components/RecentUpdateCard";
 import DateFilter, { getCurrentMonthRange, dateFilterToParams } from "../components/DateFilter";
 import { Button } from "../components/ui/button";
 import UserAvatar from "../components/UserAvatar";
-import { Ticket, AlertCircle, CheckCircle2, Loader, Users, Plus, LayoutGrid, ClipboardList, Star, RefreshCw } from "lucide-react";
+import { Ticket, AlertCircle, CheckCircle2, Loader, Users, Plus, LayoutGrid, ClipboardList, Star, RefreshCw, Lock } from "lucide-react";
 import { toast } from "../lib/notify";
 import { useAuth } from "../context/AuthContext";
+import { useEffectivePermissionsState } from "../context/EffectivePermissionsContext";
 import MyWorkspaceDashboard from "../components/MyWorkspaceDashboard";
 import WorkspaceOverallDashboard from "../components/WorkspaceOverallDashboard";
 
@@ -38,14 +39,19 @@ function longDate(d = new Date()) {
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { ready: permsReady, getDashboardAccess } = useEffectivePermissionsState();
   const [activeTab, setActiveTab] = useState("workspace_manager");
   const [defaultTab, setDefaultTab] = useState("workspace_manager");
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [savingPref, setSavingPref] = useState(false);
 
-  // Users whose role has organisation-wide workspace visibility see the
-  // "Overall" dashboard in place of the Individual/Team-Manager variants.
-  const isOverallUser = ["Super Admin", "Admin"].includes(user?.role || "");
+  // Dashboard type is now DRIVEN BY PERMISSION SET (not user role or team membership).
+  //   • Super Admin → always "overall" (bypasses the permission — see context helper)
+  //   • Otherwise → the assigned Permission Set's `dashboard.<product>.access_level`
+  //     ("individual" | "manager" | "overall" | null)
+  //   • null → renders a "No Dashboard Shared" empty state
+  const wmAccess     = getDashboardAccess("workspace_manager");
+  const profixAccess = getDashboardAccess("profix");
 
   // Load user preference on mount
   useEffect(() => {
@@ -149,7 +155,7 @@ export default function AdminDashboard() {
     </div>
   );
 
-  if (!prefsLoaded) {
+  if (!prefsLoaded || !permsReady) {
     return (
       <Layout title="Dashboard">
         <div className="flex items-center justify-center py-20 text-gray-400 text-sm">
@@ -160,13 +166,37 @@ export default function AdminDashboard() {
   }
 
   if (activeTab === "workspace_manager") {
+    let body;
+    if (!wmAccess) {
+      body = <NoDashboardShared productLabel="Workspace Manager" />;
+    } else if (wmAccess === "overall") {
+      body = <WorkspaceOverallDashboard />;
+    } else if (wmAccess === "manager") {
+      body = <MyWorkspaceDashboard showTeamSection={true} />;
+    } else {
+      // "individual"
+      body = <MyWorkspaceDashboard showTeamSection={false} />;
+    }
     return (
       <Layout
         title="Dashboard"
         contentClassName="w-full px-0 pt-0 pb-3 flex flex-col min-h-[calc(100vh-56px)]"
         actions={tabBar}
       >
-        {isOverallUser ? <WorkspaceOverallDashboard /> : <MyWorkspaceDashboard />}
+        {body}
+      </Layout>
+    );
+  }
+
+  // Profix tab
+  if (!profixAccess) {
+    return (
+      <Layout
+        title="Dashboard"
+        contentClassName="w-full px-9 sm:px-12 pt-2 pb-4 flex flex-col min-h-[calc(100vh-56px)]"
+        actions={tabBar}
+      >
+        <NoDashboardShared productLabel="Profix" />
       </Layout>
     );
   }
@@ -177,6 +207,23 @@ export default function AdminDashboard() {
       navigate={navigate}
       headerActions={tabBar}
     />
+  );
+}
+
+// ---------- No-access empty state ----------
+function NoDashboardShared({ productLabel }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-24 text-center px-6">
+      <div className="h-16 w-16 rounded-full bg-gray-100 text-gray-400 inline-flex items-center justify-center mb-4">
+        <Lock size={28} />
+      </div>
+      <h2 className="text-lg font-semibold text-gray-900">No Dashboard Shared</h2>
+      <p className="text-sm text-gray-500 mt-2 max-w-md">
+        You have not been granted access to the {productLabel} dashboard.
+        Please contact your administrator to assign a dashboard permission
+        (Individual, Manager, or Overall) to your account.
+      </p>
+    </div>
   );
 }
 

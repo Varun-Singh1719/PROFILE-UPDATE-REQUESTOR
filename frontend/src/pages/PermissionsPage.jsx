@@ -18,7 +18,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Save, Loader2, Search, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp,
   Copy, Eye, EyeOff, Briefcase, Armchair, History, Sparkles, Plus,
-  RefreshCw, CheckCircle2, Settings,
+  RefreshCw, CheckCircle2, Settings, LayoutDashboard,
 } from "lucide-react";
 import api from "../lib/api";
 import Layout from "../components/Layout";
@@ -34,16 +34,23 @@ const SCOPE_OPTS = [
   { value: "overall",    label: "Overall" },
 ];
 
-const emptyRW = () => ({ enabled: false, visible: true, scope: null });
+// Dashboard-module (single-choice) helpers
+const DASHBOARD_MODULE_KEY = "dashboard";
+const isDashboardModule = (mod) => mod?.type === "access_level" || mod?.key === DASHBOARD_MODULE_KEY;
 
-function emptyPageState(page) {
+const emptyRW = () => ({ enabled: false, visible: true, scope: null });
+const emptyDashboardPageState = () => ({ access_level: null });
+
+function emptyPageState(page, isDashboard = false) {
+  if (isDashboard) return emptyDashboardPageState();
   const functions = {};
   for (const f of page.functions || []) functions[f.key] = emptyRW();
   return { view: emptyRW(), edit: emptyRW(), functions };
 }
 function emptyModuleState(mod) {
   const pages = {};
-  for (const p of mod.pages || []) pages[p.key] = emptyPageState(p);
+  const dash = isDashboardModule(mod);
+  for (const p of mod.pages || []) pages[p.key] = emptyPageState(p, dash);
   return { pages };
 }
 function emptyStateFromCatalog(mods) {
@@ -57,9 +64,14 @@ function mergeStateWithCatalog(catalog, incoming) {
   for (const m of catalog) {
     const srcModule = incoming[m.key] || {};
     const srcPages = srcModule.pages || {};
+    const dash = isDashboardModule(m);
     for (const p of m.pages || []) {
       const srcP = srcPages[p.key] || {};
       const dstP = base[m.key].pages[p.key];
+      if (dash) {
+        dstP.access_level = srcP.access_level || null;
+        continue;
+      }
       dstP.view = { ...emptyRW(), ...(srcP.view || {}) };
       dstP.edit = { ...emptyRW(), ...(srcP.edit || {}) };
       for (const f of p.functions || []) {
@@ -235,6 +247,114 @@ function PageDetail({ page, state, onView, onEdit, onFunction, onEnableAll, onHi
   );
 }
 
+// ------------- DashboardModuleCard — single-choice per product
+function DashboardModuleCard({ mod, state, expanded, onToggle, onClear, Icon, updateState }) {
+  const levels = mod.access_levels || [
+    { key: "individual", label: "Individual" },
+    { key: "manager",    label: "Manager"    },
+    { key: "overall",    label: "Overall"    },
+  ];
+
+  const setPageLevel = (pkey, lvl) => {
+    updateState((prev) => {
+      const nm = { ...(prev[mod.key] || { pages: {} }) };
+      const np = { ...(nm.pages || {}) };
+      const cur = np[pkey] || emptyDashboardPageState();
+      np[pkey] = { ...cur, access_level: lvl };
+      return { ...prev, [mod.key]: { pages: np } };
+    });
+  };
+
+  const configuredCount = (mod.pages || []).filter((p) => !!(state.pages?.[p.key]?.access_level)).length;
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden" data-testid={`perm-mod-${mod.key}`}>
+      <button type="button" onClick={onToggle} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50" data-testid={`perm-mod-toggle-${mod.key}`}>
+        <span className="h-9 w-9 rounded-md inline-flex items-center justify-center" style={{ background: `${mod.color}15`, color: mod.color }}>
+          <Icon size={16} />
+        </span>
+        <div className="flex-1 text-left">
+          <div className="font-bold text-sm text-gray-900">{mod.label}</div>
+          <div className="text-[11px] text-gray-500 mt-0.5">
+            Choose a dashboard access level per product — Individual, Manager, or Overall.
+          </div>
+        </div>
+        {configuredCount > 0 && (
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 mr-1">
+            {configuredCount}/{(mod.pages || []).length} configured
+          </span>
+        )}
+        <button type="button" onClick={(e) => { e.stopPropagation(); onClear(); }} className="text-[11px] font-semibold text-gray-500 hover:underline px-1.5" data-testid={`mod-clear-${mod.key}`}>Clear</button>
+        {expanded ? <ChevronDown size={16} className="text-gray-400 ml-1" /> : <ChevronRight size={16} className="text-gray-400 ml-1" />}
+      </button>
+
+      {expanded && (
+        <div className="border-t border-gray-100 divide-y divide-gray-100">
+          {(mod.pages || []).map((page) => {
+            const current = state.pages?.[page.key]?.access_level || null;
+            return (
+              <div key={page.key} className="px-5 py-4" data-testid={`dashboard-product-${page.key}`}>
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-gray-900">{page.label}</div>
+                    <div className="text-[11px] text-gray-500 mt-0.5">
+                      Only one option can be selected per product.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPageLevel(page.key, null)}
+                    disabled={!current}
+                    className={`text-[11px] font-semibold px-2 py-1 rounded ${current ? "text-gray-600 hover:bg-gray-100" : "text-gray-300 cursor-default"}`}
+                    data-testid={`dashboard-clear-${page.key}`}
+                  >
+                    Clear
+                  </button>
+                </div>
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {levels.map((lvl) => {
+                    const selected = current === lvl.key;
+                    return (
+                      <button
+                        type="button"
+                        key={lvl.key}
+                        onClick={() => setPageLevel(page.key, lvl.key)}
+                        data-testid={`dashboard-radio-${page.key}-${lvl.key}`}
+                        className={`text-left rounded-lg border p-3 transition-all ${
+                          selected
+                            ? "border-[#ec9324] bg-[#ec9324]/5 shadow-sm ring-1 ring-[#ec9324]/40"
+                            : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={`h-4 w-4 rounded-full border-2 inline-flex items-center justify-center flex-shrink-0 ${
+                            selected ? "border-[#ec9324]" : "border-gray-300"
+                          }`}>
+                            {selected && <span className="h-2 w-2 rounded-full bg-[#ec9324]" />}
+                          </span>
+                          <span className={`text-sm font-semibold ${selected ? "text-[#ec9324]" : "text-gray-900"}`}>
+                            {lvl.label}
+                          </span>
+                        </div>
+                        {lvl.description && (
+                          <div className="text-[11px] text-gray-500 mt-1.5 leading-snug pl-6">
+                            {lvl.description}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 // ------------- ModuleAccordion (master-detail)
 function ModuleAccordion({ mod, state, expanded, onToggle, search, onSelectAll, onClear, updateState }) {
   const Icon = mod.key === "profix" ? Briefcase : (mod.key === "manage" ? Settings : Armchair);
@@ -397,9 +517,23 @@ function sameRW(a, b) {
 function computeDiff(catalog, before, after) {
   const rows = [];
   for (const m of catalog || []) {
+    const dash = isDashboardModule(m);
     for (const p of m.pages || []) {
       const bp = ((before || {})[m.key]?.pages || {})[p.key];
       const ap = ((after  || {})[m.key]?.pages || {})[p.key];
+      // Dashboard access_level diff — single-value comparison
+      if (dash) {
+        const bl = bp?.access_level || null;
+        const al = ap?.access_level || null;
+        if (bl === al) continue;
+        rows.push({
+          module: m.label, page: p.label, kind: "access_level", label: "Access Level",
+          before: bl ? String(bl) : "—",
+          after:  al ? String(al) : "—",
+          change: !bl && al ? "added" : (bl && !al ? "removed" : "changed"),
+        });
+        continue;
+      }
       for (const kind of ["view", "edit"]) {
         const bv = bp?.[kind], av = ap?.[kind];
         if (!bv && !av) continue;
@@ -571,6 +705,14 @@ function PreviewDialog({ open, onOpenChange, effective, beforeEffective, title, 
     const out = {};
     for (const [mkey, m] of Object.entries(eff || {})) {
       const pages = {};
+      // Dashboard module — carry access_level through
+      if (mkey === DASHBOARD_MODULE_KEY) {
+        for (const [pkey, p] of Object.entries(m.pages || {})) {
+          pages[pkey] = { access_level: p?.access_level || null };
+        }
+        out[mkey] = { pages };
+        continue;
+      }
       for (const [pkey, p] of Object.entries(m.pages || {})) {
         const fns = {};
         for (const [fkey, fv] of Object.entries(p.functions || {})) {
@@ -620,25 +762,42 @@ function PreviewDialog({ open, onOpenChange, effective, beforeEffective, title, 
                 <div key={mkey} className="rounded-lg border border-gray-200">
                   <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 text-sm font-bold text-gray-800">{mkey}</div>
                   <div className="p-3 space-y-2">
-                    {Object.entries(m.pages || {}).map(([pkey, p]) => (
-                      <div key={pkey} className="rounded border border-gray-100 p-2">
-                        <div className="text-sm font-semibold text-gray-900">{pkey}</div>
-                        <div className="text-[11px] text-gray-600 mt-0.5">
-                          {p.view?.enabled ? `View (${p.view.scope || "—"})` : "View ✗"}{" · "}
-                          {p.edit?.enabled ? `Edit (${p.edit.scope || "—"})` : "Edit ✗"}
+                    {Object.entries(m.pages || {}).map(([pkey, p]) => {
+                      // Dashboard module — render access level chip only
+                      if (mkey === DASHBOARD_MODULE_KEY) {
+                        return (
+                          <div key={pkey} className="rounded border border-gray-100 p-2 flex items-center gap-2">
+                            <div className="text-sm font-semibold text-gray-900 mr-auto">{pkey}</div>
+                            {p.access_level ? (
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/30 capitalize">
+                                {p.access_level}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-gray-400">—</span>
+                            )}
+                          </div>
+                        );
+                      }
+                      return (
+                        <div key={pkey} className="rounded border border-gray-100 p-2">
+                          <div className="text-sm font-semibold text-gray-900">{pkey}</div>
+                          <div className="text-[11px] text-gray-600 mt-0.5">
+                            {p.view?.enabled ? `View (${p.view.scope || "—"})` : "View ✗"}{" · "}
+                            {p.edit?.enabled ? `Edit (${p.edit.scope || "—"})` : "Edit ✗"}
+                          </div>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {Object.entries(p.functions || {}).filter(([, v]) => v.enabled).map(([fkey, v]) => (
+                              <span key={fkey} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                {fkey}{v.scope ? ` · ${v.scope}` : ""}
+                              </span>
+                            ))}
+                            {Object.entries(p.functions || {}).filter(([, v]) => v.enabled).length === 0 && (
+                              <span className="text-[10px] text-gray-400">No functions enabled.</span>
+                            )}
+                          </div>
                         </div>
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {Object.entries(p.functions || {}).filter(([, v]) => v.enabled).map(([fkey, v]) => (
-                            <span key={fkey} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              {fkey}{v.scope ? ` · ${v.scope}` : ""}
-                            </span>
-                          ))}
-                          {Object.entries(p.functions || {}).filter(([, v]) => v.enabled).length === 0 && (
-                            <span className="text-[10px] text-gray-400">No functions enabled.</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -871,6 +1030,12 @@ export default function PermissionsPage() {
     setState((prev) => {
       const mod = (catalog || []).find((m) => m.key === mkey);
       if (!mod) return prev;
+      // Dashboard module — set all products to "overall" (broadest)
+      if (isDashboardModule(mod)) {
+        const pages = {};
+        for (const p of mod.pages || []) pages[p.key] = { access_level: "overall" };
+        return { ...prev, [mkey]: { pages } };
+      }
       const pages = {};
       for (const p of mod.pages) {
         const fns = {};
@@ -916,6 +1081,16 @@ export default function PermissionsPage() {
     // Compute draft effective locally so it also reflects unsaved edits
     const out = {};
     for (const [mkey, m] of Object.entries(state)) {
+      // Dashboard module — carry access_level per page
+      const catMod = (catalog || []).find((c) => c.key === mkey);
+      if (catMod && isDashboardModule(catMod)) {
+        const pages = {};
+        for (const [pkey, pdata] of Object.entries(m.pages || {})) {
+          if (pdata?.access_level) pages[pkey] = { access_level: pdata.access_level };
+        }
+        if (Object.keys(pages).length) out[mkey] = { pages };
+        continue;
+      }
       const pages = {};
       for (const [pkey, pdata] of Object.entries(m.pages || {})) {
         if (!pdata.view.visible && !pdata.edit.visible) continue;
@@ -1043,16 +1218,28 @@ export default function PermissionsPage() {
 
           <div className="mt-3 space-y-3">
             {catalog.map((m) => (
-              <ModuleAccordion
-                key={m.key} mod={m}
-                state={state[m.key] || emptyModuleState(m)}
-                expanded={!!expanded[m.key]}
-                onToggle={() => setExpanded((e) => ({ ...e, [m.key]: !e[m.key] }))}
-                search={search}
-                onSelectAll={() => selectAllInModule(m.key)}
-                onClear={() => clearModule(m.key)}
-                updateState={setState}
-              />
+              isDashboardModule(m) ? (
+                <DashboardModuleCard
+                  key={m.key} mod={m}
+                  state={state[m.key] || emptyModuleState(m)}
+                  expanded={!!expanded[m.key]}
+                  onToggle={() => setExpanded((e) => ({ ...e, [m.key]: !e[m.key] }))}
+                  onClear={() => clearModule(m.key)}
+                  Icon={LayoutDashboard}
+                  updateState={setState}
+                />
+              ) : (
+                <ModuleAccordion
+                  key={m.key} mod={m}
+                  state={state[m.key] || emptyModuleState(m)}
+                  expanded={!!expanded[m.key]}
+                  onToggle={() => setExpanded((e) => ({ ...e, [m.key]: !e[m.key] }))}
+                  search={search}
+                  onSelectAll={() => selectAllInModule(m.key)}
+                  onClear={() => clearModule(m.key)}
+                  updateState={setState}
+                />
+              )
             ))}
           </div>
         </>

@@ -99,7 +99,24 @@ export function useEffectivePermissionsState() {
     if (!p) return false;
     return !!p.view?.visible;
   };
-  return { ready, isPermissive, isSuperAdmin: !!ctx.is_super_admin, isPageViewVisible, state: ctx };
+  /** Returns the dashboard access level for a given product
+   * ("workspace_manager" | "profix") based on the assigned Permission Sets.
+   *
+   * Returns:
+   *   "overall"     — user gets the organisation-wide dashboard
+   *   "manager"     — user gets the Team Manager dashboard
+   *   "individual"  — user gets the Individual dashboard
+   *   null          — user has NO dashboard access for this product
+   *                   → frontend should render "No Dashboard Shared".
+   *
+   * Super Admin ALWAYS gets "overall" (bypasses the permission).
+   */
+  const getDashboardAccess = (product) => {
+    if (ctx.is_super_admin) return "overall";
+    const dash = (ctx.modules || {}).dashboard?.pages?.[product];
+    return dash?.access_level || null;
+  };
+  return { ready, isPermissive, isSuperAdmin: !!ctx.is_super_admin, isPageViewVisible, getDashboardAccess, state: ctx };
 }
 
 /**

@@ -62,6 +62,23 @@ from core import (
 # Broader scope wins.
 _SCOPE_RANK = {None: 0, "individual": 1, "team": 2, "overall": 3}
 
+# Dashboard access-level precedence — higher wins when merging.
+_DASHBOARD_ACCESS_RANK = {None: 0, "individual": 1, "manager": 2, "overall": 3}
+_DASHBOARD_ACCESS_VALUES = ("individual", "manager", "overall")
+
+
+def _sanitize_access_level(v: Any) -> Optional[str]:
+    if v in _DASHBOARD_ACCESS_VALUES:
+        return v
+    return None
+
+
+def _merge_access_level(a: Optional[str], b: Optional[str]) -> Optional[str]:
+    """Pick the higher-ranked dashboard access level."""
+    ra = _DASHBOARD_ACCESS_RANK.get(a, 0)
+    rb = _DASHBOARD_ACCESS_RANK.get(b, 0)
+    return a if ra >= rb else b
+
 
 def _merge_rw(a: Optional[dict], b: Optional[dict]) -> dict:
     """Merge two {enabled, visible, scope} triples using OR semantics.
@@ -88,6 +105,15 @@ def _merge_modules(target: Dict[str, dict], src: Dict[str, dict]) -> None:
         t_mod = target.setdefault(mkey, {"pages": {}})
         t_pages = t_mod.setdefault("pages", {})
         for pkey, pdata in ((mdata or {}).get("pages") or {}).items():
+            # Dashboard module — merge access_level with highest-wins semantics
+            if mkey == "dashboard":
+                t_page = t_pages.setdefault(pkey, {"access_level": None})
+                incoming = _sanitize_access_level((pdata or {}).get("access_level"))
+                t_page["access_level"] = _merge_access_level(
+                    t_page.get("access_level"), incoming
+                )
+                continue
+            # Everything else — merge the {view, edit, functions} triples
             t_page = t_pages.setdefault(pkey, {"view": {}, "edit": {}, "functions": {}})
             t_page["view"] = _merge_rw(t_page.get("view"), pdata.get("view"))
             t_page["edit"] = _merge_rw(t_page.get("edit"), pdata.get("edit"))
@@ -190,6 +216,21 @@ def _normalize_v3_modules(modules: Any) -> Dict[str, dict]:
             continue
         catalog_m = catalog[mkey]
         valid_pages = {p["key"]: p for p in catalog_m["pages"]}
+
+        # Special-case: dashboard module — each page carries a single access_level
+        # ("individual" | "manager" | "overall"), not the view/edit/functions triple.
+        if catalog_m.get("type") == "access_level":
+            raw_pages = (mdata or {}).get("pages") or {}
+            pages_out: Dict[str, dict] = {}
+            for pkey, pdata in raw_pages.items():
+                if pkey not in valid_pages:
+                    continue
+                pdata = pdata if isinstance(pdata, dict) else {}
+                lvl = _sanitize_access_level(pdata.get("access_level"))
+                pages_out[pkey] = {"access_level": lvl}
+            if pages_out:
+                out[mkey] = {"pages": pages_out}
+            continue
 
         raw_pages = (mdata or {}).get("pages") or {}
         pages_out: Dict[str, dict] = {}
@@ -474,6 +515,17 @@ def _effective_from_set(set_modules: dict) -> dict:
     and functions are stripped."""
     out: Dict[str, dict] = {}
     for mkey, mdata in (set_modules or {}).items():
+        # Dashboard module — just carry access_level per page
+        if mkey == "dashboard":
+            pages_out = {}
+            for pkey, pdata in (mdata.get("pages") or {}).items():
+                lvl = (pdata or {}).get("access_level")
+                if lvl:
+                    pages_out[pkey] = {"access_level": lvl}
+            if pages_out:
+                out[mkey] = {"pages": pages_out}
+            continue
+
         pages_out = {}
         for pkey, pdata in (mdata.get("pages") or {}).items():
             view = pdata.get("view") or {}
