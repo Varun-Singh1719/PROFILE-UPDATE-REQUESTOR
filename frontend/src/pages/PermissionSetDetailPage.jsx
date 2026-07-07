@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import Layout from "../components/Layout";
 import notify from "../lib/notify";
+import SingleSelect from "../components/SingleSelect";
 import {
   ArrowLeft, Pencil, Save, Loader2, Shield, Briefcase, Armchair,
   ChevronDown, ChevronRight, X, HelpCircle,
@@ -80,18 +81,17 @@ function mergeWithSetData(schemaModules, setModules) {
 
 function ScopeSelect({ value, onChange, disabled, testId }) {
   return (
-    <select
-      value={value || "respective"}
-      onChange={(e) => onChange(e.target.value)}
-      disabled={disabled}
-      data-testid={testId}
-      onClick={(e) => e.stopPropagation()}
-      className="text-[11px] font-medium border border-[#ec9324]/30 bg-white text-[#ec9324] rounded px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40 disabled:opacity-70 disabled:cursor-default"
-    >
-      {SCOPE_OPTIONS.map((opt) => (
-        <option key={opt.value} value={opt.value}>{opt.label}</option>
-      ))}
-    </select>
+    <div className="min-w-[110px]" onClick={(e) => e.stopPropagation()}>
+      <SingleSelect
+        options={SCOPE_OPTIONS}
+        value={value || "respective"}
+        onChange={(v) => onChange(v || "respective")}
+        disabled={disabled}
+        testId={testId}
+        size="sm"
+        allowClear={false}
+      />
+    </div>
   );
 }
 
@@ -175,7 +175,6 @@ function ModuleAccordion({ moduleSchema, value, onChange, disabled, defaultOpen 
           </div>
           <div className="text-left">
             <div className="font-semibold text-gray-900">{meta.label}</div>
-            <div className="text-xs text-gray-500">{totals.on}/{totals.total} permissions enabled</div>
           </div>
         </div>
         {open ? <ChevronDown size={18} className="text-gray-400" /> : <ChevronRight size={18} className="text-gray-400" />}

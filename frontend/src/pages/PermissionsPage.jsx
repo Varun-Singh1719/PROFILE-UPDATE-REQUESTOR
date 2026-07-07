@@ -17,12 +17,14 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Save, Loader2, Search, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp,
-  Copy, Eye, EyeOff, Info, Briefcase, Armchair, History, Sparkles, Plus,
+  Copy, Eye, EyeOff, Briefcase, Armchair, History, Sparkles, Plus,
   RefreshCw, CheckCircle2, Settings,
 } from "lucide-react";
 import api from "../lib/api";
 import Layout from "../components/Layout";
 import notify from "../lib/notify";
+import SingleSelect from "../components/SingleSelect";
+import OrangeCheckbox from "../components/OrangeCheckbox";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent } from "../components/ui/dialog";
 
@@ -71,22 +73,17 @@ function mergeStateWithCatalog(catalog, incoming) {
 
 // ------------- small controls
 function ScopeSelect({ value, onChange, disabled, testId, size = "sm" }) {
-  const h = size === "sm" ? "h-7 text-[11px]" : "h-8 text-xs";
   return (
-    <select
-      value={value || ""}
-      onChange={(e) => onChange(e.target.value || null)}
+    <SingleSelect
+      options={SCOPE_OPTS}
+      value={value || null}
+      onChange={(v) => onChange(v || null)}
+      placeholder="— scope —"
       disabled={disabled}
-      data-testid={testId}
-      className={`${h} min-w-[100px] px-1.5 rounded border bg-white ${
-        disabled ? "border-gray-200 text-gray-300 cursor-not-allowed"
-                 : "border-gray-300 text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]"
-      }`}
-      title={disabled ? "Enable first" : "Access scope"}
-    >
-      <option value="">— scope —</option>
-      {SCOPE_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
+      testId={testId}
+      size={size}
+      allowClear
+    />
   );
 }
 
@@ -118,7 +115,6 @@ function PageDetail({ page, state, onView, onEdit, onFunction, onEnableAll, onHi
           <button type="button" onClick={onHideAll}   className="text-[10px] font-semibold px-2 py-0.5 rounded border border-gray-200 text-gray-700 hover:border-[#ec9324]" data-testid="page-hide-all">Hide all</button>
         </div>
       </div>
-      <p className="text-xs text-gray-500 mt-0.5">Configure who can view/edit this page and which functions appear on it.</p>
 
       {/* View / Edit cards */}
       <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -136,11 +132,12 @@ function PageDetail({ page, state, onView, onEdit, onFunction, onEnableAll, onHi
                 </div>
                 <div className="flex items-center gap-1.5">
                   <VisChip visible={!!v.visible} onClick={() => onCh({ ...v, visible: !v.visible })} testId={`page-${kind}-vis`} />
-                  <input type="checkbox" checked={!!v.enabled}
-                    onChange={(e) => onCh({ ...v, enabled: e.target.checked })}
-                    className="h-4 w-4 rounded border-gray-300 text-[#ec9324] focus:ring-[#ec9324]"
-                    data-testid={`page-${kind}-enable"`}
-                    aria-label={`Enable ${kind}`} />
+                  <OrangeCheckbox
+                    checked={!!v.enabled}
+                    onChange={(c) => onCh({ ...v, enabled: c })}
+                    testId={`page-${kind}-enable`}
+                    ariaLabel={`Enable ${kind}`}
+                  />
                 </div>
               </div>
               <ScopeSelect
@@ -150,9 +147,6 @@ function PageDetail({ page, state, onView, onEdit, onFunction, onEnableAll, onHi
                 testId={`page-${kind}-scope`}
                 size="md"
               />
-              <div className="mt-1.5 text-[10px] text-gray-500">
-                {kind === "view" ? "User can see records within this scope." : "User can edit records within this scope."}
-              </div>
             </div>
           );
         })}
@@ -186,13 +180,14 @@ function PageDetail({ page, state, onView, onEdit, onFunction, onEnableAll, onHi
                     <tr key={f.key} className={i % 2 ? "bg-white" : "bg-gray-50/40"} data-testid={`fn-row-${f.key}`}>
                       <td className="px-3 py-3 align-middle">
                         <div className="font-medium text-gray-900 text-sm">{f.label}</div>
-                        <div className="text-[10px] text-gray-400">{f.key}{f.scoped ? "" : " · unscoped"}</div>
                       </td>
                       <td className="px-3 py-3">
-                        <input type="checkbox" checked={!!v.enabled}
-                          onChange={(e) => onFunction(f.key, { ...v, enabled: e.target.checked })}
-                          className="h-4 w-4 rounded border-gray-300 text-[#ec9324] focus:ring-[#ec9324]"
-                          data-testid={`fn-enable-${f.key}`} />
+                        <OrangeCheckbox
+                          checked={!!v.enabled}
+                          onChange={(c) => onFunction(f.key, { ...v, enabled: c })}
+                          testId={`fn-enable-${f.key}`}
+                          ariaLabel={`Enable ${f.label}`}
+                        />
                       </td>
                       <td className="px-3 py-3">
                         <VisChip visible={!!v.visible}
@@ -234,9 +229,6 @@ function PageDetail({ page, state, onView, onEdit, onFunction, onEnableAll, onHi
               {f.label}
             </span>
           ))}
-        </div>
-        <div className="mt-1.5 text-[10px] text-gray-500">
-          Only Enabled + Shown functions appear. Everything else is auto-hidden.
         </div>
       </div>
     </div>
@@ -330,9 +322,6 @@ function ModuleAccordion({ mod, state, expanded, onToggle, search, onSelectAll, 
         </span>
         <div className="flex-1 text-left">
           <div className="font-bold text-sm text-gray-900">{mod.label}</div>
-          <div className="text-[11px] text-gray-500">
-            {configuredCount}/{(mod.pages || []).length} pages configured · {totalEnabledFns} functions enabled
-          </div>
         </div>
         <button type="button" onClick={(e) => { e.stopPropagation(); onSelectAll(); }} className="text-[11px] font-semibold text-[#ec9324] hover:underline px-1.5" data-testid={`mod-select-all-${mod.key}`}>Select all</button>
         <button type="button" onClick={(e) => { e.stopPropagation(); onClear(); }}    className="text-[11px] font-semibold text-gray-500 hover:underline px-1.5" data-testid={`mod-clear-${mod.key}`}>Clear</button>
@@ -359,7 +348,6 @@ function ModuleAccordion({ mod, state, expanded, onToggle, search, onSelectAll, 
                   data-testid={`page-item-${mod.key}-${p.key}`}>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold text-gray-900 truncate">{p.label}</div>
-                    <div className="text-[10px] text-gray-500 truncate">{(p.functions || []).length} functions</div>
                   </div>
                   {configured && (
                     <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Configured</span>
@@ -716,12 +704,21 @@ function AuditLogTab({ resourceId, catalog, focusResourceId, onClearResource }) 
             className="w-full h-9 pl-9 pr-3 rounded-md border border-gray-300 text-xs focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]"
             data-testid="perm-audit-search" />
         </div>
-        <select value={setFilter} onChange={(e) => setSetFilter(e.target.value)}
-          className="h-9 px-2 rounded-md border border-gray-300 bg-white text-xs text-gray-800"
-          data-testid="perm-audit-set-filter">
-          <option value="">All permission sets</option>
-          {sets.map((s) => <option key={s.id} value={s.id}>#{s.numeric_id || s.seq_no || "?"} · {s.title}</option>)}
-        </select>
+        <div className="min-w-[220px]">
+          <SingleSelect
+            testId="perm-audit-set-filter"
+            options={[
+              { value: "__all__", label: "All permission sets" },
+              ...sets.map((s) => ({ value: s.id, label: `#${s.numeric_id || s.seq_no || "?"} · ${s.title}` })),
+            ]}
+            value={setFilter || "__all__"}
+            onChange={(v) => setSetFilter(v === "__all__" ? "" : (v || ""))}
+            placeholder="All permission sets"
+            size="sm"
+            allowClear={false}
+            searchable={sets.length > 8}
+          />
+        </div>
         <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
           className="h-9 px-2 rounded-md border border-gray-300 bg-white text-xs text-gray-800" data-testid="perm-audit-from" />
         <span className="text-[10px] text-gray-400">to</span>
@@ -1015,16 +1012,20 @@ export default function PermissionsPage() {
         <>
           <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <label className="block">
-                <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Title *</span>
-                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Team Manager — Workspace"
-                  className="mt-1 w-full h-9 px-3 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]" data-testid="perm-title" />
-              </label>
-              <label className="block">
-                <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Description</span>
-                <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What this permission set is for"
-                  className="mt-1 w-full h-9 px-3 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]" data-testid="perm-description" />
-              </label>
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Title: e.g. Team Manager — Workspace"
+                className="w-full h-9 px-3 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]"
+                data-testid="perm-title"
+              />
+              <input
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Description: What this permission set is for"
+                className="w-full h-9 px-3 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]"
+                data-testid="perm-description"
+              />
             </div>
           </div>
 
@@ -1038,9 +1039,6 @@ export default function PermissionsPage() {
               className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-expand-all"><ChevronsDown size={13} /> Expand all</button>
             <button type="button" onClick={() => setExpanded(Object.fromEntries(catalog.map((m) => [m.key, false])))}
               className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-collapse-all"><ChevronsUp size={13} /> Collapse all</button>
-            <div className="ml-auto text-[11px] text-gray-500 inline-flex items-center gap-1">
-              <Info size={12} /> Hidden items disappear from the user's UI. Disabled items are read-only.
-            </div>
           </div>
 
           <div className="mt-3 space-y-3">

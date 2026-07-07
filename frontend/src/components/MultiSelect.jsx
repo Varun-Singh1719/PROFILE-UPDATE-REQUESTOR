@@ -47,8 +47,8 @@ export default function MultiSelect({ options = [], value = [], onChange, placeh
         disabled={disabled}
         data-testid={testId}
         onClick={() => !disabled && setOpen((o) => !o)}
-        className={`w-full min-h-10 flex items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40 ${
-          disabled ? "opacity-60 cursor-not-allowed" : "hover:border-gray-400"
+        className={`w-full min-h-10 flex items-center justify-between rounded-md border bg-white px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40 transition-colors ${
+          disabled ? "opacity-60 cursor-not-allowed border-gray-300" : open ? "border-[#ec9324]" : "border-gray-300 hover:border-gray-400"
         }`}
       >
         <div className="flex flex-wrap gap-1 items-center flex-1">
@@ -79,7 +79,7 @@ export default function MultiSelect({ options = [], value = [], onChange, placeh
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-72 overflow-hidden flex flex-col">
+        <div className="absolute z-50 mt-1 w-full bg-white border border-[#ec9324]/40 rounded-md shadow-lg max-h-72 overflow-hidden flex flex-col">
           <div className="px-2 py-2 border-b border-gray-100">
             <div className="relative">
               <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -109,10 +109,12 @@ export default function MultiSelect({ options = [], value = [], onChange, placeh
                   data-testid={`${testId}-option-${o.value}`}
                   title={isDisabled ? (o.disabledReason || "Not selectable") : undefined}
                   disabled={isDisabled}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm ${
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors ${
                     isDisabled
                       ? "opacity-50 cursor-not-allowed bg-gray-50"
-                      : `hover:bg-gray-50 ${sel ? "bg-[#ec9324]/5" : ""}`
+                      : sel
+                      ? "bg-[#ec9324]/10 hover:bg-[#ec9324]/15"
+                      : "hover:bg-orange-50/60"
                   }`}
                 >
                   <span

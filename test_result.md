@@ -1378,3 +1378,51 @@ frontend:
         Screenshots: test-case-9-modal.png, datestepper-final.png
         
         READY FOR USER ACCEPTANCE TESTING.
+
+
+## [2026-07-07] Permissions UI polish + Mongo Atlas switch
+
+### Backend
+- Recreated missing `/app/backend/.env` and `/app/frontend/.env` (both were empty on this environment)
+- Pointed backend at user's MongoDB Atlas cluster: `mongodb+srv://…@cluster0.vmgql1i.mongodb.net/`, `DB_NAME=app_db`
+- Regenerated `JWT_SECRET` and `FERNET_KEY`; kept default admin seed which now runs against Atlas
+- Verified: backend boots, `/api/auth/login` returns 200 for `admin@ticketing.com / Admin@123`
+- Credentials logged in `/app/memory/test_credentials.md`
+
+### Frontend (PermissionsPage.jsx + PermissionSetDetailPage.jsx)
+- Added new reusable `SingleSelect` component (Image 2 style: plain list, orange border, X clear, selected row highlighted orange)
+- Enhanced `MultiSelect` (Image 1 style): orange panel border, stronger orange highlight (`bg-[#ec9324]/10`) on selected rows, orange trigger border on open
+- Replaced native `<select>` in `ScopeSelect` (both pages) and audit-log "permission set" filter with `SingleSelect`
+- Moved `Title *` and `Description` labels inside the inputs as placeholders (removed external labels)
+- Changed native `<input type="checkbox">` accent from default blue to `accent-[#ec9324]` (orange) for View/Edit enable + function-row enable checkboxes
+- Removed helper descriptions under section headers on Permissions page:
+  * "Configure who can view/edit this page and which functions appear on it."
+  * "User can see records within this scope." / "User can edit records within this scope."
+  * "Only Enabled + Shown functions appear. Everything else is auto-hidden."
+  * "Hidden items disappear from the user's UI. Disabled items are read-only."
+- Verified visually via headless browser: title/description inputs render correctly, scope dropdown opens with plain orange-highlighted list, checkboxes render orange when checked, no crashes.
+
+### Files touched
+- `/app/backend/.env` (created)
+- `/app/frontend/.env` (created)
+- `/app/frontend/src/components/SingleSelect.jsx` (new)
+- `/app/frontend/src/components/MultiSelect.jsx` (styling)
+- `/app/frontend/src/pages/PermissionsPage.jsx`
+- `/app/frontend/src/pages/PermissionSetDetailPage.jsx`
+- `/app/memory/test_credentials.md` (created)
+
+## [2026-07-07 v2] Permissions module — remove all sub-descriptions + true orange/white checkbox
+
+- Removed remaining helper subtitles under every item in `PermissionsPage.jsx`:
+  * Function-name subtitle `{f.key} · unscoped` (below Refresh / Export / Change Default View / etc.)
+  * Page rail subtitle `X functions` under each page name
+  * Module accordion subtitle `X/Y pages configured · N functions enabled`
+- Removed `X/Y permissions enabled` subtitle in `PermissionSetDetailPage.jsx` module accordion
+- Introduced new `OrangeCheckbox` component that guarantees an orange filled box with a white tick (uses `sr-only` native input + custom `<span>` + `lucide-react` `Check` icon). This replaces browser-dependent `accent-color`, so all environments now render identically.
+- Wired `OrangeCheckbox` for both the View/Edit "Enable" checkboxes and every function-row Enable checkbox on the Permissions page.
+
+Verified visually via screenshots: checked boxes show orange fill with a crisp white ✓; all subtitles/descriptions gone; page layout tightened up.
+
+### Additional files touched
+- `frontend/src/components/OrangeCheckbox.jsx` (new)
+
