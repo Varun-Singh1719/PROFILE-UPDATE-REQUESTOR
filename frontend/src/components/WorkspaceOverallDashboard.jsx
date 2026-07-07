@@ -137,89 +137,175 @@ export default function WorkspaceOverallDashboard() {
         </div>
       </div>
 
-      {/* Row 1 — My Seat Today + [This Week + Presence per day] combined */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Hero: My Seat Today (mirrors MyWorkspaceDashboard exactly) */}
-        <div
-          className="lg:col-span-2 rounded-2xl border border-gray-200 bg-gradient-to-br from-orange-50 via-white to-white p-5 shadow-sm"
-          data-testid="my-seat-today-card"
-        >
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <div className="text-[11px] uppercase tracking-widest text-[#ec9324] font-bold">My seat today</div>
-              {mySeat ? (
-                <>
-                  <div className="mt-2 flex items-end gap-3 flex-wrap">
-                    <div className="text-4xl sm:text-5xl font-black text-gray-900">{mySeat.seat_label || "—"}</div>
-                    <div className="pb-1">
-                      <div className="text-sm font-semibold text-gray-800">{mySeat.plan_name || "Floor plan"}</div>
-                      <div className="text-xs text-gray-500 flex items-center gap-1.5 flex-wrap">
-                        {mySeat.team_name && (
-                          <span className="inline-flex items-center gap-1.5">
-                            <span
-                              className="h-2 w-2 rounded-full"
-                              style={{ background: `linear-gradient(135deg, ${teamBackground(mySeat.team_color).split(",")[1].trim()} 0%, ${teamBackground(mySeat.team_color).split(",")[2]?.split(")")[0].trim() || "#d4811f"} 100%)` }}
-                            />
-                            {mySeat.team_name}
-                          </span>
-                        )}
+      {/* Combined Row 1 + 2 — Left column: My Seat Today (top) + Occupancy/Meeting rooms (bottom) · Right column: This Week + Presence per day, stretched full height */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+        {/* LEFT COLUMN — My Seat Today (row 1) + [Occupancy + Meeting rooms] (row 2) */}
+        <div className="lg:col-span-2 flex flex-col gap-4">
+          {/* Hero: My Seat Today (mirrors MyWorkspaceDashboard exactly) */}
+          <div
+            className="rounded-2xl border border-gray-200 bg-gradient-to-br from-orange-50 via-white to-white p-5 shadow-sm"
+            data-testid="my-seat-today-card"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] uppercase tracking-widest text-[#ec9324] font-bold">My seat today</div>
+                {mySeat ? (
+                  <>
+                    <div className="mt-2 flex items-end gap-3 flex-wrap">
+                      <div className="text-4xl sm:text-5xl font-black text-gray-900">{mySeat.seat_label || "—"}</div>
+                      <div className="pb-1">
+                        <div className="text-sm font-semibold text-gray-800">{mySeat.plan_name || "Floor plan"}</div>
+                        <div className="text-xs text-gray-500 flex items-center gap-1.5 flex-wrap">
+                          {mySeat.team_name && (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span
+                                className="h-2 w-2 rounded-full"
+                                style={{ background: `linear-gradient(135deg, ${teamBackground(mySeat.team_color).split(",")[1].trim()} 0%, ${teamBackground(mySeat.team_color).split(",")[2]?.split(")")[0].trim() || "#d4811f"} 100%)` }}
+                              />
+                              {mySeat.team_name}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
+                    <div className="mt-4 flex gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={openFloor}
+                        className="inline-flex items-center gap-1.5 bg-[#ec9324] hover:bg-[#d4811f] text-white text-xs font-semibold px-3.5 py-2 rounded-md shadow-sm"
+                      >
+                        <MapIcon size={13} /> View floor plan
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigate("/workspace-manager/workstation-booking")}
+                        className="inline-flex items-center gap-1.5 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold px-3.5 py-2 rounded-md"
+                      >
+                        Book for tomorrow
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="mt-3">
+                    <div className="text-lg font-bold text-gray-800">No seat allotted today</div>
+                    <p className="text-xs text-gray-500 mt-1 max-w-md">
+                      You don't have a workstation booked for today. Book one now or view the live floor plan.
+                    </p>
+                    <div className="mt-4 flex gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => navigate("/workspace-manager/workstation-booking")}
+                        className="inline-flex items-center gap-1.5 bg-[#ec9324] hover:bg-[#d4811f] text-white text-xs font-semibold px-3.5 py-2 rounded-md shadow-sm"
+                      >
+                        <Armchair size={13} /> Book a desk
+                      </button>
+                      <button
+                        type="button"
+                        onClick={openFloor}
+                        className="inline-flex items-center gap-1.5 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold px-3.5 py-2 rounded-md"
+                      >
+                        <MapIcon size={13} /> View floor plan
+                      </button>
+                    </div>
                   </div>
-                  <div className="mt-4 flex gap-2 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={openFloor}
-                      className="inline-flex items-center gap-1.5 bg-[#ec9324] hover:bg-[#d4811f] text-white text-xs font-semibold px-3.5 py-2 rounded-md shadow-sm"
-                    >
-                      <MapIcon size={13} /> View floor plan
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => navigate("/workspace-manager/workstation-booking")}
-                      className="inline-flex items-center gap-1.5 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold px-3.5 py-2 rounded-md"
-                    >
-                      Book for tomorrow
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="mt-3">
-                  <div className="text-lg font-bold text-gray-800">No seat allotted today</div>
-                  <p className="text-xs text-gray-500 mt-1 max-w-md">
-                    You don't have a workstation booked for today. Book one now or view the live floor plan.
-                  </p>
-                  <div className="mt-4 flex gap-2 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => navigate("/workspace-manager/workstation-booking")}
-                      className="inline-flex items-center gap-1.5 bg-[#ec9324] hover:bg-[#d4811f] text-white text-xs font-semibold px-3.5 py-2 rounded-md shadow-sm"
-                    >
-                      <Armchair size={13} /> Book a desk
-                    </button>
-                    <button
-                      type="button"
-                      onClick={openFloor}
-                      className="inline-flex items-center gap-1.5 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold px-3.5 py-2 rounded-md"
-                    >
-                      <MapIcon size={13} /> View floor plan
-                    </button>
+                )}
+              </div>
+              {/* Mini map thumbnail (same component used in MyWorkspaceDashboard) */}
+              <div className="flex-shrink-0">
+                <MySeatMiniMap
+                  mySeat={mySeat}
+                  allSeats={floorData?.seats || []}
+                  onClick={openFloor}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Row 2 — Occupancy right now + Meeting rooms today */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+              <div className="px-5 pt-4 pb-3 flex items-center gap-2 border-b border-gray-100">
+                <Armchair size={16} className="text-[#ec9324]" />
+                <h3 className="font-semibold text-gray-900">Occupancy right now</h3>
+              </div>
+              <div className="p-4 flex items-center gap-5">
+                <div className="relative w-28 h-28 flex-shrink-0">
+                  <svg width="112" height="112" viewBox="0 0 112 112" className="-rotate-90">
+                    <circle cx="56" cy="56" r="44" stroke="#f3f4f6" strokeWidth="12" fill="none" />
+                    <circle
+                      cx="56" cy="56" r="44" stroke={ORANGE} strokeWidth="12" fill="none"
+                      strokeDasharray={2 * Math.PI * 44}
+                      strokeDashoffset={2 * Math.PI * 44 * (1 - (occ.occupancy_pct || 0) / 100)}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <div className="text-xl font-bold text-gray-900 leading-none">{occ.occupancy_pct || 0}%</div>
+                    <div className="text-[10px] text-gray-500 mt-0.5">occupied</div>
                   </div>
                 </div>
-              )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-black text-gray-900">{occ.present}</span>
+                    <span className="text-sm text-gray-400 font-bold">/ {occ.total_seats}</span>
+                  </div>
+                  <div className="text-[11px] text-gray-500">seats in use</div>
+                  <div className="mt-3 space-y-1 text-[11px]">
+                    <div className="flex items-center justify-between"><span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500"/>Present</span><b className="text-gray-800">{occ.present}</b></div>
+                    <div className="flex items-center justify-between"><span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-gray-300"/>Free</span><b className="text-gray-800">{occ.free}</b></div>
+                  </div>
+                </div>
+              </div>
             </div>
-            {/* Mini map thumbnail (same component used in MyWorkspaceDashboard) */}
-            <div className="flex-shrink-0">
-              <MySeatMiniMap
-                mySeat={mySeat}
-                allSeats={floorData?.seats || []}
-                onClick={openFloor}
-              />
+
+            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+              <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-gray-100">
+                <div className="inline-flex items-center gap-2">
+                  <DoorOpen size={16} className="text-[#ec9324]" />
+                  <h3 className="font-semibold text-gray-900">Meeting rooms today</h3>
+                </div>
+                <span className="text-[10px] font-semibold text-gray-500">
+                  {overall?.meeting_rooms_bookings_today || 0}/{overall?.meeting_rooms_total || 0} booked
+                </span>
+              </div>
+              <div className="p-4 grid grid-cols-1 gap-2">
+                {rooms.length === 0 && (
+                  <div className="text-center text-xs text-gray-400 py-6">
+                    No meeting rooms in use today.
+                  </div>
+                )}
+                {rooms.map((r) => (
+                  <div key={r.room_id || r.room_name} className="flex items-center gap-3 p-2 rounded-lg border border-gray-100 hover:bg-gray-50">
+                    <span className="h-9 w-9 rounded-md bg-[#ec9324]/10 text-[#ec9324] inline-flex items-center justify-center">
+                      <DoorOpen size={16} />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <div className="text-sm font-semibold text-gray-900 truncate">{r.room_name || "Room"}</div>
+                        {r.plan_name && <div className="text-[10px] text-gray-500 truncate">{r.plan_name}</div>}
+                      </div>
+                      <ProgressBar value={r.pct} max={100} height={4} />
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-bold text-gray-900">{r.used}</div>
+                      <div className="text-[10px] text-gray-500">{r.pct}% used</div>
+                    </div>
+                  </div>
+                ))}
+                {rooms.length > 0 && (
+                  <button
+                    onClick={() => navigate("/workspace-manager/meeting-rooms")}
+                    className="text-[11px] font-semibold text-[#ec9324] hover:underline mt-1"
+                  >
+                    View all meeting rooms →
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Combined: This week (top) + Presence per day (bottom) */}
+        {/* RIGHT COLUMN — This week (top) + Presence per day (bottom, flex-1 stretches to fill remaining height) */}
         <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden flex flex-col">
           {/* This Week */}
           <div className="p-4">
@@ -310,20 +396,20 @@ export default function WorkspaceOverallDashboard() {
 
           <div className="border-t border-gray-100" />
 
-          {/* Presence per day */}
-          <div className="p-4">
+          {/* Presence per day — stretches to fill remaining height */}
+          <div className="p-4 flex-1 flex flex-col min-h-0">
             <div className="text-[11px] uppercase tracking-widest text-gray-500 font-bold mb-2">Presence per day</div>
-            <div className="grid grid-cols-7 gap-1.5">
+            <div className="grid grid-cols-7 gap-1.5 flex-1 min-h-0">
               {orgWeek.map((w) => (
                 <div
                   key={w.date}
-                  className={`rounded-lg border p-1.5 text-center ${w.today ? "border-[#ec9324] bg-orange-50" : "border-gray-200"}`}
+                  className={`rounded-lg border p-1.5 text-center flex flex-col ${w.today ? "border-[#ec9324] bg-orange-50" : "border-gray-200"}`}
                 >
                   <div className="text-[10px] font-semibold text-gray-500">{w.day}</div>
                   <div className={`text-sm font-bold ${w.today ? "text-[#ec9324]" : "text-gray-900"}`}>{w.n}</div>
-                  <div className="mt-1 h-6 flex items-end justify-center">
+                  <div className="mt-1 flex-1 flex items-end justify-center min-h-[24px]">
                     <div
-                      className="w-2 rounded-t"
+                      className="w-2.5 rounded-t"
                       style={{
                         height: `${(w.count / maxOrgWeek) * 100}%`,
                         background: w.today ? ORANGE : "#d1d5db",
@@ -338,89 +424,6 @@ export default function WorkspaceOverallDashboard() {
               <span>Peak: <b className="text-gray-800">{peakOf(orgWeek)}</b></span>
               <span>Avg: <b className="text-gray-800">{avgOf(orgWeek)}/day</b></span>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Row 2 — Occupancy right now + Meeting rooms today (aligned to end where "My seat today" ends) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="lg:col-span-4 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-          <div className="px-5 pt-4 pb-3 flex items-center gap-2 border-b border-gray-100">
-            <Armchair size={16} className="text-[#ec9324]" />
-            <h3 className="font-semibold text-gray-900">Occupancy right now</h3>
-          </div>
-          <div className="p-4 flex items-center gap-5">
-            <div className="relative w-28 h-28 flex-shrink-0">
-              <svg width="112" height="112" viewBox="0 0 112 112" className="-rotate-90">
-                <circle cx="56" cy="56" r="44" stroke="#f3f4f6" strokeWidth="12" fill="none" />
-                <circle
-                  cx="56" cy="56" r="44" stroke={ORANGE} strokeWidth="12" fill="none"
-                  strokeDasharray={2 * Math.PI * 44}
-                  strokeDashoffset={2 * Math.PI * 44 * (1 - (occ.occupancy_pct || 0) / 100)}
-                  strokeLinecap="round"
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <div className="text-xl font-bold text-gray-900 leading-none">{occ.occupancy_pct || 0}%</div>
-                <div className="text-[10px] text-gray-500 mt-0.5">occupied</div>
-              </div>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-baseline gap-1">
-                <span className="text-3xl font-black text-gray-900">{occ.present}</span>
-                <span className="text-sm text-gray-400 font-bold">/ {occ.total_seats}</span>
-              </div>
-              <div className="text-[11px] text-gray-500">seats in use</div>
-              <div className="mt-3 space-y-1 text-[11px]">
-                <div className="flex items-center justify-between"><span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500"/>Present</span><b className="text-gray-800">{occ.present}</b></div>
-                <div className="flex items-center justify-between"><span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-gray-300"/>Free</span><b className="text-gray-800">{occ.free}</b></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="lg:col-span-4 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-          <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-gray-100">
-            <div className="inline-flex items-center gap-2">
-              <DoorOpen size={16} className="text-[#ec9324]" />
-              <h3 className="font-semibold text-gray-900">Meeting rooms today</h3>
-            </div>
-            <span className="text-[10px] font-semibold text-gray-500">
-              {overall?.meeting_rooms_bookings_today || 0}/{overall?.meeting_rooms_total || 0} booked
-            </span>
-          </div>
-          <div className="p-4 grid grid-cols-1 gap-2">
-            {rooms.length === 0 && (
-              <div className="text-center text-xs text-gray-400 py-6">
-                No meeting rooms in use today.
-              </div>
-            )}
-            {rooms.map((r) => (
-              <div key={r.room_id || r.room_name} className="flex items-center gap-3 p-2 rounded-lg border border-gray-100 hover:bg-gray-50">
-                <span className="h-9 w-9 rounded-md bg-[#ec9324]/10 text-[#ec9324] inline-flex items-center justify-center">
-                  <DoorOpen size={16} />
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <div className="text-sm font-semibold text-gray-900 truncate">{r.room_name || "Room"}</div>
-                    {r.plan_name && <div className="text-[10px] text-gray-500 truncate">{r.plan_name}</div>}
-                  </div>
-                  <ProgressBar value={r.pct} max={100} height={4} />
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-bold text-gray-900">{r.used}</div>
-                  <div className="text-[10px] text-gray-500">{r.pct}% used</div>
-                </div>
-              </div>
-            ))}
-            {rooms.length > 0 && (
-              <button
-                onClick={() => navigate("/workspace-manager/meeting-rooms")}
-                className="text-[11px] font-semibold text-[#ec9324] hover:underline mt-1"
-              >
-                View all meeting rooms →
-              </button>
-            )}
           </div>
         </div>
       </div>
