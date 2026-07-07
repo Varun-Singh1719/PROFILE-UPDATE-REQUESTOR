@@ -342,7 +342,7 @@ export default function WorkspaceOverallDashboard() {
         </div>
       </div>
 
-      {/* Row 2 — Occupancy right now (narrow) + Meeting rooms today (wide) */}
+      {/* Row 2 — Occupancy right now + Meeting rooms today (aligned to end where "My seat today" ends) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <div className="lg:col-span-4 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
           <div className="px-5 pt-4 pb-3 flex items-center gap-2 border-b border-gray-100">
@@ -379,7 +379,7 @@ export default function WorkspaceOverallDashboard() {
           </div>
         </div>
 
-        <div className="lg:col-span-8 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        <div className="lg:col-span-4 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
           <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-gray-100">
             <div className="inline-flex items-center gap-2">
               <DoorOpen size={16} className="text-[#ec9324]" />
@@ -389,9 +389,9 @@ export default function WorkspaceOverallDashboard() {
               {overall?.meeting_rooms_bookings_today || 0}/{overall?.meeting_rooms_total || 0} booked
             </span>
           </div>
-          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="p-4 grid grid-cols-1 gap-2">
             {rooms.length === 0 && (
-              <div className="col-span-1 sm:col-span-2 text-center text-xs text-gray-400 py-6">
+              <div className="text-center text-xs text-gray-400 py-6">
                 No meeting rooms in use today.
               </div>
             )}
@@ -416,7 +416,7 @@ export default function WorkspaceOverallDashboard() {
             {rooms.length > 0 && (
               <button
                 onClick={() => navigate("/workspace-manager/meeting-rooms")}
-                className="col-span-1 sm:col-span-2 text-[11px] font-semibold text-[#ec9324] hover:underline mt-1"
+                className="text-[11px] font-semibold text-[#ec9324] hover:underline mt-1"
               >
                 View all meeting rooms →
               </button>
