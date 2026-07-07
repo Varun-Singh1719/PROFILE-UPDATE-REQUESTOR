@@ -1,8 +1,9 @@
 /**
- * WMOverallPreview — DESIGN PROPOSAL ONLY (v2).
+ * WMOverallPreview — DESIGN PROPOSAL ONLY (v3).
  *
  * Route: /mockup/wm-overall
  * All numbers are illustrative — nothing is wired to backend.
+ * Team colours pulled from the real `TEAM_PALETTES` used in the Teams module.
  */
 import React from "react";
 import {
@@ -12,12 +13,12 @@ import {
   ChevronLeft,
   ChevronRight,
   DoorOpen,
-  FileBarChart,
   MapPin,
   Clock,
   Armchair,
 } from "lucide-react";
 import Layout from "../components/Layout";
+import { teamBackground, teamInitials } from "../lib/teamColors";
 
 const ORANGE = "#ec9324";
 
@@ -53,17 +54,20 @@ const ROOMS = [
   { name: "Aurora", floor: "F4", used: "6h 20m", pct: 89 },
   { name: "Peak",   floor: "F5", used: "5h 40m", pct: 74 },
   { name: "Cove",   floor: "F3", used: "4h 05m", pct: 62 },
+  { name: "Horizon",floor: "F2", used: "3h 15m", pct: 48 },
+  { name: "Nebula", floor: "F4", used: "2h 45m", pct: 36 },
 ];
 
+// Team colors mirror the real palette ids stored in the Teams module DB.
 const TEAMS = [
-  { name: "DQ Team",         color: "#ec9324", seatFrom: "F3-A01", seatTo: "F3-A08", count: 8  },
-  { name: "Design Squad",    color: "#3b82f6", seatFrom: "F3-B10", seatTo: "F3-B14", count: 5  },
-  { name: "Aquaholics",      color: "#10b981", seatFrom: "F4-C01", seatTo: "F4-C12", count: 12 },
-  { name: "AutoVerse",       color: "#8b5cf6", seatFrom: "F4-D01", seatTo: "F4-D06", count: 6  },
-  { name: "BrewBulbs",       color: "#ef4444", seatFrom: "F2-A01", seatTo: "F2-A11", count: 11 },
-  { name: "CareCrew",        color: "#0ea5e9", seatFrom: "F2-B01", seatTo: "F2-B12", count: 12 },
-  { name: "Chem Catalysts",  color: "#f59e0b", seatFrom: "F5-A01", seatTo: "F5-A07", count: 7  },
-  { name: "Fintech Wizards", color: "#22c55e", seatFrom: "F5-B01", seatTo: "F5-B11", count: 11 },
+  { name: "DQ Team",         color: "tp11", seatFrom: "F3-A01", seatTo: "F3-A08", count: 8  },
+  { name: "Design Squad",    color: "tp4",  seatFrom: "F3-B10", seatTo: "F3-B14", count: 5  },
+  { name: "Aquaholics",      color: "tp29", seatFrom: "F4-C01", seatTo: "F4-C12", count: 12 },
+  { name: "AutoVerse",       color: "tp1",  seatFrom: "F4-D01", seatTo: "F4-D06", count: 6  },
+  { name: "BrewBulbs",       color: "tp16", seatFrom: "F2-A01", seatTo: "F2-A11", count: 11 },
+  { name: "CareCrew",        color: "tp46", seatFrom: "F2-B01", seatTo: "F2-B12", count: 12 },
+  { name: "Chem Catalysts",  color: "tp2",  seatFrom: "F5-A01", seatTo: "F5-A07", count: 7  },
+  { name: "Fintech Wizards", color: "tp3",  seatFrom: "F5-B01", seatTo: "F5-B11", count: 11 },
 ];
 
 const ACTIVITY = [
@@ -120,7 +124,7 @@ export default function WMOverallPreview() {
           </div>
         </div>
 
-        {/* Row 1 — SAME as other 2 dashboards: My Seat Today (2/3) + This Week (1/3) */}
+        {/* Row 1 — My Seat Today (2/3) + Combined [This Week + Presence per day] (1/3) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* My Seat Today (personal hero) */}
           <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-gradient-to-br from-orange-50 via-white to-white p-5 shadow-sm">
@@ -151,7 +155,6 @@ export default function WMOverallPreview() {
                   </button>
                 </div>
               </div>
-              {/* Mini map preview */}
               <div className="flex-shrink-0 w-32 h-32 rounded-lg border border-gray-200 bg-white flex items-center justify-center text-gray-400">
                 <div className="text-center">
                   <MapIcon size={22} className="mx-auto text-[#ec9324] mb-1" />
@@ -161,75 +164,101 @@ export default function WMOverallPreview() {
             </div>
           </div>
 
-          {/* This Week (personal 7-day strip) */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-[11px] uppercase tracking-widest text-gray-500 font-bold">This week</div>
-              <div className="inline-flex items-center gap-1">
-                <button className="p-1 rounded hover:bg-gray-100"><ChevronLeft size={13}/></button>
-                <button className="text-[10px] font-semibold text-[#ec9324] px-2 py-0.5 rounded hover:bg-orange-50">Today</button>
-                <button className="p-1 rounded hover:bg-gray-100"><ChevronRight size={13}/></button>
+          {/* Combined: This Week (top) + Presence per day (bottom) */}
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden flex flex-col">
+            {/* This Week */}
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[11px] uppercase tracking-widest text-gray-500 font-bold">This week</div>
+                <div className="inline-flex items-center gap-1">
+                  <button className="p-1 rounded hover:bg-gray-100"><ChevronLeft size={13}/></button>
+                  <button className="text-[10px] font-semibold text-[#ec9324] px-2 py-0.5 rounded hover:bg-orange-50">Today</button>
+                  <button className="p-1 rounded hover:bg-gray-100"><ChevronRight size={13}/></button>
+                </div>
+              </div>
+              <div className="text-[10px] text-gray-500 mb-2 flex items-center gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500"/>Assigned</span>
+                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400"/>Requested</span>
+                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-gray-300"/>None</span>
+              </div>
+              <div className="grid grid-cols-7 gap-1.5">
+                {MY_WEEK.map((w) => {
+                  const dot =
+                    w.status === "assigned"  ? "bg-emerald-500" :
+                    w.status === "requested" ? "bg-amber-400"   :
+                                               "bg-gray-300";
+                  return (
+                    <div key={w.d} className={`rounded-lg border p-1.5 text-center ${w.today ? "border-[#ec9324] bg-orange-50" : "border-gray-200"}`}>
+                      <div className="text-[10px] font-semibold text-gray-500">{w.d}</div>
+                      <div className={`text-sm font-bold ${w.today ? "text-[#ec9324]" : "text-gray-900"}`}>{w.n}</div>
+                      <div className="mt-1 inline-flex items-center justify-center">
+                        <span className={`h-2 w-2 rounded-full ${dot}`} />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-            <div className="text-[10px] text-gray-500 mb-2 flex items-center gap-2">
-              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500"/>Assigned</span>
-              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400"/>Requested</span>
-              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-gray-300"/>None</span>
-            </div>
-            <div className="grid grid-cols-7 gap-1.5">
-              {MY_WEEK.map((w) => {
-                const dot =
-                  w.status === "assigned"  ? "bg-emerald-500" :
-                  w.status === "requested" ? "bg-amber-400"   :
-                                             "bg-gray-300";
-                return (
+
+            {/* Divider */}
+            <div className="border-t border-gray-100" />
+
+            {/* Presence per day — matches the attached screenshot style */}
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[11px] uppercase tracking-widest text-gray-500 font-bold">Presence per day</div>
+              </div>
+              <div className="grid grid-cols-7 gap-1.5">
+                {ORG_WEEK.map((w) => (
                   <div key={w.d} className={`rounded-lg border p-1.5 text-center ${w.today ? "border-[#ec9324] bg-orange-50" : "border-gray-200"}`}>
                     <div className="text-[10px] font-semibold text-gray-500">{w.d}</div>
                     <div className={`text-sm font-bold ${w.today ? "text-[#ec9324]" : "text-gray-900"}`}>{w.n}</div>
-                    <div className="mt-1 inline-flex items-center justify-center">
-                      <span className={`h-2 w-2 rounded-full ${dot}`} />
+                    <div className="mt-1 h-6 flex items-end justify-center">
+                      <div className="w-2 rounded-t" style={{ height: `${(w.cnt / maxOrgWeek) * 100}%`, background: w.today ? ORANGE : "#d1d5db" }} />
                     </div>
-                    <div className="text-[9px] text-gray-500 mt-0.5 truncate">
-                      {w.status === "assigned" ? w.seat : w.status === "requested" ? "req." : "—"}
-                    </div>
+                    <div className="text-[9px] text-gray-500 mt-0.5">{w.cnt}</div>
                   </div>
-                );
-              })}
+                ))}
+              </div>
+              <div className="mt-2 text-[10px] text-gray-500 flex items-center justify-between">
+                <span>Peak: <b className="text-gray-800">Thu · 342</b></span>
+                <span>Avg: <b className="text-gray-800">248/day</b></span>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Row 2 — Occupancy Right Now + Presence Per Day + Meeting rooms today */}
+        {/* Row 2 — Occupancy right now (narrow) + Meeting rooms today (wide) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           {/* Occupancy right now */}
-          <div className="lg:col-span-3 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          <div className="lg:col-span-4 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
             <div className="px-5 pt-4 pb-3 flex items-center gap-2 border-b border-gray-100">
               <Armchair size={16} className="text-[#ec9324]" />
               <h3 className="font-semibold text-gray-900">Occupancy right now</h3>
             </div>
-            <div className="p-4 flex items-center gap-4">
-              <div className="relative w-24 h-24 flex-shrink-0">
-                <svg width="96" height="96" viewBox="0 0 96 96" className="-rotate-90">
-                  <circle cx="48" cy="48" r="38" stroke="#f3f4f6" strokeWidth="10" fill="none" />
+            <div className="p-4 flex items-center gap-5">
+              <div className="relative w-28 h-28 flex-shrink-0">
+                <svg width="112" height="112" viewBox="0 0 112 112" className="-rotate-90">
+                  <circle cx="56" cy="56" r="44" stroke="#f3f4f6" strokeWidth="12" fill="none" />
                   <circle
-                    cx="48" cy="48" r="38" stroke={ORANGE} strokeWidth="10" fill="none"
-                    strokeDasharray={2 * Math.PI * 38}
-                    strokeDashoffset={2 * Math.PI * 38 * (1 - occupancyPct / 100)}
+                    cx="56" cy="56" r="44" stroke={ORANGE} strokeWidth="12" fill="none"
+                    strokeDasharray={2 * Math.PI * 44}
+                    strokeDashoffset={2 * Math.PI * 44 * (1 - occupancyPct / 100)}
                     strokeLinecap="round"
                   />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <div className="text-lg font-bold text-gray-900 leading-none">{occupancyPct}%</div>
-                  <div className="text-[9px] text-gray-500 mt-0.5">occupied</div>
+                  <div className="text-xl font-bold text-gray-900 leading-none">{occupancyPct}%</div>
+                  <div className="text-[10px] text-gray-500 mt-0.5">occupied</div>
                 </div>
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-1">
-                  <span className="text-2xl font-black text-gray-900">{totalPresent}</span>
+                  <span className="text-3xl font-black text-gray-900">{totalPresent}</span>
                   <span className="text-sm text-gray-400 font-bold">/ {totalSeats}</span>
                 </div>
                 <div className="text-[11px] text-gray-500">seats in use</div>
-                <div className="mt-2 space-y-1 text-[11px]">
+                <div className="mt-3 space-y-1 text-[11px]">
                   <div className="flex items-center justify-between"><span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500"/>Present</span><b className="text-gray-800">{totalPresent}</b></div>
                   <div className="flex items-center justify-between"><span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-gray-300"/>Free</span><b className="text-gray-800">{totalSeats - totalPresent}</b></div>
                 </div>
@@ -237,36 +266,8 @@ export default function WMOverallPreview() {
             </div>
           </div>
 
-          {/* Presence per day */}
-          <div className="lg:col-span-5 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-gray-100">
-              <div className="inline-flex items-center gap-2">
-                <Users size={16} className="text-[#ec9324]" />
-                <h3 className="font-semibold text-gray-900">Presence per day</h3>
-              </div>
-              <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">Avg 248/day</span>
-            </div>
-            <div className="p-4">
-              <div className="grid grid-cols-7 gap-2 items-end" style={{ minHeight: 110 }}>
-                {ORG_WEEK.map((w) => (
-                  <div key={w.d} className="flex flex-col items-center">
-                    <div className="flex-1 flex items-end w-full">
-                      <div className="w-full rounded-t" style={{ height: `${(w.cnt / maxOrgWeek) * 90}px`, background: w.today ? ORANGE : "#e5e7eb" }} title={`${w.cnt}`}/>
-                    </div>
-                    <div className={`mt-1 text-[10px] font-semibold ${w.today ? "text-[#ec9324]" : "text-gray-500"}`}>{w.d}</div>
-                    <div className={`text-[10px] ${w.today ? "text-gray-900 font-bold" : "text-gray-400"}`}>{w.cnt}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-2 text-[10px] text-gray-500 flex items-center justify-between">
-                <span>Peak: <b className="text-gray-800">Thu · 342</b></span>
-                <span>Weekend low: <b className="text-gray-800">Sun · 62</b></span>
-              </div>
-            </div>
-          </div>
-
-          {/* Meeting rooms today */}
-          <div className="lg:col-span-4 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          {/* Meeting rooms today (wider now) */}
+          <div className="lg:col-span-8 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
             <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-gray-100">
               <div className="inline-flex items-center gap-2">
                 <DoorOpen size={16} className="text-[#ec9324]" />
@@ -274,9 +275,9 @@ export default function WMOverallPreview() {
               </div>
               <span className="text-[10px] font-semibold text-gray-500">34/48 booked</span>
             </div>
-            <div className="p-4 space-y-2">
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
               {ROOMS.map((r) => (
-                <div key={r.name} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
+                <div key={r.name} className="flex items-center gap-3 p-2 rounded-lg border border-gray-100 hover:bg-gray-50">
                   <span className="h-9 w-9 rounded-md bg-[#ec9324]/10 text-[#ec9324] inline-flex items-center justify-center">
                     <DoorOpen size={16} />
                   </span>
@@ -293,14 +294,14 @@ export default function WMOverallPreview() {
                   </div>
                 </div>
               ))}
-              <button className="w-full text-[11px] font-semibold text-[#ec9324] hover:underline mt-1">
+              <button className="col-span-1 sm:col-span-2 text-[11px] font-semibold text-[#ec9324] hover:underline mt-1">
                 View all meeting rooms →
               </button>
             </div>
           </div>
         </div>
 
-        {/* Row 3 — All teams today (seat range + View on map) */}
+        {/* Row 3 — All teams today (seat range + View on map) — uses real team palette */}
         <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
           <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-gray-100 flex-wrap gap-2">
             <div className="inline-flex items-center gap-2 flex-wrap">
@@ -313,8 +314,11 @@ export default function WMOverallPreview() {
             {TEAMS.map((t) => (
               <div key={t.name} className="rounded-xl border border-gray-200 p-3 hover:border-[#ec9324] transition-colors">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="h-8 w-8 rounded-lg inline-flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0" style={{ background: t.color }}>
-                    {t.name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase()}
+                  <span
+                    className="h-8 w-8 rounded-lg inline-flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0"
+                    style={{ background: teamBackground(t.color) }}
+                  >
+                    {teamInitials(t.name)}
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold text-gray-900 truncate">{t.name}</div>
