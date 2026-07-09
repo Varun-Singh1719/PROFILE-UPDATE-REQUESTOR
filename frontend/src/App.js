@@ -4,7 +4,6 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { BusyProvider } from "./context/BusyContext";
 import { EffectivePermissionsProvider } from "./context/EffectivePermissionsContext";
-import BusyOverlay from "./components/BusyOverlay";
 import GlobalToaster from "./components/GlobalToaster";
 import DialogHost from "./components/DialogHost";
 import LoginPage from "./pages/LoginPage";
@@ -127,8 +126,8 @@ function App() {
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-          {/* Global, app-wide busy overlay — sits above all routes incl. login */}
-          <BusyOverlay />
+          {/* BusyOverlay is mounted inside <Layout> so it only covers the
+              content area (sidebar + top bar remain interactive). */}
           {/* Global confirm / prompt / alert dialog renderer */}
           <DialogHost />
         </BrowserRouter>

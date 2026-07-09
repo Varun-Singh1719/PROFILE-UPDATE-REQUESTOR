@@ -18,12 +18,14 @@ function defaultLabel(method) {
   if (m === "patch")  return "Updating…";
   if (m === "put")    return "Updating…";
   if (m === "delete") return "Deleting…";
-  return "Processing…";
+  return "Loading…";
 }
 
-// Methods that auto-trigger the global overlay (mutating verbs only — GETs
-// are usually background fetches / page loads / polling and shouldn't flash).
-const MUTATING = new Set(["post", "put", "patch", "delete"]);
+// Methods that auto-trigger the global overlay. GETs now also trigger a
+// content-area loader so pages show visual feedback while data is pending.
+// Callers can opt out of the overlay via `silent: true` (used by background
+// polling and hot-path calls that shouldn't flash the loader).
+const TRIGGERS_OVERLAY = new Set(["get", "post", "put", "patch", "delete"]);
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("access_token");
@@ -32,13 +34,14 @@ api.interceptors.request.use((config) => {
   // Overlay opt-in/out:
   //   • `silent: true`             — never show overlay (use for polling)
   //   • `loadingLabel: "…"`         — always show overlay with that label
-  //   • mutating verb (default)    — show overlay with auto label ("Saving…", etc.)
+  //   • any tracked verb (default) — show overlay with auto label
+  //     ("Loading…" for GET, "Saving…" for POST, etc.)
   const method = (config.method || "get").toLowerCase();
-  const isMutating = MUTATING.has(method);
-  const wantsOverlay = !config.silent && (config.loadingLabel || isMutating);
+  const isTracked = TRIGGERS_OVERLAY.has(method);
+  const wantsOverlay = !config.silent && (config.loadingLabel || isTracked);
   if (wantsOverlay) {
     // If a more-specific label is already showing (e.g. set by useAction wrapping
-    // this call), don't clobber it with our generic "Saving…" — push a null
+    // this call), don't clobber it with our generic label — push a null
     // label so we still bump the counter but the existing label keeps showing.
     const explicit = config.loadingLabel;
     const label = explicit || (__busyBridge.hasLabel() ? null : defaultLabel(method));

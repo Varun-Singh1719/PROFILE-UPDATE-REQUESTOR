@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 import Breadcrumbs from "./Breadcrumbs";
+import BusyOverlay from "./BusyOverlay";
 
 /**
  * Layout — global app shell.
@@ -50,10 +51,18 @@ export default function Layout({
     <div className="min-h-screen bg-white">
       <Sidebar />
       <main
-        className="flex-1 overflow-x-hidden transition-[margin] duration-200"
+        className="relative flex-1 overflow-x-hidden transition-[margin] duration-200 min-h-screen"
         style={{ marginLeft: sidebarOffset }}
       >
         {!hideTopBar && <TopBar title={title} actions={actions} />}
+        {/* Content-area page loader (below top bar). Renders inside `<main>`
+            (position: relative) so the overlay only covers the content, leaving
+            the sidebar and top bar interactive during API waits. */}
+        <div className="absolute left-0 right-0 bottom-0 pointer-events-none" style={{ top: hideTopBar ? 0 : 56 }}>
+          <div className="relative w-full h-full pointer-events-auto">
+            <BusyOverlay />
+          </div>
+        </div>
         {fullBleed ? (
           <div className={contentClassName}>
             {breadcrumbs && (
