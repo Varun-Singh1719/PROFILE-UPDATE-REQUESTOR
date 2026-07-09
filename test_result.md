@@ -1534,3 +1534,24 @@ Extended v3 permission-set endpoints for the new listing:
 - `# Users` pill on a row navigates to `/admin/contacts?permission_set=<id>` and the Employees page shows a visible orange filter chip that clears both the local filter and the URL param.
 - Legacy URLs `/admin/permission-sets` and `/admin/permission-sets/:id` redirect to the new tabbed page.
 - Audit log tab still works.
+
+
+## [2026-07-09 v2] Permissions → Permission Sets tab — freeze-headers layout polish
+
+Applied the tabular-page pattern (Bookings/TicketList style) to the new tab:
+- **"+ Add Permission Set"** moved to the Layout top bar (right of the "Permissions" title, next to the user menu). Only rendered when the Sets tab is active.
+- **"Refresh"** moved out of the sets list card and now sits **parallel to the tab bar** (right of Permission Sets / Editor / Audit log). It calls the child list's `refresh()` through a `useImperativeHandle` ref exposed by the list component.
+- **Frozen chrome:** for the Sets tab only, the Layout content uses `h-[calc(100vh-56px)] overflow-hidden flex flex-col` so the top bar + tab bar + filter row stay pinned. The **table body is the only scrollable region** (`flex-1 min-h-0 overflow-auto` with a sticky `thead`). Editor / Audit log tabs keep the original `min-h` scroll-the-whole-page behaviour.
+- **Fixed footer:** `Pagination` is a `shrink-0` sibling of the scroll area, so it's always visible at the bottom of the card regardless of table length.
+- Horizontal padding on the Sets tab dropped from `px-9 sm:px-12` to `px-4 sm:px-6` so the pagination "Show:" size selector fits on the right without being clipped.
+
+### Files touched
+- `frontend/src/pages/PermissionsPage.jsx`
+- `frontend/src/components/permissions/PermissionSetsListTab.jsx` (converted to `forwardRef` with an `useImperativeHandle` exposing `refresh()`)
+
+### Verified via screenshots
+- Top bar shows "+ Add Permission Set" when Sets tab is active.
+- Tab bar row shows the three tabs on the left and the Refresh button flush on the right.
+- Card fills the remaining viewport; measured card `y=121 → 1068` on a 1080-tall viewport, with pagination pinned at `y=1010` (inside the card boundary) and the page-size dropdown at `x=1754→1879` (within 1920).
+- Table body scrolls independently; sticky column headers stay pinned.
+- Editor and Audit log tabs still render with their original scroll behaviour.

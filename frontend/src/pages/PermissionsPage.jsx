@@ -988,6 +988,17 @@ export default function PermissionsPage() {
   const [tab, setTab] = useState(tabParam);
   useEffect(() => { setTab(tabParam); }, [tabParam]);
 
+  // Ref to the Permission Sets list tab so the Refresh button (which lives next
+  // to the tab bar in the parent) can trigger a reload.
+  const setsListRef = React.useRef(null);
+  const [refreshingList, setRefreshingList] = useState(false);
+  const doListRefresh = async () => {
+    if (!setsListRef.current) return;
+    setRefreshingList(true);
+    try { setsListRef.current.refresh(); }
+    finally { setTimeout(() => setRefreshingList(false), 400); }
+  };
+
   const [catalog, setCatalog] = useState(null);
   const [state, setState] = useState({});
   const [title, setTitle] = useState("");
@@ -1163,9 +1174,22 @@ export default function PermissionsPage() {
   return (
     <Layout
       title="Permissions"
-      contentClassName="w-full px-9 sm:px-12 pt-2 pb-6 flex flex-col min-h-[calc(100vh-56px)]"
+      contentClassName={
+        tab === "sets"
+          ? "w-full px-4 sm:px-6 pt-2 pb-3 flex flex-col h-[calc(100vh-56px)] overflow-hidden"
+          : "w-full px-9 sm:px-12 pt-2 pb-6 flex flex-col min-h-[calc(100vh-56px)]"
+      }
       actions={
         <div className="flex items-center gap-2">
+          {tab === "sets" && (
+            <Button
+              onClick={openCreate}
+              className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9 text-xs font-semibold"
+              data-testid="perm-sets-add-btn"
+            >
+              <Plus size={13} className="mr-1.5"/> Add Permission Set
+            </Button>
+          )}
           {tab === "editor" && (
             <>
               <button type="button" onClick={() => setCopyOpen(true)}  className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-copy-btn"><Copy size={13} /> Copy from set</button>
@@ -1179,9 +1203,10 @@ export default function PermissionsPage() {
         </div>
       }
     >
-      {/* Tab bar (hidden in view mode — view has its own back button) */}
+      {/* Tab bar row — first flex child so it stays fixed at the top of the
+          fixed-height content area. Refresh sits parallel to the tabs on the right. */}
       {tab !== "view" && (
-        <div className="mt-1 mb-3 flex items-end gap-1 border-b border-gray-200" data-testid="perm-tabbar">
+        <div className="mt-1 mb-3 flex items-end gap-1 border-b border-gray-200 shrink-0" data-testid="perm-tabbar">
           <button type="button" onClick={() => goToTab("sets")} data-testid="perm-tab-sets"
             className={`h-9 px-4 rounded-t-md text-xs font-semibold inline-flex items-center gap-1.5 border border-b-0 ${
               tab === "sets" ? "bg-white border-gray-200 text-[#ec9324]" : "bg-transparent border-transparent text-gray-500 hover:text-gray-800"
@@ -1201,12 +1226,25 @@ export default function PermissionsPage() {
             <History size={13} /> Audit log
           </button>
           <div className="flex-1 border-b border-gray-200 -mb-px" />
+          {tab === "sets" && (
+            <button
+              type="button"
+              onClick={doListRefresh}
+              disabled={refreshingList}
+              data-testid="perm-sets-refresh"
+              title="Refresh"
+              aria-label="Refresh"
+              className="mb-1 inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold disabled:opacity-60"
+            >
+              <RefreshCw size={13} className={refreshingList ? "animate-spin" : ""}/> Refresh
+            </button>
+          )}
         </div>
       )}
 
       {tab === "sets" ? (
         <PermissionSetsListTab
-          onCreate={openCreate}
+          ref={setsListRef}
           onView={openView}
           onEdit={openEdit}
         />

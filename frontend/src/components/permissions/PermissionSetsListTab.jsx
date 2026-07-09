@@ -1,17 +1,26 @@
 /**
  * PermissionSetsListTab — the "Permission Sets" tab inside PermissionsPage.
  *
+ * Layout (matches Bookings / TicketList pattern):
+ *   • Filter bar — sticky at top
+ *   • Table — flex-1, only this area scrolls; thead is sticky
+ *   • Pagination — fixed at bottom of the flex column
+ *
  * Columns: #ID | Name | Description | Created By | Created On | Updated On | # Users | Actions (⋮)
  * Filters: Date (created_on) · Search (name/desc) · Module (multi) · Created By (multi) · Updated By (multi)
  * Actions per row: View, Edit, Duplicate, Delete (soft)
  * # Users column is clickable → /admin/contacts?permission_set=<id>
  *
- * Talks to `/api/permission-sets-v3` (list + filter-options + duplicate + delete).
+ * The parent (PermissionsPage) owns the "+ Add Permission Set" button (top bar) and
+ * the "Refresh" button (next to the tab bar). It calls this component's `refresh()`
+ * via a forwarded ref.
  */
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Plus, Search, MoreVertical, Eye, Pencil, Copy, Trash2, Loader2, RefreshCw,
+  Search, MoreVertical, Eye, Pencil, Copy, Trash2, Loader2,
   Users, X, ArrowUpDown, ArrowUp, ArrowDown,
 } from "lucide-react";
 import api from "../../lib/api";
@@ -23,7 +32,6 @@ import Pagination from "../Pagination";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from "../ui/dropdown-menu";
-import { Button } from "../ui/button";
 
 function fmtDate(iso) {
   if (!iso) return "—";
@@ -42,7 +50,7 @@ function isoDay(d) {
 
 const DEFAULT_PAGE_SIZE = 25;
 
-export default function PermissionSetsListTab({ onCreate, onView, onEdit }) {
+const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView, onEdit }, ref) {
   const navigate = useNavigate();
 
   // ---- filter state ----
@@ -104,6 +112,13 @@ export default function PermissionSetsListTab({ onCreate, onView, onEdit }) {
 
   useEffect(() => { loadOptions(); }, [loadOptions]);
   useEffect(() => { load(); }, [load]);
+
+  // Expose refresh() to parent (called by the Refresh button that sits next to the tab bar).
+  useImperativeHandle(ref, () => ({
+    refresh: () => { loadOptions(); load(); },
+    isLoading: () => loading,
+    total: () => total,
+  }), [loadOptions, load, loading, total]);
 
   // ---- filter helpers ----
   const dateFilterValue = useMemo(() => {
@@ -177,36 +192,15 @@ export default function PermissionSetsListTab({ onCreate, onView, onEdit }) {
   };
 
   const goToEmployees = (row) => {
-    // Pre-filter the Employees page by this permission set.
     navigate(`/admin/contacts?permission_set=${encodeURIComponent(row.id)}`);
   };
 
   return (
-    <div className="mt-3 space-y-3" data-testid="perm-sets-tab">
-      {/* Top action row */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <Button
-          onClick={onCreate}
-          className="h-9 bg-[#ec9324] hover:bg-[#d4811f] text-white text-xs font-semibold"
-          data-testid="perm-sets-add-btn"
-        >
-          <Plus size={14} className="mr-1.5"/> Add Permission Set
-        </Button>
-        <div className="ml-auto text-xs text-gray-500">
-          {total.toLocaleString()} {total === 1 ? "set" : "sets"}
-        </div>
-        <button
-          type="button"
-          onClick={() => { loadOptions(); load(); }}
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold"
-          data-testid="perm-sets-refresh"
-        >
-          <RefreshCw size={12}/> Refresh
-        </button>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white border border-gray-200 rounded-xl p-3">
+    // Fill remaining vertical space inside PermissionsPage (which itself is a flex-col).
+    // The sticky filter row + sticky thead give the "freeze headers, scroll body" pattern.
+    <div className="flex-1 min-h-0 flex flex-col bg-white border border-gray-200 rounded-xl overflow-hidden" data-testid="perm-sets-tab">
+      {/* FILTERS — sticky (screen freezes here) */}
+      <div className="border-b border-gray-200 bg-white px-4 py-3 sticky top-0 z-20">
         <div className="flex flex-wrap items-end gap-2">
           {/* Search */}
           <div className="relative w-64">
@@ -282,126 +276,130 @@ export default function PermissionSetsListTab({ onCreate, onView, onEdit }) {
               <X size={12}/> Clear all
             </button>
           )}
-        </div>
-      </div>
 
-      {/* Table */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <div className="overflow-x-auto max-h-[calc(100vh-24rem)] overflow-y-auto">
-          <table className="w-full text-sm">
-            <thead className="text-[11px] uppercase tracking-wider text-gray-600 bg-gray-50 sticky top-0 z-10 border-b border-gray-200">
-              <tr>
-                <th className="px-4 py-3 text-left cursor-pointer select-none" onClick={() => toggleSort("seq_no")} data-testid="perm-sets-sort-id">
-                  <span className="inline-flex items-center gap-1">System ID <SortIcon col="seq_no"/></span>
-                </th>
-                <th className="px-4 py-3 text-left cursor-pointer select-none" onClick={() => toggleSort("title")} data-testid="perm-sets-sort-name">
-                  <span className="inline-flex items-center gap-1">Name <SortIcon col="title"/></span>
-                </th>
-                <th className="px-4 py-3 text-left">Description</th>
-                <th className="px-4 py-3 text-left">Created By</th>
-                <th className="px-4 py-3 text-left cursor-pointer select-none" onClick={() => toggleSort("created_on")} data-testid="perm-sets-sort-created">
-                  <span className="inline-flex items-center gap-1">Created On <SortIcon col="created_on"/></span>
-                </th>
-                <th className="px-4 py-3 text-left cursor-pointer select-none" onClick={() => toggleSort("updated_on")} data-testid="perm-sets-sort-updated">
-                  <span className="inline-flex items-center gap-1">Updated On <SortIcon col="updated_on"/></span>
-                </th>
-                <th className="px-4 py-3 text-right cursor-pointer select-none" onClick={() => toggleSort("assigned_users")} data-testid="perm-sets-sort-users">
-                  <span className="inline-flex items-center gap-1 justify-end w-full">Users <SortIcon col="assigned_users"/></span>
-                </th>
-                <th className="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading ? (
-                <tr><td colSpan={8} className="text-center py-16"><Loader2 className="animate-spin inline text-[#ec9324]" size={22}/></td></tr>
-              ) : items.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-16 text-sm text-gray-500">
-                  No permission sets found. <button onClick={onCreate} className="text-[#ec9324] font-medium hover:underline" data-testid="perm-sets-empty-cta">Create your first one</button>.
-                </td></tr>
-              ) : items.map((s) => (
-                <tr key={s.id} className="hover:bg-gray-50" data-testid={`perm-sets-row-${s.seq_no}`}>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-700">#{s.seq_no || s.numeric_id}</td>
-                  <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() => onView(s.id)}
-                      data-testid={`perm-sets-name-${s.seq_no}`}
-                      className="font-medium text-gray-900 hover:text-[#ec9324] hover:underline text-left"
-                    >{s.title}</button>
-                  </td>
-                  <td className="px-4 py-3 text-gray-700 max-w-sm">
-                    <div className="line-clamp-1">{s.description || <span className="text-gray-400">—</span>}</div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="text-gray-900 text-xs">{s.created_by?.name || "—"}</div>
-                    <div className="text-[11px] text-gray-500">{s.created_by?.email}</div>
-                  </td>
-                  <td className="px-4 py-3 text-gray-700 text-xs">{fmtDate(s.created_on)}</td>
-                  <td className="px-4 py-3 text-gray-700 text-xs">{fmtDate(s.updated_on)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => goToEmployees(s)}
-                      data-testid={`perm-sets-users-${s.seq_no}`}
-                      title="View assigned employees"
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold border transition-colors ${
-                        (s.assigned_users_count || 0) > 0
-                          ? "border-[#ec9324]/40 bg-[#ec9324]/10 text-[#ec9324] hover:bg-[#ec9324]/20"
-                          : "border-gray-200 text-gray-500 hover:border-gray-300"
-                      }`}
-                    >
-                      <Users size={11}/> {s.assigned_users_count || 0}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          data-testid={`perm-sets-actions-${s.seq_no}`}
-                          className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800"
-                          aria-label="Row actions"
-                        >{busyId === s.id ? <Loader2 size={15} className="animate-spin"/> : <MoreVertical size={15}/>}</button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-40">
-                        <DropdownMenuItem onClick={() => onView(s.id)} data-testid={`perm-sets-view-${s.seq_no}`}>
-                          <Eye size={13} className="mr-2"/> View
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onEdit(s.id)} data-testid={`perm-sets-edit-${s.seq_no}`}>
-                          <Pencil size={13} className="mr-2"/> Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => doDuplicate(s)} data-testid={`perm-sets-duplicate-${s.seq_no}`}>
-                          <Copy size={13} className="mr-2"/> Duplicate
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator/>
-                        <DropdownMenuItem onClick={() => doDelete(s)} data-testid={`perm-sets-delete-${s.seq_no}`} className="text-red-600 focus:text-red-700">
-                          <Trash2 size={13} className="mr-2"/> Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        {!loading && total > 0 && (
-          <div className="border-t border-gray-100 px-4 py-2">
-            <Pagination
-              page={page}
-              pageSize={pageSize}
-              total={total}
-              onPageChange={setPage}
-              onPageSizeChange={(n) => { setPageSize(n); setPage(1); }}
-              pageSizeOptions={[25, 50, 100]}
-              label="permission sets"
-              testIdPrefix="perm-sets-pg"
-            />
+          <div className="ml-auto text-xs text-gray-500 self-end pb-2">
+            {loading ? "Loading…" : `${total.toLocaleString()} ${total === 1 ? "set" : "sets"}`}
           </div>
-        )}
+        </div>
       </div>
+
+      {/* TABLE — the only scrollable region */}
+      <div className="flex-1 min-h-0 overflow-auto" data-testid="perm-sets-table-wrapper">
+        <table className="w-full text-sm">
+          <thead className="text-[11px] uppercase tracking-wider text-gray-600 bg-gray-50 sticky top-0 z-10 border-b border-gray-200">
+            <tr>
+              <th className="px-4 py-3 text-left cursor-pointer select-none" onClick={() => toggleSort("seq_no")} data-testid="perm-sets-sort-id">
+                <span className="inline-flex items-center gap-1">System ID <SortIcon col="seq_no"/></span>
+              </th>
+              <th className="px-4 py-3 text-left cursor-pointer select-none" onClick={() => toggleSort("title")} data-testid="perm-sets-sort-name">
+                <span className="inline-flex items-center gap-1">Name <SortIcon col="title"/></span>
+              </th>
+              <th className="px-4 py-3 text-left">Description</th>
+              <th className="px-4 py-3 text-left">Created By</th>
+              <th className="px-4 py-3 text-left cursor-pointer select-none" onClick={() => toggleSort("created_on")} data-testid="perm-sets-sort-created">
+                <span className="inline-flex items-center gap-1">Created On <SortIcon col="created_on"/></span>
+              </th>
+              <th className="px-4 py-3 text-left cursor-pointer select-none" onClick={() => toggleSort("updated_on")} data-testid="perm-sets-sort-updated">
+                <span className="inline-flex items-center gap-1">Updated On <SortIcon col="updated_on"/></span>
+              </th>
+              <th className="px-4 py-3 text-right cursor-pointer select-none" onClick={() => toggleSort("assigned_users")} data-testid="perm-sets-sort-users">
+                <span className="inline-flex items-center gap-1 justify-end w-full">Users <SortIcon col="assigned_users"/></span>
+              </th>
+              <th className="px-4 py-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 bg-white">
+            {loading ? (
+              <tr><td colSpan={8} className="text-center py-16"><Loader2 className="animate-spin inline text-[#ec9324]" size={22}/></td></tr>
+            ) : items.length === 0 ? (
+              <tr><td colSpan={8} className="text-center py-16 text-sm text-gray-500">
+                No permission sets found.
+              </td></tr>
+            ) : items.map((s) => (
+              <tr key={s.id} className="hover:bg-gray-50" data-testid={`perm-sets-row-${s.seq_no}`}>
+                <td className="px-4 py-3 font-mono text-xs text-gray-700">#{s.seq_no || s.numeric_id}</td>
+                <td className="px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => onView(s.id)}
+                    data-testid={`perm-sets-name-${s.seq_no}`}
+                    className="font-medium text-gray-900 hover:text-[#ec9324] hover:underline text-left"
+                  >{s.title}</button>
+                </td>
+                <td className="px-4 py-3 text-gray-700 max-w-sm">
+                  <div className="line-clamp-1">{s.description || <span className="text-gray-400">—</span>}</div>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="text-gray-900 text-xs">{s.created_by?.name || "—"}</div>
+                  <div className="text-[11px] text-gray-500">{s.created_by?.email}</div>
+                </td>
+                <td className="px-4 py-3 text-gray-700 text-xs">{fmtDate(s.created_on)}</td>
+                <td className="px-4 py-3 text-gray-700 text-xs">{fmtDate(s.updated_on)}</td>
+                <td className="px-4 py-3 text-right">
+                  <button
+                    type="button"
+                    onClick={() => goToEmployees(s)}
+                    data-testid={`perm-sets-users-${s.seq_no}`}
+                    title="View assigned employees"
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold border transition-colors ${
+                      (s.assigned_users_count || 0) > 0
+                        ? "border-[#ec9324]/40 bg-[#ec9324]/10 text-[#ec9324] hover:bg-[#ec9324]/20"
+                        : "border-gray-200 text-gray-500 hover:border-gray-300"
+                    }`}
+                  >
+                    <Users size={11}/> {s.assigned_users_count || 0}
+                  </button>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        data-testid={`perm-sets-actions-${s.seq_no}`}
+                        className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800"
+                        aria-label="Row actions"
+                      >{busyId === s.id ? <Loader2 size={15} className="animate-spin"/> : <MoreVertical size={15}/>}</button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-40">
+                      <DropdownMenuItem onClick={() => onView(s.id)} data-testid={`perm-sets-view-${s.seq_no}`}>
+                        <Eye size={13} className="mr-2"/> View
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onEdit(s.id)} data-testid={`perm-sets-edit-${s.seq_no}`}>
+                        <Pencil size={13} className="mr-2"/> Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => doDuplicate(s)} data-testid={`perm-sets-duplicate-${s.seq_no}`}>
+                        <Copy size={13} className="mr-2"/> Duplicate
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator/>
+                      <DropdownMenuItem onClick={() => doDelete(s)} data-testid={`perm-sets-delete-${s.seq_no}`} className="text-red-600 focus:text-red-700">
+                        <Trash2 size={13} className="mr-2"/> Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* PAGINATION — fixed footer of the tab card */}
+      {!loading && total > 0 && (
+        <div className="shrink-0">
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onPageChange={setPage}
+            onPageSizeChange={(n) => { setPageSize(n); setPage(1); }}
+            pageSizeOptions={[25, 50, 100]}
+            label="permission sets"
+            testIdPrefix="perm-sets-pg"
+          />
+        </div>
+      )}
     </div>
   );
-}
+});
+
+export default PermissionSetsListTab;
