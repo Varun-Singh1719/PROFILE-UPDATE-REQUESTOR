@@ -1591,3 +1591,25 @@ Applied the tabular-page pattern (Bookings/TicketList style) to the new tab:
 ### Files touched
 - `backend/routers/permissions_v3.py`
 - `frontend/src/components/permissions/PermissionSetsListTab.jsx`
+
+
+## [2026-07-09 v5] DialogHost redesign + delete-permission-set copy polish
+
+### Global — `components/DialogHost.jsx`
+Rewrote the confirm / prompt / alert modal:
+- Icon badge in the header: destructive → `AlertTriangle` in a soft red circle with ring; primary confirm → `HelpCircle` in an orange circle; info → grey `Info`. Callers can override with `opts.icon` and `opts.tone`.
+- Cleaner card: `rounded-2xl`, larger `max-w-lg`, subtle backdrop blur, fade-in animation.
+- Header uses `title` + optional `message` block with proper hierarchy (semibold title, relaxed body).
+- Removed grey footer band → plain white row with hairline top border. Consistent `h-9` buttons with focus rings.
+- Added × close affordance in the header for mouse/keyboard cancel.
+
+### Caller — `PermissionSetsListTab.jsx`
+Rewrote the delete-set message to be scannable:
+- Title uses the set name inline: `Delete "…"?`
+- Body: one soft-delete explainer + one impact line ("un-assigned from N employee(s)") shown only when assigned; number pluralises.
+
+Backwards-compatible — every existing `confirm/prompt/alert` call site works unchanged; icon/tone are derived from `confirmVariant`.
+
+### Files touched
+- `frontend/src/components/DialogHost.jsx`
+- `frontend/src/components/permissions/PermissionSetsListTab.jsx`

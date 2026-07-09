@@ -192,10 +192,16 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
   };
 
   const doDelete = async (row) => {
+    const users = row.assigned_users_count || 0;
+    const usersLine = users > 0
+      ? `\nIt will also be un-assigned from ${users} ${users === 1 ? "employee" : "employees"}.`
+      : "";
     const ok = await confirmDialog({
-      title: "Delete permission set",
-      message: `Delete "${row.title}"? This will also un-assign it from any employees who currently have it. This is a soft-delete — audit log references keep resolving.`,
+      title: `Delete "${row.title}"?`,
+      message:
+        `This is a soft-delete — the set will move to the Deleted tab and can still be viewed from the audit log.${usersLine}`,
       confirmLabel: "Delete",
+      cancelLabel: "Cancel",
       confirmVariant: "destructive",
     });
     if (!ok) return;
