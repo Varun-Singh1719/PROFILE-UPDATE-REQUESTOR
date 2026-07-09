@@ -286,16 +286,31 @@ async def list_v3_sets(
     sort_dir: Optional[str] = Query("desc", description="asc|desc"),
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=200),
+    status: Optional[str] = Query("active", description="Comma-separated: active,deleted"),
     include_deleted: bool = Query(False),
 ):
     """Paginated list of v3 permission sets with filters + assigned-user counts.
+
+    Status filter (default = "active"):
+      - "active" — only sets with no `deleted_at`
+      - "deleted" — only soft-deleted sets
+      - "active,deleted" (or both) — everything
+    `include_deleted=true` is a legacy alias for status="active,deleted".
 
     Response: `{items: [...], total, page, page_size}`.
     Each item is enriched with `assigned_users_count`.
     """
     query: Dict[str, Any] = {"version": 3}
-    if not include_deleted:
-        query["deleted_at"] = {"$in": [None]}  # exclude soft-deleted
+
+    # Normalise status → set of {"active", "deleted"}
+    status_tokens = {s.strip().lower() for s in (status or "").split(",") if s.strip()}
+    if include_deleted or {"active", "deleted"}.issubset(status_tokens):
+        pass  # no deleted_at filter
+    elif "deleted" in status_tokens and "active" not in status_tokens:
+        query["deleted_at"] = {"$nin": [None]}  # only soft-deleted
+    else:
+        # Default & "active" — exclude soft-deleted
+        query["deleted_at"] = {"$in": [None]}
 
     if q:
         query["$or"] = [
@@ -380,13 +395,14 @@ async def list_v3_sets(
 @api_router.get("/permission-sets-v3/filter-options")
 async def list_v3_filter_options(user=Depends(get_current_user)):
     """Distinct creators/updaters + available modules — used to populate the
-    filter dropdowns on the Permission Sets tab."""
+    filter dropdowns on the Permission Sets tab. Includes historical users from
+    soft-deleted sets so filters remain useful when Status=Deleted."""
     creators_map: Dict[str, dict] = {}
     updaters_map: Dict[str, dict] = {}
     modules_present: set = set()
 
     async for doc in db.permission_sets.find(
-        {"version": 3, "deleted_at": {"$in": [None]}},
+        {"version": 3},
         {"_id": 0, "created_by": 1, "updated_by": 1, "modules": 1},
     ):
         cb = doc.get("created_by") or {}

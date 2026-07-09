@@ -58,6 +58,9 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
   const [createdBy, setCreatedBy] = useState([]);
   const [updatedBy, setUpdatedBy] = useState([]);
   const [moduleFilter, setModuleFilter] = useState([]);
+  // Status: ["active"] by default → deleted sets hidden. ["deleted"] shows only
+  // soft-deleted. ["active","deleted"] (or empty) shows everything.
+  const [statusFilter, setStatusFilter] = useState(["active"]);
   // Date filter — { field: "created_on"|"updated_on", from: ISO, to: ISO }
   const [dateField, setDateField] = useState("updated_on");
   const [dateFrom, setDateFrom] = useState("");
@@ -102,6 +105,8 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
       if (createdBy.length) params.created_by = createdBy.join(",");
       if (updatedBy.length) params.updated_by = updatedBy.join(",");
       if (moduleFilter.length) params.modules = moduleFilter.join(",");
+      // Status — if empty or both, backend returns everything (send both explicitly)
+      params.status = statusFilter.length ? statusFilter.join(",") : "active,deleted";
       if (dateFrom) {
         if (dateField === "updated_on") params.updated_from = dateFrom;
         else params.created_from = dateFrom;
@@ -116,7 +121,7 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
     } catch (e) {
       notify.error(e, { what: "Load permission sets" });
     } finally { setLoading(false); }
-  }, [page, pageSize, sortBy, sortDir, search, createdBy, updatedBy, moduleFilter, dateField, dateFrom, dateTo]);
+  }, [page, pageSize, sortBy, sortDir, search, createdBy, updatedBy, moduleFilter, statusFilter, dateField, dateFrom, dateTo]);
 
   useEffect(() => { loadOptions(); }, [loadOptions]);
   useEffect(() => { load(); }, [load]);
@@ -152,10 +157,13 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
   };
 
   const hasActiveFilters =
-    !!search.trim() || createdBy.length > 0 || updatedBy.length > 0 || moduleFilter.length > 0 || !!dateFrom || !!dateTo;
+    !!search.trim() || createdBy.length > 0 || updatedBy.length > 0 || moduleFilter.length > 0
+    || !!dateFrom || !!dateTo
+    || !(statusFilter.length === 1 && statusFilter[0] === "active");
 
   const clearAll = () => {
     setSearch(""); setCreatedBy([]); setUpdatedBy([]); setModuleFilter([]);
+    setStatusFilter(["active"]);
     setDateField("updated_on"); setDateFrom(""); setDateTo(""); setPage(1);
   };
 
@@ -234,6 +242,19 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
             testId="perm-sets-date-filter"
           />
 
+          {/* Status */}
+          <MultiSelectFilter
+            label="Status"
+            value={statusFilter}
+            onChange={(v) => { setStatusFilter(v); setPage(1); }}
+            options={[
+              { value: "active", label: "Active" },
+              { value: "deleted", label: "Deleted" },
+            ]}
+            testIdPrefix="perm-sets-status"
+            className="w-40"
+          />
+
           {/* Module — placeholder shows "Module: All" via MultiSelectFilter's built-in label */}
           <MultiSelectFilter
             label="Module"
@@ -293,10 +314,12 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
                 <span className="inline-flex items-center gap-1">Name <SortIcon col="title"/></span>
               </th>
               <th className="px-4 py-3 text-left">Description</th>
+              <th className="px-4 py-3 text-left">Status</th>
               <th className="px-4 py-3 text-left">Created By</th>
               <th className="px-4 py-3 text-left cursor-pointer select-none" onClick={() => toggleSort("created_on")} data-testid="perm-sets-sort-created">
                 <span className="inline-flex items-center gap-1">Created On <SortIcon col="created_on"/></span>
               </th>
+              <th className="px-4 py-3 text-left">Updated By</th>
               <th className="px-4 py-3 text-left cursor-pointer select-none" onClick={() => toggleSort("updated_on")} data-testid="perm-sets-sort-updated">
                 <span className="inline-flex items-center gap-1">Updated On <SortIcon col="updated_on"/></span>
               </th>
@@ -308,75 +331,87 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
           </thead>
           <tbody className="divide-y divide-gray-100 bg-white">
             {loading ? (
-              <tr><td colSpan={8} className="text-center py-16"><Loader2 className="animate-spin inline text-[#ec9324]" size={22}/></td></tr>
+              <tr><td colSpan={10} className="text-center py-16"><Loader2 className="animate-spin inline text-[#ec9324]" size={22}/></td></tr>
             ) : items.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-16 text-sm text-gray-500">
+              <tr><td colSpan={10} className="text-center py-16 text-sm text-gray-500">
                 No permission sets found.
               </td></tr>
-            ) : items.map((s) => (
-              <tr key={s.id} className="hover:bg-gray-50" data-testid={`perm-sets-row-${s.seq_no}`}>
-                <td className="px-4 py-3 font-mono text-xs text-gray-700">#{s.seq_no || s.numeric_id}</td>
-                <td className="px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => onView(s.id)}
-                    data-testid={`perm-sets-name-${s.seq_no}`}
-                    className="font-medium text-gray-900 hover:text-[#ec9324] hover:underline text-left"
-                  >{s.title}</button>
-                </td>
-                <td className="px-4 py-3 text-gray-700 max-w-sm">
-                  <div className="line-clamp-1">{s.description || <span className="text-gray-400">—</span>}</div>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="text-gray-900 text-xs">{s.created_by?.name || "—"}</div>
-                  <div className="text-[11px] text-gray-500">{s.created_by?.email}</div>
-                </td>
-                <td className="px-4 py-3 text-gray-700 text-xs">{fmtDate(s.created_on)}</td>
-                <td className="px-4 py-3 text-gray-700 text-xs">{fmtDate(s.updated_on)}</td>
-                <td className="px-4 py-3 text-right">
-                  <button
-                    type="button"
-                    onClick={() => goToEmployees(s)}
-                    data-testid={`perm-sets-users-${s.seq_no}`}
-                    title="View assigned employees"
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold border transition-colors ${
-                      (s.assigned_users_count || 0) > 0
-                        ? "border-[#ec9324]/40 bg-[#ec9324]/10 text-[#ec9324] hover:bg-[#ec9324]/20"
-                        : "border-gray-200 text-gray-500 hover:border-gray-300"
-                    }`}
-                  >
-                    <Users size={11}/> {s.assigned_users_count || 0}
-                  </button>
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        data-testid={`perm-sets-actions-${s.seq_no}`}
-                        className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800"
-                        aria-label="Row actions"
-                      >{busyId === s.id ? <Loader2 size={15} className="animate-spin"/> : <MoreVertical size={15}/>}</button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-40">
-                      <DropdownMenuItem onClick={() => onView(s.id)} data-testid={`perm-sets-view-${s.seq_no}`}>
-                        <Eye size={13} className="mr-2"/> View
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => onEdit(s.id)} data-testid={`perm-sets-edit-${s.seq_no}`}>
-                        <Pencil size={13} className="mr-2"/> Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => doDuplicate(s)} data-testid={`perm-sets-duplicate-${s.seq_no}`}>
-                        <Copy size={13} className="mr-2"/> Duplicate
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator/>
-                      <DropdownMenuItem onClick={() => doDelete(s)} data-testid={`perm-sets-delete-${s.seq_no}`} className="text-red-600 focus:text-red-700">
-                        <Trash2 size={13} className="mr-2"/> Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </td>
-              </tr>
-            ))}
+            ) : items.map((s) => {
+              const isDeleted = !!s.deleted_at;
+              return (
+                <tr key={s.id} className={`hover:bg-gray-50 ${isDeleted ? "opacity-70" : ""}`} data-testid={`perm-sets-row-${s.seq_no}`}>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-700">#{s.seq_no || s.numeric_id}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => onView(s.id)}
+                      data-testid={`perm-sets-name-${s.seq_no}`}
+                      className={`font-medium text-left hover:text-[#ec9324] hover:underline ${isDeleted ? "text-gray-600 line-through decoration-red-300/70" : "text-gray-900"}`}
+                    >{s.title}</button>
+                  </td>
+                  <td className="px-4 py-3 text-gray-700 max-w-sm">
+                    <div className="line-clamp-1">{s.description || <span className="text-gray-400">—</span>}</div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {isDeleted ? (
+                      <span className="inline-flex items-center rounded-full bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 text-[10px] font-semibold">Deleted</span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 text-[10px] font-semibold">Active</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-gray-900 text-xs">{s.created_by?.name || "—"}</td>
+                  <td className="px-4 py-3 text-gray-700 text-xs">{fmtDate(s.created_on)}</td>
+                  <td className="px-4 py-3 text-gray-900 text-xs">{s.updated_by?.name || "—"}</td>
+                  <td className="px-4 py-3 text-gray-700 text-xs">{fmtDate(s.updated_on)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      type="button"
+                      onClick={() => goToEmployees(s)}
+                      data-testid={`perm-sets-users-${s.seq_no}`}
+                      title="View assigned employees"
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold border transition-colors ${
+                        (s.assigned_users_count || 0) > 0
+                          ? "border-[#ec9324]/40 bg-[#ec9324]/10 text-[#ec9324] hover:bg-[#ec9324]/20"
+                          : "border-gray-200 text-gray-500 hover:border-gray-300"
+                      }`}
+                    >
+                      <Users size={11}/> {s.assigned_users_count || 0}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          data-testid={`perm-sets-actions-${s.seq_no}`}
+                          className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800"
+                          aria-label="Row actions"
+                        >{busyId === s.id ? <Loader2 size={15} className="animate-spin"/> : <MoreVertical size={15}/>}</button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-40">
+                        <DropdownMenuItem onClick={() => onView(s.id)} data-testid={`perm-sets-view-${s.seq_no}`}>
+                          <Eye size={13} className="mr-2"/> View
+                        </DropdownMenuItem>
+                        {!isDeleted && (
+                          <>
+                            <DropdownMenuItem onClick={() => onEdit(s.id)} data-testid={`perm-sets-edit-${s.seq_no}`}>
+                              <Pencil size={13} className="mr-2"/> Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => doDuplicate(s)} data-testid={`perm-sets-duplicate-${s.seq_no}`}>
+                              <Copy size={13} className="mr-2"/> Duplicate
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator/>
+                            <DropdownMenuItem onClick={() => doDelete(s)} data-testid={`perm-sets-delete-${s.seq_no}`} className="text-red-600 focus:text-red-700">
+                              <Trash2 size={13} className="mr-2"/> Delete
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

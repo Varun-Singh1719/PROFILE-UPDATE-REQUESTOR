@@ -1573,3 +1573,21 @@ Applied the tabular-page pattern (Bookings/TicketList style) to the new tab:
 - `frontend/src/components/permissions/PermissionSetsListTab.jsx`
 - `frontend/src/components/DateFilter.jsx`
 - `backend/routers/permissions_v3.py`
+
+
+## [2026-07-09 v4] Permission Sets tab — Status + Updated By columns/filters
+
+### Backend
+- `GET /permission-sets-v3` now accepts a `status` query param (default `"active"`): `active` hides soft-deleted, `deleted` shows only soft-deleted, `active,deleted` shows all. Legacy `include_deleted=true` still works as alias.
+- `GET /permission-sets-v3/filter-options` now includes users from soft-deleted sets, so creators/updaters remain filterable when Status=Deleted.
+
+### Frontend (`PermissionSetsListTab.jsx`)
+- New **Status** multi-select filter (`Active` / `Deleted`), default `["active"]`. Non-default state also drives the `Clear all` button.
+- New **Status** column with green `Active` / red `Deleted` badge.
+- New **Updated By** column between `Created On` and `Updated On`.
+- Removed email sub-line under `Created By`; both `Created By` and `Updated By` cells now show only the name.
+- Deleted rows are dimmed with a strikethrough title. Their `Actions (⋮)` menu only exposes **View** (Edit / Duplicate / Delete hidden).
+
+### Files touched
+- `backend/routers/permissions_v3.py`
+- `frontend/src/components/permissions/PermissionSetsListTab.jsx`
