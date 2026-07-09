@@ -6,7 +6,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import SingleSelect from "../components/SingleSelect";
 import notify from "../lib/notify";
 import { Upload, Loader2, X, Paperclip } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
@@ -99,14 +99,20 @@ export default function CreateTicketPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <Label>Priority *</Label>
-            <Select value={priority} onValueChange={setPriority}>
-              <SelectTrigger data-testid="ticket-priority-select" className="mt-1.5"><SelectValue/></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="High">High</SelectItem>
-                <SelectItem value="Medium">Medium</SelectItem>
-                <SelectItem value="Low">Low</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="mt-1.5">
+              <SingleSelect
+                testId="ticket-priority-select"
+                options={[
+                  { value: "High", label: "High" },
+                  { value: "Medium", label: "Medium" },
+                  { value: "Low", label: "Low" },
+                ]}
+                value={priority}
+                onChange={(v) => setPriority(v || "Medium")}
+                allowClear={false}
+                placeholder="Select priority"
+              />
+            </div>
           </div>
           <div>
             <Label htmlFor="due">Due Date</Label>

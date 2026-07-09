@@ -7,6 +7,7 @@ import { Label } from "../components/ui/label";
 import { Switch } from "../components/ui/switch";
 import { Checkbox } from "../components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import SingleSelect from "../components/SingleSelect";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from "../components/ui/dialog";
@@ -903,12 +904,16 @@ export default function ContactListPage() {
           </DialogHeader>
           <div className="mt-2">
             <Label>New role</Label>
-            <Select value={bulkRole} onValueChange={setBulkRole}>
-              <SelectTrigger data-testid="bulk-role-select"><SelectValue/></SelectTrigger>
-              <SelectContent>
-                {ROLE_OPTIONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <div className="mt-1.5">
+              <SingleSelect
+                testId="bulk-role-select"
+                options={ROLE_OPTIONS.map((r) => ({ value: r, label: r }))}
+                value={bulkRole}
+                onChange={(v) => setBulkRole(v || bulkRole)}
+                allowClear={false}
+                placeholder="Select role"
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBulkRoleOpen(false)}>Cancel</Button>
@@ -954,12 +959,16 @@ export default function ContactListPage() {
               </div>
               <div>
                 <Label>Role *</Label>
-                <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
-                  <SelectTrigger data-testid="contact-role"><SelectValue/></SelectTrigger>
-                  <SelectContent>
-                    {ROLE_OPTIONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="mt-1.5">
+                  <SingleSelect
+                    testId="contact-role"
+                    options={ROLE_OPTIONS.map((r) => ({ value: r, label: r }))}
+                    value={form.role}
+                    onChange={(v) => setForm({ ...form, role: v || form.role })}
+                    allowClear={false}
+                    placeholder="Select role"
+                  />
+                </div>
               </div>
               <div className="col-span-2">
                 <Label className="flex items-center gap-1.5">

@@ -878,7 +878,7 @@ frontend:
             - Test creds in /app/memory/test_credentials.md.
 
 metadata:
-  needs_retesting: true
+  needs_retesting: false
 
 test_plan:
   current_focus: []
@@ -892,6 +892,53 @@ agent_communication:
         Bug fix in Teams form (/admin/teams → Add New Team).
         File touched: /app/frontend/src/pages/TeamsPage.jsx only.
         Please run the focused frontend test described above. DO NOT regress unrelated team flows (edit, delete, search).
+    
+    - agent: "testing"
+      message: |
+        ✅ DROPDOWN UI CONSISTENCY VERIFICATION COMPLETE — ALL 4 DROPDOWNS PASS
+        
+        Verified that all four dropdowns now use consistent SingleSelect UI (plain list, no checkboxes, orange border, X clear button).
+        
+        **TEST RESULTS (5/5 PASSED):**
+        
+        1. ✅ ProfiX → Create New Request (/admin/create) → Priority dropdown (data-testid="ticket-priority-select")
+           - Opens/closes correctly
+           - Shows options High / Medium / Low as plain list items
+           - Selecting an option updates the trigger label
+           - Style matches SingleSelect (chevrons on right, orange border on hover/open, no checkbox squares)
+        
+        2a. ✅ Manage → Employee List (/admin/contacts) → Add New Employee → Role dropdown (data-testid="contact-role")
+           - Opens/closes correctly
+           - Shows options Super Admin / Admin as plain list items
+           - Selecting an option updates the trigger label
+           - Style matches SingleSelect (no checkboxes)
+        
+        2b. ✅ Manage → Employee List (/admin/contacts) → Bulk Actions → Change Role → New Role dropdown (data-testid="bulk-role-select")
+           - Opens/closes correctly
+           - Shows options Super Admin / Admin as plain list items
+           - Selecting an option updates the trigger label
+           - Style matches SingleSelect (no checkboxes)
+        
+        3. ✅ Manage → Email Templates (/admin/email-templates) → New Template → Category dropdown (data-testid="template-category")
+           - Opens/closes correctly
+           - Shows options transactional / onboarding / security / notification / marketing as plain list items
+           - Selecting an option updates the trigger label
+           - Style matches SingleSelect (no checkboxes)
+        
+        4. ✅ Manage → Permission Sets (/admin/permission-sets) → Created By filter (data-testid="pset-filter-creator")
+           - Opens/closes correctly
+           - Shows creator options as plain list (no checkboxes)
+           - Selecting an option updates the trigger label
+           - Style matches SingleSelect
+        
+        **CONSOLE ERRORS:**
+        - 2 non-critical 401 errors detected (likely PDF loading authentication issues, not related to dropdown functionality)
+        
+        **SCREENSHOTS:**
+        - 15 screenshots captured showing open/closed states of all dropdowns
+        - All dropdowns visually match the SingleSelect reference UI (Permissions >> Scope)
+        
+        All dropdowns now use consistent UI. No major issues found. Ready for user acceptance testing.
     
     - agent: "testing"
       message: |
@@ -1227,7 +1274,7 @@ frontend:
             - "View Booking" button navigates to /workspace-manager/bookings but without ?bookingId= parameter in URL (navigation works but query param missing). This is a minor issue that doesn't affect the core bug fix verification.
             
             **CONSOLE ERRORS:**
-            - 401 errors detected for PDF loading (https://manager-portal-18.preview.emergentagent.com/api/floor-plans/pdf/...) - this is a backend PDF authentication issue, not related to the bug fixes
+            - 401 errors detected for PDF loading (https://manage-ui-update.preview.emergentagent.com/api/floor-plans/pdf/...) - this is a backend PDF authentication issue, not related to the bug fixes
             - No critical JavaScript errors detected
             
             Test date used: 2026-07-03 (date with existing workstation bookings)

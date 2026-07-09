@@ -6,7 +6,7 @@ import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { Switch } from "../components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import SingleSelect from "../components/SingleSelect";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
@@ -552,12 +552,16 @@ export default function EmailTemplatesPage() {
               </div>
               <div>
                 <Label>Category</Label>
-                <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                  <SelectTrigger data-testid="template-category"><SelectValue/></SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="mt-1.5">
+                  <SingleSelect
+                    testId="template-category"
+                    options={CATEGORIES.map((c) => ({ value: c, label: c }))}
+                    value={form.category}
+                    onChange={(v) => setForm({ ...form, category: v || form.category })}
+                    allowClear={false}
+                    placeholder="Select category"
+                  />
+                </div>
               </div>
               <div className="col-span-2">
                 <Label>From Email {editing?.local && <span className="text-[10px] text-amber-700 ml-1">(backend wiring pending — leave as TBD for now)</span>}</Label>

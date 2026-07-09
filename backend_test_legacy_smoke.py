@@ -6,7 +6,7 @@ Quick smoke check for legacy permission endpoints
 import requests
 import sys
 
-BASE_URL = "https://manager-portal-18.preview.emergentagent.com/api"
+BASE_URL = "https://manage-ui-update.preview.emergentagent.com/api"
 SUPER_ADMIN_EMAIL = "admin@ticketing.com"
 SUPER_ADMIN_PASSWORD = "Admin@123"
 

@@ -4,6 +4,7 @@ import api from "../lib/api";
 import Layout from "../components/Layout";
 import notify from "../lib/notify";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
+import SingleSelect from "../components/SingleSelect";
 import DateFilter from "../components/DateFilter";
 import {
   ListChecks, Loader2, Eye, Pencil, Trash2, Plus, Filter, X, Search,
@@ -235,14 +236,14 @@ export default function PermissionSetsListPage() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Created By</label>
-              <MultiSelectFilter
-                label="Created By"
-                value={createdBy ? [createdBy] : []}
-                onChange={(arr) => setCreatedBy(arr[0] || "")}
+              <SingleSelect
+                testId="pset-filter-creator"
                 options={creators.map((c) => ({ value: c.id, label: c.name || c.email }))}
-                testIdPrefix="pset-filter-creator"
-                single
-                className="w-full"
+                value={createdBy || null}
+                onChange={(v) => setCreatedBy(v || "")}
+                placeholder="All"
+                searchable={(creators || []).length > 8}
+                allowClear
               />
             </div>
             <div className="md:col-span-2 lg:col-span-5">
