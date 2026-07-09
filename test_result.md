@@ -1473,3 +1473,34 @@ Verified visually via screenshots: checked boxes show orange fill with a crisp w
 ### Additional files touched
 - `frontend/src/components/OrangeCheckbox.jsx` (new)
 
+
+## [2026-07-09] ProfiX & Manage — dropdown consistency pass
+
+### Env restore
+- Recreated missing `/app/backend/.env` (Mongo Atlas cluster `cluster0.vmgql1i.mongodb.net`, DB `app_db`) and `/app/frontend/.env` (REACT_APP_BACKEND_URL) — both were empty on this fresh container.
+- `/api/auth/login` returns 200 for `admin@ticketing.com / Admin@123` against Atlas.
+
+### Frontend — dropdown unification
+Applied the shared rule across ProfiX & Manage modules:
+- **Singular** → `SingleSelect` (same style as Permissions >> Scope)
+- **Multiple** → `MultiSelectFilter` (same style as ProfiX >> All Requests >> Created By)
+
+Converted the following (all were shadcn `<Select>` or `MultiSelectFilter single` before):
+1. `CreateTicketPage.jsx` — Priority
+2. `EmailTemplatesPage.jsx` — Category
+3. `ContactListPage.jsx` — Add / Edit Employee > Role AND Bulk actions > New role
+4. `PermissionSetsListPage.jsx` — Created By filter (was `MultiSelectFilter single`)
+
+All existing multi-selects (Status/Priority/Team/Created By/Assigned To on TicketList, filters on EmailTemplates / Notifications / ContactList / PermissionSets, plus Managers/Members on Teams) were already using `MultiSelectFilter` — left untouched.
+
+### Verified
+Automated frontend testing agent verified all 5 dropdowns open correctly, render as plain list (no checkboxes), and update the trigger on selection. No console errors.
+
+### Files touched
+- `/app/backend/.env` (recreated)
+- `/app/frontend/.env` (recreated)
+- `/app/memory/test_credentials.md` (recreated)
+- `/app/frontend/src/pages/CreateTicketPage.jsx`
+- `/app/frontend/src/pages/EmailTemplatesPage.jsx`
+- `/app/frontend/src/pages/ContactListPage.jsx`
+- `/app/frontend/src/pages/PermissionSetsListPage.jsx`
