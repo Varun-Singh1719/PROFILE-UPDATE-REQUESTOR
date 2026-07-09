@@ -1504,3 +1504,33 @@ Automated frontend testing agent verified all 5 dropdowns open correctly, render
 - `/app/frontend/src/pages/EmailTemplatesPage.jsx`
 - `/app/frontend/src/pages/ContactListPage.jsx`
 - `/app/frontend/src/pages/PermissionSetsListPage.jsx`
+
+
+## [2026-07-09] Permissions module — Permission Sets tab + View/Edit + soft-delete + employee deep-link
+
+### Backend (`/app/backend/routers/permissions_v3.py`)
+Extended v3 permission-set endpoints for the new listing:
+- `GET /permission-sets-v3` now supports `q`, `created_by`, `updated_by`, `created_from`, `created_to`, `modules`, `sort_by`, `sort_dir`, `page`, `page_size`, `include_deleted`.
+  Response: `{items, total, page, page_size}` with each item enriched with `assigned_users_count` (aggregated from `contacts.permission_set_ids`).
+- `GET /permission-sets-v3/filter-options` — distinct creators, updaters, and modules present across all v3 sets.
+- `POST /permission-sets-v3/{id}/duplicate` — clone a v3 set (new id + seq_no, name suffixed "(Copy)" or "(Copy N)").
+- `DELETE /permission-sets-v3/{id}` — soft-delete (marks `deleted_at`/`deleted_by` and un-assigns from every contact). Audit-log references keep resolving.
+- `POST /permission-sets-v3` — now writes `deleted_at:null`/`deleted_by:null` explicitly.
+- `PUT /permission-sets-v3/{id}` — refuses to update if `deleted_at` is set.
+
+### Frontend
+- **`pages/PermissionsPage.jsx`** — restructured to three tabs: **Permission Sets** (default) · Editor · Audit log. Added a `?tab=view&set=<id>` mode that renders the read-only detail card. `doSave` now navigates to the View mode after saving. `+ Add Permission Set` on the list resets editor state and switches to Editor.
+- **`components/permissions/PermissionSetsListTab.jsx`** (new) — tabular listing: `System ID · Name · Description · Created By · Created On · Updated On · Users (clickable) · Actions (⋮ View / Edit / Duplicate / Delete)`, filters (search / date / module / created-by / updated-by / Clear all), column sorting, pagination. Uses `MultiSelectFilter` for multi-selects and `DateFilter` for the date range (same pattern as Bookings).
+- **`components/permissions/PermissionSetView.jsx`** (new) — read-only detail card. Shows title/description, four meta chips (Created By/On, Updated By/On), an orange "N assigned employees · view list" pill that deep-links to `/admin/contacts?permission_set=<id>`, an Edit button (top-right), and a per-module accordion listing enabled pages, view/edit chips (with scope tags), and enabled function chips.
+- **`pages/ContactListPage.jsx`** — on mount, reads `?permission_set=<id>` from the URL and pre-fills `psetFilter`. Renders a prominent orange chip row above the filter bar (`Filtered by permission set: #ID · Name ×`) that stays in sync with the multi-select and with the URL param.
+- **`App.js`** — removed legacy standalone routes. `/admin/permission-sets` redirects to `/admin/permissions`; `/admin/permission-sets/:id` redirects to `/admin/permissions?tab=view&set=<id>` (or editor when `?edit=1`).
+- **Deleted:** `pages/PermissionSetsListPage.jsx`, `pages/PermissionSetDetailPage.jsx`.
+
+### Verified visually (screenshots)
+- Permission Sets tab renders 3 sets with correct columns/counts. Actions ⋮ shows View/Edit/Duplicate/Delete.
+- Clicking a name opens View mode with meta, assigned-users pill, and module tree.
+- `+ Add Permission Set` switches to Editor tab in a blank state.
+- Module / Created By / Updated By multi-selects open and can be applied. Clear-all resets everything.
+- `# Users` pill on a row navigates to `/admin/contacts?permission_set=<id>` and the Employees page shows a visible orange filter chip that clears both the local filter and the URL param.
+- Legacy URLs `/admin/permission-sets` and `/admin/permission-sets/:id` redirect to the new tabbed page.
+- Audit log tab still works.

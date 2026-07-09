@@ -18,7 +18,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Save, Loader2, Search, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp,
   Copy, Eye, EyeOff, Briefcase, Armchair, History, Sparkles, Plus,
-  RefreshCw, CheckCircle2, Settings, LayoutDashboard,
+  RefreshCw, CheckCircle2, Settings, LayoutDashboard, ListChecks,
 } from "lucide-react";
 import api from "../lib/api";
 import Layout from "../components/Layout";
@@ -27,6 +27,8 @@ import SingleSelect from "../components/SingleSelect";
 import OrangeCheckbox from "../components/OrangeCheckbox";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent } from "../components/ui/dialog";
+import PermissionSetsListTab from "../components/permissions/PermissionSetsListTab";
+import PermissionSetView from "../components/permissions/PermissionSetView";
 
 const SCOPE_OPTS = [
   { value: "individual", label: "Individual" },
@@ -979,7 +981,9 @@ export default function PermissionsPage() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const editingId = params.get("set");
-  const tabParam = params.get("tab") === "audit" ? "audit" : "editor";
+  const rawTab = params.get("tab");
+  // Valid tabs: "sets" (default, listing) | "editor" | "audit" | "view"
+  const tabParam = (["editor", "audit", "view"].includes(rawTab)) ? rawTab : "sets";
 
   const [tab, setTab] = useState(tabParam);
   useEffect(() => { setTab(tabParam); }, [tabParam]);
@@ -997,11 +1001,27 @@ export default function PermissionsPage() {
   const [beforeEffective, setBeforeEffective] = useState(null);
   const [copiedFromId, setCopiedFromId] = useState(null);
 
-  const goToTab = (next) => {
+  const goToTab = (next, extra = {}) => {
     const p = new URLSearchParams(params);
-    if (next === "audit") p.set("tab", "audit"); else p.delete("tab");
+    // "sets" is the default → drop tab param
+    if (next === "sets") p.delete("tab");
+    else p.set("tab", next);
+    // Optional extras (e.g. set=<id>) or drop
+    if (Object.prototype.hasOwnProperty.call(extra, "set")) {
+      if (extra.set) p.set("set", extra.set); else p.delete("set");
+    }
     setParams(p);
   };
+
+  const openCreate = () => {
+    // Clear any editingId and reset editor state so the form starts blank
+    setTitle(""); setDescription(""); setCopiedFromId(null);
+    if (catalog) setState(emptyStateFromCatalog(catalog));
+    goToTab("editor", { set: null });
+  };
+  const openView = (id) => goToTab("view", { set: id });
+  const openEdit = (id) => goToTab("editor", { set: id });
+  const backToList = () => goToTab("sets", { set: null });
 
   useEffect(() => {
     (async () => {
@@ -1116,11 +1136,15 @@ export default function PermissionsPage() {
     setSaving(true);
     try {
       const payload = { title: title.trim(), description, modules: state, copied_from_id: copiedFromId };
-      if (editingId) { await api.put(`/permission-sets-v3/${editingId}`, payload); notify.success("Permission set updated"); }
-      else {
+      if (editingId) {
+        await api.put(`/permission-sets-v3/${editingId}`, payload);
+        notify.success("Permission set updated");
+        // After update, jump to the View mode
+        goToTab("view", { set: editingId });
+      } else {
         const { data } = await api.post("/permission-sets-v3", payload);
         notify.success("Permission set created");
-        navigate(`/admin/permissions?set=${data.id}`);
+        goToTab("view", { set: data.id });
       }
     } catch (e) { notify.error(e, { what: "Save permission set" }); }
     finally { setSaving(false); }
@@ -1142,7 +1166,6 @@ export default function PermissionsPage() {
       contentClassName="w-full px-9 sm:px-12 pt-2 pb-6 flex flex-col min-h-[calc(100vh-56px)]"
       actions={
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => goToTab("audit")} className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-audit-btn"><History size={13} /> Audit log</button>
           {tab === "editor" && (
             <>
               <button type="button" onClick={() => setCopyOpen(true)}  className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-copy-btn"><Copy size={13} /> Copy from set</button>
@@ -1156,24 +1179,51 @@ export default function PermissionsPage() {
         </div>
       }
     >
-      {/* Tab bar */}
-      <div className="mt-1 mb-3 flex items-end gap-1 border-b border-gray-200" data-testid="perm-tabbar">
-        <button type="button" onClick={() => goToTab("editor")} data-testid="perm-tab-editor"
-          className={`h-9 px-4 rounded-t-md text-xs font-semibold inline-flex items-center gap-1.5 border border-b-0 ${
-            tab === "editor" ? "bg-white border-gray-200 text-[#ec9324]" : "bg-transparent border-transparent text-gray-500 hover:text-gray-800"
-          }`}>
-          <Sparkles size={13} /> Editor
-        </button>
-        <button type="button" onClick={() => goToTab("audit")} data-testid="perm-tab-audit"
-          className={`h-9 px-4 rounded-t-md text-xs font-semibold inline-flex items-center gap-1.5 border border-b-0 ${
-            tab === "audit" ? "bg-white border-gray-200 text-[#ec9324]" : "bg-transparent border-transparent text-gray-500 hover:text-gray-800"
-          }`}>
-          <History size={13} /> Audit log
-        </button>
-        <div className="flex-1 border-b border-gray-200 -mb-px" />
-      </div>
+      {/* Tab bar (hidden in view mode — view has its own back button) */}
+      {tab !== "view" && (
+        <div className="mt-1 mb-3 flex items-end gap-1 border-b border-gray-200" data-testid="perm-tabbar">
+          <button type="button" onClick={() => goToTab("sets")} data-testid="perm-tab-sets"
+            className={`h-9 px-4 rounded-t-md text-xs font-semibold inline-flex items-center gap-1.5 border border-b-0 ${
+              tab === "sets" ? "bg-white border-gray-200 text-[#ec9324]" : "bg-transparent border-transparent text-gray-500 hover:text-gray-800"
+            }`}>
+            <ListChecks size={13} /> Permission Sets
+          </button>
+          <button type="button" onClick={() => goToTab("editor")} data-testid="perm-tab-editor"
+            className={`h-9 px-4 rounded-t-md text-xs font-semibold inline-flex items-center gap-1.5 border border-b-0 ${
+              tab === "editor" ? "bg-white border-gray-200 text-[#ec9324]" : "bg-transparent border-transparent text-gray-500 hover:text-gray-800"
+            }`}>
+            <Sparkles size={13} /> Editor {editingId ? <span className="text-[10px] text-gray-500">(editing)</span> : <span className="text-[10px] text-gray-500">(new)</span>}
+          </button>
+          <button type="button" onClick={() => goToTab("audit")} data-testid="perm-tab-audit"
+            className={`h-9 px-4 rounded-t-md text-xs font-semibold inline-flex items-center gap-1.5 border border-b-0 ${
+              tab === "audit" ? "bg-white border-gray-200 text-[#ec9324]" : "bg-transparent border-transparent text-gray-500 hover:text-gray-800"
+            }`}>
+            <History size={13} /> Audit log
+          </button>
+          <div className="flex-1 border-b border-gray-200 -mb-px" />
+        </div>
+      )}
 
-      {tab === "audit" ? (
+      {tab === "sets" ? (
+        <PermissionSetsListTab
+          onCreate={openCreate}
+          onView={openView}
+          onEdit={openEdit}
+        />
+      ) : tab === "view" ? (
+        editingId ? (
+          <PermissionSetView
+            setId={editingId}
+            catalog={catalog}
+            onEdit={openEdit}
+            onBack={backToList}
+          />
+        ) : (
+          <div className="mt-3 rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
+            No permission set selected. <button onClick={backToList} className="text-[#ec9324] font-medium hover:underline">Go back to the list</button>.
+          </div>
+        )
+      ) : tab === "audit" ? (
         <AuditLogTab
           catalog={catalog}
           focusResourceId={editingId}

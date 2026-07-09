@@ -275,15 +275,130 @@ class PermissionSetV3In(BaseModel):
 async def list_v3_sets(
     user=Depends(get_current_user),
     q: Optional[str] = Query(None, description="Search by title/description"),
+    created_by: Optional[str] = Query(None, description="Comma-separated user ids"),
+    updated_by: Optional[str] = Query(None, description="Comma-separated user ids"),
+    created_from: Optional[str] = Query(None, description="YYYY-MM-DD or ISO"),
+    created_to: Optional[str] = Query(None, description="YYYY-MM-DD or ISO"),
+    modules: Optional[str] = Query(None, description="Comma-separated module keys"),
+    sort_by: Optional[str] = Query("updated_on", description="seq_no|title|created_on|updated_on|assigned_users"),
+    sort_dir: Optional[str] = Query("desc", description="asc|desc"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=200),
+    include_deleted: bool = Query(False),
 ):
+    """Paginated list of v3 permission sets with filters + assigned-user counts.
+
+    Response: `{items: [...], total, page, page_size}`.
+    Each item is enriched with `assigned_users_count`.
+    """
     query: Dict[str, Any] = {"version": 3}
+    if not include_deleted:
+        query["deleted_at"] = {"$in": [None]}  # exclude soft-deleted
+
     if q:
         query["$or"] = [
             {"title":       {"$regex": q, "$options": "i"}},
             {"description": {"$regex": q, "$options": "i"}},
         ]
-    docs = await db.permission_sets.find(query, {"_id": 0}).sort("updated_on", -1).to_list(1000)
-    return docs
+
+    def _split(v):
+        return [x.strip() for x in (v or "").split(",") if x.strip()]
+
+    cb_ids = _split(created_by)
+    if cb_ids:
+        query["created_by.id"] = {"$in": cb_ids}
+    ub_ids = _split(updated_by)
+    if ub_ids:
+        query["updated_by.id"] = {"$in": ub_ids}
+
+    date_cond: Dict[str, Any] = {}
+    if created_from:
+        date_cond["$gte"] = created_from
+    if created_to:
+        date_cond["$lte"] = created_to if "T" in created_to else f"{created_to}T23:59:59.999999+00:00"
+    if date_cond:
+        query["created_on"] = date_cond
+
+    mod_keys = _split(modules)
+    if mod_keys:
+        # Match sets that include ANY of the selected modules (OR semantics).
+        query["$and"] = query.get("$and", []) + [
+            {"$or": [{f"modules.{m}": {"$exists": True}} for m in mod_keys]},
+        ]
+
+    # Sort direction
+    direction = -1 if (sort_dir or "desc").lower() != "asc" else 1
+    sort_field = {
+        "seq_no": "seq_no",
+        "numeric_id": "seq_no",
+        "id": "seq_no",
+        "title": "title",
+        "name": "title",
+        "created_on": "created_on",
+        "updated_on": "updated_on",
+    }.get((sort_by or "updated_on").lower(), "updated_on")
+
+    total = await db.permission_sets.count_documents(query)
+    skip = (page - 1) * page_size
+
+    cursor = db.permission_sets.find(query, {"_id": 0}).sort(sort_field, direction).skip(skip).limit(page_size)
+    docs = await cursor.to_list(page_size)
+
+    # Enrich with assigned users count (from contacts.permission_set_ids)
+    set_ids = [d.get("id") for d in docs if d.get("id")]
+    counts: Dict[str, int] = {sid: 0 for sid in set_ids}
+    if set_ids:
+        pipeline = [
+            {"$match": {"permission_set_ids": {"$in": set_ids}}},
+            {"$unwind": "$permission_set_ids"},
+            {"$match": {"permission_set_ids": {"$in": set_ids}}},
+            {"$group": {"_id": "$permission_set_ids", "n": {"$sum": 1}}},
+        ]
+        async for row in db.contacts.aggregate(pipeline):
+            counts[row["_id"]] = int(row.get("n") or 0)
+
+    for d in docs:
+        d["assigned_users_count"] = counts.get(d.get("id"), 0)
+
+    # Client-side sort by assigned_users if requested (post-enrichment)
+    if (sort_by or "").lower() in ("assigned_users", "users", "users_count"):
+        docs.sort(key=lambda x: x.get("assigned_users_count", 0), reverse=(direction == -1))
+
+    return {"items": docs, "total": total, "page": page, "page_size": page_size}
+
+
+@api_router.get("/permission-sets-v3/filter-options")
+async def list_v3_filter_options(user=Depends(get_current_user)):
+    """Distinct creators/updaters + available modules — used to populate the
+    filter dropdowns on the Permission Sets tab."""
+    creators_map: Dict[str, dict] = {}
+    updaters_map: Dict[str, dict] = {}
+    modules_present: set = set()
+
+    async for doc in db.permission_sets.find(
+        {"version": 3, "deleted_at": {"$in": [None]}},
+        {"_id": 0, "created_by": 1, "updated_by": 1, "modules": 1},
+    ):
+        cb = doc.get("created_by") or {}
+        if cb.get("id") and cb["id"] not in creators_map:
+            creators_map[cb["id"]] = {"id": cb["id"], "name": cb.get("name") or cb.get("email"), "email": cb.get("email")}
+        ub = doc.get("updated_by") or {}
+        if ub.get("id") and ub["id"] not in updaters_map:
+            updaters_map[ub["id"]] = {"id": ub["id"], "name": ub.get("name") or ub.get("email"), "email": ub.get("email")}
+        for m in (doc.get("modules") or {}).keys():
+            modules_present.add(m)
+
+    module_catalog = {m["key"]: m for m in PERMISSION_MODULES_V3}
+    modules_out = [
+        {"key": k, "label": (module_catalog.get(k) or {}).get("label") or k.replace("_", " ").title()}
+        for k in sorted(modules_present)
+    ]
+
+    return {
+        "created_by": sorted(creators_map.values(), key=lambda x: (x.get("name") or "").lower()),
+        "updated_by": sorted(updaters_map.values(), key=lambda x: (x.get("name") or "").lower()),
+        "modules": modules_out,
+    }
 
 
 @api_router.get("/permission-sets-v3/{pset_id}")
@@ -333,6 +448,8 @@ async def create_v3_set(body: PermissionSetV3In, user=Depends(require_role("Supe
         "updated_on": now_iso(),
         "updated_by": _actor(user),
         "copied_from_id": body.copied_from_id,
+        "deleted_at": None,
+        "deleted_by": None,
     }
     await db.permission_sets.insert_one({**doc})
     doc.pop("_id", None)
@@ -352,6 +469,8 @@ async def update_v3_set(
     existing = await db.permission_sets.find_one({"id": pset_id}, {"_id": 0})
     if not existing:
         raise HTTPException(404, "Permission set not found")
+    if existing.get("deleted_at"):
+        raise HTTPException(400, "Cannot edit a deleted permission set")
 
     modules = _normalize_v3_modules(body.modules or {})
     updates = {
@@ -382,17 +501,88 @@ async def update_v3_set(
 
 @api_router.delete("/permission-sets-v3/{pset_id}")
 async def delete_v3_set(pset_id: str, user=Depends(require_role("Super Admin"))):
+    """Soft-delete: mark `deleted_at`/`deleted_by` and un-assign the set from
+    every employee. The document remains in the collection so audit-log
+    references keep resolving."""
     existing = await db.permission_sets.find_one({"id": pset_id}, {"_id": 0})
     if not existing:
         raise HTTPException(404, "Permission set not found")
-    await db.permission_sets.delete_one({"id": pset_id})
+    if existing.get("deleted_at"):
+        raise HTTPException(400, "Permission set is already deleted")
+    now = now_iso()
+    await db.permission_sets.update_one(
+        {"id": pset_id},
+        {"$set": {
+            "deleted_at": now,
+            "deleted_by": _actor(user),
+            "updated_on": now,
+            "updated_by": _actor(user),
+        }},
+    )
+    res = await db.contacts.update_many(
+        {"permission_set_ids": pset_id},
+        {"$pull": {"permission_set_ids": pset_id}},
+    )
     await log_audit(
         actor=user, action="permission_set.delete", resource="permission_set",
         resource_id=pset_id,
-        detail=f"Deleted permission set '{existing.get('title')}'",
-        metadata={"previous": {"title": existing.get("title"), "modules": existing.get("modules") or {}}},
+        detail=f"Deleted permission set '{existing.get('title')}' (soft); unassigned from {res.modified_count} employee(s)",
+        metadata={
+            "previous": {"title": existing.get("title"), "modules": existing.get("modules") or {}},
+            "unassigned_count": res.modified_count,
+            "soft": True,
+        },
+        severity="warning",
     )
-    return {"ok": True}
+    return {"ok": True, "unassigned_count": res.modified_count}
+
+
+@api_router.post("/permission-sets-v3/{pset_id}/duplicate")
+async def duplicate_v3_set(pset_id: str, user=Depends(require_role("Super Admin"))):
+    """Clone an existing v3 permission set. New id + seq_no, name suffixed
+    '(Copy)' (or '(Copy N)' on collision). Modules deep-copied. Soft-deleted
+    sets cannot be duplicated."""
+    import json as _json
+    src = await db.permission_sets.find_one({"id": pset_id, "version": 3}, {"_id": 0})
+    if not src or src.get("deleted_at"):
+        raise HTTPException(404, "Permission set not found")
+
+    base_title = src.get("title") or "Permission Set"
+    candidate = f"{base_title} (Copy)"
+    n = 2
+    while await db.permission_sets.find_one({
+        "title": {"$regex": f"^{candidate}$", "$options": "i"},
+        "version": 3,
+        "deleted_at": {"$in": [None]},
+    }):
+        candidate = f"{base_title} (Copy {n})"
+        n += 1
+
+    seq = await _next_seq()
+    now = now_iso()
+    doc = {
+        "id": f"pset-{uuid.uuid4()}",
+        "seq_no": seq,
+        "numeric_id": seq,
+        "title": candidate,
+        "description": src.get("description") or "",
+        "version": 3,
+        "modules": _json.loads(_json.dumps(src.get("modules") or {})),
+        "created_on": now,
+        "created_by": _actor(user),
+        "updated_on": now,
+        "updated_by": _actor(user),
+        "copied_from_id": pset_id,
+    }
+    await db.permission_sets.insert_one({**doc})
+    doc.pop("_id", None)
+    await log_audit(
+        actor=user, action="permission_set.duplicate", resource="permission_set",
+        resource_id=doc["id"],
+        detail=f"Duplicated permission set '{src.get('title')}' → '{candidate}' (#{seq})",
+        metadata={"source_id": pset_id, "source_seq_no": src.get("seq_no"), "seq_no": seq},
+    )
+    return doc
 
 
 # --------------------------------------------------------------------------- #

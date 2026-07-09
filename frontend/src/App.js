@@ -1,6 +1,6 @@
 import React from "react";
 import "./App.css";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams, useSearchParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { BusyProvider } from "./context/BusyContext";
 import { EffectivePermissionsProvider } from "./context/EffectivePermissionsContext";
@@ -18,8 +18,6 @@ import CreateTicketPage from "./pages/CreateTicketPage";
 import ContactListPage from "./pages/ContactListPage";
 import TeamsPage from "./pages/TeamsPage";
 import PermissionsPage from "./pages/PermissionsPage";
-import PermissionSetsListPage from "./pages/PermissionSetsListPage";
-import PermissionSetDetailPage from "./pages/PermissionSetDetailPage";
 import NotificationsOutboxPage from "./pages/NotificationsOutboxPage";
 import EmailTemplatesPage from "./pages/EmailTemplatesPage";
 import DeskBookingPage from "./pages/DeskBookingPage";
@@ -55,6 +53,15 @@ function HomeRedirect() {
   if (loading || user === null) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#ec9324]" size={32}/></div>;
   if (!user) return <Navigate to="/login" replace />;
   return <Navigate to={roleHome()} replace />;
+}
+
+/** Legacy `/admin/permission-sets/:id` → new tabbed permissions page (view mode). */
+function PermissionSetRedirect() {
+  const { id } = useParams();
+  const [sp] = useSearchParams();
+  const edit = sp.get("edit") === "1";
+  const target = `/admin/permissions?tab=${edit ? "editor" : "view"}${id ? `&set=${encodeURIComponent(id)}` : ""}`;
+  return <Navigate to={target} replace />;
 }
 
 // Both canonical roles are allowed on the admin shell.
@@ -96,8 +103,9 @@ function App() {
             <Route path="/admin/contacts" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><ContactListPage /></ProtectedRoute>} />
             <Route path="/admin/teams" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><TeamsPage /></ProtectedRoute>} />
             <Route path="/admin/permissions" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><PermissionsPage /></ProtectedRoute>} />
-            <Route path="/admin/permission-sets" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><PermissionSetsListPage /></ProtectedRoute>} />
-            <Route path="/admin/permission-sets/:id" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><PermissionSetDetailPage /></ProtectedRoute>} />
+            {/* Legacy: standalone permission-sets pages folded into Permissions tabs */}
+            <Route path="/admin/permission-sets" element={<Navigate to="/admin/permissions" replace />} />
+            <Route path="/admin/permission-sets/:id" element={<PermissionSetRedirect />} />
             <Route path="/admin/notifications" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><NotificationsOutboxPage /></ProtectedRoute>} />
             <Route path="/admin/email-templates" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><EmailTemplatesPage /></ProtectedRoute>} />
 

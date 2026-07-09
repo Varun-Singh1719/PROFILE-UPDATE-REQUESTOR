@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import api, { API } from "../lib/api";
 import Layout from "../components/Layout";
 import { Input } from "../components/ui/input";
@@ -659,6 +660,16 @@ export default function ContactListPage() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
 
+  // Read `permission_set` URL param on mount (deep-link from Permission Sets tab)
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const psetId = searchParams.get("permission_set");
+    if (psetId) {
+      setPsetFilter((prev) => (prev.includes(psetId) ? prev : [psetId]));
+    }
+    // eslint-disable-next-line
+  }, []);
+
   useEffect(() => {
     (async () => {
       try {
@@ -1012,6 +1023,38 @@ export default function ContactListPage() {
       </Dialog>
 
       <div className="mt-6 sticky top-14 z-30 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
+        {/* Prominent chip when filtering by a permission set (deep-link from Permission Sets tab) */}
+        {psetFilter.length > 0 && (
+          <div className="mb-2 flex flex-wrap items-center gap-2" data-testid="contact-pset-chip-row">
+            <span className="text-[11px] uppercase tracking-wider font-semibold text-gray-500">Filtered by permission set:</span>
+            {psetFilter.map((pid) => {
+              const p = permissionSets.find((x) => x.id === pid);
+              const label = p ? `#${p.numeric_id || p.seq_no || "?"} · ${p.title || p.name || "Untitled"}` : pid;
+              return (
+                <span
+                  key={pid}
+                  data-testid={`contact-pset-chip-${pid}`}
+                  className="inline-flex items-center gap-1 rounded-full bg-[#ec9324]/10 border border-[#ec9324]/40 text-[#ec9324] px-3 py-1 text-xs font-semibold"
+                >
+                  {label}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = psetFilter.filter((x) => x !== pid);
+                      setPsetFilter(next);
+                      const sp = new URLSearchParams(searchParams);
+                      if (next.length === 1) sp.set("permission_set", next[0]);
+                      else sp.delete("permission_set");
+                      setSearchParams(sp, { replace: true });
+                    }}
+                    className="rounded-full p-0.5 hover:bg-[#ec9324]/20"
+                    aria-label="Remove filter"
+                  ><X size={11}/></button>
+                </span>
+              );
+            })}
+          </div>
+        )}
         <div className="flex gap-3 flex-wrap items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100" data-testid="contacts-filter-bar">
         <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
@@ -1039,8 +1082,18 @@ export default function ContactListPage() {
         <MultiSelectFilter
           label="Permission Set"
           value={psetFilter}
-          onChange={setPsetFilter}
-          options={permissionSets.map((p) => ({ value: p.id, label: `#${p.numeric_id} · ${p.name}` }))}
+          onChange={(v) => {
+            setPsetFilter(v);
+            // Keep the URL in sync so the deep-link is preserved / cleared
+            const sp = new URLSearchParams(searchParams);
+            if (v.length === 1) sp.set("permission_set", v[0]);
+            else sp.delete("permission_set");
+            setSearchParams(sp, { replace: true });
+          }}
+          options={permissionSets.map((p) => ({
+            value: p.id,
+            label: `#${p.numeric_id || p.seq_no || "?"} · ${p.title || p.name || "Untitled"}`,
+          }))}
           testIdPrefix="contact-pset-filter"
           className="w-64"
         />
