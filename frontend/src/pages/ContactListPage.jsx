@@ -965,7 +965,8 @@ export default function ContactListPage() {
                 <Label className="flex items-center gap-1.5">
                   <ShieldCheck size={14} className="text-gray-500" /> Permission Sets
                 </Label>
-                <MultiSelect
+                <MultiSelectFilter
+                  label="Permission Sets"
                   options={permissionSets.map((p) => ({
                     value: p.id,
                     label: `#${p.numeric_id} · ${p.name}`,
@@ -973,7 +974,9 @@ export default function ContactListPage() {
                   value={form.permission_set_ids || []}
                   onChange={(ids) => setForm({ ...form, permission_set_ids: ids })}
                   placeholder="Assign one or more Permission Sets…"
-                  data-testid="contact-permission-sets"
+                  testIdPrefix="contact-permission-sets"
+                  hideLabelPrefix
+                  fullWidth
                 />
                 <div className="text-xs text-gray-500 mt-1">
                   Effective access = OR-union of all assigned sets (allow wins).

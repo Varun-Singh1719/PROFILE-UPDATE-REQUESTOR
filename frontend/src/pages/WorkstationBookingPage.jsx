@@ -60,6 +60,8 @@ import {
   DialogTitle,
 } from "../components/ui/dialog";
 import MultiSelect from "../components/MultiSelect";
+import MultiSelectFilter from "../components/ui/MultiSelectFilter";
+import SingleSelect from "../components/SingleSelect";
 import DateFilter from "../components/DateFilter";
 import WorkstationFloorMap from "../components/WorkstationFloorMap";
 import { useAuth } from "../context/AuthContext";
@@ -678,16 +680,18 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
             {livePlans.length > 1 && (
               <div className="flex items-center gap-2">
                 <label className="text-xs font-medium text-gray-600">Floor Plan</label>
-                <select
-                  value={selectedPlanId}
-                  onChange={(e) => setPlanAndClear(e.target.value)}
-                  className="text-sm rounded-md border border-gray-300 px-2 py-1.5 bg-white"
-                  data-testid="ws-plan-selector"
-                >
-                  {livePlans.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name} ({p.seat_count} seats)</option>
-                  ))}
-                </select>
+                <div className="w-56">
+                  <SingleSelect
+                    options={livePlans.map((p) => ({ value: p.id, label: `${p.name} (${p.seat_count} seats)` }))}
+                    value={selectedPlanId}
+                    onChange={(v) => setPlanAndClear(v || "")}
+                    placeholder="Select plan"
+                    testId="ws-plan-selector"
+                    allowClear={false}
+                    searchable={livePlans.length > 8}
+                    size="md"
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -831,24 +835,24 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                         <label className="text-xs font-medium text-gray-700">
                           Team <span className="text-red-500">*</span>
                         </label>
-                        <select
-                          value={teamId}
-                          onChange={(e) => {
-                            setTeamId(e.target.value);
-                            setSelectedSeatIds([]);
-                            setManualEmpIds([]);
-                            setAutoStartSeatId(null);
-                            setAutoSuggestion(null);
-                          }}
-                          disabled={!canEdit || refLoading}
-                          className="mt-1 w-full text-sm rounded-md border border-gray-300 px-2 py-2 bg-white disabled:bg-gray-50 disabled:text-gray-400"
-                          data-testid="ws-auto-team-select"
-                        >
-                          <option value="">{refLoading ? "Loading…" : "Select team"}</option>
-                          {teams.map((t) => (
-                            <option key={t.id} value={t.id}>{t.name}</option>
-                          ))}
-                        </select>
+                        <div className="mt-1">
+                          <SingleSelect
+                            options={teams.map((t) => ({ value: t.id, label: t.name }))}
+                            value={teamId}
+                            onChange={(v) => {
+                              setTeamId(v || "");
+                              setSelectedSeatIds([]);
+                              setManualEmpIds([]);
+                              setAutoStartSeatId(null);
+                              setAutoSuggestion(null);
+                            }}
+                            placeholder={refLoading ? "Loading…" : "Select team"}
+                            disabled={!canEdit || refLoading}
+                            searchable={teams.length > 8}
+                            allowClear={false}
+                            testId="ws-auto-team-select"
+                          />
+                        </div>
                       </div>
 
                       {/* Team info card — shows total team size + how many are
@@ -979,13 +983,16 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                       <div>
                         <label className="text-xs font-medium text-gray-700">Workstation(s)</label>
                         <div className="mt-1">
-                          <MultiSelect
+                          <MultiSelectFilter
+                            label="Workstations"
                             options={availableSeatOptions}
                             value={selectedSeatIds}
                             onChange={setSelectedSeatIds}
                             placeholder={availLoading ? "Loading…" : "Select workstation(s)"}
-                            testId="ws-workstation-select"
+                            testIdPrefix="ws-workstation-select"
                             disabled={!canEdit || availLoading}
+                            hideLabelPrefix
+                            fullWidth
                           />
                         </div>
                         <div className="mt-1 text-[11px] text-gray-500 flex items-center gap-2">
@@ -1001,18 +1008,22 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                         <label className="text-xs font-medium text-gray-700">
                           Employee Name {isSingle ? <span className="text-red-500">*</span> : <span className="text-gray-400">(single seat)</span>}
                         </label>
-                        <select
-                          value={employeeId}
-                          onChange={(e) => setEmployeeId(e.target.value)}
-                          disabled={!canEdit || !isSingle || refLoading}
-                          className="mt-1 w-full text-sm rounded-md border border-gray-300 px-2 py-2 bg-white disabled:bg-gray-50 disabled:text-gray-400"
-                          data-testid="ws-employee-select"
-                        >
-                          <option value="">{refLoading ? "Loading…" : "Select employee"}</option>
-                          {availableEmployees.map((e) => (
-                            <option key={e.id} value={e.id}>{e.name} {e.emp_id ? `· ${e.emp_id}` : ""}</option>
-                          ))}
-                        </select>
+                        <div className="mt-1">
+                          <SingleSelect
+                            options={availableEmployees.map((e) => ({
+                              value: e.id,
+                              label: e.name,
+                              sublabel: e.emp_id || undefined,
+                            }))}
+                            value={employeeId}
+                            onChange={(v) => setEmployeeId(v || "")}
+                            placeholder={refLoading ? "Loading…" : "Select employee"}
+                            disabled={!canEdit || !isSingle || refLoading}
+                            searchable={availableEmployees.length > 8}
+                            allowClear={false}
+                            testId="ws-employee-select"
+                          />
+                        </div>
                       </div>
 
                       {/* Team (multi) */}
@@ -1020,18 +1031,18 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                         <label className="text-xs font-medium text-gray-700">
                           Team Name {isMulti ? <span className="text-red-500">*</span> : <span className="text-gray-400">(multi-seat)</span>}
                         </label>
-                        <select
-                          value={teamId}
-                          onChange={(e) => { setTeamId(e.target.value); setManualEmpIds([]); }}
-                          disabled={!canEdit || !isMulti || refLoading}
-                          className="mt-1 w-full text-sm rounded-md border border-gray-300 px-2 py-2 bg-white disabled:bg-gray-50 disabled:text-gray-400"
-                          data-testid="ws-team-select"
-                        >
-                          <option value="">{refLoading ? "Loading…" : "Select team"}</option>
-                          {teams.map((t) => (
-                            <option key={t.id} value={t.id}>{t.name}</option>
-                          ))}
-                        </select>
+                        <div className="mt-1">
+                          <SingleSelect
+                            options={teams.map((t) => ({ value: t.id, label: t.name }))}
+                            value={teamId}
+                            onChange={(v) => { setTeamId(v || ""); setManualEmpIds([]); }}
+                            placeholder={refLoading ? "Loading…" : "Select team"}
+                            disabled={!canEdit || !isMulti || refLoading}
+                            searchable={teams.length > 8}
+                            allowClear={false}
+                            testId="ws-team-select"
+                          />
+                        </div>
 
                         {isMulti && teamId && (
                           <div className="mt-3 rounded-md border border-gray-200 p-2 bg-gray-50">
@@ -1065,13 +1076,16 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
 
                             {allocationMode === "manual" && (
                               <div className="mt-2">
-                                <MultiSelect
-                                  options={teamPool.map((e) => ({ value: e.id, label: e.name, sublabel: e.emp_id || "" }))}
+                                <MultiSelectFilter
+                                  label="Team members"
+                                  options={teamPool.map((e) => ({ value: e.id, label: e.name + (e.emp_id ? ` · ${e.emp_id}` : "") }))}
                                   value={manualEmpIds}
                                   onChange={(vals) => setManualEmpIds(vals.slice(0, seatCount))}
                                   placeholder={`Pick ${seatCount} member(s)`}
-                                  testId="ws-manual-allocation"
+                                  testIdPrefix="ws-manual-allocation"
                                   disabled={!canEdit}
+                                  hideLabelPrefix
+                                  fullWidth
                                 />
                                 <div className="mt-1 text-[10px] text-gray-500">
                                   {manualEmpIds.length}/{seatCount} selected. Workstations are assigned in the order of selection.

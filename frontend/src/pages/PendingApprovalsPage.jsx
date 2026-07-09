@@ -31,6 +31,7 @@ import {
 } from "../components/ui/dialog";
 import WorkstationFloorMap from "../components/WorkstationFloorMap";
 import ApprovalSettingsModal from "../components/ApprovalSettingsModal";
+import SingleSelect from "../components/SingleSelect";
 import { useAuth } from "../context/AuthContext";
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
 
@@ -331,16 +332,18 @@ export default function PendingApprovalsPage() {
       actions={
         <>
           {plans.length > 1 && (
-            <select
-              value={selectedPlanId}
-              onChange={(e) => setSelectedPlanId(e.target.value)}
-              className="text-sm rounded-md border border-gray-300 px-2 h-9 bg-white"
-              data-testid="pa-plan-selector"
-            >
-              {plans.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+            <div className="w-56">
+              <SingleSelect
+                options={plans.map((p) => ({ value: p.id, label: p.name }))}
+                value={selectedPlanId}
+                onChange={(v) => setSelectedPlanId(v || "")}
+                placeholder="Floor plan"
+                testId="pa-plan-selector"
+                allowClear={false}
+                searchable={plans.length > 8}
+                size="md"
+              />
+            </div>
           )}
           <button
             onClick={loadRequests}

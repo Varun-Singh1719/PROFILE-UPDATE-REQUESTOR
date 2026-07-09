@@ -17,6 +17,7 @@ import {
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
+import SingleSelect from "../components/SingleSelect";
 import DateFilter from "../components/DateFilter";
 import api from "../lib/api";
 import { Button } from "../components/ui/button";
@@ -894,17 +895,20 @@ function BookingDetailsDrawer({ booking: b, editing, onStartEdit, onExitEdit, on
                 )}
                 {isWorkstation && (
                   <EditField label="Employee">
-                    <select
+                    <SingleSelect
+                      options={activeEmployees.map((e) => ({
+                        value: e.id,
+                        label: e.name,
+                        sublabel: e.emp_id || undefined,
+                      }))}
                       value={draft.employee_id}
-                      onChange={(e) => setDraft({ ...draft, employee_id: e.target.value })}
-                      data-testid="drawer-edit-employee"
-                      className="w-full h-9 px-2 text-sm rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40 bg-white"
-                    >
-                      {activeEmployees.length === 0 && <option value="">— No employees available —</option>}
-                      {activeEmployees.map((e) => (
-                        <option key={e.id} value={e.id}>{e.name}{e.emp_id ? ` · ${e.emp_id}` : ""}</option>
-                      ))}
-                    </select>
+                      onChange={(v) => setDraft({ ...draft, employee_id: v || "" })}
+                      placeholder={activeEmployees.length === 0 ? "No employees available" : "Select employee"}
+                      testId="drawer-edit-employee"
+                      searchable={activeEmployees.length > 8}
+                      allowClear={false}
+                      disabled={activeEmployees.length === 0}
+                    />
                   </EditField>
                 )}
               </div>

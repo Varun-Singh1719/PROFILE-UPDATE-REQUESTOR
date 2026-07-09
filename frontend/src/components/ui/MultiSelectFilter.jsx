@@ -24,6 +24,12 @@
  *   align            — "left" (default) or "right" — popup horizontal anchor
  *   disabled         — disable the trigger
  *   maxSelectedLabels— truncate the label list beyond this count (default 3)
+ *   hideLabelPrefix  — when true, hides the "Label:" prefix on the trigger.
+ *                      Use for form-field usage (label sits above the field)
+ *                      so the trigger just shows the placeholder / selected list.
+ *                      Default: false (filter-bar usage).
+ *   fullWidth        — when true, wrapper takes 100% width (form-field usage).
+ *                      Default: false (inline filter-chip usage).
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, Check, Search, X } from "lucide-react";
@@ -40,6 +46,8 @@ export default function MultiSelectFilter({
   disabled = false,
   align = "left",
   maxSelectedLabels = 3,
+  hideLabelPrefix = false,
+  fullWidth = false,
   single = false, // when true, only one value can be selected; renders radio-style row
   closeOnSelectSingle = true,
 }) {
@@ -111,7 +119,9 @@ export default function MultiSelectFilter({
   // Build the trigger text
   let triggerNode;
   if (selectedOptions.length === 0) {
-    triggerNode = (
+    triggerNode = hideLabelPrefix ? (
+      <span className="truncate text-gray-400">{placeholder}</span>
+    ) : (
       <span className="truncate text-gray-500">
         <span className="text-gray-600">{label}:</span> <span className="text-gray-500">{placeholder}</span>
       </span>
@@ -135,7 +145,7 @@ export default function MultiSelectFilter({
   const tid = testIdPrefix || undefined;
 
   return (
-    <div ref={rootRef} className={`relative inline-block ${className}`} data-testid={tid}>
+    <div ref={rootRef} className={`relative ${fullWidth ? "block w-full" : "inline-block"} ${className}`} data-testid={tid}>
       <button
         type="button"
         disabled={disabled}

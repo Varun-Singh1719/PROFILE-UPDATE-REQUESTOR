@@ -9,6 +9,7 @@ import {
 } from "../components/ui/dialog";
 import notify from "../lib/notify";
 import MultiSelect from "../components/MultiSelect";
+import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import { Plus, Pencil, Users, Trash2, Search, Sparkles, Check } from "lucide-react";
 import { confirm as confirmDialog } from '../lib/dialog';
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
@@ -325,22 +326,28 @@ export default function TeamsPage() {
             </div>
             <div>
               <Label>Manager(s)</Label>
-              <MultiSelect
+              <MultiSelectFilter
+                label="Managers"
                 options={managerOptions}
                 value={form.manager_ids}
                 onChange={(v) => setForm({ ...form, manager_ids: v })}
                 placeholder="Select one or more managers..."
-                testId="team-managers"
+                testIdPrefix="team-managers"
+                hideLabelPrefix
+                fullWidth
               />
             </div>
             <div>
               <Label>Team Members</Label>
-              <MultiSelect
+              <MultiSelectFilter
+                label="Members"
                 options={memberOptions}
                 value={form.member_ids}
                 onChange={(v) => setForm({ ...form, member_ids: v })}
                 placeholder="Select team members..."
-                testId="team-members"
+                testIdPrefix="team-members"
+                hideLabelPrefix
+                fullWidth
               />
             </div>
             <div>
