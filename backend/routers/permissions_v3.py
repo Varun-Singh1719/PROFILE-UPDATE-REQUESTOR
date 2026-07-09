@@ -279,6 +279,8 @@ async def list_v3_sets(
     updated_by: Optional[str] = Query(None, description="Comma-separated user ids"),
     created_from: Optional[str] = Query(None, description="YYYY-MM-DD or ISO"),
     created_to: Optional[str] = Query(None, description="YYYY-MM-DD or ISO"),
+    updated_from: Optional[str] = Query(None, description="YYYY-MM-DD or ISO"),
+    updated_to: Optional[str] = Query(None, description="YYYY-MM-DD or ISO"),
     modules: Optional[str] = Query(None, description="Comma-separated module keys"),
     sort_by: Optional[str] = Query("updated_on", description="seq_no|title|created_on|updated_on|assigned_users"),
     sort_dir: Optional[str] = Query("desc", description="asc|desc"),
@@ -318,6 +320,14 @@ async def list_v3_sets(
         date_cond["$lte"] = created_to if "T" in created_to else f"{created_to}T23:59:59.999999+00:00"
     if date_cond:
         query["created_on"] = date_cond
+
+    upd_cond: Dict[str, Any] = {}
+    if updated_from:
+        upd_cond["$gte"] = updated_from
+    if updated_to:
+        upd_cond["$lte"] = updated_to if "T" in updated_to else f"{updated_to}T23:59:59.999999+00:00"
+    if upd_cond:
+        query["updated_on"] = upd_cond
 
     mod_keys = _split(modules)
     if mod_keys:

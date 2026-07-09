@@ -58,6 +58,8 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
   const [createdBy, setCreatedBy] = useState([]);
   const [updatedBy, setUpdatedBy] = useState([]);
   const [moduleFilter, setModuleFilter] = useState([]);
+  // Date filter — { field: "created_on"|"updated_on", from: ISO, to: ISO }
+  const [dateField, setDateField] = useState("updated_on");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
@@ -100,15 +102,21 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
       if (createdBy.length) params.created_by = createdBy.join(",");
       if (updatedBy.length) params.updated_by = updatedBy.join(",");
       if (moduleFilter.length) params.modules = moduleFilter.join(",");
-      if (dateFrom) params.created_from = dateFrom;
-      if (dateTo) params.created_to = dateTo;
+      if (dateFrom) {
+        if (dateField === "updated_on") params.updated_from = dateFrom;
+        else params.created_from = dateFrom;
+      }
+      if (dateTo) {
+        if (dateField === "updated_on") params.updated_to = dateTo;
+        else params.created_to = dateTo;
+      }
       const { data } = await api.get("/permission-sets-v3", { params });
       setItems(data.items || []);
       setTotal(data.total || 0);
     } catch (e) {
       notify.error(e, { what: "Load permission sets" });
     } finally { setLoading(false); }
-  }, [page, pageSize, sortBy, sortDir, search, createdBy, updatedBy, moduleFilter, dateFrom, dateTo]);
+  }, [page, pageSize, sortBy, sortDir, search, createdBy, updatedBy, moduleFilter, dateField, dateFrom, dateTo]);
 
   useEffect(() => { loadOptions(); }, [loadOptions]);
   useEffect(() => { load(); }, [load]);
@@ -129,11 +137,13 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
     if (from && to) mode = from.getTime() === to.getTime() ? "on" : "between";
     else if (from && !to) mode = "after";
     else if (!from && to) mode = "before";
-    return { field: "created_on", mode, from, to };
-  }, [dateFrom, dateTo]);
+    return { field: dateField, mode, from, to };
+  }, [dateField, dateFrom, dateTo]);
 
   const applyDateFilter = (next) => {
     setPage(1);
+    // Field can flip inside the popup — sync it here
+    if (next?.field && next.field !== dateField) setDateField(next.field);
     if (!next?.from && !next?.to) { setDateFrom(""); setDateTo(""); return; }
     if (next.mode === "between") { setDateFrom(isoDay(next.from)); setDateTo(isoDay(next.to || next.from)); }
     else if (next.mode === "on") { setDateFrom(isoDay(next.from)); setDateTo(isoDay(next.from)); }
@@ -146,7 +156,7 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
 
   const clearAll = () => {
     setSearch(""); setCreatedBy([]); setUpdatedBy([]); setModuleFilter([]);
-    setDateFrom(""); setDateTo(""); setPage(1);
+    setDateField("updated_on"); setDateFrom(""); setDateTo(""); setPage(1);
   };
 
   const toggleSort = (col) => {
@@ -201,70 +211,58 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
     <div className="flex-1 min-h-0 flex flex-col bg-white border border-gray-200 rounded-xl overflow-hidden" data-testid="perm-sets-tab">
       {/* FILTERS — sticky (screen freezes here) */}
       <div className="border-b border-gray-200 bg-white px-4 py-3 sticky top-0 z-20">
-        <div className="flex flex-wrap items-end gap-2">
-          {/* Search */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Search — label lives INSIDE the input as placeholder */}
           <div className="relative w-64">
-            <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1">Name / Description</label>
-            <Search size={13} className="absolute left-2.5 top-[calc(50%+8px)] -translate-y-1/2 text-gray-400"/>
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"/>
             <input
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              placeholder="Search…"
+              placeholder="Name / Description"
               data-testid="perm-sets-search"
-              className="w-full h-9 pl-8 pr-3 rounded-md border border-gray-300 text-xs focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]"
+              className="w-full h-9 pl-8 pr-3 rounded-md border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]"
             />
           </div>
 
-          {/* Date */}
-          <div>
-            <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1">Created On</label>
-            <DateFilter
-              value={dateFilterValue}
-              onChange={applyDateFilter}
-              fields={["created_on"]}
-              label="Date"
-              testId="perm-sets-date-filter"
-            />
-          </div>
+          {/* Date — DateFilter's own trigger already prefixes with the field name
+              ("Updated At: All time" / "Created At: All time") and lets the user
+              swap between the two fields inside the popup. */}
+          <DateFilter
+            value={dateFilterValue}
+            onChange={applyDateFilter}
+            fields={["updated_on", "created_on"]}
+            testId="perm-sets-date-filter"
+          />
 
-          {/* Module */}
-          <div>
-            <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1">Module</label>
-            <MultiSelectFilter
-              label="Module"
-              value={moduleFilter}
-              onChange={(v) => { setModuleFilter(v); setPage(1); }}
-              options={moduleOpts}
-              testIdPrefix="perm-sets-module"
-              className="w-52"
-            />
-          </div>
+          {/* Module — placeholder shows "Module: All" via MultiSelectFilter's built-in label */}
+          <MultiSelectFilter
+            label="Module"
+            value={moduleFilter}
+            onChange={(v) => { setModuleFilter(v); setPage(1); }}
+            options={moduleOpts}
+            testIdPrefix="perm-sets-module"
+            className="w-44"
+          />
 
           {/* Created By */}
-          <div>
-            <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1">Created By</label>
-            <MultiSelectFilter
-              label="Created By"
-              value={createdBy}
-              onChange={(v) => { setCreatedBy(v); setPage(1); }}
-              options={creatorOpts}
-              testIdPrefix="perm-sets-created-by"
-              className="w-52"
-            />
-          </div>
+          <MultiSelectFilter
+            label="Created By"
+            value={createdBy}
+            onChange={(v) => { setCreatedBy(v); setPage(1); }}
+            options={creatorOpts}
+            testIdPrefix="perm-sets-created-by"
+            className="w-48"
+          />
 
           {/* Updated By */}
-          <div>
-            <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1">Updated By</label>
-            <MultiSelectFilter
-              label="Updated By"
-              value={updatedBy}
-              onChange={(v) => { setUpdatedBy(v); setPage(1); }}
-              options={updaterOpts}
-              testIdPrefix="perm-sets-updated-by"
-              className="w-52"
-            />
-          </div>
+          <MultiSelectFilter
+            label="Updated By"
+            value={updatedBy}
+            onChange={(v) => { setUpdatedBy(v); setPage(1); }}
+            options={updaterOpts}
+            testIdPrefix="perm-sets-updated-by"
+            className="w-48"
+          />
 
           {hasActiveFilters && (
             <button
@@ -277,7 +275,7 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
             </button>
           )}
 
-          <div className="ml-auto text-xs text-gray-500 self-end pb-2">
+          <div className="ml-auto text-xs text-gray-500">
             {loading ? "Loading…" : `${total.toLocaleString()} ${total === 1 ? "set" : "sets"}`}
           </div>
         </div>

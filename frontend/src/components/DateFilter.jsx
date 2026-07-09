@@ -30,7 +30,7 @@ export function getCurrentMonthRange() {
   return { field: "created_at", mode: "between", from, to };
 }
 
-const FIELD_LABEL = { created_at: "Created At", updated_at: "Updated At", date: "Date" };
+const FIELD_LABEL = { created_at: "Created At", updated_at: "Updated At", created_on: "Created On", updated_on: "Updated On", date: "Date" };
 const MODE_LABEL = { between: "Between", on: "On", before: "Before", after: "After" };
 
 /**

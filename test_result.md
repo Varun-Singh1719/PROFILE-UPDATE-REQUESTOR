@@ -1555,3 +1555,21 @@ Applied the tabular-page pattern (Bookings/TicketList style) to the new tab:
 - Card fills the remaining viewport; measured card `y=121 → 1068` on a 1080-tall viewport, with pagination pinned at `y=1010` (inside the card boundary) and the page-size dropdown at `x=1754→1879` (within 1920).
 - Table body scrolls independently; sticky column headers stay pinned.
 - Editor and Audit log tabs still render with their original scroll behaviour.
+
+
+## [2026-07-09 v3] Permission Sets tab — filter polish
+
+### Frontend
+- **Labels moved inside the controls.** Removed the uppercase `<label>` chips above each filter. Placeholders live inside:
+  - Search input placeholder = `Name / Description`
+  - Date trigger prefix = `Updated On: …` / `Created On: …` (auto-swaps with the field radio)
+  - `MultiSelectFilter` triggers show their built-in `Module: All`, `Created By: All`, `Updated By: All` labels
+- **DateFilter now exposes both fields.** `<DateFilter fields={["updated_on", "created_on"]}/>` gives the same radio switcher used in ProfiX >> All Requests. Default field is `Updated On`. Extended `FIELD_LABEL` in `DateFilter.jsx` to include `created_on`/`updated_on`.
+
+### Backend
+- `GET /permission-sets-v3` now also accepts `updated_from` / `updated_to` (in addition to `created_from` / `created_to`). The list tab passes the correct pair based on the selected date field.
+
+### Files touched
+- `frontend/src/components/permissions/PermissionSetsListTab.jsx`
+- `frontend/src/components/DateFilter.jsx`
+- `backend/routers/permissions_v3.py`
