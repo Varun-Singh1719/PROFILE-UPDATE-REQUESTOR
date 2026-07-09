@@ -60,6 +60,7 @@ import {
   DialogTitle,
 } from "../components/ui/dialog";
 import MultiSelect from "../components/MultiSelect";
+import DateFilter from "../components/DateFilter";
 import WorkstationFloorMap from "../components/WorkstationFloorMap";
 import { useAuth } from "../context/AuthContext";
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
@@ -147,7 +148,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
   const [allocationMode, setAllocationMode] = useState("random"); // 'random' | 'manual'
   const [manualEmpIds, setManualEmpIds] = useState([]);            // length == seat count
   const [recurringOn, setRecurringOn] = useState(false);
-  const [recurringEnd, setRecurringEnd] = useState(todayIso());
+  const [recurringEnd, setRecurringEnd] = useState("");  // blank by default — user must pick
   const [recurringDays, setRecurringDays] = useState([]);         // ['Su','M',...]
   const [saving, setSaving] = useState(false);
   const formRef = useRef(null);
@@ -556,6 +557,11 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
     if (recurringOn) {
       if (!recurringEnd)         return "Select a recurring end date.";
       if (recurringEnd < date)   return "Recurring end date must be on or after the booking date.";
+      // Max 3 months (approx 92 days) from the booking start date
+      const startD = new Date(date + "T00:00:00");
+      const maxD = new Date(startD); maxD.setMonth(maxD.getMonth() + 3);
+      const endD = new Date(recurringEnd + "T00:00:00");
+      if (endD > maxD) return "Recurring end date cannot be more than 3 months from the booking date.";
       if (recurringDays.length === 0) return "Pick at least one day of the week.";
     }
     return null;
@@ -688,17 +694,38 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
 
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
-              <label className="text-xs font-medium text-gray-600">Booking Date</label>
-              <div className="relative">
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDateAndClear(e.target.value)}
-                  className="text-sm rounded-md border border-gray-300 pl-8 pr-2 py-1.5 bg-white"
-                  data-testid="ws-date-filter"
+              <label className="text-xs font-medium text-gray-600">
+                {isRequestMode ? "Request Date" : "Booking Date"}
+              </label>
+              {isRequestMode ? (
+                // Request mode — use the same calendar UI as Bookings, single-date only
+                // (no Before/After/Between/On tabs).
+                <DateFilter
+                  value={{ field: "date", mode: "on", from: date ? new Date(date + "T00:00:00") : null, to: null }}
+                  onChange={(v) => {
+                    if (!v?.from) { setDateAndClear(""); return; }
+                    const d = v.from;
+                    const p = (n) => String(n).padStart(2, "0");
+                    setDateAndClear(`${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`);
+                  }}
+                  fields={["date"]}
+                  singleDate
+                  minDate={todayIso()}
+                  label="Request Date"
+                  testId="ws-date-filter"
                 />
-                <CalendarIcon size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
-              </div>
+              ) : (
+                <div className="relative">
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDateAndClear(e.target.value)}
+                    className="text-sm rounded-md border border-gray-300 pl-8 pr-2 py-1.5 bg-white"
+                    data-testid="ws-date-filter"
+                  />
+                  <CalendarIcon size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+                </div>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -1066,15 +1093,37 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
 
                   {/* Booking Date — duplicate of header date for clarity, kept in sync */}
                   <div>
-                    <label className="text-xs font-medium text-gray-700">Booking Date</label>
-                    <input
-                      type="date"
-                      value={date}
-                      onChange={(e) => setDateAndClear(e.target.value)}
-                      disabled={!canEdit}
-                      className="mt-1 w-full text-sm rounded-md border border-gray-300 px-2 py-2 bg-white"
-                      data-testid="ws-form-date"
-                    />
+                    <label className="text-xs font-medium text-gray-700">
+                      {isRequestMode ? "Request Date" : "Booking Date"}
+                    </label>
+                    {isRequestMode ? (
+                      <div className="mt-1">
+                        <DateFilter
+                          value={{ field: "date", mode: "on", from: date ? new Date(date + "T00:00:00") : null, to: null }}
+                          onChange={(v) => {
+                            if (!v?.from) { setDateAndClear(""); return; }
+                            const d = v.from;
+                            const p = (n) => String(n).padStart(2, "0");
+                            setDateAndClear(`${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`);
+                          }}
+                          fields={["date"]}
+                          singleDate
+                          minDate={todayIso()}
+                          label="Request Date"
+                          testId="ws-form-date"
+                          className="w-full"
+                        />
+                      </div>
+                    ) : (
+                      <input
+                        type="date"
+                        value={date}
+                        onChange={(e) => setDateAndClear(e.target.value)}
+                        disabled={!canEdit}
+                        className="mt-1 w-full text-sm rounded-md border border-gray-300 px-2 py-2 bg-white"
+                        data-testid="ws-form-date"
+                      />
+                    )}
                   </div>
 
                   {/* Recurring (booking mode only — requests are single-date) */}
@@ -1101,16 +1150,28 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                     {recurringOn && (
                       <div className="space-y-2">
                         <div>
-                          <label className="text-[11px] text-gray-600">End Date</label>
+                          <label className="text-[11px] text-gray-600">End Date <span className="text-red-500">*</span></label>
                           <input
                             type="date"
                             value={recurringEnd}
                             min={date}
+                            max={(() => {
+                              // 3 months from the booking (start) date
+                              const d = new Date(date + "T00:00:00");
+                              d.setMonth(d.getMonth() + 3);
+                              const y = d.getFullYear();
+                              const m = String(d.getMonth() + 1).padStart(2, "0");
+                              const dd = String(d.getDate()).padStart(2, "0");
+                              return `${y}-${m}-${dd}`;
+                            })()}
                             onChange={(e) => setRecurringEnd(e.target.value)}
                             disabled={!canEdit}
+                            required
+                            placeholder="Select end date"
                             className="mt-1 w-full text-sm rounded-md border border-gray-300 px-2 py-1.5 bg-white"
                             data-testid="ws-recurring-end"
                           />
+                          <div className="text-[10px] text-gray-500 mt-0.5">Max 3 months from booking date.</div>
                         </div>
                         <div>
                           <label className="text-[11px] text-gray-600">Repeat On</label>

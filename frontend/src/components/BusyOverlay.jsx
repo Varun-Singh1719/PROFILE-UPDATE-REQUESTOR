@@ -41,7 +41,7 @@ export default function BusyOverlay() {
       aria-busy="true"
       aria-live="polite"
       role="status"
-      className="absolute inset-0 z-40 transition-colors duration-200 bg-white/60 backdrop-blur-[2px]"
+      className="absolute inset-0 z-40 transition-colors duration-200 bg-white/60 backdrop-blur-[2px] pointer-events-auto"
       style={{ cursor: "wait" }}
     >
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">

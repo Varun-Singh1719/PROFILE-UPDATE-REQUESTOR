@@ -64,39 +64,65 @@ export default function DateFilter({
   label,
   testId = "date-filter",
   className = "",
+  // singleDate = true → hide the mode tabs and expose only a single-date
+  //   picker (used for the "Booking Date" / "Request Workstation Date"
+  //   pickers where "Before/After/Between" don't make sense).
+  singleDate = false,
+  // Optional min/max date constraints (Date | ISO string) — used when
+  // singleDate is true to disable out-of-range days on the calendar.
+  minDate,
+  maxDate,
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
 
   useEffect(() => { if (open) setDraft(value); }, [open, value]);
 
-  const showFieldSelector = fields.length > 1;
+  const showFieldSelector = !singleDate && fields.length > 1;
   // Ensure the value's field is always one of the allowed fields
   const currentField = value?.field && fields.includes(value.field) ? value.field : fields[0];
 
   const trigger = useMemo(() => {
     const prefix = label || (showFieldSelector ? (FIELD_LABEL[currentField] || "Date") : (FIELD_LABEL[fields[0]] || "Date"));
-    if (!value?.from && !value?.to) return `${prefix}: All time`;
+    if (!value?.from && !value?.to) return singleDate ? `${prefix}: —` : `${prefix}: All time`;
+    if (singleDate) return `${prefix}: ${fmtShort(value.from)}`;
     if (value.mode === "between") return `${prefix}: ${fmtShort(value.from)} → ${fmtShort(value.to)}`;
     if (value.mode === "on") return `${prefix}: On ${fmtShort(value.from)}`;
     if (value.mode === "before") return `${prefix}: Before ${fmtShort(value.from)}`;
     if (value.mode === "after") return `${prefix}: After ${fmtShort(value.from)}`;
     return `${prefix}: All time`;
-  }, [value, label, showFieldSelector, currentField, fields]);
+  }, [value, label, showFieldSelector, currentField, fields, singleDate]);
 
   const submit = () => { onChange?.(draft); setOpen(false); };
-  const reset = () => { setDraft({ field: draft?.field || fields[0], mode: "between", from: null, to: null }); };
+  const reset = () => {
+    if (singleDate) setDraft({ field: fields[0], mode: "on", from: null, to: null });
+    else setDraft({ field: draft?.field || fields[0], mode: "between", from: null, to: null });
+  };
 
   const clear = (e) => {
     e.stopPropagation();
     e.preventDefault();
-    const next = { field: fields[0], mode: "between", from: null, to: null };
+    const next = singleDate
+      ? { field: fields[0], mode: "on", from: null, to: null }
+      : { field: fields[0], mode: "between", from: null, to: null };
     onChange?.(next);
   };
 
   const hasFilter = !!(value?.from || value?.to);
   const field = draft?.field && fields.includes(draft.field) ? draft.field : fields[0];
-  const mode = draft?.mode || "between";
+  const mode = singleDate ? "on" : (draft?.mode || "between");
+
+  // Disable dates outside [minDate, maxDate] on the calendar
+  const disabledMatcher = useMemo(() => {
+    if (!minDate && !maxDate) return undefined;
+    const min = minDate ? (typeof minDate === "string" ? new Date(minDate + "T00:00:00") : minDate) : null;
+    const max = maxDate ? (typeof maxDate === "string" ? new Date(maxDate + "T00:00:00") : maxDate) : null;
+    return (day) => {
+      if (min && day < min) return true;
+      if (max && day > max) return true;
+      return false;
+    };
+  }, [minDate, maxDate]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -148,7 +174,8 @@ export default function DateFilter({
           </div>
         )}
 
-        {/* Mode tabs */}
+        {/* Mode tabs — hidden in singleDate mode */}
+        {!singleDate && (
         <div className={`flex gap-2 px-8 border-b border-gray-100 ${showFieldSelector ? "pt-4" : "pt-6"}`}>
           {(["between", "on", "before", "after"]).map((m) => (
             <button
@@ -165,9 +192,10 @@ export default function DateFilter({
             </button>
           ))}
         </div>
+        )}
 
         {/* Date inputs + calendars */}
-        <div className="px-8 py-6">
+        <div className={singleDate ? "px-8 py-6 pt-6" : "px-8 py-6"}>
           {mode === "between" ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div>
@@ -178,6 +206,7 @@ export default function DateFilter({
                     selected={draft?.from || undefined}
                     onSelect={(d) => setDraft({ ...draft, from: d || null })}
                     initialFocus
+                    disabled={disabledMatcher}
                   />
                 </div>
               </div>
@@ -188,19 +217,21 @@ export default function DateFilter({
                     mode="single"
                     selected={draft?.to || undefined}
                     onSelect={(d) => setDraft({ ...draft, to: d || null })}
+                    disabled={disabledMatcher}
                   />
                 </div>
               </div>
             </div>
           ) : (
             <div className="max-w-md">
-              <DateInput label={MODE_LABEL[mode]} value={draft?.from} onChange={(d) => setDraft({ ...draft, from: d })}/>
+              <DateInput label={singleDate ? "Date" : MODE_LABEL[mode]} value={draft?.from} onChange={(d) => setDraft({ ...draft, from: d })}/>
               <div className="mt-4">
                 <Calendar
                   mode="single"
                   selected={draft?.from || undefined}
-                  onSelect={(d) => setDraft({ ...draft, from: d || null })}
+                  onSelect={(d) => setDraft({ ...draft, from: d || null, mode: singleDate ? "on" : (draft?.mode || "on") })}
                   initialFocus
+                  disabled={disabledMatcher}
                 />
               </div>
             </div>

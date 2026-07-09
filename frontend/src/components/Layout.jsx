@@ -58,8 +58,8 @@ export default function Layout({
         {/* Content-area page loader (below top bar). Renders inside `<main>`
             (position: relative) so the overlay only covers the content, leaving
             the sidebar and top bar interactive during API waits. */}
-        <div className="absolute left-0 right-0 bottom-0 pointer-events-none" style={{ top: hideTopBar ? 0 : 56 }}>
-          <div className="relative w-full h-full pointer-events-auto">
+        <div className="absolute left-0 right-0 bottom-0 pointer-events-none z-30" style={{ top: hideTopBar ? 0 : 56 }}>
+          <div className="relative w-full h-full">
             <BusyOverlay />
           </div>
         </div>
