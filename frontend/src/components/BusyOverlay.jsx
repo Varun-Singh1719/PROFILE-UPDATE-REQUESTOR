@@ -3,31 +3,37 @@ import { useBusy } from "../context/BusyContext";
 import { Loader2 } from "lucide-react";
 
 /**
- * BusyOverlay — content-area page loader.
+ * BusyOverlay — content-area page loader (READ requests only).
  *
  * Renders inside the main content area (positioned `absolute inset-0`), so
- * the sidebar and top bar remain unaffected and interactive during API waits.
+ * the sidebar and top bar remain unaffected and interactive during GET waits.
+ *
+ * For mutating requests (POST/PATCH/PUT/DELETE) this overlay does NOT render —
+ * see `MutationBlocker` instead, which covers the ENTIRE screen so the user
+ * can't fire another action mid-write.
  *
  * Behaviour:
  *   • Fires within 200 ms of a request starting (sub-200 ms calls never flash).
- *   • Blocks pointer/keyboard events inside the content area so double-submits
- *     against the currently-loading page are prevented.
- *   • Shows the currently active label ("Loading…", "Saving…", "Uploading…", …).
- *   • Sidebar + top bar are NOT covered — the user can still navigate.
+ *   • Sidebar + top bar are NOT covered — the user can still navigate. Any
+ *     new navigation click aborts in-flight reads (see BusyContext).
  */
 const SPINNER_DELAY_MS = 200;
 
 export default function BusyOverlay() {
-  const { isBusy, label } = useBusy();
+  const { isBusy, isMutating, label } = useBusy();
   const [showSpinner, setShowSpinner] = useState(false);
 
+  // Only show this scoped overlay when there is a read in flight (and no
+  // mutation — mutations get the full-page MutationBlocker instead).
+  const active = isBusy && !isMutating;
+
   useEffect(() => {
-    if (!isBusy) { setShowSpinner(false); return; }
+    if (!active) { setShowSpinner(false); return; }
     const t = setTimeout(() => setShowSpinner(true), SPINNER_DELAY_MS);
     return () => clearTimeout(t);
-  }, [isBusy]);
+  }, [active]);
 
-  if (!isBusy || !showSpinner) return null;
+  if (!active || !showSpinner) return null;
 
   return (
     <div
@@ -37,12 +43,6 @@ export default function BusyOverlay() {
       role="status"
       className="absolute inset-0 z-40 transition-colors duration-200 bg-white/60 backdrop-blur-[2px]"
       style={{ cursor: "wait" }}
-      onClickCapture={(e) => { e.stopPropagation(); e.preventDefault(); }}
-      onMouseDownCapture={(e) => { e.stopPropagation(); e.preventDefault(); }}
-      onKeyDownCapture={(e) => {
-        // Allow Tab navigation for accessibility, block everything else
-        if (e.key !== "Tab") { e.stopPropagation(); e.preventDefault(); }
-      }}
     >
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div

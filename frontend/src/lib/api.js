@@ -27,6 +27,10 @@ function defaultLabel(method) {
 // polling and hot-path calls that shouldn't flash the loader).
 const TRIGGERS_OVERLAY = new Set(["get", "post", "put", "patch", "delete"]);
 
+// Mutating verbs — used to tag the busy slot as "mutation" so the overlay
+// escalates to a full-page block (user cannot fire another action mid-write).
+const MUTATING = new Set(["post", "put", "patch", "delete"]);
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("access_token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -36,16 +40,36 @@ api.interceptors.request.use((config) => {
   //   • `loadingLabel: "…"`         — always show overlay with that label
   //   • any tracked verb (default) — show overlay with auto label
   //     ("Loading…" for GET, "Saving…" for POST, etc.)
+  //
+  // Abort semantics:
+  //   • Every GET request gets an AbortController registered as kind="read".
+  //     If the user clicks another action element, __busyBridge.abortAllReads()
+  //     will cancel the pending request and drop the response.
+  //   • Mutations (POST/PATCH/PUT/DELETE) get kind="mutation" — the overlay
+  //     goes full-page (see BusyOverlay + MutationBlocker) so the user can't
+  //     fire another action mid-write. Backend can't be reliably aborted, so
+  //     we let it run to completion for data integrity.
+  //   • Callers can pass their own `config.signal` to opt out of auto-attach.
   const method = (config.method || "get").toLowerCase();
   const isTracked = TRIGGERS_OVERLAY.has(method);
+  const isMutating = MUTATING.has(method);
   const wantsOverlay = !config.silent && (config.loadingLabel || isTracked);
+
+  // Attach an AbortController so read requests can be aborted on user action.
+  // Skip if the caller already supplied a signal (assume they manage it).
+  let controller = null;
+  if (!config.signal) {
+    controller = new AbortController();
+    config.signal = controller.signal;
+  }
+
   if (wantsOverlay) {
-    // If a more-specific label is already showing (e.g. set by useAction wrapping
-    // this call), don't clobber it with our generic label — push a null
-    // label so we still bump the counter but the existing label keeps showing.
     const explicit = config.loadingLabel;
     const label = explicit || (__busyBridge.hasLabel() ? null : defaultLabel(method));
-    config.__busyToken = __busyBridge.start(label);
+    config.__busyToken = __busyBridge.start(label, {
+      kind: isMutating ? "mutation" : "read",
+      controller,
+    });
   }
   return config;
 });
@@ -59,7 +83,18 @@ function popIfNeeded(config) {
 
 api.interceptors.response.use(
   (response) => { popIfNeeded(response.config); return response; },
-  (error)    => { popIfNeeded(error?.config);    return Promise.reject(error); },
+  (error)    => {
+    popIfNeeded(error?.config);
+    // Aborted GET requests (via AbortController) — silently swallow. These
+    // aren't real failures; the user simply moved on before the response.
+    // axios v1 surfaces cancellations as ERR_CANCELED / axios.isCancel(error).
+    if (axios.isCancel && axios.isCancel(error)) {
+      // eslint-disable-next-line no-console
+      // console.debug("[api] request aborted:", error?.config?.url);
+      return new Promise(() => {}); // never resolve/reject — dead call
+    }
+    return Promise.reject(error);
+  },
 );
 
 export function formatApiError(detail) {

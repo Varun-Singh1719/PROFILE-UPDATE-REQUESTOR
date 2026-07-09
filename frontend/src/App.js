@@ -6,6 +6,7 @@ import { BusyProvider } from "./context/BusyContext";
 import { EffectivePermissionsProvider } from "./context/EffectivePermissionsContext";
 import GlobalToaster from "./components/GlobalToaster";
 import DialogHost from "./components/DialogHost";
+import MutationBlocker from "./components/MutationBlocker";
 import LoginPage from "./pages/LoginPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
@@ -127,7 +128,10 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           {/* BusyOverlay is mounted inside <Layout> so it only covers the
-              content area (sidebar + top bar remain interactive). */}
+              content area (sidebar + top bar remain interactive) for GET
+              requests. Mutations (POST/PATCH/PUT/DELETE) instead trigger
+              MutationBlocker below which covers the ENTIRE screen. */}
+          <MutationBlocker />
           {/* Global confirm / prompt / alert dialog renderer */}
           <DialogHost />
         </BrowserRouter>
