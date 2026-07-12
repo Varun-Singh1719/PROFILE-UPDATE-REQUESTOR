@@ -292,7 +292,7 @@ export default function TicketListPage({
         </div>
       }
     >
-      <div className="sticky top-14 z-30 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
+      <div className="sticky top-0 z-30 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
         <div className="flex flex-wrap gap-3 items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100" data-testid="tickets-filter-bar">
         <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
@@ -370,7 +370,7 @@ export default function TicketListPage({
       </div>
       </div>
 
-      <div className="mt-3 flex-1 flex flex-col min-h-0">
+      <div className="mt-3 flex flex-col">
         <TicketTable
           tickets={tickets}
           selectable={selectable}

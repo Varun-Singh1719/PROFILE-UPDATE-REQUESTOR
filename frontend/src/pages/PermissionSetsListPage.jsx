@@ -175,7 +175,7 @@ export default function PermissionSetsListPage() {
       <div className="space-y-6">
 
         {/* Filters */}
-        <div className="sticky top-14 z-30 -mx-4 px-4 pt-1 pb-2 bg-gray-50/95 backdrop-blur">
+        <div className="sticky top-0 z-30 -mx-4 px-4 pt-1 pb-2 bg-gray-50/95 backdrop-blur">
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">
             <Filter size={14} className="text-gray-500" />

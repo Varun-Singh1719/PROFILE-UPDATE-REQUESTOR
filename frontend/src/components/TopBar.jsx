@@ -38,7 +38,7 @@ export default function TopBar({ title, actions }) {
   return (
     <>
       <header
-        className="sticky top-0 z-20 h-14 bg-white/95 backdrop-blur border-b border-gray-200 flex items-center px-4 gap-3"
+        className="flex-shrink-0 h-14 bg-white border-b border-gray-200 flex items-center px-4 gap-3 z-20"
         data-testid="app-topbar"
       >
         {/* Page title slot — set via <Layout title="..."/> */}
