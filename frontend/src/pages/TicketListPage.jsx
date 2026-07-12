@@ -8,7 +8,7 @@ import { useEffectivePage } from "../context/EffectivePermissionsContext";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
-import { Search, Plus, RefreshCw, Download, X, Play } from "lucide-react";
+import { Search, Plus, RefreshCw, Download, X, Send } from "lucide-react";
 import Pagination from "../components/Pagination";
 import notify from "../lib/notify";
 import { StatusBadge } from "../components/Badges";
@@ -326,7 +326,7 @@ export default function TicketListPage({
             title="Search"
             className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center text-gray-600"
           >
-            <Play size={12} fill="currentColor" strokeWidth={0} />
+            <Send size={13} strokeWidth={2} />
           </button>
         </div>
         {/* ── Description search (substring, all chars allowed) ──────────── */}
@@ -349,7 +349,7 @@ export default function TicketListPage({
             title="Search"
             className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center text-gray-600"
           >
-            <Play size={12} fill="currentColor" strokeWidth={0} />
+            <Send size={13} strokeWidth={2} />
           </button>
         </div>
         {!lockedStatus && (
