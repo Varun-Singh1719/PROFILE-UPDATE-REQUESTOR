@@ -210,6 +210,20 @@ async def startup():
     if perm_migrated:
         logger.info(f"Migrated {perm_migrated} permission_rules: subject_type/id -> role/team_id/employee_id")
 
+    # ---- Migration: strip `subject` field from tickets (Jul 2026) ----
+    # The Subject column was removed from the app; existing tickets still hold
+    # the old field in DB. $unset it so the field disappears from list/detail
+    # responses and doesn't leak into exports.
+    try:
+        res_unset_subject = await db.tickets.update_many(
+            {"subject": {"$exists": True}},
+            {"$unset": {"subject": ""}},
+        )
+        if res_unset_subject.modified_count:
+            logger.info(f"Migration: unset `subject` on {res_unset_subject.modified_count} tickets")
+    except Exception as _e:  # noqa: BLE001
+        logger.warning(f"tickets.subject $unset migration skipped: {_e}")
+
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@ticketing.com")
     admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
 
