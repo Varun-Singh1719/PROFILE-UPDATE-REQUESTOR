@@ -1,6 +1,7 @@
 """Tickets: list/CRUD, bulk, csv export, comments, activity."""
 import csv
 import io
+import re
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -90,7 +91,7 @@ def _csv_list(v):
     return out
 
 
-def parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date, date_from=None, date_to=None, date_field="created_at", team=None):
+def parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date, date_from=None, date_to=None, date_field="created_at", team=None, id_q=None, desc_q=None):
     query = {}
     # status / priority / created_by / team support both single & comma-separated
     st_list = _csv_list(status)
@@ -119,7 +120,25 @@ def parse_filters(status, priority, created_by, assigned_to, q, created_on, upda
     tm_list = _csv_list(team)
     if tm_list:
         query["team_id"] = {"$in": tm_list} if len(tm_list) > 1 else tm_list[0]
-    if q:
+    # ---- Split search: exact ID match + description substring (Jul 2026) ----
+    # `id_q`  → numeric only, EXACT match on `ticket_id` (accepts either "1102"
+    #          or "TKT-1102" from the caller; we normalise to full form).
+    # `desc_q` → substring, case-insensitive, on `description` only. Special
+    #           regex characters are escaped so users can search for symbols.
+    if id_q is not None and str(id_q).strip() != "":
+        s = str(id_q).strip()
+        # Strip optional "TKT-" prefix; keep only digits.
+        digits = re.sub(r"[^0-9]", "", s.upper().removeprefix("TKT-") if s.upper().startswith("TKT-") else s)
+        if digits:
+            query["ticket_id"] = f"TKT-{digits}"
+        else:
+            # Non-numeric ID input → force empty result set.
+            query["ticket_id"] = "__no_match__"
+    if desc_q is not None and str(desc_q).strip() != "":
+        escaped = re.escape(str(desc_q).strip())
+        query["description"] = {"$regex": escaped, "$options": "i"}
+    # Legacy combined `q` — used only if neither id_q nor desc_q was supplied.
+    if q and not (id_q or desc_q):
         # Search across ticket fields. Special-case: if the user types a bare
         # number (e.g. "1102"), also match the full ticket_id "TKT-1102". If
         # they type "TKT-1102" or "TKT" it still matches on ticket_id.
@@ -155,6 +174,8 @@ async def list_tickets(
     assigned_to: Optional[str] = None,
     team: Optional[str] = None,
     q: Optional[str] = None,
+    id_q: Optional[str] = None,
+    desc_q: Optional[str] = None,
     created_on: Optional[str] = None,
     updated_on: Optional[str] = None,
     due_date: Optional[str] = None,
@@ -166,7 +187,7 @@ async def list_tickets(
     sort_by: str = "updated_on",
     sort_dir: str = "desc",
 ):
-    query = parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date, date_from, date_to, date_field, team=team)
+    query = parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date, date_from, date_to, date_field, team=team, id_q=id_q, desc_q=desc_q)
 
     role = user["role"]
     uid = user["id"]
@@ -260,6 +281,8 @@ async def export_tickets_csv(
     assigned_to: Optional[str] = None,
     team: Optional[str] = None,
     q: Optional[str] = None,
+    id_q: Optional[str] = None,
+    desc_q: Optional[str] = None,
     created_on: Optional[str] = None,
     updated_on: Optional[str] = None,
     due_date: Optional[str] = None,
@@ -267,7 +290,7 @@ async def export_tickets_csv(
     date_to: Optional[str] = None,
     date_field: Optional[str] = "created_at",
 ):
-    query = parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date, date_from, date_to, date_field, team=team)
+    query = parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date, date_from, date_to, date_field, team=team, id_q=id_q, desc_q=desc_q)
     role = user["role"]; uid = user["id"]
     if scope == "mine":
         if role == "Research":

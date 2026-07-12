@@ -8,7 +8,7 @@ import { useEffectivePage } from "../context/EffectivePermissionsContext";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
-import { Search, Plus, RefreshCw, Download, X } from "lucide-react";
+import { Search, Plus, RefreshCw, Download, X, Play } from "lucide-react";
 import Pagination from "../components/Pagination";
 import notify from "../lib/notify";
 import { StatusBadge } from "../components/Badges";
@@ -31,7 +31,15 @@ export default function TicketListPage({
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  // Split search — legacy `search` kept only for URL/deep-link compat with
+  // "clear all" ergonomics. Actual queries go via id_q / desc_q.
   const [search, setSearch] = useState("");
+  // What the user is TYPING (does not trigger requests):
+  const [idInput, setIdInput] = useState("");
+  const [descInput, setDescInput] = useState("");
+  // What has been COMMITTED (Enter or arrow-click); this triggers the request:
+  const [idQuery, setIdQuery] = useState("");
+  const [descQuery, setDescQuery] = useState("");
   const [params, setParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -68,7 +76,8 @@ export default function TicketListPage({
           assigned_to: (assigneeFilter.length ? assigneeFilter.join(",") : "") || urlAssignedTo || undefined,
           created_by: createdBy.length ? createdBy.join(",") : undefined,
           team: teamFilter.length ? teamFilter.join(",") : undefined,
-          q: search || undefined,
+          id_q: idQuery || undefined,
+          desc_q: descQuery || undefined,
           page, page_size: pageSize,
           // Default sort — status ordinal ascending (Open → In Progress → Closed).
           // Backend adds a secondary tiebreak on updated_on desc.
@@ -83,10 +92,10 @@ export default function TicketListPage({
         setTickets(r.data); setTotal(r.data.length);
       }
     } finally { setLoading(false); }
-  }, [scope, status, priority, urlAssignedTo, assigneeFilter, createdBy, teamFilter, search, dateFilter, page, pageSize]);
+  }, [scope, status, priority, urlAssignedTo, assigneeFilter, createdBy, teamFilter, idQuery, descQuery, dateFilter, page, pageSize]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { setPage(1); }, [scope, status, priority, urlAssignedTo, assigneeFilter, createdBy, teamFilter, search, dateFilter, pageSize]);
+  useEffect(() => { setPage(1); }, [scope, status, priority, urlAssignedTo, assigneeFilter, createdBy, teamFilter, idQuery, descQuery, dateFilter, pageSize]);
 
   const exportCsv = () => {
     const token = localStorage.getItem("access_token") || "";
@@ -98,7 +107,8 @@ export default function TicketListPage({
     if (assignedCsv) p.set("assigned_to", assignedCsv);
     if (createdBy.length) p.set("created_by", createdBy.join(","));
     if (teamFilter.length) p.set("team", teamFilter.join(","));
-    if (search) p.set("q", search);
+    if (idQuery) p.set("id_q", idQuery);
+    if (descQuery) p.set("desc_q", descQuery);
     const dateParams = dateFilterToParams(dateFilter);
     Object.entries(dateParams).forEach(([k, v]) => { if (v) p.set(k, v); });
     fetch(`${API}/tickets/export.csv?${p.toString()}`, {
@@ -139,9 +149,11 @@ export default function TicketListPage({
   // status counts as an active filter only when the user picked it; if the
   // route locks status (e.g. Open Requests) it should not show "Clear all".
   const userPickedStatus = !lockedStatus && !!status;
-  const hasActiveFilters = !!(search || userPickedStatus || priority || createdBy.length || assigneeFilter.length || teamFilter.length || urlAssignedTo || isDateFilterActive);
+  const hasActiveFilters = !!(idQuery || descQuery || userPickedStatus || priority || createdBy.length || assigneeFilter.length || teamFilter.length || urlAssignedTo || isDateFilterActive);
   const clearAllFilters = () => {
     setSearch("");
+    setIdInput(""); setDescInput("");
+    setIdQuery(""); setDescQuery("");
     setCreatedBy([]);
     setAssigneeFilter([]);
     setTeamFilter([]);
@@ -293,11 +305,52 @@ export default function TicketListPage({
       }
     >
       <div className="sticky top-0 z-30 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
-        <div className="flex flex-wrap gap-3 items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100" data-testid="tickets-filter-bar">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
-          <Input placeholder="Search by Request ID or Description..." data-testid="search-input"
-            className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <div className="flex flex-nowrap gap-2 items-center bg-white p-3 rounded-xl shadow-soft border border-gray-100 overflow-x-auto" data-testid="tickets-filter-bar">
+        {/* ── ID search (numeric, exact match) ───────────────────────────── */}
+        <div className="relative w-28 shrink-0">
+          <Input
+            placeholder="ID"
+            data-testid="search-id-input"
+            className="pr-9 h-9"
+            value={idInput}
+            inputMode="numeric"
+            onChange={(e) => setIdInput(e.target.value.replace(/[^0-9]/g, ""))}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); setIdQuery(idInput.trim()); } }}
+            aria-label="Search by ID"
+          />
+          <button
+            type="button"
+            onClick={() => setIdQuery(idInput.trim())}
+            data-testid="search-id-btn"
+            aria-label="Search ID"
+            title="Search"
+            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center text-gray-600"
+          >
+            <Play size={12} fill="currentColor" strokeWidth={0} />
+          </button>
+        </div>
+        {/* ── Description search (substring, all chars allowed) ──────────── */}
+        <div className="relative flex-1 min-w-[200px] shrink">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16}/>
+          <Input
+            placeholder="Search description..."
+            data-testid="search-desc-input"
+            className="pl-9 pr-9 h-9"
+            value={descInput}
+            onChange={(e) => setDescInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); setDescQuery(descInput.trim()); } }}
+            aria-label="Search by description"
+          />
+          <button
+            type="button"
+            onClick={() => setDescQuery(descInput.trim())}
+            data-testid="search-desc-btn"
+            aria-label="Search description"
+            title="Search"
+            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center text-gray-600"
+          >
+            <Play size={12} fill="currentColor" strokeWidth={0} />
+          </button>
         </div>
         {!lockedStatus && (
           <MultiSelectFilter
@@ -310,7 +363,7 @@ export default function TicketListPage({
               { value: "Closed", label: "Closed" },
             ]}
             testIdPrefix="filter-status"
-            className="w-40"
+            className="w-32 shrink-0"
           />
         )}
         <MultiSelectFilter
@@ -323,7 +376,7 @@ export default function TicketListPage({
             { value: "Low", label: "Low" },
           ]}
           testIdPrefix="filter-priority"
-          className="w-40"
+          className="w-32 shrink-0"
         />
         <MultiSelectFilter
           label="Team"
@@ -331,7 +384,7 @@ export default function TicketListPage({
           onChange={setTeamFilter}
           options={teams.map(t => ({ value: t.id, label: t.name }))}
           testIdPrefix="filter-team"
-          className="w-40"
+          className="w-32 shrink-0"
         />
         <MultiSelectFilter
           label="Created By"
@@ -339,7 +392,7 @@ export default function TicketListPage({
           onChange={setCreatedBy}
           options={creators.map(c => ({ value: c.id, label: c.name }))}
           testIdPrefix="filter-created-by"
-          className="w-44"
+          className="w-36 shrink-0"
         />
         {!isDQ && (
           <MultiSelectFilter
@@ -351,17 +404,17 @@ export default function TicketListPage({
               ...members.map(m => ({ value: m.id, label: m.name })),
             ]}
             testIdPrefix="filter-assigned-to"
-            className="w-44"
+            className="w-36 shrink-0"
           />
         )}
-        <DateFilter value={dateFilter} onChange={setDateFilter} />
+        <div className="shrink-0"><DateFilter value={dateFilter} onChange={setDateFilter} /></div>
         {hasActiveFilters && (
           <Button
             variant="ghost"
             size="sm"
             onClick={clearAllFilters}
             data-testid="clear-all-filters"
-            className="h-9 text-xs text-gray-600 hover:text-[#ec9324] hover:bg-[#ec9324]/10 px-2 gap-1"
+            className="h-9 text-xs text-gray-600 hover:text-[#ec9324] hover:bg-[#ec9324]/10 px-2 gap-1 shrink-0"
             title="Clear all filters"
           >
             <X size={14}/> Clear all
