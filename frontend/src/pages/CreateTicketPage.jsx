@@ -14,7 +14,6 @@ import { useAuth } from "../context/AuthContext";
 export default function CreateTicketPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("Medium");
   const [dueDate, setDueDate] = useState("");
@@ -67,7 +66,7 @@ export default function CreateTicketPage() {
       }
       const first = attachments[0] || {};
       const r = await api.post("/tickets", {
-        subject, description, priority,
+        description, priority,
         due_date: dueDate || null,
         number_of_profiles: Number(profiles),
         attachment_path: first.path || null,
@@ -85,11 +84,6 @@ export default function CreateTicketPage() {
   return (
     <Layout title="Create New Request">
       <form onSubmit={submit} className="max-w-2xl space-y-5 bg-white p-6 rounded-xl shadow-soft border border-gray-100">
-        <div>
-          <Label htmlFor="subject">Subject *</Label>
-          <Input id="subject" required value={subject} onChange={(e) => setSubject(e.target.value)}
-            data-testid="ticket-subject-input" className="mt-1.5" placeholder="e.g. Expert Profile Not Updated"/>
-        </div>
         <div>
           <Label htmlFor="description">Description</Label>
           <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)}

@@ -64,7 +64,7 @@ export default function TicketDetailPage() {
 
   return (
     <Layout
-      title={ticket.subject}
+      title={`Request ${ticket.ticket_id ? String(ticket.ticket_id).match(/\d+/)?.[0] || ticket.ticket_id : ""}`}
       actions={
         <div className="flex gap-2">
           {canUpdateStatus && permChangeStatus.isVisible && (

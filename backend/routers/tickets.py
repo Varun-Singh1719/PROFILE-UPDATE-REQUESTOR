@@ -120,14 +120,20 @@ def parse_filters(status, priority, created_by, assigned_to, q, created_on, upda
     if tm_list:
         query["team_id"] = {"$in": tm_list} if len(tm_list) > 1 else tm_list[0]
     if q:
-        query["$or"] = [
+        # Search across ticket fields. Special-case: if the user types a bare
+        # number (e.g. "1102"), also match the full ticket_id "TKT-1102". If
+        # they type "TKT-1102" or "TKT" it still matches on ticket_id.
+        or_clauses = [
             {"ticket_id": {"$regex": q, "$options": "i"}},
-            {"subject": {"$regex": q, "$options": "i"}},
             {"description": {"$regex": q, "$options": "i"}},
             {"assigned_to_name": {"$regex": q, "$options": "i"}},
             {"created_by_name": {"$regex": q, "$options": "i"}},
             {"team_name": {"$regex": q, "$options": "i"}},
         ]
+        q_clean = q.strip()
+        if q_clean.isdigit():
+            or_clauses.append({"ticket_id": {"$regex": f"^TKT-{q_clean}", "$options": "i"}})
+        query["$or"] = or_clauses
     if created_on:
         query["created_on"] = {"$regex": f"^{created_on}"}
     if updated_on:
@@ -193,10 +199,52 @@ async def list_tickets(
     if page is not None:
         page = max(1, page)
         page_size = max(1, min(page_size, 200))
-        sort_field = sort_by if sort_by in ("ticket_id", "subject", "status", "priority", "created_on", "updated_on", "due_date", "number_of_profiles") else "updated_on"
+        # subject is no longer a valid sort field (removed Jul 2026 — see PRD)
+        sort_field = sort_by if sort_by in ("ticket_id", "status", "priority", "created_on", "updated_on", "due_date", "number_of_profiles") else "updated_on"
         sort_order = -1 if sort_dir == "desc" else 1
         total = await db.tickets.count_documents(query)
-        items = await db.tickets.find(query, {"_id": 0}).sort(sort_field, sort_order).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+
+        # Status default order: Open → In Progress → Closed
+        # Priority default order: High → Medium → Low
+        # When sorting on those fields, project a numeric rank and sort by it.
+        # For status sort we ALSO tie-break by priority (High first) then updated_on.
+        if sort_field == "status":
+            pipeline = [
+                {"$match": query},
+                {"$addFields": {
+                    "_status_rank": {"$switch": {"branches": [
+                        {"case": {"$eq": ["$status", "Open"]}, "then": 1},
+                        {"case": {"$eq": ["$status", "In Progress"]}, "then": 2},
+                        {"case": {"$eq": ["$status", "Closed"]}, "then": 3},
+                    ], "default": 99}},
+                    "_priority_rank": {"$switch": {"branches": [
+                        {"case": {"$eq": ["$priority", "High"]}, "then": 1},
+                        {"case": {"$eq": ["$priority", "Medium"]}, "then": 2},
+                        {"case": {"$eq": ["$priority", "Low"]}, "then": 3},
+                    ], "default": 99}},
+                }},
+                {"$sort": {"_status_rank": sort_order, "_priority_rank": 1, "updated_on": -1}},
+                {"$skip": (page - 1) * page_size},
+                {"$limit": page_size},
+                {"$project": {"_id": 0, "_status_rank": 0, "_priority_rank": 0}},
+            ]
+            items = await db.tickets.aggregate(pipeline).to_list(page_size)
+        elif sort_field == "priority":
+            pipeline = [
+                {"$match": query},
+                {"$addFields": {"_rank": {"$switch": {"branches": [
+                    {"case": {"$eq": ["$priority", "High"]}, "then": 1},
+                    {"case": {"$eq": ["$priority", "Medium"]}, "then": 2},
+                    {"case": {"$eq": ["$priority", "Low"]}, "then": 3},
+                ], "default": 99}}}},
+                {"$sort": {"_rank": sort_order, "updated_on": -1}},
+                {"$skip": (page - 1) * page_size},
+                {"$limit": page_size},
+                {"$project": {"_id": 0, "_rank": 0}},
+            ]
+            items = await db.tickets.aggregate(pipeline).to_list(page_size)
+        else:
+            items = await db.tickets.find(query, {"_id": 0}).sort(sort_field, sort_order).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
         return {"items": items, "total": total, "page": page, "page_size": page_size}
     items = await db.tickets.find(query, {"_id": 0}).sort("updated_on", -1).to_list(2000)
     return items
@@ -242,10 +290,10 @@ async def export_tickets_csv(
     items = await db.tickets.find(query, {"_id": 0}).sort("updated_on", -1).to_list(20000)
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["Ticket ID", "Subject", "Status", "Priority", "Created By", "Team", "Assigned To", "Profiles", "Due Date", "Created On", "Updated On"])
+    w.writerow(["Ticket ID", "Status", "Priority", "Created By", "Team", "Assigned To", "Profiles", "Due Date", "Created On", "Updated On"])
     for t in items:
         w.writerow([
-            t.get("ticket_id", ""), t.get("subject", ""), t.get("status", ""), t.get("priority", ""),
+            t.get("ticket_id", ""), t.get("status", ""), t.get("priority", ""),
             t.get("created_by_name", ""), t.get("team_name", "") or "—",
             t.get("assigned_to_name") or "Unassigned",
             t.get("number_of_profiles", "") or 0,
@@ -281,7 +329,6 @@ async def create_ticket(body: TicketCreate, user=Depends(get_current_user)):
     doc = {
         "id": str(uuid.uuid4()),
         "ticket_id": f"TKT-{1000 + count + 1}",
-        "subject": body.subject,
         "description": body.description or "",
         "priority": body.priority,
         "due_date": body.due_date,
@@ -417,7 +464,7 @@ async def update_ticket(ticket_id: str, body: TicketUpdate, user=Depends(get_cur
                     related_id=ticket_id,
                     metadata={
                         "ticket_id": t.get("ticket_id") or ticket_id,
-                        "subject": t.get("subject") or "",
+                        "subject": t.get("ticket_id") or "",
                         "closed_by": user.get("name") or "",
                         "closed_at": update["updated_on"],
                     },
@@ -538,7 +585,7 @@ async def bulk_status(body: BulkStatus, user=Depends(get_current_user)):
                         related_id=tid,
                         metadata={
                             "ticket_id": t.get("ticket_id") or tid,
-                            "subject": t.get("subject") or "",
+                            "subject": t.get("ticket_id") or "",
                             "closed_by": user.get("name") or "",
                             "closed_at": now_iso(),
                         },

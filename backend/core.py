@@ -834,7 +834,9 @@ class PermissionSetUpdate(BaseModel):
     modules: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None
 
 class TicketCreate(BaseModel):
-    subject: str
+    # `subject` field removed (Jul 2026) — see PRD.
+    # Backend still accepts it for backwards compat with older clients but ignores it.
+    subject: Optional[str] = None
     description: Optional[str] = ""
     priority: TicketPriority
     due_date: Optional[str] = None

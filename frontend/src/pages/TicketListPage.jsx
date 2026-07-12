@@ -70,6 +70,10 @@ export default function TicketListPage({
           team: teamFilter.length ? teamFilter.join(",") : undefined,
           q: search || undefined,
           page, page_size: pageSize,
+          // Default sort — status ordinal ascending (Open → In Progress → Closed).
+          // Backend adds a secondary tiebreak on updated_on desc.
+          sort_by: "status",
+          sort_dir: "asc",
           ...dateParams,
         }
       });
@@ -214,44 +218,8 @@ export default function TicketListPage({
   const permCreate     = permFn("create_ticket");
   const permBulkAssign = permFn("bulk_assign");
 
-  const rowActions = (t) => (
-    <>
-      {isDQ && !t.assigned_to_id && (
-        <Button size="sm" className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid={`assign-me-${t.ticket_id}`}
-          onClick={() => assignSelf(t.id)}>Assign to Me</Button>
-      )}
-      {isDQ && t.assigned_to_id === user.id && t.status !== "Closed" && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button size="sm" variant="outline" data-testid={`update-status-${t.ticket_id}`}>Status</Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => updateStatus(t.id, "Open")}>Open</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => updateStatus(t.id, "In Progress")}>In Progress</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => updateStatus(t.id, "Closed")}>Closed</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-      {isAdmin && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button size="sm" variant="outline" data-testid={`admin-actions-${t.ticket_id}`}>Manage</Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-gray-500">Update Status</div>
-            <DropdownMenuItem onClick={() => updateStatus(t.id, "Open")}>Open</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => updateStatus(t.id, "In Progress")}>In Progress</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => updateStatus(t.id, "Closed")}>Closed</DropdownMenuItem>
-            <div className="px-2 py-1 mt-1 text-[10px] uppercase tracking-wider text-gray-500">Assign</div>
-            {members.map(m => (
-              <DropdownMenuItem key={m.id} onClick={() => reassign(t.id, m.id)}>{m.name}</DropdownMenuItem>
-            ))}
-            <DropdownMenuItem onClick={() => reassign(t.id, "")}>Unassign</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-    </>
-  );
+  // Row actions are now rendered inside TicketTable (single triple-dot menu).
+  // We pass the callbacks + role hints through props below.
 
   const selectable = isDQ || isAdmin;
 
@@ -328,7 +296,7 @@ export default function TicketListPage({
         <div className="flex flex-wrap gap-3 items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100" data-testid="tickets-filter-bar">
         <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
-          <Input placeholder="Search by Request ID, Subject or Description..." data-testid="search-input"
+          <Input placeholder="Search by Request ID or Description..." data-testid="search-input"
             className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         {!lockedStatus && (
@@ -402,20 +370,25 @@ export default function TicketListPage({
       </div>
       </div>
 
-      <div className="mt-6 flex-1 flex flex-col">
+      <div className="mt-3 flex-1 flex flex-col min-h-0">
         <TicketTable
           tickets={tickets}
           selectable={selectable}
           selected={selected}
           onToggle={toggle}
           onToggleAll={toggleAll}
-          actions={rowActions}
           basePath={basePath}
           showView={!isDQ}
-          numericIdOnly={isDQ}
+          members={members}
+          isAdmin={isAdmin}
+          isDQ={isDQ}
+          currentUserId={user?.id || ""}
+          onUpdateStatus={updateStatus}
+          onReassign={reassign}
+          onAssignSelf={assignSelf}
         />
-        {/* Pagination footer — sticks to viewport bottom when content is short */}
-        <div className="mt-auto pt-3 bg-white rounded-xl shadow-soft border border-gray-100">
+        {/* Pagination footer — pinned below the table */}
+        <div className="mt-2 pt-3 bg-white rounded-xl shadow-soft border border-gray-100">
           <Pagination
             page={page}
             pageSize={pageSize}
