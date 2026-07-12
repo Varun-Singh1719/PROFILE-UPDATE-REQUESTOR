@@ -268,12 +268,21 @@ function DashboardModuleCard({ mod, state, expanded, onToggle, onClear, Icon, up
             {configuredCount}/{(mod.pages || []).length} configured
           </span>
         )}
-        <button type="button" onClick={(e) => { e.stopPropagation(); onClear(); }} className="text-[11px] font-semibold text-gray-500 hover:underline px-1.5" data-testid={`mod-clear-${mod.key}`}>Clear</button>
         {expanded ? <ChevronDown size={16} className="text-gray-400 ml-1" /> : <ChevronRight size={16} className="text-gray-400 ml-1" />}
       </button>
 
       {expanded && (
         <div className="border-t border-gray-100 divide-y divide-gray-100">
+          <div className="px-5 py-2.5 flex items-center justify-end gap-2 bg-gray-50/40">
+            <button
+              type="button"
+              onClick={onClear}
+              className="text-[11px] font-semibold text-gray-500 hover:underline px-1.5"
+              data-testid={`mod-clear-${mod.key}`}
+            >
+              Clear
+            </button>
+          </div>
           {(mod.pages || []).map((page) => {
             const current = state.pages?.[page.key]?.access_level || null;
             return (
@@ -427,8 +436,6 @@ function ModuleAccordion({ mod, state, expanded, onToggle, search, onSelectAll, 
         <div className="flex-1 text-left">
           <div className="font-bold text-sm text-gray-900">{mod.label}</div>
         </div>
-        <button type="button" onClick={(e) => { e.stopPropagation(); onSelectAll(); }} className="text-[11px] font-semibold text-[#ec9324] hover:underline px-1.5" data-testid={`mod-select-all-${mod.key}`}>Select all</button>
-        <button type="button" onClick={(e) => { e.stopPropagation(); onClear(); }}    className="text-[11px] font-semibold text-gray-500 hover:underline px-1.5" data-testid={`mod-clear-${mod.key}`}>Clear</button>
         {expanded ? <ChevronDown size={16} className="text-gray-400 ml-1" /> : <ChevronRight size={16} className="text-gray-400 ml-1" />}
       </button>
 
@@ -436,7 +443,27 @@ function ModuleAccordion({ mod, state, expanded, onToggle, search, onSelectAll, 
         <div className="border-t border-gray-100 grid grid-cols-12 divide-x divide-gray-100">
           {/* LEFT rail: pages */}
           <div className="col-span-12 md:col-span-3 bg-gray-50/60 max-h-[720px] overflow-y-auto">
-            <div className="px-3 pt-3 pb-1 text-[10px] uppercase tracking-widest text-gray-500 font-bold">Pages</div>
+            <div className="px-3 pt-3 pb-2 flex items-center justify-between gap-2">
+              <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Pages</span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={onSelectAll}
+                  className="text-[11px] font-semibold text-[#ec9324] hover:underline px-1.5"
+                  data-testid={`mod-select-all-${mod.key}`}
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={onClear}
+                  className="text-[11px] font-semibold text-gray-500 hover:underline px-1.5"
+                  data-testid={`mod-clear-${mod.key}`}
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
             {filteredPages.length === 0 && (
               <div className="p-4 text-center text-xs text-gray-400">No pages match your search.</div>
             )}

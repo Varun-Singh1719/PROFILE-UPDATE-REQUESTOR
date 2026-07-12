@@ -251,7 +251,7 @@ PERMISSION_MODULES_V3 = [
         "key": "dashboard",
         "label": "Dashboard",
         "icon": "LayoutDashboard",
-        "color": "#10b981",
+        "color": "#ec9324",
         "type": "access_level",
         "access_levels": [
             {"key": "individual", "label": "Individual", "description": "Sees only their own dashboard (personal bookings, workstation, meetings, requests)."},
@@ -317,7 +317,7 @@ PERMISSION_MODULES_V3 = [
         "key": "manage",
         "label": "Manage",
         "icon": "Settings",
-        "color": "#6366f1",
+        "color": "#ec9324",
         "pages": [
             {
                 "key": "employees", "label": "Employees", "route": "/admin/contacts",
@@ -384,7 +384,7 @@ PERMISSION_MODULES_V3 = [
         "key": "desk_booking",
         "label": "Workspace Manager",
         "icon": "Armchair",
-        "color": "#3b82f6",
+        "color": "#ec9324",
         "pages": [
             {
                 "key": "workstation_bookings", "label": "Workstation Bookings", "route": "/workspace-manager/workstation-booking",
