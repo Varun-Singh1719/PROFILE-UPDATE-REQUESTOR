@@ -7,6 +7,7 @@ import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { Switch } from "../components/ui/switch";
 import SingleSelect from "../components/SingleSelect";
+import DeferredSearchInput from "../components/DeferredSearchInput";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
@@ -409,10 +410,13 @@ export default function EmailTemplatesPage() {
       <TooltipProvider delayDuration={150}>
       <div className="sticky top-14 z-30 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
         <div className="flex flex-wrap gap-3 items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100" data-testid="templates-filter-bar">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
-          <Input placeholder="Search by name, kind or subject…" className="pl-9" value={q} onChange={(e) => setQ(e.target.value)} data-testid="template-search"/>
-        </div>
+        <DeferredSearchInput
+          className="flex-1 min-w-[240px]"
+          placeholder="Search by name, kind or subject…"
+          testId="template-search"
+          value={q}
+          onCommit={setQ}
+        />
         <MultiSelectFilter
           label="Category"
           value={category}

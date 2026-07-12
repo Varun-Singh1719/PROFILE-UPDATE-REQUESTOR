@@ -24,6 +24,7 @@ import api from "../lib/api";
 import Layout from "../components/Layout";
 import notify from "../lib/notify";
 import SingleSelect from "../components/SingleSelect";
+import DeferredSearchInput from "../components/DeferredSearchInput";
 import OrangeCheckbox from "../components/OrangeCheckbox";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent } from "../components/ui/dialog";
@@ -755,12 +756,13 @@ function AuditLogTab({ resourceId, catalog, focusResourceId, onClearResource }) 
     <div className="mt-3 rounded-2xl border border-gray-200 bg-white shadow-sm" data-testid="perm-audit-tab">
       {/* Filter bar */}
       <div className="p-3 border-b border-gray-100 flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[220px] max-w-xs">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search actor, detail or id…"
-            className="w-full h-9 pl-9 pr-3 rounded-md border border-gray-300 text-xs focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]"
-            data-testid="perm-audit-search" />
-        </div>
+        <DeferredSearchInput
+          className="flex-1 min-w-[220px] max-w-xs"
+          placeholder="Search actor, detail or id…"
+          testId="perm-audit-search"
+          value={q}
+          onCommit={setQ}
+        />
         <div className="min-w-[220px]">
           <SingleSelect
             testId="perm-audit-set-filter"
@@ -1152,11 +1154,13 @@ export default function PermissionsPage() {
           </div>
 
           <div className="mt-3 flex items-center gap-2 flex-wrap">
-            <div className="relative flex-1 min-w-[240px] max-w-md">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search modules, pages, functions…"
-                className="w-full h-9 pl-9 pr-3 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]" data-testid="perm-search" />
-            </div>
+            <DeferredSearchInput
+              className="flex-1 min-w-[240px] max-w-md"
+              placeholder="Search modules, pages, functions…"
+              testId="perm-search"
+              value={search}
+              onCommit={setSearch}
+            />
             <button type="button" onClick={() => setExpanded(Object.fromEntries(catalog.map((m) => [m.key, true])))}
               className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-expand-all"><ChevronsDown size={13} /> Expand all</button>
             <button type="button" onClick={() => setExpanded(Object.fromEntries(catalog.map((m) => [m.key, false])))}

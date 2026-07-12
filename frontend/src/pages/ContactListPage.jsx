@@ -9,6 +9,7 @@ import { Switch } from "../components/ui/switch";
 import { Checkbox } from "../components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import SingleSelect from "../components/SingleSelect";
+import DeferredSearchInput from "../components/DeferredSearchInput";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from "../components/ui/dialog";
@@ -1056,10 +1057,13 @@ export default function ContactListPage() {
           </div>
         )}
         <div className="flex gap-3 flex-wrap items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100" data-testid="contacts-filter-bar">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
-          <Input placeholder="Search name or email..." className="pl-9" value={q} onChange={(e) => setQ(e.target.value)} data-testid="contact-search"/>
-        </div>
+        <DeferredSearchInput
+          className="flex-1 min-w-[240px]"
+          placeholder="Search name or email..."
+          testId="contact-search"
+          value={q}
+          onCommit={setQ}
+        />
         <MultiSelectFilter
           label="Role"
           value={role}

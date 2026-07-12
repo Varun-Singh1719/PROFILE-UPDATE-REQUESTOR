@@ -28,6 +28,7 @@ import notify from "../../lib/notify";
 import { confirm as confirmDialog } from "../../lib/dialog";
 import MultiSelectFilter from "../ui/MultiSelectFilter";
 import DateFilter from "../DateFilter";
+import DeferredSearchInput from "../DeferredSearchInput";
 import Pagination from "../Pagination";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
@@ -227,16 +228,13 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
       <div className="border-b border-gray-200 bg-white px-4 py-3 sticky top-0 z-20">
         <div className="flex flex-wrap items-center gap-2">
           {/* Search — label lives INSIDE the input as placeholder */}
-          <div className="relative w-64">
-            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"/>
-            <input
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              placeholder="Name / Description"
-              data-testid="perm-sets-search"
-              className="w-full h-9 pl-8 pr-3 rounded-md border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]"
-            />
-          </div>
+          <DeferredSearchInput
+            className="w-64"
+            placeholder="Name / Description"
+            testId="perm-sets-search"
+            value={search}
+            onCommit={(v) => { setSearch(v); setPage(1); }}
+          />
 
           {/* Date — DateFilter's own trigger already prefixes with the field name
               ("Updated At: All time" / "Created At: All time") and lets the user

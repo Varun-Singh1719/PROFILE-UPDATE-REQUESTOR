@@ -19,6 +19,7 @@ import Pagination from "../components/Pagination";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import SingleSelect from "../components/SingleSelect";
 import DateFilter from "../components/DateFilter";
+import DeferredSearchInput from "../components/DeferredSearchInput";
 import api from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Checkbox } from "../components/ui/checkbox";
@@ -400,17 +401,13 @@ export default function BookingsPage() {
               />
             </div>
             {/* Search */}
-            <div className="relative w-56">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" size={14}/>
-              <input
-                type="text"
-                placeholder="Search seat / room…"
-                value={search}
-                onChange={e => onFilterChange(setSearch)(e.target.value)}
-                data-testid="bookings-search"
-                className="w-full h-9 pl-7 pr-3 py-1.5 border border-gray-200 rounded-md text-xs focus:outline-none focus:border-[#ec9324]"
-              />
-            </div>
+            <DeferredSearchInput
+              className="w-56"
+              placeholder="Search seat / room…"
+              testId="bookings-search"
+              value={search}
+              onCommit={(v) => onFilterChange(setSearch)(v)}
+            />
             {/* Type */}
             <MultiSelectFilter
               label="Type"

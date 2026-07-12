@@ -10,6 +10,7 @@ import {
 import notify from "../lib/notify";
 import MultiSelect from "../components/MultiSelect";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
+import DeferredSearchInput from "../components/DeferredSearchInput";
 import { Plus, Pencil, Users, Trash2, Search, Sparkles, Check } from "lucide-react";
 import { confirm as confirmDialog } from '../lib/dialog';
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
@@ -191,16 +192,13 @@ export default function TeamsPage() {
     >
       <div className="sticky top-14 z-30 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
       <div className="bg-white p-4 rounded-xl shadow-soft border border-gray-100">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
-          <Input
-            placeholder="Search teams by name, manager, or member…"
-            className="pl-9 max-w-md"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            data-testid="team-search"
-          />
-        </div>
+        <DeferredSearchInput
+          className="max-w-md"
+          placeholder="Search teams by name, manager, or member…"
+          testId="team-search"
+          value={search}
+          onCommit={setSearch}
+        />
       </div>
       </div>
 

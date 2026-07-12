@@ -5,6 +5,7 @@ import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
+import DeferredSearchInput from "../components/DeferredSearchInput";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from "../components/ui/dialog";
@@ -82,10 +83,13 @@ export default function NotificationsOutboxPage() {
     >
       <div className="sticky top-14 z-30 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
         <div className="flex flex-wrap gap-3 items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100" data-testid="outbox-filter-bar">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
-          <Input placeholder="Search recipient or subject…" className="pl-9" value={q} onChange={(e) => setQ(e.target.value)} data-testid="outbox-search"/>
-        </div>
+        <DeferredSearchInput
+          className="flex-1 min-w-[240px]"
+          placeholder="Search recipient or subject…"
+          testId="outbox-search"
+          value={q}
+          onCommit={setQ}
+        />
         <MultiSelectFilter
           label="Kind"
           value={kind}
