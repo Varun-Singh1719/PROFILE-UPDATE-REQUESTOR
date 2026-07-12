@@ -40,8 +40,6 @@ POST /api/permission-sets/v3            — create
 PUT  /api/permission-sets/v3/{id}       — replace/update
 DELETE /api/permission-sets/v3/{id}     — delete
 GET  /api/permissions/audit             — audit-log rows scoped to permission changes
-GET  /api/permissions/preview/{id}      — dry-run: return effective permissions
-                                          a user assigned to <id> would see.
 """
 
 from __future__ import annotations
@@ -720,59 +718,6 @@ async def permissions_audit(
         if rid:
             r["target_title"] = titles.get(rid)
     return {"rows": rows, "total": total, "skip": skip, "limit": limit}
-
-
-# --------------------------------------------------------------------------- #
-# Effective permission preview                                                 #
-# --------------------------------------------------------------------------- #
-
-def _effective_from_set(set_modules: dict) -> dict:
-    """Return a flat 'effective' view for the preview modal — hidden pages
-    and functions are stripped."""
-    out: Dict[str, dict] = {}
-    for mkey, mdata in (set_modules or {}).items():
-        # Dashboard module — just carry access_level per page
-        if mkey == "dashboard":
-            pages_out = {}
-            for pkey, pdata in (mdata.get("pages") or {}).items():
-                lvl = (pdata or {}).get("access_level")
-                if lvl:
-                    pages_out[pkey] = {"access_level": lvl}
-            if pages_out:
-                out[mkey] = {"pages": pages_out}
-            continue
-
-        pages_out = {}
-        for pkey, pdata in (mdata.get("pages") or {}).items():
-            view = pdata.get("view") or {}
-            edit = pdata.get("edit") or {}
-            if not view.get("visible") and not edit.get("visible"):
-                continue
-            fns_out = {}
-            for fkey, fdata in (pdata.get("functions") or {}).items():
-                if not fdata.get("visible"):
-                    continue
-                fns_out[fkey] = {"enabled": bool(fdata.get("enabled")), "scope": fdata.get("scope")}
-            pages_out[pkey] = {
-                "view": {"enabled": bool(view.get("enabled")), "scope": view.get("scope")} if view.get("visible") else None,
-                "edit": {"enabled": bool(edit.get("enabled")), "scope": edit.get("scope")} if edit.get("visible") else None,
-                "functions": fns_out,
-            }
-        if pages_out:
-            out[mkey] = {"pages": pages_out}
-    return out
-
-
-@api_router.get("/permissions/preview/{pset_id}")
-async def permissions_preview(pset_id: str, user=Depends(require_role("Super Admin"))):
-    doc = await db.permission_sets.find_one({"id": pset_id}, {"_id": 0})
-    if not doc:
-        raise HTTPException(404, "Permission set not found")
-    modules = doc.get("modules") or {}
-    if doc.get("version") != 3:
-        doc = _migrate_legacy_to_v3(doc)
-        modules = doc.get("modules") or {}
-    return {"id": pset_id, "title": doc.get("title"), "effective": _effective_from_set(modules)}
 
 
 # --------------------------------------------------------------------------- #

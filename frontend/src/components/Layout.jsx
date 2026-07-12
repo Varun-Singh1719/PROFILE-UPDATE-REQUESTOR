@@ -3,6 +3,7 @@ import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 import Breadcrumbs from "./Breadcrumbs";
 import BusyOverlay from "./BusyOverlay";
+import ImpersonationBanner from "./ImpersonationBanner";
 
 /**
  * Layout — global app shell.
@@ -55,6 +56,7 @@ export default function Layout({
         style={{ marginLeft: sidebarOffset }}
       >
         {!hideTopBar && <TopBar title={title} actions={actions} />}
+        <ImpersonationBanner />
         {/* Content-area page loader (below top bar). Renders inside `<main>`
             (position: relative) so the overlay only covers the content, leaving
             the sidebar and top bar interactive during API waits. */}

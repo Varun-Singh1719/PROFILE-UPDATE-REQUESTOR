@@ -731,11 +731,16 @@ def _public_contact(doc: dict) -> dict:
     return doc
 
 async def get_current_user(request: Request) -> dict:
-    token = request.cookies.get("access_token")
+    # Prefer the `Authorization: Bearer` header when present so that per-tab
+    # impersonation (which writes the token into sessionStorage and sends it
+    # via the header) can override the shared browser cookie without kicking
+    # out the original user in other tabs.
+    token = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip() or None
     if not token:
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            token = auth_header[7:]
+        token = request.cookies.get("access_token")
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:

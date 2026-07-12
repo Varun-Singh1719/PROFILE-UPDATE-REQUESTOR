@@ -18,7 +18,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Save, Loader2, Search, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp,
   Copy, Eye, EyeOff, Briefcase, Armchair, History, Sparkles, Plus,
-  RefreshCw, CheckCircle2, Settings, LayoutDashboard, ListChecks,
+  RefreshCw, CheckCircle2, Settings, LayoutDashboard, ListChecks, LogIn,
 } from "lucide-react";
 import api from "../lib/api";
 import Layout from "../components/Layout";
@@ -29,6 +29,7 @@ import { Button } from "../components/ui/button";
 import { Dialog, DialogContent } from "../components/ui/dialog";
 import PermissionSetsListTab from "../components/permissions/PermissionSetsListTab";
 import PermissionSetView from "../components/permissions/PermissionSetView";
+import LoginAsDialog from "../components/permissions/LoginAsDialog";
 
 const SCOPE_OPTS = [
   { value: "individual", label: "Individual" },
@@ -225,25 +226,6 @@ function PageDetail({ page, state, onView, onEdit, onFunction, onEnableAll, onHi
             </table>
           </div>
         )}
-      </div>
-
-      {/* Live preview strip */}
-      <div className="mt-5 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-3" data-testid="page-preview-strip">
-        <div className="flex items-center gap-2 mb-2">
-          <Sparkles size={14} className="text-[#ec9324]" />
-          <div className="text-[11px] uppercase tracking-widest text-gray-500 font-bold">What the user will see on this page</div>
-        </div>
-        <div className="rounded-md border border-gray-200 bg-white p-2 flex items-center gap-2 flex-wrap">
-          <div className="text-sm font-semibold text-gray-800 mr-auto">{page.label}</div>
-          {(page.functions || []).filter((f) => {
-            const v = state.functions?.[f.key] || emptyRW();
-            return v.enabled && v.visible;
-          }).map((f) => (
-            <span key={f.key} className="inline-flex items-center gap-1 h-7 px-2.5 rounded bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/30 text-[11px] font-semibold">
-              {f.label}
-            </span>
-          ))}
-        </div>
       </div>
     </div>
   );
@@ -698,119 +680,6 @@ function CopyFromDialog({ open, onOpenChange, onCopy, catalog, currentState }) {
   );
 }
 
-function PreviewDialog({ open, onOpenChange, effective, beforeEffective, title, catalog, showDiff }) {
-  const [tab, setTab] = useState("effective"); // "effective" | "diff"
-  useEffect(() => { if (open) setTab(showDiff ? "diff" : "effective"); }, [open, showDiff]);
-  // Build a synthetic module-shaped tree from an "effective" preview so
-  // computeDiff (which walks the catalog) can consume it.
-  const effToState = (eff) => {
-    const out = {};
-    for (const [mkey, m] of Object.entries(eff || {})) {
-      const pages = {};
-      // Dashboard module — carry access_level through
-      if (mkey === DASHBOARD_MODULE_KEY) {
-        for (const [pkey, p] of Object.entries(m.pages || {})) {
-          pages[pkey] = { access_level: p?.access_level || null };
-        }
-        out[mkey] = { pages };
-        continue;
-      }
-      for (const [pkey, p] of Object.entries(m.pages || {})) {
-        const fns = {};
-        for (const [fkey, fv] of Object.entries(p.functions || {})) {
-          fns[fkey] = { enabled: !!fv.enabled, visible: true, scope: fv.scope || null };
-        }
-        pages[pkey] = {
-          view: p.view ? { enabled: !!p.view.enabled, visible: true, scope: p.view.scope || null } : emptyRW(),
-          edit: p.edit ? { enabled: !!p.edit.enabled, visible: true, scope: p.edit.scope || null } : emptyRW(),
-          functions: fns,
-        };
-      }
-      out[mkey] = { pages };
-    }
-    return out;
-  };
-  const diffRows = useMemo(() => {
-    if (!showDiff) return [];
-    return computeDiff(catalog || [], effToState(beforeEffective || {}), effToState(effective || {}));
-  }, [catalog, beforeEffective, effective, showDiff]);
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl p-0 overflow-hidden" data-testid="perm-preview-dialog">
-        <div className="px-5 pt-4 pb-3 border-b border-gray-100 flex items-center gap-2">
-          <Sparkles size={16} className="text-[#ec9324]" />
-          <div className="flex-1"><div className="font-semibold text-gray-900">Effective permissions preview</div>
-          <div className="text-xs text-gray-500">What a user assigned to <b>{title || "this set"}</b> will actually see & do.</div></div>
-          {showDiff && (
-            <div className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white p-0.5">
-              <button type="button" onClick={() => setTab("effective")} data-testid="preview-tab-effective"
-                className={`h-7 px-2.5 rounded text-[11px] font-semibold ${tab === "effective" ? "bg-[#ec9324] text-white" : "text-gray-700 hover:bg-gray-50"}`}>Effective</button>
-              <button type="button" onClick={() => setTab("diff")} data-testid="preview-tab-diff"
-                className={`h-7 px-2.5 rounded text-[11px] font-semibold ${tab === "diff" ? "bg-[#ec9324] text-white" : "text-gray-700 hover:bg-gray-50"}`}>What changes ({diffRows.length})</button>
-            </div>
-          )}
-        </div>
-
-        <div className="p-5 max-h-[520px] overflow-y-auto space-y-3">
-          {tab === "diff" ? (
-            <>
-              <div className="text-[11px] uppercase tracking-widest text-gray-500 font-bold mb-1">Changes since last save</div>
-              <DiffTable rows={diffRows} />
-            </>
-          ) : (
-            <>
-              {Object.keys(effective || {}).length === 0 && <div className="text-xs text-gray-400 text-center py-6">Nothing enabled yet.</div>}
-              {Object.entries(effective || {}).map(([mkey, m]) => (
-                <div key={mkey} className="rounded-lg border border-gray-200">
-                  <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 text-sm font-bold text-gray-800">{mkey}</div>
-                  <div className="p-3 space-y-2">
-                    {Object.entries(m.pages || {}).map(([pkey, p]) => {
-                      // Dashboard module — render access level chip only
-                      if (mkey === DASHBOARD_MODULE_KEY) {
-                        return (
-                          <div key={pkey} className="rounded border border-gray-100 p-2 flex items-center gap-2">
-                            <div className="text-sm font-semibold text-gray-900 mr-auto">{pkey}</div>
-                            {p.access_level ? (
-                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/30 capitalize">
-                                {p.access_level}
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-gray-400">—</span>
-                            )}
-                          </div>
-                        );
-                      }
-                      return (
-                        <div key={pkey} className="rounded border border-gray-100 p-2">
-                          <div className="text-sm font-semibold text-gray-900">{pkey}</div>
-                          <div className="text-[11px] text-gray-600 mt-0.5">
-                            {p.view?.enabled ? `View (${p.view.scope || "—"})` : "View ✗"}{" · "}
-                            {p.edit?.enabled ? `Edit (${p.edit.scope || "—"})` : "Edit ✗"}
-                          </div>
-                          <div className="mt-1 flex flex-wrap gap-1">
-                            {Object.entries(p.functions || {}).filter(([, v]) => v.enabled).map(([fkey, v]) => (
-                              <span key={fkey} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                {fkey}{v.scope ? ` · ${v.scope}` : ""}
-                              </span>
-                            ))}
-                            {Object.entries(p.functions || {}).filter(([, v]) => v.enabled).length === 0 && (
-                              <span className="text-[10px] text-gray-400">No functions enabled.</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function AuditLogTab({ resourceId, catalog, focusResourceId, onClearResource }) {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
@@ -1007,9 +876,7 @@ export default function PermissionsPage() {
   const [expanded, setExpanded] = useState({});
   const [saving, setSaving] = useState(false);
   const [copyOpen, setCopyOpen] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [effective, setEffective] = useState({});
-  const [beforeEffective, setBeforeEffective] = useState(null);
+  const [loginAsOpen, setLoginAsOpen] = useState(false);
   const [copiedFromId, setCopiedFromId] = useState(null);
 
   const goToTab = (next, extra = {}) => {
@@ -1099,49 +966,6 @@ export default function PermissionsPage() {
     notify.success("Permissions copied — you can now tweak & save.");
   };
 
-  const doPreview = async () => {
-    // Fetch the saved effective (before) whenever we're editing an existing set
-    if (editingId) {
-      try {
-        const { data } = await api.get(`/permissions/preview/${editingId}`);
-        setBeforeEffective(data.effective || {});
-      } catch { setBeforeEffective({}); }
-    } else {
-      setBeforeEffective(null);
-    }
-    // Compute draft effective locally so it also reflects unsaved edits
-    const out = {};
-    for (const [mkey, m] of Object.entries(state)) {
-      // Dashboard module — carry access_level per page
-      const catMod = (catalog || []).find((c) => c.key === mkey);
-      if (catMod && isDashboardModule(catMod)) {
-        const pages = {};
-        for (const [pkey, pdata] of Object.entries(m.pages || {})) {
-          if (pdata?.access_level) pages[pkey] = { access_level: pdata.access_level };
-        }
-        if (Object.keys(pages).length) out[mkey] = { pages };
-        continue;
-      }
-      const pages = {};
-      for (const [pkey, pdata] of Object.entries(m.pages || {})) {
-        if (!pdata.view.visible && !pdata.edit.visible) continue;
-        const fns = {};
-        for (const [fkey, fdata] of Object.entries(pdata.functions || {})) {
-          if (!fdata.visible) continue;
-          fns[fkey] = { enabled: fdata.enabled, scope: fdata.scope };
-        }
-        pages[pkey] = {
-          view: pdata.view.visible ? { enabled: pdata.view.enabled, scope: pdata.view.scope } : null,
-          edit: pdata.edit.visible ? { enabled: pdata.edit.enabled, scope: pdata.edit.scope } : null,
-          functions: fns,
-        };
-      }
-      if (Object.keys(pages).length) out[mkey] = { pages };
-    }
-    setEffective(out);
-    setPreviewOpen(true);
-  };
-
   const doSave = async () => {
     if (!title.trim()) { notify.error("Title is required"); return; }
     setSaving(true);
@@ -1181,6 +1005,15 @@ export default function PermissionsPage() {
       }
       actions={
         <div className="flex items-center gap-2">
+          {/* Login As — always available on the Permissions page for Super Admins */}
+          <button
+            type="button"
+            onClick={() => setLoginAsOpen(true)}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold"
+            data-testid="perm-login-as-btn"
+          >
+            <LogIn size={13}/> Login As
+          </button>
           {tab === "sets" && (
             <Button
               onClick={openCreate}
@@ -1193,7 +1026,6 @@ export default function PermissionsPage() {
           {tab === "editor" && (
             <>
               <button type="button" onClick={() => setCopyOpen(true)}  className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-copy-btn"><Copy size={13} /> Copy from set</button>
-              <button type="button" onClick={doPreview}                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-preview-btn"><Sparkles size={13} /> Preview</button>
               <Button onClick={doSave} disabled={saving} className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9 text-xs font-semibold" data-testid="perm-save-btn">
                 {saving ? <Loader2 className="animate-spin mr-1.5" size={13} /> : <Save size={13} className="mr-1.5" />}
                 {editingId ? "Update set" : "Save as new set"}
@@ -1334,7 +1166,7 @@ export default function PermissionsPage() {
       )}
 
       <CopyFromDialog open={copyOpen} onOpenChange={setCopyOpen} onCopy={doCopyFrom} catalog={catalog} currentState={state} />
-      <PreviewDialog open={previewOpen} onOpenChange={setPreviewOpen} effective={effective} beforeEffective={beforeEffective} title={title} catalog={catalog} showDiff={!!editingId} />
+      <LoginAsDialog open={loginAsOpen} onOpenChange={setLoginAsOpen} />
     </Layout>
   );
 }

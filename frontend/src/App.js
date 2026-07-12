@@ -11,6 +11,7 @@ import LoginPage from "./pages/LoginPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import AuthCallback from "./pages/AuthCallback";
+import ImpersonateCallback from "./pages/ImpersonateCallback";
 import AdminDashboard from "./pages/AdminDashboard";
 import TicketListPage from "./pages/TicketListPage";
 import TicketDetailPage from "./pages/TicketDetailPage";
@@ -83,6 +84,7 @@ function App() {
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="/impersonate/callback" element={<ImpersonateCallback />} />
 
             {/* Unified admin shell — Super Admin + Admin */}
             <Route path="/admin" element={<ProtectedRoute roles={ADMIN_ROLES}><AdminDashboard /></ProtectedRoute>} />

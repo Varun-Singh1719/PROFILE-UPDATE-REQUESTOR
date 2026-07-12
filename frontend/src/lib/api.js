@@ -32,7 +32,12 @@ const TRIGGERS_OVERLAY = new Set(["get", "post", "put", "patch", "delete"]);
 const MUTATING = new Set(["post", "put", "patch", "delete"]);
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("access_token");
+  // Per-tab impersonation: `sessionStorage.access_token` (if present) beats the
+  // shared `localStorage.access_token`, so a "Login As" tab authenticates as
+  // the impersonated user without affecting other tabs of the same browser.
+  const token =
+    (typeof window !== "undefined" && window.sessionStorage.getItem("access_token")) ||
+    localStorage.getItem("access_token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
 
   // Overlay opt-in/out:

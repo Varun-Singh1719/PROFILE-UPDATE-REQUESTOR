@@ -111,6 +111,70 @@ async def me(user: dict = Depends(get_current_user)):
     return user
 
 
+# --------------------------------------------------------------------------- #
+# Impersonation ("Login As")                                                   #
+#                                                                             #
+# A Super Admin can mint a short-lived access token for any other active      #
+# user. The frontend opens a NEW browser tab and stores the token in that     #
+# tab's sessionStorage so the original tab (which uses localStorage +         #
+# httpOnly cookie) is not affected. Every impersonation is written to the     #
+# audit log with the actor + target.                                          #
+# --------------------------------------------------------------------------- #
+
+class ImpersonateIn(BaseModel):
+    user_id: str
+
+
+@api_router.get("/auth/impersonation-candidates")
+async def impersonation_candidates(actor: dict = Depends(get_current_user)):
+    """List active users a Super Admin can impersonate. Excludes the actor
+    itself and inactive accounts. Returned rows are trimmed to what the
+    dropdown needs — id, name, email, role."""
+    if actor.get("role") != "Super Admin":
+        raise HTTPException(403, "Only Super Admins can impersonate")
+    cursor = db.contacts.find(
+        {"status": "Active", "id": {"$ne": actor.get("id")}},
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1},
+    ).sort("name", 1)
+    users = await cursor.to_list(1000)
+    return {"users": users}
+
+
+@api_router.post("/auth/impersonate")
+async def impersonate(body: ImpersonateIn, actor: dict = Depends(get_current_user)):
+    """Mint an access token for another user. Super Admin only. Does NOT set
+    the auth cookie — the caller (frontend) puts the returned token into the
+    new tab's `sessionStorage` so the original session keeps working."""
+    if actor.get("role") != "Super Admin":
+        raise HTTPException(403, "Only Super Admins can impersonate")
+    if not body.user_id or body.user_id == actor.get("id"):
+        raise HTTPException(400, "Pick a different user to impersonate")
+
+    target = await db.contacts.find_one({"id": body.user_id})
+    if not target:
+        raise HTTPException(404, "User not found")
+    if target.get("status") != "Active":
+        raise HTTPException(400, "That user account is inactive")
+
+    token = create_access_token(target["id"], target["email"], target["role"])
+    _public_contact(target)
+
+    await log_audit(
+        actor=actor,
+        action="auth.impersonate",
+        resource="user",
+        resource_id=target["id"],
+        detail=f"{actor.get('name') or actor.get('email')} started impersonating {target.get('name') or target.get('email')}",
+        metadata={
+            "target_id": target["id"],
+            "target_email": target.get("email"),
+            "target_role": target.get("role"),
+        },
+        severity="warning",
+    )
+    return {"access_token": token, "user": target}
+
+
 @api_router.post("/auth/forgot-password")
 async def forgot_password(body: ForgotPasswordIn):
     """Always returns 200 to prevent email enumeration."""

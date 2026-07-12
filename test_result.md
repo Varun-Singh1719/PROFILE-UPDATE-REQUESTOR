@@ -1613,3 +1613,34 @@ Backwards-compatible — every existing `confirm/prompt/alert` call site works u
 ### Files touched
 - `frontend/src/components/DialogHost.jsx`
 - `frontend/src/components/permissions/PermissionSetsListTab.jsx`
+
+
+## [2026-07-12] Permissions — "Login As" feature + Preview removal
+
+### Backend
+- Removed `GET /api/permissions/preview/{id}` + helper from `routers/permissions_v3.py`.
+- New `GET /api/auth/impersonation-candidates` — active users (excluding actor). Super Admin only.
+- New `POST /api/auth/impersonate` — mints JWT for target user (no cookie set). Super Admin only. Audit-logged as `auth.impersonate` (severity=warning).
+- `core.get_current_user` now prefers `Authorization: Bearer` over the shared cookie so per-tab impersonation actually isolates.
+
+### Frontend
+- `lib/api.js` — reads `sessionStorage.access_token` first, then `localStorage`.
+- `context/AuthContext.jsx` — exposes `isImpersonating`; `logout()` on an impersonated tab wipes only sessionStorage (never touches the shared cookie).
+- `pages/ImpersonateCallback.jsx` (new) — `/impersonate/callback#token=…` stashes token into sessionStorage and reloads into `/`.
+- `components/permissions/LoginAsDialog.jsx` (new) — popup with search + Name (left) / email (right) list; opens the impersonated session via `window.open('/impersonate/callback#token=…')`.
+- `components/ImpersonationBanner.jsx` (new) + `components/Layout.jsx` — amber strip on impersonated tabs with target name/email/role and "Exit impersonation" button.
+- `pages/PermissionsPage.jsx` — removed PreviewDialog, `doPreview`, effective state, Live preview strip, and Preview button. Added "Login As" button (top bar, all tabs).
+- `App.js` — new route `/impersonate/callback`.
+
+### Verified end-to-end
+- Login As button in top bar → dialog with Name-left / email-right rows.
+- Submit opens new tab logged in as target (avatar/sidebar/dashboard all reflect target user).
+- Original tab stays on `/admin/permissions` as Admin (proven via Playwright cross-tab test).
+- Amber banner shows on impersonated tab with "Exit impersonation".
+
+### Files touched
+- `backend/core.py`, `backend/routers/auth.py`, `backend/routers/permissions_v3.py`
+- `frontend/src/lib/api.js`, `frontend/src/context/AuthContext.jsx`, `frontend/src/App.js`
+- `frontend/src/components/Layout.jsx`, `frontend/src/components/ImpersonationBanner.jsx` (new)
+- `frontend/src/pages/ImpersonateCallback.jsx` (new), `frontend/src/pages/PermissionsPage.jsx`
+- `frontend/src/components/permissions/LoginAsDialog.jsx` (new)
