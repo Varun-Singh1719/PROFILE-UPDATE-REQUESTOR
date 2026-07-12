@@ -1,33 +1,53 @@
 import React from "react";
 
+/**
+ * StatusBadge — outlined pill, transparent background, colored border + text.
+ * Fixed width for symmetry: every status pill is the same size regardless of
+ * label length. Do NOT let the pill auto-size to its content.
+ *
+ *   Open        → Green
+ *   In Progress → Orange
+ *   Closed      → Red
+ */
 export function StatusBadge({ status }) {
   const map = {
-    Open: "bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/30",
-    "In Progress": "bg-green-100 text-green-700 border border-green-200",
-    Closed: "bg-[#b2b2b2]/15 text-gray-600 border border-[#b2b2b2]/30",
+    Open:          { text: "#16a34a", border: "#16a34a", bg: "#ffffff" }, // green
+    "In Progress": { text: "#ec9324", border: "#ec9324", bg: "#ffffff" }, // orange
+    Closed:        { text: "#dc2626", border: "#dc2626", bg: "#ffffff" }, // red
   };
+  const c = map[status] || { text: "#6b7280", border: "#d1d5db", bg: "#ffffff" };
   return (
     <span
       data-testid={`status-badge-${status?.toLowerCase().replace(/\s/g, "-")}`}
-      className={`inline-flex items-center text-xs font-semibold uppercase tracking-wide rounded-full px-2.5 py-1 ${map[status] || ""}`}
+      className="inline-flex items-center justify-center w-28 h-7 text-xs font-semibold rounded-full border-2 select-none whitespace-nowrap"
+      style={{ color: c.text, borderColor: c.border, backgroundColor: c.bg }}
     >
-      <span className="w-1.5 h-1.5 rounded-full mr-1.5"
-        style={{ backgroundColor: status === "Open" ? "#ec9324" : status === "In Progress" ? "#22c55e" : "#b2b2b2" }} />
       {status}
     </span>
   );
 }
 
+/**
+ * PriorityBadge — solid pill, colored background, white text.
+ * Fixed width for symmetry: every priority pill is the same size regardless of
+ * label length.
+ *
+ *   Low    → Green
+ *   Medium → Orange
+ *   High   → Red
+ */
 export function PriorityBadge({ priority }) {
   const map = {
-    High: "bg-red-100 text-red-700 border border-red-200",
-    Medium: "bg-yellow-100 text-yellow-700 border border-yellow-200",
-    Low: "bg-green-100 text-green-700 border border-green-200",
+    High:   "#dc2626", // red
+    Medium: "#ec9324", // orange
+    Low:    "#16a34a", // green
   };
+  const bg = map[priority] || "#9ca3af";
   return (
     <span
       data-testid={`priority-badge-${priority?.toLowerCase()}`}
-      className={`inline-flex items-center text-xs font-semibold uppercase tracking-wide rounded-full px-2.5 py-1 ${map[priority] || ""}`}
+      className="inline-flex items-center justify-center w-20 h-7 text-xs font-semibold text-white rounded-full select-none whitespace-nowrap"
+      style={{ backgroundColor: bg }}
     >
       {priority}
     </span>
