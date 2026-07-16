@@ -48,6 +48,8 @@ export default function MultiSelectFilter({
   maxSelectedLabels = 3,
   hideLabelPrefix = false,
   fullWidth = false,
+  showCountOnly = false, // when true, trigger shows "N selected" instead of listing selected names
+  countUnitLabel = "selected", // label appended to the count when showCountOnly is on
   single = false, // when true, only one value can be selected; renders radio-style row
   closeOnSelectSingle = true,
 }) {
@@ -124,6 +126,14 @@ export default function MultiSelectFilter({
     ) : (
       <span className="truncate text-gray-500">
         <span className="text-gray-600">{label}:</span> <span className="text-gray-500">{placeholder}</span>
+      </span>
+    );
+  } else if (showCountOnly) {
+    // Compact mode — trigger just reports the count. Selected names are
+    // typically rendered as chips below the field.
+    triggerNode = (
+      <span className="truncate text-gray-900 font-medium">
+        {selectedOptions.length} {countUnitLabel}
       </span>
     );
   } else if (selectedOptions.length <= maxSelectedLabels) {
@@ -245,7 +255,9 @@ export default function MultiSelectFilter({
                     )}
                   </span>
                   {o.meta && (
-                    <span className="text-[10px] text-gray-400 shrink-0">{o.meta}</span>
+                    <span className={`shrink-0 tabular-nums font-mono ${optDisabled ? "text-gray-300" : "text-gray-500"} text-[11px]`}>
+                      {o.meta}
+                    </span>
                   )}
                 </button>
               );

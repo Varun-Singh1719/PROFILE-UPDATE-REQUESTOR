@@ -58,7 +58,7 @@ async def _hydrate_team(t: dict, name_map: Optional[dict] = None) -> dict:
         if ids:
             contacts = await db.contacts.find(
                 {"id": {"$in": list(ids)}},
-                {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1},
+                {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1, "emp_id": 1},
             ).to_list(2000)
         name_map = {c["id"]: c for c in contacts}
 
@@ -106,7 +106,7 @@ async def list_teams(user=Depends(get_current_user)):
     if all_ids:
         contacts = await db.contacts.find(
             {"id": {"$in": list(all_ids)}},
-            {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1},
+            {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1, "emp_id": 1},
         ).to_list(2000)
     name_map = {c["id"]: c for c in contacts}
     for t in teams:

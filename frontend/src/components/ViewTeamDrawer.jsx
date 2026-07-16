@@ -10,7 +10,7 @@
  *                   The parent is expected to close this drawer and open the
  *                   edit dialog in the same flow.
  */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from "./ui/sheet";
@@ -34,17 +34,24 @@ const fmtDateTime = (iso) => {
   }
 };
 
-const NameChip = ({ name, tone = "member" }) => (
-  <span
-    className={`inline-flex items-center text-xs font-medium rounded px-2 py-1 ${
+const NameRow = ({ name, empId, tone = "member" }) => (
+  <div
+    className={`flex items-center justify-between gap-3 px-3 py-2 text-sm rounded-md border ${
       tone === "manager"
-        ? "bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/20"
-        : "bg-gray-100 text-gray-700 border border-gray-200"
+        ? "bg-[#ec9324]/5 border-[#ec9324]/20"
+        : "bg-white border-gray-200 hover:bg-gray-50"
     }`}
-    title={name}
   >
-    {name}
-  </span>
+    <span
+      className={`truncate ${tone === "manager" ? "text-[#ec9324] font-medium" : "text-gray-800"}`}
+      title={name}
+    >
+      {name}
+    </span>
+    <span className="shrink-0 text-xs font-mono tabular-nums text-gray-500">
+      {empId || "—"}
+    </span>
+  </div>
 );
 
 const SectionTitle = ({ icon: Icon, children, count }) => (
@@ -98,8 +105,14 @@ export default function ViewTeamDrawer({ open, onOpenChange, teamId, onEdit, can
     if (!open) setTeam(null);
   }, [open]);
 
-  const managers = team?.managers || [];
-  const members  = team?.members || [];
+  const managers = useMemo(
+    () => [...(team?.managers || [])].sort((a, b) => (a.name || "").localeCompare(b.name || "")),
+    [team]
+  );
+  const members = useMemo(
+    () => [...(team?.members || [])].sort((a, b) => (a.name || "").localeCompare(b.name || "")),
+    [team]
+  );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -178,27 +191,41 @@ export default function ViewTeamDrawer({ open, onOpenChange, teamId, onEdit, can
               {/* Managers */}
               <section>
                 <SectionTitle icon={UserCog} count={managers.length}>Managers</SectionTitle>
-                <div className="flex flex-wrap gap-1.5" data-testid="view-team-managers">
-                  {managers.length === 0 && (
-                    <span className="text-xs text-gray-400 italic">No managers assigned.</span>
-                  )}
-                  {managers.map((m) => (
-                    <NameChip key={m.id} name={m.name} tone="manager" />
-                  ))}
-                </div>
+                {managers.length === 0 ? (
+                  <span className="text-xs text-gray-400 italic">No managers assigned.</span>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                      <span>Name</span>
+                      <span>Employee ID</span>
+                    </div>
+                    <div className="space-y-1.5" data-testid="view-team-managers">
+                      {managers.map((m) => (
+                        <NameRow key={m.id} name={m.name} empId={m.emp_id} tone="manager" />
+                      ))}
+                    </div>
+                  </>
+                )}
               </section>
 
               {/* Members */}
               <section>
                 <SectionTitle icon={Users} count={members.length}>Team Members</SectionTitle>
-                <div className="flex flex-wrap gap-1.5" data-testid="view-team-members">
-                  {members.length === 0 && (
-                    <span className="text-xs text-gray-400 italic">No members yet.</span>
-                  )}
-                  {members.map((m) => (
-                    <NameChip key={m.id} name={m.name} />
-                  ))}
-                </div>
+                {members.length === 0 ? (
+                  <span className="text-xs text-gray-400 italic">No members yet.</span>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                      <span>Name</span>
+                      <span>Employee ID</span>
+                    </div>
+                    <div className="space-y-1.5" data-testid="view-team-members">
+                      {members.map((m) => (
+                        <NameRow key={m.id} name={m.name} empId={m.emp_id} />
+                      ))}
+                    </div>
+                  </>
+                )}
               </section>
 
               {/* Counts */}

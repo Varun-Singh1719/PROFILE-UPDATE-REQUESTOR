@@ -118,7 +118,7 @@ export default function TeamsPage() {
           return {
             value: e.id,
             label: e.name,
-            sublabel: `${e.role} • ${e.email}`,
+            meta: e.emp_id || "",
             disabled: !!inOtherTeam,
             disabledReason: inOtherTeam ? `Already in "${team.name}"` : "",
           };
@@ -141,7 +141,7 @@ export default function TeamsPage() {
         .map((e) => ({
           value: e.id,
           label: e.name,
-          sublabel: `${e.role} • ${e.email}`,
+          meta: e.emp_id || "",
         }))
         .sort((a, b) => a.label.localeCompare(b.label)),
     [employees]
@@ -421,25 +421,29 @@ export default function TeamsPage() {
                 testIdPrefix="team-managers"
                 hideLabelPrefix
                 fullWidth
+                showCountOnly
+                countUnitLabel="manager(s) selected"
               />
               {form.manager_ids.length > 0 && (
                 <div
                   className="flex flex-wrap gap-1.5 mt-2"
                   data-testid="team-managers-chips"
                 >
-                  {form.manager_ids.map((id) => {
-                    const emp = employeeById[id];
-                    return (
+                  {form.manager_ids
+                    .map((id) => ({ id, emp: employeeById[id] }))
+                    .sort((a, b) =>
+                      (a.emp?.name || "").localeCompare(b.emp?.name || "")
+                    )
+                    .map(({ id, emp }) => (
                       <SelectionChip
                         key={id}
                         label={emp?.name || "Unknown"}
-                        sublabel={emp?.email}
+                        sublabel={emp?.emp_id}
                         tone="manager"
                         onRemove={() => removeManager(id)}
                         testId={`team-manager-chip-${id}`}
                       />
-                    );
-                  })}
+                    ))}
                 </div>
               )}
             </div>
@@ -455,24 +459,28 @@ export default function TeamsPage() {
                 testIdPrefix="team-members"
                 hideLabelPrefix
                 fullWidth
+                showCountOnly
+                countUnitLabel="member(s) selected"
               />
               {form.member_ids.length > 0 && (
                 <div
                   className="flex flex-wrap gap-1.5 mt-2"
                   data-testid="team-members-chips"
                 >
-                  {form.member_ids.map((id) => {
-                    const emp = employeeById[id];
-                    return (
+                  {form.member_ids
+                    .map((id) => ({ id, emp: employeeById[id] }))
+                    .sort((a, b) =>
+                      (a.emp?.name || "").localeCompare(b.emp?.name || "")
+                    )
+                    .map(({ id, emp }) => (
                       <SelectionChip
                         key={id}
                         label={emp?.name || "Unknown"}
-                        sublabel={emp?.email}
+                        sublabel={emp?.emp_id}
                         onRemove={() => removeMember(id)}
                         testId={`team-member-chip-${id}`}
                       />
-                    );
-                  })}
+                    ))}
                 </div>
               )}
             </div>
