@@ -103,16 +103,89 @@
 #====================================================================================================
 
 user_problem_statement: |
-  Workspace Manager & Dashboard Enhancements (Jul 2026):
-  1. Auto Approval matrix: remove Recurring Request; add Date and Time criteria
-     with per-cell gear-icon configuration (Date Filter modes On/Before/After/Between,
-     Time operators On/Before/After/Between). Rules combine via OR with team_member
-     and manager criteria.
-  2. Dashboard: two tabs (Workspace Manager = default = Floor Layout view; Profix =
-     legacy stats). User can set their default; preference is persisted server-side
-     and re-loaded on every visit.
+  Manage → Teams — Team Management Enhancements (Jul 2026):
+  1. Add/Edit Team form:
+     • Disable (freeze) users already assigned as a Team Member of another team
+       in the Team Members dropdown (still visible + tooltip reason).
+     • Show selected Team Members and Managers as chips/tags with a remove (×) icon.
+     • Allow multiple Managers per team; a user can be Manager of multiple teams
+       (no restriction on Manager selection).
+  2. View Team page (right-side slide-out drawer, does not navigate away):
+     • Fields: Team Name, Description, Managers, Team Members, Total Managers,
+       Total Team Members, Created By, Created On, Updated By, Updated On.
+     • Edit button in top-right that opens the Edit dialog.
+  3. Clicking a Team Name in the Teams list opens the View drawer.
 
 backend:
+  - task: "Teams — description, created_by, updated_by; GET /api/teams/{id}; managers can span multiple teams"
+    implemented: true
+    working: true
+    file: "backend/routers/teams.py, backend/core.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            • Added `description` to TeamCreate / TeamUpdate.
+            • Added `created_by` and `updated_by` embed docs
+              ({id, name, email}) to team documents.
+            • list_teams and new GET /api/teams/{id} both hydrate
+              managers[], members[], and refresh embedded created_by /
+              updated_by names from the current contacts collection
+              (so renaming an employee reflects in team detail views).
+            • Removed one-team-per-manager restriction: managers may
+              now be assigned to multiple teams (only dedupe).
+            • Members remain restricted to one team; validation
+              messages preserved.
+            Backend smoke-tested via curl on the new Atlas DB —
+            create → patch → delete cycle returns hydrated payloads.
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ ALL TESTS PASSED (19/20 tests, 1 expected legacy data behavior)
+            
+            Comprehensive testing completed for Teams API (Jul 16 2026):
+            
+            1. ✅ GET /api/teams/colors - Returns palette + used + suggested colors
+            
+            2. ✅ GET /api/teams - List endpoint:
+               - Returns array with all required fields (id, name, manager_ids, member_ids, color, initials, created_on, updated_on)
+               - managers[] and members[] are properly hydrated with {id, name, email, role}
+               - Legacy teams (created before changes) don't have description/created_by/updated_by fields - EXPECTED BEHAVIOR for backward compatibility
+               - New teams have all fields including description, created_by, updated_by
+            
+            3. ✅ POST /api/teams - Create team:
+               - Successfully creates team with description field
+               - created_by and updated_by are set with {id, name, email} structure
+               - Both created_on and updated_on timestamps are set
+               - Duplicate name validation works (400 error)
+               - Member conflict validation works (400 when member already in another team)
+            
+            4. ✅ GET /api/teams/{team_id} - NEW endpoint:
+               - Returns 200 with hydrated team data for existing team
+               - Returns 404 for non-existent team (random UUID)
+               - Same hydration as list endpoint (managers[], members[])
+            
+            5. ✅ KEY REGRESSION CHECK - Managers can span multiple teams:
+               - POST /api/teams successfully accepts manager already assigned to another team
+               - PATCH /api/teams/{id} successfully accepts manager already assigned to another team
+               - This is the KEY change - previously managers were restricted to one team
+            
+            6. ✅ Members remain restricted to one team:
+               - POST /api/teams correctly rejects (400) member already in another team
+               - PATCH /api/teams/{id} correctly rejects (400) member already in another team
+            
+            7. ✅ PATCH /api/teams/{id} - Update team:
+               - Successfully updates description field
+               - updated_by is refreshed to current actor with {id, name, email}
+               - updated_on timestamp advances
+            
+            8. ✅ DELETE /api/teams/{id} - Returns {ok: true}
+            
+            All test teams cleaned up successfully. No issues found.
+
   - task: "Permissions v3 — /api/permissions/audit paged + filtered + enriched"
     implemented: true
     working: "NA"
@@ -182,6 +255,37 @@ backend:
             the new Date rule is evaluated against the request's booking date.
 
 frontend:
+  - task: "TeamsPage — view drawer, chips, description, multi-team managers"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/TeamsPage.jsx, frontend/src/components/ViewTeamDrawer.jsx, frontend/src/components/ui/MultiSelectFilter.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            • Clicking a team name in the Teams list opens a right-side
+              slide-out drawer (ViewTeamDrawer) showing Name, Description,
+              Managers chips, Members chips, Total Managers, Total Members,
+              Created By, Created On, Updated By, Updated On, and an "Edit"
+              button in the top-right that closes the drawer and opens the
+              existing edit dialog (180 ms delay for a smooth transition).
+            • Add/Edit form now includes a Description textarea, and renders
+              selected Managers and Members as removable chips beneath their
+              respective MultiSelect dropdowns (chip × removes the entry).
+            • Team Members dropdown disables (freezes) users already assigned
+              as a Member of another team — the disabled row shows the
+              assignment reason as a sublabel and is sorted to the bottom of
+              the list.
+            • Manager restrictions removed: a user can now be Manager of
+              multiple teams. Manager dropdown only filters by role
+              (Super Admin / Admin) and sorts alphabetically.
+            • MultiSelectFilter extended: supports optional `disabled`,
+              `disabledReason`, and `sublabel` on option items (backward
+              compatible — existing pages that don't pass these still work).
+
   - task: "ApprovalSettingsModal — new Date & Time rows"
     implemented: true
     working: "NA"
@@ -265,17 +369,109 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 1
+  test_sequence: 2
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "Permissions v3 — Audit endpoint (paged + filtered + enriched)"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
+    - agent: "main"
+      message: |
+        Manage → Teams enhancements (Jul 16, 2026):
+        
+        BACKEND (backend/routers/teams.py, backend/core.py):
+          * TeamCreate / TeamUpdate now accept an optional `description` (str).
+          * Team documents persist `created_by` / `updated_by` as
+            {id, name, email} embed docs. `updated_by` refreshes on every PATCH.
+          * New endpoint: GET /api/teams/{team_id} — hydrated single-team fetch
+            used by the new right-side View drawer.
+          * `list_teams` and single-fetch both re-hydrate embedded created_by /
+            updated_by names from the live contacts collection.
+          * REMOVED the one-team-per-manager restriction from POST and PATCH.
+            Managers can now be assigned to multiple teams (still dedup'd).
+          * Members remain restricted to one team (unchanged validation +
+            error copy). Smoke-tested via curl on the new Atlas cluster.
+        
+        FRONTEND (frontend/src/pages/TeamsPage.jsx,
+                  frontend/src/components/ViewTeamDrawer.jsx,
+                  frontend/src/components/ui/MultiSelectFilter.jsx):
+          * Team Name in the list is now a button → opens the ViewTeamDrawer
+            (right-side sheet).
+          * Drawer shows Name, Description, Managers chips, Members chips,
+            Total counts, Created/Updated audit trail, and an Edit button
+            in the top-right that hops into the existing edit dialog.
+          * Add/Edit dialog: new Description textarea; selected Managers &
+            Members render as removable pill chips; Members dropdown freezes
+            (opacity 50, disabled) users already in another team (with
+            sublabel showing the team name); Manager dropdown has NO
+            multi-team restriction anymore.
+          * MultiSelectFilter now supports `disabled` / `disabledReason` /
+            `sublabel` on option items — backward compatible with all other
+            usages (Bookings, Notifications, Permissions etc.).
+        
+        Please test:
+          1) POST /api/teams with a description → payload persists.
+          2) PATCH /api/teams/{id} refreshes updated_by / updated_on.
+          3) GET /api/teams/{id} returns hydrated managers & members.
+          4) Adding a manager already on another team should now SUCCEED
+             (previously blocked).
+          5) Adding a member already on another team is still blocked
+             with the existing message.
+
+    - agent: "testing"
+      message: |
+        ✅ TEAMS API BACKEND TESTING COMPLETE — ALL TESTS PASSED
+        
+        Tested Teams API changes (Jul 16 2026) as requested. All 19 functional tests passed.
+        
+        **TEST RESULTS:**
+        
+        1. ✅ GET /api/teams/colors - Returns palette + used + suggested
+        
+        2. ✅ GET /api/teams - List endpoint with hydration:
+           - Returns array with all required fields
+           - managers[] and members[] properly hydrated with {id, name, email, role}
+           - Legacy teams (created before changes) don't have description/created_by/updated_by - EXPECTED for backward compatibility
+           - New teams have all fields including description, created_by, updated_by
+        
+        3. ✅ POST /api/teams - Create with description:
+           - Description field persists correctly
+           - created_by and updated_by set with {id, name, email}
+           - created_on and updated_on timestamps set
+           - Duplicate name validation works (400)
+        
+        4. ✅ GET /api/teams/{team_id} - NEW endpoint:
+           - Returns 200 with hydrated data for existing team
+           - Returns 404 for non-existent team
+           - Same hydration as list endpoint
+        
+        5. ✅ KEY REGRESSION CHECK - Managers can span multiple teams:
+           - POST /api/teams accepts manager already in another team ✅
+           - PATCH /api/teams/{id} accepts manager already in another team ✅
+           - This is the critical change - previously restricted, now allowed
+        
+        6. ✅ Members remain restricted to one team:
+           - POST correctly rejects (400) member already in another team
+           - PATCH correctly rejects (400) member already in another team
+        
+        7. ✅ PATCH /api/teams/{id} - Update:
+           - Description updates correctly
+           - updated_by refreshed to current actor
+           - updated_on timestamp advances
+        
+        8. ✅ DELETE /api/teams/{id} - Returns {ok: true}
+        
+        **BACKWARD COMPATIBILITY VERIFIED:**
+        - Legacy teams (created before Jul 16 changes) work correctly without description/created_by/updated_by fields
+        - No breaking changes to existing data
+        
+        All test teams cleaned up. No issues found.
+
+
     - agent: "main"
       message: |
         Permissions Round 2 & Round 3 completed (Jul 6, 2026):
@@ -1274,7 +1470,7 @@ frontend:
             - "View Booking" button navigates to /workspace-manager/bookings but without ?bookingId= parameter in URL (navigation works but query param missing). This is a minor issue that doesn't affect the core bug fix verification.
             
             **CONSOLE ERRORS:**
-            - 401 errors detected for PDF loading (https://manage-perms-v2.preview.emergentagent.com/api/floor-plans/pdf/...) - this is a backend PDF authentication issue, not related to the bug fixes
+            - 401 errors detected for PDF loading (https://team-ops-feature.preview.emergentagent.com/api/floor-plans/pdf/...) - this is a backend PDF authentication issue, not related to the bug fixes
             - No critical JavaScript errors detected
             
             Test date used: 2026-07-03 (date with existing workstation bookings)

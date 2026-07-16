@@ -812,6 +812,7 @@ class ContactUpdate(BaseModel):
 
 class TeamCreate(BaseModel):
     name: str
+    description: Optional[str] = ""
     manager_ids: List[str] = []
     member_ids: List[str] = []
     color: Optional[str] = "#ec9324"
@@ -819,6 +820,7 @@ class TeamCreate(BaseModel):
 
 class TeamUpdate(BaseModel):
     name: Optional[str] = None
+    description: Optional[str] = None
     manager_ids: Optional[List[str]] = None
     member_ids: Optional[List[str]] = None
     color: Optional[str] = None

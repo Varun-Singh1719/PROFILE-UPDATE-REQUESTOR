@@ -2,16 +2,17 @@ import React, { useEffect, useMemo, useState } from "react";
 import api from "../lib/api";
 import Layout from "../components/Layout";
 import { Input } from "../components/ui/input";
+import { Textarea } from "../components/ui/textarea";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from "../components/ui/dialog";
 import notify from "../lib/notify";
-import MultiSelect from "../components/MultiSelect";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import DeferredSearchInput from "../components/DeferredSearchInput";
-import { Plus, Pencil, Users, Trash2, Search, Sparkles, Check } from "lucide-react";
+import ViewTeamDrawer from "../components/ViewTeamDrawer";
+import { Plus, Pencil, Users, Trash2, Sparkles, Check, X } from "lucide-react";
 import { confirm as confirmDialog } from '../lib/dialog';
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
 import {
@@ -21,10 +22,42 @@ import {
   teamInitials,
 } from "../lib/teamColors";
 
-const EMPTY_FORM = { name: "", manager_ids: [], member_ids: [], color: "", initials: "" };
+const EMPTY_FORM = {
+  name: "",
+  description: "",
+  manager_ids: [],
+  member_ids: [],
+  color: "",
+  initials: "",
+};
 
 // Strip to A-Z/0-9, uppercase, cap 2 chars — matches backend normaliser.
 const sanitizeInitials = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 2);
+
+/* ── Chip primitive used to render selected managers / members with a remove x ── */
+function SelectionChip({ label, sublabel, onRemove, tone = "member", testId }) {
+  const toneCls =
+    tone === "manager"
+      ? "bg-[#ec9324]/10 text-[#ec9324] border-[#ec9324]/30"
+      : "bg-gray-100 text-gray-700 border-gray-200";
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 max-w-full text-xs font-medium rounded-full border ${toneCls} pl-2.5 pr-1 py-0.5`}
+      data-testid={testId}
+      title={sublabel ? `${label} — ${sublabel}` : label}
+    >
+      <span className="truncate">{label}</span>
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`Remove ${label}`}
+        className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full hover:bg-black/10"
+      >
+        <X size={11} strokeWidth={2.5} />
+      </button>
+    </span>
+  );
+}
 
 export default function TeamsPage() {
   // ── Permissions V3 (Round 3) ──
@@ -41,6 +74,10 @@ export default function TeamsPage() {
   const [search, setSearch] = useState("");
   const [usedColors, setUsedColors] = useState([]);
 
+  // View drawer state
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewTeamId, setViewTeamId] = useState(null);
+
   const loadAll = async () => {
     const [t, e, cm] = await Promise.all([
       api.get("/teams"),
@@ -54,51 +91,60 @@ export default function TeamsPage() {
 
   useEffect(() => { loadAll(); }, []);
 
-  // employee_id -> team they belong to (for disabling in MultiSelect)
-  const employeeTeamMap = useMemo(() => {
+  // employee_id -> team they're a *member* of. Managers are NOT tracked here
+  // because a manager may belong to multiple teams (per Jul-2026 spec).
+  const memberTeamMap = useMemo(() => {
     const m = {};
     for (const t of teams) {
       for (const id of (t.member_ids || [])) m[id] = t;
-      for (const id of (t.manager_ids || [])) m[id] = t;
     }
     return m;
   }, [teams]);
+
+  // Quick lookup for chip labels
+  const employeeById = useMemo(() => {
+    const m = {};
+    for (const e of employees) m[e.id] = e;
+    return m;
+  }, [employees]);
 
   const memberOptions = useMemo(
     () =>
       employees
         .filter((e) => e.status === "Active")
         .map((e) => {
-          const team = employeeTeamMap[e.id];
+          const team = memberTeamMap[e.id];
           const inOtherTeam = team && team.id !== editing?.id;
           return {
             value: e.id,
             label: e.name,
             sublabel: `${e.role} • ${e.email}`,
             disabled: !!inOtherTeam,
-            disabledReason: inOtherTeam ? `Already assigned to "${team.name}"` : "",
+            disabledReason: inOtherTeam ? `Already in "${team.name}"` : "",
           };
+        })
+        // Sort: enabled first (alpha), then disabled (alpha) — keeps disabled rows
+        // visible at the bottom of the list per spec.
+        .sort((a, b) => {
+          if (!!a.disabled === !!b.disabled) return a.label.localeCompare(b.label);
+          return a.disabled ? 1 : -1;
         }),
-    [employees, employeeTeamMap, editing]
+    [employees, memberTeamMap, editing]
   );
 
-  // Manager options: Manager or Admin role only
+  // Manager options: Manager/Admin/Super Admin role only.
+  // Managers are NOT restricted by other teams (they can manage multiple teams).
   const managerOptions = useMemo(
     () =>
       employees
         .filter((e) => e.status === "Active" && (e.role === "Super Admin" || e.role === "Admin"))
-        .map((e) => {
-          const team = employeeTeamMap[e.id];
-          const inOtherTeam = team && team.id !== editing?.id;
-          return {
-            value: e.id,
-            label: e.name,
-            sublabel: `${e.role} • ${e.email}`,
-            disabled: !!inOtherTeam,
-            disabledReason: inOtherTeam ? `Already manages "${team.name}"` : "",
-          };
-        }),
-    [employees, employeeTeamMap, editing]
+        .map((e) => ({
+          value: e.id,
+          label: e.name,
+          sublabel: `${e.role} • ${e.email}`,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [employees]
   );
 
   const filteredTeams = useMemo(() => {
@@ -115,9 +161,7 @@ export default function TeamsPage() {
   const openCreate = async () => {
     setEditing(null);
     // Always refetch the latest used colours right before opening so we never
-    // auto-assign a palette id that another team has already taken (would
-    // otherwise be a stale-state race when the user opens the form quickly
-    // after another team was created elsewhere).
+    // auto-assign a palette id that another team has already taken.
     let freshUsed = usedColors;
     try {
       const { data } = await api.get("/teams/colors");
@@ -132,12 +176,27 @@ export default function TeamsPage() {
     setEditing(t);
     setForm({
       name: t.name,
+      description: t.description || "",
       manager_ids: t.manager_ids || [],
       member_ids: t.member_ids || [],
       color: t.color || suggestNextPalette(usedColors),
       initials: t.initials || "",
     });
     setOpen(true);
+  };
+
+  const openView = (t) => {
+    setViewTeamId(t.id);
+    setViewOpen(true);
+  };
+
+  // Wired to the Edit button *inside* the view drawer. Closes the drawer
+  // first, then hops over to the edit dialog so the two never overlap.
+  const editFromView = (team) => {
+    setViewOpen(false);
+    // Slight delay lets the sheet finish its slide-out before the dialog
+    // fades in — feels less abrupt.
+    setTimeout(() => openEdit(team), 180);
   };
 
   const submit = async (e) => {
@@ -173,6 +232,12 @@ export default function TeamsPage() {
       notify.error(e?.response?.data?.detail || "Failed");
     }
   };
+
+  // Chip helpers
+  const removeManager = (id) =>
+    setForm((f) => ({ ...f, manager_ids: f.manager_ids.filter((x) => x !== id) }));
+  const removeMember = (id) =>
+    setForm((f) => ({ ...f, member_ids: f.member_ids.filter((x) => x !== id) }));
 
   return (
     <Layout
@@ -212,7 +277,7 @@ export default function TeamsPage() {
                 <th className="px-4 py-3 text-left">Managers</th>
                 <th className="px-4 py-3 text-left">Members</th>
                 <th className="px-4 py-3 text-left">Created</th>
-                <th className="px-4 py-3 text-right">Edit</th>
+                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -228,7 +293,17 @@ export default function TeamsPage() {
                       {t.initials || teamInitials(t.name)}
                     </div>
                   </td>
-                  <td className="px-4 py-3 font-semibold text-gray-900">{t.name}</td>
+                  <td className="px-4 py-3 font-semibold text-gray-900">
+                    <button
+                      type="button"
+                      onClick={() => openView(t)}
+                      className="text-left hover:text-[#ec9324] hover:underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 rounded"
+                      data-testid={`team-name-${t.name}`}
+                      aria-label={`View team ${t.name}`}
+                    >
+                      {t.name}
+                    </button>
+                  </td>
                   <td className="px-4 py-3 text-gray-600">
                     <div className="flex flex-wrap gap-1">
                       {(t.managers || []).map((m) => (
@@ -291,7 +366,7 @@ export default function TeamsPage() {
       </div>
 
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditing(null); setForm(EMPTY_FORM); } }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit Team" : "Add New Team"}</DialogTitle>
           </DialogHeader>
@@ -322,6 +397,19 @@ export default function TeamsPage() {
                 />
               </div>
             </div>
+
+            <div>
+              <Label htmlFor="team-description-input">Description</Label>
+              <Textarea
+                id="team-description-input"
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                placeholder="What does this team do?"
+                rows={3}
+                data-testid="team-description"
+              />
+            </div>
+
             <div>
               <Label>Manager(s)</Label>
               <MultiSelectFilter
@@ -334,7 +422,28 @@ export default function TeamsPage() {
                 hideLabelPrefix
                 fullWidth
               />
+              {form.manager_ids.length > 0 && (
+                <div
+                  className="flex flex-wrap gap-1.5 mt-2"
+                  data-testid="team-managers-chips"
+                >
+                  {form.manager_ids.map((id) => {
+                    const emp = employeeById[id];
+                    return (
+                      <SelectionChip
+                        key={id}
+                        label={emp?.name || "Unknown"}
+                        sublabel={emp?.email}
+                        tone="manager"
+                        onRemove={() => removeManager(id)}
+                        testId={`team-manager-chip-${id}`}
+                      />
+                    );
+                  })}
+                </div>
+              )}
             </div>
+
             <div>
               <Label>Team Members</Label>
               <MultiSelectFilter
@@ -347,7 +456,27 @@ export default function TeamsPage() {
                 hideLabelPrefix
                 fullWidth
               />
+              {form.member_ids.length > 0 && (
+                <div
+                  className="flex flex-wrap gap-1.5 mt-2"
+                  data-testid="team-members-chips"
+                >
+                  {form.member_ids.map((id) => {
+                    const emp = employeeById[id];
+                    return (
+                      <SelectionChip
+                        key={id}
+                        label={emp?.name || "Unknown"}
+                        sublabel={emp?.email}
+                        onRemove={() => removeMember(id)}
+                        testId={`team-member-chip-${id}`}
+                      />
+                    );
+                  })}
+                </div>
+              )}
             </div>
+
             <div>
               <Label className="flex items-center gap-1.5">
                 Team Colour
@@ -408,6 +537,15 @@ export default function TeamsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Right-side slide-out view drawer */}
+      <ViewTeamDrawer
+        open={viewOpen}
+        onOpenChange={setViewOpen}
+        teamId={viewTeamId}
+        canEdit={permEdit.isVisible && permEdit.canUse}
+        onEdit={editFromView}
+      />
     </Layout>
   );
 }

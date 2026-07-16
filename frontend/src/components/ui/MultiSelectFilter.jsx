@@ -209,16 +209,21 @@ export default function MultiSelectFilter({
             )}
             {filtered.map((o) => {
               const checked = selected.has(o.value);
+              const optDisabled = !!o.disabled;
               return (
                 <button
                   key={o.value}
                   type="button"
-                  onClick={() => toggle(o.value)}
+                  onClick={() => { if (!optDisabled) toggle(o.value); }}
                   role="option"
                   aria-selected={checked}
+                  aria-disabled={optDisabled}
+                  disabled={optDisabled}
+                  title={optDisabled ? (o.disabledReason || "Not available") : undefined}
                   data-testid={tid ? `${tid}-opt-${o.value}` : undefined}
                   className={`w-full text-left flex items-center gap-3 px-3 py-2 text-xs transition-colors
-                              ${checked ? "bg-orange-50" : "hover:bg-gray-50"}`}
+                              ${checked ? "bg-orange-50" : "hover:bg-gray-50"}
+                              ${optDisabled ? "opacity-50 cursor-not-allowed hover:bg-transparent" : ""}`}
                 >
                   <span
                     className={`shrink-0 inline-flex items-center justify-center w-4 h-4 border
@@ -231,8 +236,13 @@ export default function MultiSelectFilter({
                       ? (checked && <span className="w-1.5 h-1.5 rounded-full bg-white" />)
                       : <Check size={12} strokeWidth={3} />}
                   </span>
-                  <span className={`flex-1 truncate ${checked ? "text-gray-900 font-medium" : "text-gray-700"}`}>
-                    {o.label}
+                  <span className={`flex-1 min-w-0 ${checked ? "text-gray-900 font-medium" : "text-gray-700"}`}>
+                    <span className="truncate block">{o.label}</span>
+                    {(o.sublabel || (optDisabled && o.disabledReason)) && (
+                      <span className="block text-[10px] text-gray-400 truncate">
+                        {optDisabled && o.disabledReason ? o.disabledReason : o.sublabel}
+                      </span>
+                    )}
                   </span>
                   {o.meta && (
                     <span className="text-[10px] text-gray-400 shrink-0">{o.meta}</span>

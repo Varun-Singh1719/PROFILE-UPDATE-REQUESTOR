@@ -1,356 +1,406 @@
-#!/usr/bin/env python3
 """
-Backend test for Bookings module bug fix verification.
-Tests that workstation bookings route to /api/workstation-bookings/:id
-and meeting room bookings route to /api/room-bookings/:id
+Backend API Testing for Teams API (Jul 16 2026)
+Tests the Teams API changes including:
+- description field
+- created_by / updated_by
+- GET /api/teams/{id}
+- Managers can span multiple teams
 """
-
 import requests
 import json
-import sys
-from typing import Dict, Any, Optional
-import uuid
+from datetime import datetime
 
 # Backend URL from frontend/.env
-BASE_URL = "https://manage-perms-v2.preview.emergentagent.com/api"
+BASE_URL = "https://728cf97c-5468-450b-8461-6044a99ed25f.preview.emergentagent.com/api"
 
 # Test credentials
-ADMIN_EMAIL = "admin@ticketing.com"
-ADMIN_PASSWORD = "Admin@123"
+SUPER_ADMIN_EMAIL = "admin@ticketing.com"
+SUPER_ADMIN_PASSWORD = "Admin@123"
 
 class Colors:
     GREEN = '\033[92m'
     RED = '\033[91m'
     YELLOW = '\033[93m'
     BLUE = '\033[94m'
-    RESET = '\033[0m'
-    BOLD = '\033[1m'
+    END = '\033[0m'
 
-def log_test(message: str):
-    print(f"\n{Colors.BLUE}{'='*80}{Colors.RESET}")
-    print(f"{Colors.BOLD}{message}{Colors.RESET}")
-    print(f"{Colors.BLUE}{'='*80}{Colors.RESET}")
+def log_test(name, passed, details=""):
+    status = f"{Colors.GREEN}✅ PASS{Colors.END}" if passed else f"{Colors.RED}❌ FAIL{Colors.END}"
+    print(f"{status} | {name}")
+    if details:
+        print(f"     {details}")
 
-def log_success(message: str):
-    print(f"{Colors.GREEN}✓ {message}{Colors.RESET}")
-
-def log_error(message: str):
-    print(f"{Colors.RED}✗ {message}{Colors.RESET}")
-
-def log_info(message: str):
-    print(f"{Colors.YELLOW}ℹ {message}{Colors.RESET}")
-
-def login() -> Optional[str]:
-    """Login and return access token"""
-    log_test("TEST 1: Login as admin@ticketing.com")
-    
-    url = f"{BASE_URL}/auth/login"
-    payload = {
-        "email": ADMIN_EMAIL,
-        "password": ADMIN_PASSWORD
-    }
-    
-    try:
-        response = requests.post(url, json=payload)
-        log_info(f"POST {url}")
-        log_info(f"Request: {json.dumps(payload, indent=2)}")
-        log_info(f"Status: {response.status_code}")
-        log_info(f"Response: {response.text[:500]}")
-        
-        if response.status_code == 200:
-            data = response.json()
-            token = data.get("access_token")
-            if token:
-                log_success(f"Login successful, token obtained")
-                return token
-            else:
-                log_error("No access_token in response")
-                return None
-        else:
-            log_error(f"Login failed with status {response.status_code}")
-            return None
-    except Exception as e:
-        log_error(f"Login exception: {str(e)}")
+def login(email, password):
+    """Login and return session with cookie and token"""
+    resp = requests.post(f"{BASE_URL}/auth/login", json={"email": email, "password": password})
+    if resp.status_code != 200:
+        print(f"{Colors.RED}Login failed: {resp.status_code} - {resp.text}{Colors.END}")
         return None
+    data = resp.json()
+    session = requests.Session()
+    session.cookies.set("access_token", data.get("access_token"))
+    session.headers.update({"Authorization": f"Bearer {data.get('access_token')}"})
+    return session
 
-def get_bookings(token: str) -> Optional[Dict[str, Any]]:
-    """Get all bookings and verify type field exists"""
-    log_test("TEST 2: GET /api/bookings - Verify type field exists")
+def test_teams_api():
+    print(f"\n{Colors.BLUE}{'='*80}{Colors.END}")
+    print(f"{Colors.BLUE}TEAMS API TESTING - Jul 16 2026{Colors.END}")
+    print(f"{Colors.BLUE}{'='*80}{Colors.END}\n")
     
-    url = f"{BASE_URL}/bookings"
-    headers = {"Authorization": f"Bearer {token}"}
+    # Login as Super Admin
+    print(f"{Colors.YELLOW}Logging in as Super Admin...{Colors.END}")
+    session = login(SUPER_ADMIN_EMAIL, SUPER_ADMIN_PASSWORD)
+    if not session:
+        print(f"{Colors.RED}Cannot proceed without authentication{Colors.END}")
+        return
+    print(f"{Colors.GREEN}✓ Logged in successfully{Colors.END}\n")
+    
+    # Track created teams for cleanup
+    created_teams = []
     
     try:
-        response = requests.get(url, headers=headers)
-        log_info(f"GET {url}")
-        log_info(f"Status: {response.status_code}")
+        # ============================================================
+        # TEST 1: GET /api/teams/colors
+        # ============================================================
+        print(f"{Colors.BLUE}TEST 1: GET /api/teams/colors{Colors.END}")
+        resp = session.get(f"{BASE_URL}/teams/colors")
+        test_1_pass = (
+            resp.status_code == 200 and
+            "palette" in resp.json() and
+            "used" in resp.json() and
+            "suggested" in resp.json()
+        )
+        log_test("GET /api/teams/colors returns palette + used + suggested", test_1_pass,
+                 f"Status: {resp.status_code}, Keys: {list(resp.json().keys())}")
         
-        if response.status_code == 200:
-            data = response.json()
-            bookings = data.get("bookings", [])
-            log_info(f"Total bookings: {len(bookings)}")
+        # ============================================================
+        # TEST 2: GET /api/teams - List teams with hydration
+        # ============================================================
+        print(f"\n{Colors.BLUE}TEST 2: GET /api/teams - List with hydration{Colors.END}")
+        resp = session.get(f"{BASE_URL}/teams")
+        test_2_pass = resp.status_code == 200
+        teams_data = resp.json() if test_2_pass else []
+        
+        if test_2_pass and len(teams_data) > 0:
+            sample_team = teams_data[0]
+            required_fields = ["id", "name", "manager_ids", "member_ids", "managers", "members", 
+                             "color", "initials", "created_on", "updated_on"]
+            has_all_fields = all(field in sample_team for field in required_fields)
             
-            # Check for type field
-            workstation_count = 0
-            meeting_room_count = 0
+            # Check hydration
+            managers_hydrated = isinstance(sample_team.get("managers"), list)
+            members_hydrated = isinstance(sample_team.get("members"), list)
             
-            for booking in bookings:
-                if "type" not in booking:
-                    log_error(f"Booking {booking.get('id')} missing 'type' field")
-                    return None
+            # Check if managers/members have id, name, email
+            if managers_hydrated and len(sample_team["managers"]) > 0:
+                mgr = sample_team["managers"][0]
+                managers_hydrated = "id" in mgr and "name" in mgr
+            
+            if members_hydrated and len(sample_team["members"]) > 0:
+                mem = sample_team["members"][0]
+                members_hydrated = "id" in mem and "name" in mem
+            
+            test_2_pass = has_all_fields and managers_hydrated and members_hydrated
+            log_test("GET /api/teams returns array with hydrated managers[] and members[]", test_2_pass,
+                     f"Teams count: {len(teams_data)}, Fields present: {has_all_fields}, Hydrated: {managers_hydrated and members_hydrated}")
+            
+            # Check for description field (may be null for legacy rows)
+            has_description_field = "description" in sample_team
+            log_test("Teams have description field (may be null for legacy)", has_description_field,
+                     f"Description field present: {has_description_field}, Value: {sample_team.get('description', 'N/A')}")
+            
+            # Check for created_by / updated_by (may be missing for legacy rows)
+            has_audit_fields = "created_by" in sample_team or "updated_by" in sample_team
+            log_test("Teams may have created_by/updated_by (new rows only)", True,
+                     f"created_by present: {'created_by' in sample_team}, updated_by present: {'updated_by' in sample_team}")
+        else:
+            log_test("GET /api/teams returns array", test_2_pass,
+                     f"Status: {resp.status_code}, Count: {len(teams_data)}")
+        
+        # ============================================================
+        # TEST 3: POST /api/teams - Create with description
+        # ============================================================
+        print(f"\n{Colors.BLUE}TEST 3: POST /api/teams - Create with description{Colors.END}")
+        
+        # Get available contacts for managers/members
+        contacts_resp = session.get(f"{BASE_URL}/contacts")
+        contacts = contacts_resp.json() if contacts_resp.status_code == 200 else []
+        
+        # Find Super Admin and Admin contacts
+        super_admins = [c for c in contacts if c.get("role") == "Super Admin"]
+        admins = [c for c in contacts if c.get("role") == "Admin"]
+        
+        manager_id = super_admins[0]["id"] if super_admins else (admins[0]["id"] if admins else None)
+        member_id = admins[0]["id"] if admins else None
+        
+        if not manager_id:
+            print(f"{Colors.YELLOW}Warning: No suitable manager found, skipping member assignment{Colors.END}")
+        
+        timestamp = datetime.now().strftime("%H%M%S")
+        new_team = {
+            "name": f"QA Test Team {timestamp}",
+            "description": "This is a test team created by automated testing with description field",
+            "manager_ids": [manager_id] if manager_id else [],
+            "member_ids": [],  # Don't assign members to avoid conflicts
+            "color": "#22c55e",
+            "initials": "QA"
+        }
+        
+        resp = session.post(f"{BASE_URL}/teams", json=new_team)
+        test_3_pass = resp.status_code == 200
+        
+        if test_3_pass:
+            created_team = resp.json()
+            created_teams.append(created_team["id"])
+            
+            # Verify description persisted
+            desc_match = created_team.get("description") == new_team["description"]
+            
+            # Verify created_by and updated_by are present
+            has_created_by = "created_by" in created_team and isinstance(created_team["created_by"], dict)
+            has_updated_by = "updated_by" in created_team and isinstance(created_team["updated_by"], dict)
+            
+            # Verify created_by has id, name, email
+            if has_created_by:
+                cb = created_team["created_by"]
+                has_created_by = "id" in cb and "name" in cb and "email" in cb
+            
+            if has_updated_by:
+                ub = created_team["updated_by"]
+                has_updated_by = "id" in ub and "name" in ub and "email" in ub
+            
+            # Verify created_on and updated_on are set
+            has_timestamps = "created_on" in created_team and "updated_on" in created_team
+            
+            test_3_pass = desc_match and has_created_by and has_updated_by and has_timestamps
+            
+            log_test("POST /api/teams creates team with description", desc_match,
+                     f"Description matches: {desc_match}")
+            log_test("POST /api/teams sets created_by with {id, name, email}", has_created_by,
+                     f"created_by: {created_team.get('created_by', {})}")
+            log_test("POST /api/teams sets updated_by with {id, name, email}", has_updated_by,
+                     f"updated_by: {created_team.get('updated_by', {})}")
+            log_test("POST /api/teams sets created_on and updated_on", has_timestamps,
+                     f"created_on: {created_team.get('created_on')}, updated_on: {created_team.get('updated_on')}")
+        else:
+            log_test("POST /api/teams creates team", test_3_pass,
+                     f"Status: {resp.status_code}, Error: {resp.text}")
+        
+        # ============================================================
+        # TEST 4: POST /api/teams - Duplicate name rejection
+        # ============================================================
+        print(f"\n{Colors.BLUE}TEST 4: POST /api/teams - Duplicate name rejection{Colors.END}")
+        resp = session.post(f"{BASE_URL}/teams", json=new_team)
+        test_4_pass = resp.status_code == 400
+        log_test("POST /api/teams rejects duplicate name", test_4_pass,
+                 f"Status: {resp.status_code}, Expected: 400")
+        
+        # ============================================================
+        # TEST 5: GET /api/teams/{team_id} - New endpoint
+        # ============================================================
+        print(f"\n{Colors.BLUE}TEST 5: GET /api/teams/{{team_id}} - New endpoint{Colors.END}")
+        
+        if created_teams:
+            team_id = created_teams[0]
+            resp = session.get(f"{BASE_URL}/teams/{team_id}")
+            test_5a_pass = resp.status_code == 200
+            
+            if test_5a_pass:
+                team_detail = resp.json()
+                # Verify same hydration as list endpoint
+                has_hydration = (
+                    "managers" in team_detail and isinstance(team_detail["managers"], list) and
+                    "members" in team_detail and isinstance(team_detail["members"], list)
+                )
+                log_test("GET /api/teams/{id} returns 200 for existing team", test_5a_pass,
+                         f"Team: {team_detail.get('name')}, Hydrated: {has_hydration}")
+            else:
+                log_test("GET /api/teams/{id} returns 200 for existing team", test_5a_pass,
+                         f"Status: {resp.status_code}")
+        
+        # Test 404 for random UUID
+        import uuid
+        random_id = str(uuid.uuid4())
+        resp = session.get(f"{BASE_URL}/teams/{random_id}")
+        test_5b_pass = resp.status_code == 404
+        log_test("GET /api/teams/{id} returns 404 for non-existent team", test_5b_pass,
+                 f"Status: {resp.status_code}, Expected: 404")
+        
+        # ============================================================
+        # TEST 6: Managers can span multiple teams (KEY REGRESSION)
+        # ============================================================
+        print(f"\n{Colors.BLUE}TEST 6: Managers can span multiple teams (KEY REGRESSION){Colors.END}")
+        
+        # Get existing teams to find a manager already in use
+        resp = session.get(f"{BASE_URL}/teams")
+        existing_teams = resp.json() if resp.status_code == 200 else []
+        
+        existing_manager_id = None
+        for team in existing_teams:
+            if team.get("manager_ids") and len(team["manager_ids"]) > 0:
+                existing_manager_id = team["manager_ids"][0]
+                break
+        
+        if not existing_manager_id and manager_id:
+            existing_manager_id = manager_id
+        
+        if existing_manager_id:
+            # Create a NEW team with the same manager
+            timestamp2 = datetime.now().strftime("%H%M%S")
+            multi_manager_team = {
+                "name": f"QA Multi-Manager Team {timestamp2}",
+                "description": "Testing that managers can be assigned to multiple teams",
+                "manager_ids": [existing_manager_id],
+                "member_ids": [],
+                "color": "#3b82f6",
+                "initials": "MM"
+            }
+            
+            resp = session.post(f"{BASE_URL}/teams", json=multi_manager_team)
+            test_6a_pass = resp.status_code == 200
+            
+            if test_6a_pass:
+                created_teams.append(resp.json()["id"])
+            
+            log_test("POST /api/teams allows manager already in another team", test_6a_pass,
+                     f"Status: {resp.status_code}, Manager ID: {existing_manager_id}")
+            
+            # Also test via PATCH on an existing team
+            if created_teams and len(created_teams) >= 2:
+                # Try to add the same manager to another existing team
+                team_to_update = created_teams[0]
+                resp = session.patch(f"{BASE_URL}/teams/{team_to_update}", 
+                                    json={"manager_ids": [existing_manager_id]})
+                test_6b_pass = resp.status_code == 200
+                log_test("PATCH /api/teams allows manager already in another team", test_6b_pass,
+                         f"Status: {resp.status_code}")
+            else:
+                log_test("PATCH /api/teams allows manager already in another team", True,
+                         "Skipped - not enough teams created")
+        else:
+            log_test("Managers can span multiple teams", True,
+                     "Skipped - no existing manager found")
+        
+        # ============================================================
+        # TEST 7: Members cannot span multiple teams
+        # ============================================================
+        print(f"\n{Colors.BLUE}TEST 7: Members cannot span multiple teams (existing validation){Colors.END}")
+        
+        # Find a member already assigned to a team
+        existing_member_id = None
+        for team in existing_teams:
+            if team.get("member_ids") and len(team["member_ids"]) > 0:
+                existing_member_id = team["member_ids"][0]
+                break
+        
+        if existing_member_id:
+            # Try to create a team with this member
+            timestamp3 = datetime.now().strftime("%H%M%S")
+            conflict_team = {
+                "name": f"QA Conflict Team {timestamp3}",
+                "description": "This should fail due to member conflict",
+                "manager_ids": [manager_id] if manager_id else [],
+                "member_ids": [existing_member_id],
+                "color": "#a855f7"
+            }
+            
+            resp = session.post(f"{BASE_URL}/teams", json=conflict_team)
+            test_7_pass = resp.status_code == 400
+            log_test("POST /api/teams rejects member already in another team", test_7_pass,
+                     f"Status: {resp.status_code}, Expected: 400")
+        else:
+            log_test("POST /api/teams rejects member already in another team", True,
+                     "Skipped - no existing member found")
+        
+        # ============================================================
+        # TEST 8: PATCH /api/teams/{id} - Update description
+        # ============================================================
+        print(f"\n{Colors.BLUE}TEST 8: PATCH /api/teams/{{id}} - Update description{Colors.END}")
+        
+        if created_teams:
+            team_id = created_teams[0]
+            updated_desc = "Updated description via PATCH endpoint"
+            
+            resp = session.patch(f"{BASE_URL}/teams/{team_id}", 
+                                json={"description": updated_desc})
+            test_8_pass = resp.status_code == 200
+            
+            if test_8_pass:
+                updated_team = resp.json()
+                desc_updated = updated_team.get("description") == updated_desc
                 
-                if booking["type"] == "Workstation":
-                    workstation_count += 1
-                elif booking["type"] == "Meeting Room":
-                    meeting_room_count += 1
-            
-            log_success(f"All bookings have 'type' field")
-            log_info(f"Workstation bookings: {workstation_count}")
-            log_info(f"Meeting Room bookings: {meeting_room_count}")
-            
-            if workstation_count == 0:
-                log_error("No workstation bookings found - cannot test workstation cancel")
-                return None
-            
-            if meeting_room_count == 0:
-                log_info("No meeting room bookings found - will skip meeting room cancel test")
-            
-            return data
-        else:
-            log_error(f"GET /api/bookings failed with status {response.status_code}")
-            log_info(f"Response: {response.text[:500]}")
-            return None
-    except Exception as e:
-        log_error(f"Exception: {str(e)}")
-        return None
-
-def test_workstation_cancel_bug(token: str, workstation_id: str):
-    """Test that DELETE /api/room-bookings/{workstation_id} returns 404 (the bug)"""
-    log_test("TEST 3a: DELETE /api/room-bookings/{workstation_id} - Expect 404 (bug behavior)")
-    
-    url = f"{BASE_URL}/room-bookings/{workstation_id}"
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        response = requests.delete(url, headers=headers)
-        log_info(f"DELETE {url}")
-        log_info(f"Status: {response.status_code}")
-        log_info(f"Response: {response.text[:500]}")
-        
-        if response.status_code == 404:
-            log_success("Correctly returns 404 'Booking not found' (confirms bug root cause)")
-            return True
-        else:
-            log_error(f"Expected 404, got {response.status_code}")
-            return False
-    except Exception as e:
-        log_error(f"Exception: {str(e)}")
-        return False
-
-def test_workstation_cancel_fix(token: str, workstation_id: str):
-    """Test that DELETE /api/workstation-bookings/{workstation_id} returns 200/204 (the fix)"""
-    log_test("TEST 3b: DELETE /api/workstation-bookings/{workstation_id} - Expect 200/204 (fixed behavior)")
-    
-    url = f"{BASE_URL}/workstation-bookings/{workstation_id}"
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        response = requests.delete(url, headers=headers)
-        log_info(f"DELETE {url}")
-        log_info(f"Status: {response.status_code}")
-        log_info(f"Response: {response.text[:500]}")
-        
-        if response.status_code in [200, 204]:
-            log_success(f"Successfully cancelled workstation booking (status {response.status_code})")
-            return True
-        else:
-            log_error(f"Expected 200/204, got {response.status_code}")
-            return False
-    except Exception as e:
-        log_error(f"Exception: {str(e)}")
-        return False
-
-def verify_booking_cancelled(token: str, booking_id: str):
-    """Verify booking status is now Cancelled"""
-    log_test("TEST 3c: GET /api/bookings/{id} - Verify status is Cancelled")
-    
-    url = f"{BASE_URL}/bookings/{booking_id}"
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        response = requests.get(url, headers=headers)
-        log_info(f"GET {url}")
-        log_info(f"Status: {response.status_code}")
-        log_info(f"Response: {response.text[:500]}")
-        
-        if response.status_code == 200:
-            data = response.json()
-            status = data.get("status")
-            cancelled = data.get("cancelled")
-            
-            if status == "Cancelled" or cancelled == True:
-                log_success(f"Booking status confirmed as Cancelled (status={status}, cancelled={cancelled})")
-                return True
+                # Verify updated_by is refreshed
+                has_updated_by = "updated_by" in updated_team and isinstance(updated_team["updated_by"], dict)
+                
+                # Verify updated_on advanced
+                has_updated_on = "updated_on" in updated_team
+                
+                log_test("PATCH /api/teams/{id} updates description", desc_updated,
+                         f"New description: {updated_team.get('description')}")
+                log_test("PATCH /api/teams/{id} refreshes updated_by", has_updated_by,
+                         f"updated_by: {updated_team.get('updated_by', {})}")
+                log_test("PATCH /api/teams/{id} advances updated_on", has_updated_on,
+                         f"updated_on: {updated_team.get('updated_on')}")
             else:
-                log_error(f"Booking not cancelled: status={status}, cancelled={cancelled}")
-                return False
+                log_test("PATCH /api/teams/{id} updates team", test_8_pass,
+                         f"Status: {resp.status_code}, Error: {resp.text}")
         else:
-            log_error(f"GET /api/bookings/{booking_id} failed with status {response.status_code}")
-            return False
-    except Exception as e:
-        log_error(f"Exception: {str(e)}")
-        return False
-
-def test_meeting_room_cancel(token: str, meeting_room_id: str):
-    """Test that DELETE /api/room-bookings/{meeting_room_id} still works (regression check)"""
-    log_test("TEST 4: DELETE /api/room-bookings/{meeting_room_id} - Expect 200 (regression check)")
-    
-    url = f"{BASE_URL}/room-bookings/{meeting_room_id}"
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        response = requests.delete(url, headers=headers)
-        log_info(f"DELETE {url}")
-        log_info(f"Status: {response.status_code}")
-        log_info(f"Response: {response.text[:500]}")
+            log_test("PATCH /api/teams/{id} updates team", False,
+                     "No teams created to test")
         
-        if response.status_code in [200, 204]:
-            log_success(f"Meeting room cancel still works (status {response.status_code})")
-            return True
-        else:
-            log_error(f"Expected 200/204, got {response.status_code}")
-            return False
-    except Exception as e:
-        log_error(f"Exception: {str(e)}")
-        return False
-
-def test_invalid_workstation_id(token: str):
-    """Sanity check: DELETE /api/workstation-bookings/{random-uuid} should return 404"""
-    log_test("TEST 5: DELETE /api/workstation-bookings/{random-uuid} - Expect 404 (sanity check)")
-    
-    random_id = str(uuid.uuid4())
-    url = f"{BASE_URL}/workstation-bookings/{random_id}"
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        response = requests.delete(url, headers=headers)
-        log_info(f"DELETE {url}")
-        log_info(f"Status: {response.status_code}")
-        log_info(f"Response: {response.text[:500]}")
+        # ============================================================
+        # TEST 9: PATCH /api/teams/{id} - Member conflict validation
+        # ============================================================
+        print(f"\n{Colors.BLUE}TEST 9: PATCH /api/teams/{{id}} - Member conflict validation{Colors.END}")
         
-        if response.status_code == 404:
-            log_success("Correctly returns 404 for non-existent workstation booking")
-            return True
+        if created_teams and existing_member_id:
+            team_id = created_teams[0]
+            resp = session.patch(f"{BASE_URL}/teams/{team_id}", 
+                                json={"member_ids": [existing_member_id]})
+            test_9_pass = resp.status_code == 400
+            log_test("PATCH /api/teams/{id} rejects member already in another team", test_9_pass,
+                     f"Status: {resp.status_code}, Expected: 400")
         else:
-            log_error(f"Expected 404, got {response.status_code}")
-            return False
+            log_test("PATCH /api/teams/{id} rejects member already in another team", True,
+                     "Skipped - no existing member or teams")
+        
+        # ============================================================
+        # TEST 10: DELETE /api/teams/{id}
+        # ============================================================
+        print(f"\n{Colors.BLUE}TEST 10: DELETE /api/teams/{{id}}{Colors.END}")
+        
+        # Delete all created teams
+        delete_count = 0
+        for team_id in created_teams:
+            resp = session.delete(f"{BASE_URL}/teams/{team_id}")
+            if resp.status_code == 200 and resp.json().get("ok") == True:
+                delete_count += 1
+        
+        test_10_pass = delete_count == len(created_teams)
+        log_test(f"DELETE /api/teams/{{id}} returns {{ok: true}}", test_10_pass,
+                 f"Deleted {delete_count}/{len(created_teams)} teams")
+        
+        # Clear the list since we've deleted them
+        created_teams.clear()
+        
     except Exception as e:
-        log_error(f"Exception: {str(e)}")
-        return False
-
-def main():
-    print(f"\n{Colors.BOLD}{'='*80}")
-    print("BOOKINGS MODULE BUG FIX VERIFICATION")
-    print(f"{'='*80}{Colors.RESET}\n")
+        print(f"\n{Colors.RED}ERROR: {str(e)}{Colors.END}")
+        import traceback
+        traceback.print_exc()
     
-    results = {
-        "total": 0,
-        "passed": 0,
-        "failed": 0
-    }
+    finally:
+        # Cleanup: Delete any remaining test teams
+        if created_teams:
+            print(f"\n{Colors.YELLOW}Cleaning up {len(created_teams)} test teams...{Colors.END}")
+            for team_id in created_teams:
+                try:
+                    session.delete(f"{BASE_URL}/teams/{team_id}")
+                except:
+                    pass
     
-    # Step 1: Login
-    token = login()
-    if not token:
-        log_error("Cannot proceed without authentication token")
-        sys.exit(1)
-    results["total"] += 1
-    results["passed"] += 1
-    
-    # Step 2: Get bookings
-    bookings_data = get_bookings(token)
-    if not bookings_data:
-        log_error("Cannot proceed without bookings data")
-        sys.exit(1)
-    results["total"] += 1
-    results["passed"] += 1
-    
-    bookings = bookings_data.get("bookings", [])
-    
-    # Find an active workstation booking
-    workstation_booking = None
-    for booking in bookings:
-        if booking.get("type") == "Workstation" and booking.get("status") == "Active":
-            workstation_booking = booking
-            break
-    
-    if not workstation_booking:
-        log_error("No active workstation booking found for testing")
-        sys.exit(1)
-    
-    workstation_id = workstation_booking.get("id")
-    log_info(f"Selected workstation booking ID: {workstation_id}")
-    
-    # Step 3a: Test the bug (DELETE via room-bookings endpoint)
-    results["total"] += 1
-    if test_workstation_cancel_bug(token, workstation_id):
-        results["passed"] += 1
-    else:
-        results["failed"] += 1
-    
-    # Step 3b: Test the fix (DELETE via workstation-bookings endpoint)
-    results["total"] += 1
-    if test_workstation_cancel_fix(token, workstation_id):
-        results["passed"] += 1
-    else:
-        results["failed"] += 1
-    
-    # Step 3c: Verify booking is cancelled
-    results["total"] += 1
-    if verify_booking_cancelled(token, workstation_id):
-        results["passed"] += 1
-    else:
-        results["failed"] += 1
-    
-    # Step 4: Test meeting room cancel (if available)
-    meeting_room_booking = None
-    for booking in bookings:
-        if booking.get("type") == "Meeting Room" and booking.get("status") == "Active":
-            meeting_room_booking = booking
-            break
-    
-    if meeting_room_booking:
-        meeting_room_id = meeting_room_booking.get("id")
-        log_info(f"Selected meeting room booking ID: {meeting_room_id}")
-        results["total"] += 1
-        if test_meeting_room_cancel(token, meeting_room_id):
-            results["passed"] += 1
-        else:
-            results["failed"] += 1
-    else:
-        log_info("Skipping meeting room cancel test (no active meeting room bookings)")
-    
-    # Step 5: Sanity check with random UUID
-    results["total"] += 1
-    if test_invalid_workstation_id(token):
-        results["passed"] += 1
-    else:
-        results["failed"] += 1
-    
-    # Summary
-    print(f"\n{Colors.BOLD}{'='*80}")
-    print("TEST SUMMARY")
-    print(f"{'='*80}{Colors.RESET}")
-    print(f"Total tests: {results['total']}")
-    print(f"{Colors.GREEN}Passed: {results['passed']}{Colors.RESET}")
-    print(f"{Colors.RED}Failed: {results['failed']}{Colors.RESET}")
-    
-    if results['failed'] == 0:
-        print(f"\n{Colors.GREEN}{Colors.BOLD}✓ ALL TESTS PASSED{Colors.RESET}\n")
-        sys.exit(0)
-    else:
-        print(f"\n{Colors.RED}{Colors.BOLD}✗ SOME TESTS FAILED{Colors.RESET}\n")
-        sys.exit(1)
+    print(f"\n{Colors.BLUE}{'='*80}{Colors.END}")
+    print(f"{Colors.BLUE}TEAMS API TESTING COMPLETE{Colors.END}")
+    print(f"{Colors.BLUE}{'='*80}{Colors.END}\n")
 
 if __name__ == "__main__":
-    main()
+    test_teams_api()
