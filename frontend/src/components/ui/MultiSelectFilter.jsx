@@ -192,8 +192,9 @@ export default function MultiSelectFilter({
           role="listbox"
           aria-multiselectable="true"
           data-testid={tid ? `${tid}-popup` : undefined}
-          className={`absolute z-50 mt-1 min-w-[240px] max-w-[360px] bg-white border border-gray-200
-                      shadow-lg rounded-md py-1 ${align === "right" ? "right-0" : "left-0"}`}
+          className={`absolute z-50 mt-1 bg-white border border-gray-200 shadow-lg rounded-md py-1
+                      ${fullWidth ? "w-full" : "min-w-[240px] max-w-[360px]"}
+                      ${align === "right" ? "right-0" : "left-0"}`}
         >
           {showSearch && (
             <div className="px-2 pt-1 pb-2 border-b border-gray-100">
@@ -220,6 +221,10 @@ export default function MultiSelectFilter({
             {filtered.map((o) => {
               const checked = selected.has(o.value);
               const optDisabled = !!o.disabled;
+              // Middle column: prefer explicit `middle`, else if disabled and has
+              // `disabledReason`, use that. Kept as its own column so the row is
+              // symmetric — empty middle simply leaves the gap.
+              const middleText = o.middle || (optDisabled ? o.disabledReason : "") || "";
               return (
                 <button
                   key={o.value}
@@ -231,9 +236,10 @@ export default function MultiSelectFilter({
                   disabled={optDisabled}
                   title={optDisabled ? (o.disabledReason || "Not available") : undefined}
                   data-testid={tid ? `${tid}-opt-${o.value}` : undefined}
-                  className={`w-full text-left flex items-center gap-3 px-3 py-2 text-xs transition-colors
+                  className={`w-full text-left grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto]
+                              items-center gap-4 px-3 py-2 text-xs transition-colors
                               ${checked ? "bg-orange-50" : "hover:bg-gray-50"}
-                              ${optDisabled ? "opacity-50 cursor-not-allowed hover:bg-transparent" : ""}`}
+                              ${optDisabled ? "opacity-60 cursor-not-allowed hover:bg-transparent" : ""}`}
                 >
                   <span
                     className={`shrink-0 inline-flex items-center justify-center w-4 h-4 border
@@ -246,19 +252,39 @@ export default function MultiSelectFilter({
                       ? (checked && <span className="w-1.5 h-1.5 rounded-full bg-white" />)
                       : <Check size={12} strokeWidth={3} />}
                   </span>
-                  <span className={`flex-1 min-w-0 ${checked ? "text-gray-900 font-medium" : "text-gray-700"}`}>
-                    <span className="truncate block">{o.label}</span>
-                    {(o.sublabel || (optDisabled && o.disabledReason)) && (
-                      <span className="block text-[10px] text-gray-400 truncate">
-                        {optDisabled && o.disabledReason ? o.disabledReason : o.sublabel}
-                      </span>
-                    )}
+
+                  {/* Column 1 — Name (left aligned) */}
+                  <span
+                    className={`truncate ${checked ? "text-gray-900 font-medium" : "text-gray-700"}`}
+                    title={o.label}
+                  >
+                    {o.label}
                   </span>
-                  {o.meta && (
-                    <span className={`shrink-0 tabular-nums font-mono ${optDisabled ? "text-gray-300" : "text-gray-500"} text-[11px]`}>
+
+                  {/* Column 2 — Middle: team / info pill (centered) */}
+                  <span className="justify-self-center min-w-0 max-w-full">
+                    {middleText ? (
+                      <span
+                        className={`inline-block truncate max-w-full text-[10px] font-medium rounded-full px-2 py-0.5
+                                    ${optDisabled
+                                      ? "bg-gray-100 text-gray-500 border border-gray-200"
+                                      : "bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/20"}`}
+                        title={middleText}
+                      >
+                        {middleText}
+                      </span>
+                    ) : null}
+                  </span>
+
+                  {/* Column 3 — Meta / emp id (right aligned) */}
+                  {o.meta ? (
+                    <span
+                      className={`justify-self-end shrink-0 tabular-nums font-mono
+                                  ${optDisabled ? "text-gray-400" : "text-gray-500"} text-[11px]`}
+                    >
                       {o.meta}
                     </span>
-                  )}
+                  ) : <span />}
                 </button>
               );
             })}

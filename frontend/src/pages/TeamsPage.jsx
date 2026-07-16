@@ -119,6 +119,9 @@ export default function TeamsPage() {
             value: e.id,
             label: e.name,
             meta: e.emp_id || "",
+            // Team pill shown in the middle column of every row — empty for
+            // members who don't yet belong to any team (keeps grid symmetric).
+            middle: inOtherTeam ? team.name : "",
             disabled: !!inOtherTeam,
             disabledReason: inOtherTeam ? `Already in "${team.name}"` : "",
           };
