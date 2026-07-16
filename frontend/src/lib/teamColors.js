@@ -133,3 +133,33 @@ export function teamInitials(name) {
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
+
+/** Two-letter person initials, e.g. "Aarushi Ajmani" -> "AA". */
+export function personInitials(name) {
+  if (!name) return "?";
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+/** Simple stable string hash — kept tiny; deterministic across sessions. */
+function _strHash(str) {
+  let h = 0;
+  const s = String(str || "");
+  for (let i = 0; i < s.length; i += 1) {
+    h = (h * 31 + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
+/**
+ * Deterministic avatar gradient for a person, keyed by their id
+ * (or falls back to name). Reuses the same 60-stop palette we already ship
+ * for teams so the whole UI feels visually cohesive.
+ */
+export function personAvatarBackground(seed) {
+  const palette = TEAM_PALETTES[_strHash(seed) % TEAM_PALETTES.length];
+  return `linear-gradient(135deg, ${palette.stops[0]} 0%, ${palette.stops[1]} 100%)`;
+}
+

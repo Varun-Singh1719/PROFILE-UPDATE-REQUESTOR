@@ -18,7 +18,7 @@ import { Button } from "./ui/button";
 import { Pencil, Users, UserCog, Calendar, User as UserIcon } from "lucide-react";
 import api from "../lib/api";
 import notify from "../lib/notify";
-import { teamBackground, teamInitials } from "../lib/teamColors";
+import { teamBackground, teamInitials, personInitials, personAvatarBackground } from "../lib/teamColors";
 
 const fmtDateTime = (iso) => {
   if (!iso) return "—";
@@ -34,7 +34,7 @@ const fmtDateTime = (iso) => {
   }
 };
 
-const NameRow = ({ name, empId, tone = "member" }) => (
+const NameRow = ({ id, name, empId, tone = "member" }) => (
   <div
     className={`flex items-center justify-between gap-3 px-3 py-2 text-sm rounded-md border ${
       tone === "manager"
@@ -42,12 +42,24 @@ const NameRow = ({ name, empId, tone = "member" }) => (
         : "bg-white border-gray-200 hover:bg-gray-50"
     }`}
   >
-    <span
-      className={`truncate ${tone === "manager" ? "text-[#ec9324] font-medium" : "text-gray-800"}`}
-      title={name}
-    >
-      {name}
-    </span>
+    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+      <span
+        className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-white font-semibold text-[10px] shadow-sm ring-1 ring-black/5"
+        style={{
+          background: personAvatarBackground(id || name),
+          letterSpacing: "0.02em",
+        }}
+        aria-hidden="true"
+      >
+        {personInitials(name)}
+      </span>
+      <span
+        className={`truncate ${tone === "manager" ? "text-[#ec9324] font-medium" : "text-gray-800"}`}
+        title={name}
+      >
+        {name}
+      </span>
+    </div>
     <span className="shrink-0 text-xs font-mono tabular-nums text-gray-500">
       {empId || "—"}
     </span>
@@ -201,7 +213,7 @@ export default function ViewTeamDrawer({ open, onOpenChange, teamId, onEdit, can
                     </div>
                     <div className="space-y-1.5" data-testid="view-team-managers">
                       {managers.map((m) => (
-                        <NameRow key={m.id} name={m.name} empId={m.emp_id} tone="manager" />
+                        <NameRow key={m.id} id={m.id} name={m.name} empId={m.emp_id} tone="manager" />
                       ))}
                     </div>
                   </>
@@ -221,7 +233,7 @@ export default function ViewTeamDrawer({ open, onOpenChange, teamId, onEdit, can
                     </div>
                     <div className="space-y-1.5" data-testid="view-team-members">
                       {members.map((m) => (
-                        <NameRow key={m.id} name={m.name} empId={m.emp_id} />
+                        <NameRow key={m.id} id={m.id} name={m.name} empId={m.emp_id} />
                       ))}
                     </div>
                   </>
