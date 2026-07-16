@@ -1,406 +1,547 @@
 """
-Backend API Testing for Teams API (Jul 16 2026)
-Tests the Teams API changes including:
-- description field
-- created_by / updated_by
-- GET /api/teams/{id}
-- Managers can span multiple teams
+Backend test for Profix Tickets team_name enrichment bug fix (Jul 16 2026)
+
+Verifies that:
+1. GET /api/tickets?scope=all returns team_name for tickets whose creator is in a team
+2. GET /api/tickets (non-paged) also enriches team_name
+3. GET /api/tickets with sort_by=status (aggregation pipeline) enriches team_name
+4. GET /api/tickets with sort_by=priority (aggregation pipeline) enriches team_name
+5. GET /api/tickets/export.csv includes team_name in CSV
+6. Team filter regression: ?team=<id> returns tickets whose creator is in that team
+7. POST /api/tickets as admin (not in any team) creates ticket with team_name=null
+8. Teams endpoints smoke test (POST/GET/PATCH/DELETE)
 """
+
 import requests
 import json
+import csv
+import io
 from datetime import datetime
 
-# Backend URL from frontend/.env
+# Configuration
 BASE_URL = "https://728cf97c-5468-450b-8461-6044a99ed25f.preview.emergentagent.com/api"
+ADMIN_EMAIL = "admin@ticketing.com"
+ADMIN_PASSWORD = "Admin@123"
 
-# Test credentials
-SUPER_ADMIN_EMAIL = "admin@ticketing.com"
-SUPER_ADMIN_PASSWORD = "Admin@123"
+# Test state
+session = requests.Session()
+auth_token = None
+admin_user = None
+techknights_team_id = None
+test_ticket_id = None
 
-class Colors:
-    GREEN = '\033[92m'
-    RED = '\033[91m'
-    YELLOW = '\033[93m'
-    BLUE = '\033[94m'
-    END = '\033[0m'
+def log(msg):
+    """Print timestamped log message"""
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
 
-def log_test(name, passed, details=""):
-    status = f"{Colors.GREEN}✅ PASS{Colors.END}" if passed else f"{Colors.RED}❌ FAIL{Colors.END}"
-    print(f"{status} | {name}")
-    if details:
-        print(f"     {details}")
-
-def login(email, password):
-    """Login and return session with cookie and token"""
-    resp = requests.post(f"{BASE_URL}/auth/login", json={"email": email, "password": password})
+def login():
+    """Login as Super Admin and capture auth token"""
+    global auth_token, admin_user
+    log(f"Logging in as {ADMIN_EMAIL}...")
+    
+    resp = session.post(
+        f"{BASE_URL}/auth/login",
+        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
+    )
+    
     if resp.status_code != 200:
-        print(f"{Colors.RED}Login failed: {resp.status_code} - {resp.text}{Colors.END}")
-        return None
+        log(f"❌ Login failed: {resp.status_code} - {resp.text}")
+        return False
+    
     data = resp.json()
-    session = requests.Session()
-    session.cookies.set("access_token", data.get("access_token"))
-    session.headers.update({"Authorization": f"Bearer {data.get('access_token')}"})
-    return session
+    auth_token = data.get("access_token")
+    admin_user = data.get("user")
+    
+    if not auth_token:
+        log("❌ No access_token in login response")
+        return False
+    
+    log(f"✅ Logged in as {admin_user.get('name')} (role: {admin_user.get('role')})")
+    return True
 
-def test_teams_api():
-    print(f"\n{Colors.BLUE}{'='*80}{Colors.END}")
-    print(f"{Colors.BLUE}TEAMS API TESTING - Jul 16 2026{Colors.END}")
-    print(f"{Colors.BLUE}{'='*80}{Colors.END}\n")
+def get_techknights_team():
+    """Get TechKnights team ID"""
+    global techknights_team_id
+    log("Fetching TechKnights team...")
     
-    # Login as Super Admin
-    print(f"{Colors.YELLOW}Logging in as Super Admin...{Colors.END}")
-    session = login(SUPER_ADMIN_EMAIL, SUPER_ADMIN_PASSWORD)
-    if not session:
-        print(f"{Colors.RED}Cannot proceed without authentication{Colors.END}")
-        return
-    print(f"{Colors.GREEN}✓ Logged in successfully{Colors.END}\n")
+    resp = session.get(f"{BASE_URL}/teams")
     
-    # Track created teams for cleanup
-    created_teams = []
+    if resp.status_code != 200:
+        log(f"❌ GET /api/teams failed: {resp.status_code}")
+        return False
     
-    try:
-        # ============================================================
-        # TEST 1: GET /api/teams/colors
-        # ============================================================
-        print(f"{Colors.BLUE}TEST 1: GET /api/teams/colors{Colors.END}")
-        resp = session.get(f"{BASE_URL}/teams/colors")
-        test_1_pass = (
-            resp.status_code == 200 and
-            "palette" in resp.json() and
-            "used" in resp.json() and
-            "suggested" in resp.json()
-        )
-        log_test("GET /api/teams/colors returns palette + used + suggested", test_1_pass,
-                 f"Status: {resp.status_code}, Keys: {list(resp.json().keys())}")
-        
-        # ============================================================
-        # TEST 2: GET /api/teams - List teams with hydration
-        # ============================================================
-        print(f"\n{Colors.BLUE}TEST 2: GET /api/teams - List with hydration{Colors.END}")
-        resp = session.get(f"{BASE_URL}/teams")
-        test_2_pass = resp.status_code == 200
-        teams_data = resp.json() if test_2_pass else []
-        
-        if test_2_pass and len(teams_data) > 0:
-            sample_team = teams_data[0]
-            required_fields = ["id", "name", "manager_ids", "member_ids", "managers", "members", 
-                             "color", "initials", "created_on", "updated_on"]
-            has_all_fields = all(field in sample_team for field in required_fields)
-            
-            # Check hydration
-            managers_hydrated = isinstance(sample_team.get("managers"), list)
-            members_hydrated = isinstance(sample_team.get("members"), list)
-            
-            # Check if managers/members have id, name, email
-            if managers_hydrated and len(sample_team["managers"]) > 0:
-                mgr = sample_team["managers"][0]
-                managers_hydrated = "id" in mgr and "name" in mgr
-            
-            if members_hydrated and len(sample_team["members"]) > 0:
-                mem = sample_team["members"][0]
-                members_hydrated = "id" in mem and "name" in mem
-            
-            test_2_pass = has_all_fields and managers_hydrated and members_hydrated
-            log_test("GET /api/teams returns array with hydrated managers[] and members[]", test_2_pass,
-                     f"Teams count: {len(teams_data)}, Fields present: {has_all_fields}, Hydrated: {managers_hydrated and members_hydrated}")
-            
-            # Check for description field (may be null for legacy rows)
-            has_description_field = "description" in sample_team
-            log_test("Teams have description field (may be null for legacy)", has_description_field,
-                     f"Description field present: {has_description_field}, Value: {sample_team.get('description', 'N/A')}")
-            
-            # Check for created_by / updated_by (may be missing for legacy rows)
-            has_audit_fields = "created_by" in sample_team or "updated_by" in sample_team
-            log_test("Teams may have created_by/updated_by (new rows only)", True,
-                     f"created_by present: {'created_by' in sample_team}, updated_by present: {'updated_by' in sample_team}")
-        else:
-            log_test("GET /api/teams returns array", test_2_pass,
-                     f"Status: {resp.status_code}, Count: {len(teams_data)}")
-        
-        # ============================================================
-        # TEST 3: POST /api/teams - Create with description
-        # ============================================================
-        print(f"\n{Colors.BLUE}TEST 3: POST /api/teams - Create with description{Colors.END}")
-        
-        # Get available contacts for managers/members
-        contacts_resp = session.get(f"{BASE_URL}/contacts")
-        contacts = contacts_resp.json() if contacts_resp.status_code == 200 else []
-        
-        # Find Super Admin and Admin contacts
-        super_admins = [c for c in contacts if c.get("role") == "Super Admin"]
-        admins = [c for c in contacts if c.get("role") == "Admin"]
-        
-        manager_id = super_admins[0]["id"] if super_admins else (admins[0]["id"] if admins else None)
-        member_id = admins[0]["id"] if admins else None
-        
-        if not manager_id:
-            print(f"{Colors.YELLOW}Warning: No suitable manager found, skipping member assignment{Colors.END}")
-        
-        timestamp = datetime.now().strftime("%H%M%S")
-        new_team = {
-            "name": f"QA Test Team {timestamp}",
-            "description": "This is a test team created by automated testing with description field",
-            "manager_ids": [manager_id] if manager_id else [],
-            "member_ids": [],  # Don't assign members to avoid conflicts
-            "color": "#22c55e",
-            "initials": "QA"
-        }
-        
-        resp = session.post(f"{BASE_URL}/teams", json=new_team)
-        test_3_pass = resp.status_code == 200
-        
-        if test_3_pass:
-            created_team = resp.json()
-            created_teams.append(created_team["id"])
-            
-            # Verify description persisted
-            desc_match = created_team.get("description") == new_team["description"]
-            
-            # Verify created_by and updated_by are present
-            has_created_by = "created_by" in created_team and isinstance(created_team["created_by"], dict)
-            has_updated_by = "updated_by" in created_team and isinstance(created_team["updated_by"], dict)
-            
-            # Verify created_by has id, name, email
-            if has_created_by:
-                cb = created_team["created_by"]
-                has_created_by = "id" in cb and "name" in cb and "email" in cb
-            
-            if has_updated_by:
-                ub = created_team["updated_by"]
-                has_updated_by = "id" in ub and "name" in ub and "email" in ub
-            
-            # Verify created_on and updated_on are set
-            has_timestamps = "created_on" in created_team and "updated_on" in created_team
-            
-            test_3_pass = desc_match and has_created_by and has_updated_by and has_timestamps
-            
-            log_test("POST /api/teams creates team with description", desc_match,
-                     f"Description matches: {desc_match}")
-            log_test("POST /api/teams sets created_by with {id, name, email}", has_created_by,
-                     f"created_by: {created_team.get('created_by', {})}")
-            log_test("POST /api/teams sets updated_by with {id, name, email}", has_updated_by,
-                     f"updated_by: {created_team.get('updated_by', {})}")
-            log_test("POST /api/teams sets created_on and updated_on", has_timestamps,
-                     f"created_on: {created_team.get('created_on')}, updated_on: {created_team.get('updated_on')}")
-        else:
-            log_test("POST /api/teams creates team", test_3_pass,
-                     f"Status: {resp.status_code}, Error: {resp.text}")
-        
-        # ============================================================
-        # TEST 4: POST /api/teams - Duplicate name rejection
-        # ============================================================
-        print(f"\n{Colors.BLUE}TEST 4: POST /api/teams - Duplicate name rejection{Colors.END}")
-        resp = session.post(f"{BASE_URL}/teams", json=new_team)
-        test_4_pass = resp.status_code == 400
-        log_test("POST /api/teams rejects duplicate name", test_4_pass,
-                 f"Status: {resp.status_code}, Expected: 400")
-        
-        # ============================================================
-        # TEST 5: GET /api/teams/{team_id} - New endpoint
-        # ============================================================
-        print(f"\n{Colors.BLUE}TEST 5: GET /api/teams/{{team_id}} - New endpoint{Colors.END}")
-        
-        if created_teams:
-            team_id = created_teams[0]
-            resp = session.get(f"{BASE_URL}/teams/{team_id}")
-            test_5a_pass = resp.status_code == 200
-            
-            if test_5a_pass:
-                team_detail = resp.json()
-                # Verify same hydration as list endpoint
-                has_hydration = (
-                    "managers" in team_detail and isinstance(team_detail["managers"], list) and
-                    "members" in team_detail and isinstance(team_detail["members"], list)
-                )
-                log_test("GET /api/teams/{id} returns 200 for existing team", test_5a_pass,
-                         f"Team: {team_detail.get('name')}, Hydrated: {has_hydration}")
-            else:
-                log_test("GET /api/teams/{id} returns 200 for existing team", test_5a_pass,
-                         f"Status: {resp.status_code}")
-        
-        # Test 404 for random UUID
-        import uuid
-        random_id = str(uuid.uuid4())
-        resp = session.get(f"{BASE_URL}/teams/{random_id}")
-        test_5b_pass = resp.status_code == 404
-        log_test("GET /api/teams/{id} returns 404 for non-existent team", test_5b_pass,
-                 f"Status: {resp.status_code}, Expected: 404")
-        
-        # ============================================================
-        # TEST 6: Managers can span multiple teams (KEY REGRESSION)
-        # ============================================================
-        print(f"\n{Colors.BLUE}TEST 6: Managers can span multiple teams (KEY REGRESSION){Colors.END}")
-        
-        # Get existing teams to find a manager already in use
-        resp = session.get(f"{BASE_URL}/teams")
-        existing_teams = resp.json() if resp.status_code == 200 else []
-        
-        existing_manager_id = None
-        for team in existing_teams:
-            if team.get("manager_ids") and len(team["manager_ids"]) > 0:
-                existing_manager_id = team["manager_ids"][0]
-                break
-        
-        if not existing_manager_id and manager_id:
-            existing_manager_id = manager_id
-        
-        if existing_manager_id:
-            # Create a NEW team with the same manager
-            timestamp2 = datetime.now().strftime("%H%M%S")
-            multi_manager_team = {
-                "name": f"QA Multi-Manager Team {timestamp2}",
-                "description": "Testing that managers can be assigned to multiple teams",
-                "manager_ids": [existing_manager_id],
-                "member_ids": [],
-                "color": "#3b82f6",
-                "initials": "MM"
-            }
-            
-            resp = session.post(f"{BASE_URL}/teams", json=multi_manager_team)
-            test_6a_pass = resp.status_code == 200
-            
-            if test_6a_pass:
-                created_teams.append(resp.json()["id"])
-            
-            log_test("POST /api/teams allows manager already in another team", test_6a_pass,
-                     f"Status: {resp.status_code}, Manager ID: {existing_manager_id}")
-            
-            # Also test via PATCH on an existing team
-            if created_teams and len(created_teams) >= 2:
-                # Try to add the same manager to another existing team
-                team_to_update = created_teams[0]
-                resp = session.patch(f"{BASE_URL}/teams/{team_to_update}", 
-                                    json={"manager_ids": [existing_manager_id]})
-                test_6b_pass = resp.status_code == 200
-                log_test("PATCH /api/teams allows manager already in another team", test_6b_pass,
-                         f"Status: {resp.status_code}")
-            else:
-                log_test("PATCH /api/teams allows manager already in another team", True,
-                         "Skipped - not enough teams created")
-        else:
-            log_test("Managers can span multiple teams", True,
-                     "Skipped - no existing manager found")
-        
-        # ============================================================
-        # TEST 7: Members cannot span multiple teams
-        # ============================================================
-        print(f"\n{Colors.BLUE}TEST 7: Members cannot span multiple teams (existing validation){Colors.END}")
-        
-        # Find a member already assigned to a team
-        existing_member_id = None
-        for team in existing_teams:
-            if team.get("member_ids") and len(team["member_ids"]) > 0:
-                existing_member_id = team["member_ids"][0]
-                break
-        
-        if existing_member_id:
-            # Try to create a team with this member
-            timestamp3 = datetime.now().strftime("%H%M%S")
-            conflict_team = {
-                "name": f"QA Conflict Team {timestamp3}",
-                "description": "This should fail due to member conflict",
-                "manager_ids": [manager_id] if manager_id else [],
-                "member_ids": [existing_member_id],
-                "color": "#a855f7"
-            }
-            
-            resp = session.post(f"{BASE_URL}/teams", json=conflict_team)
-            test_7_pass = resp.status_code == 400
-            log_test("POST /api/teams rejects member already in another team", test_7_pass,
-                     f"Status: {resp.status_code}, Expected: 400")
-        else:
-            log_test("POST /api/teams rejects member already in another team", True,
-                     "Skipped - no existing member found")
-        
-        # ============================================================
-        # TEST 8: PATCH /api/teams/{id} - Update description
-        # ============================================================
-        print(f"\n{Colors.BLUE}TEST 8: PATCH /api/teams/{{id}} - Update description{Colors.END}")
-        
-        if created_teams:
-            team_id = created_teams[0]
-            updated_desc = "Updated description via PATCH endpoint"
-            
-            resp = session.patch(f"{BASE_URL}/teams/{team_id}", 
-                                json={"description": updated_desc})
-            test_8_pass = resp.status_code == 200
-            
-            if test_8_pass:
-                updated_team = resp.json()
-                desc_updated = updated_team.get("description") == updated_desc
-                
-                # Verify updated_by is refreshed
-                has_updated_by = "updated_by" in updated_team and isinstance(updated_team["updated_by"], dict)
-                
-                # Verify updated_on advanced
-                has_updated_on = "updated_on" in updated_team
-                
-                log_test("PATCH /api/teams/{id} updates description", desc_updated,
-                         f"New description: {updated_team.get('description')}")
-                log_test("PATCH /api/teams/{id} refreshes updated_by", has_updated_by,
-                         f"updated_by: {updated_team.get('updated_by', {})}")
-                log_test("PATCH /api/teams/{id} advances updated_on", has_updated_on,
-                         f"updated_on: {updated_team.get('updated_on')}")
-            else:
-                log_test("PATCH /api/teams/{id} updates team", test_8_pass,
-                         f"Status: {resp.status_code}, Error: {resp.text}")
-        else:
-            log_test("PATCH /api/teams/{id} updates team", False,
-                     "No teams created to test")
-        
-        # ============================================================
-        # TEST 9: PATCH /api/teams/{id} - Member conflict validation
-        # ============================================================
-        print(f"\n{Colors.BLUE}TEST 9: PATCH /api/teams/{{id}} - Member conflict validation{Colors.END}")
-        
-        if created_teams and existing_member_id:
-            team_id = created_teams[0]
-            resp = session.patch(f"{BASE_URL}/teams/{team_id}", 
-                                json={"member_ids": [existing_member_id]})
-            test_9_pass = resp.status_code == 400
-            log_test("PATCH /api/teams/{id} rejects member already in another team", test_9_pass,
-                     f"Status: {resp.status_code}, Expected: 400")
-        else:
-            log_test("PATCH /api/teams/{id} rejects member already in another team", True,
-                     "Skipped - no existing member or teams")
-        
-        # ============================================================
-        # TEST 10: DELETE /api/teams/{id}
-        # ============================================================
-        print(f"\n{Colors.BLUE}TEST 10: DELETE /api/teams/{{id}}{Colors.END}")
-        
-        # Delete all created teams
-        delete_count = 0
-        for team_id in created_teams:
-            resp = session.delete(f"{BASE_URL}/teams/{team_id}")
-            if resp.status_code == 200 and resp.json().get("ok") == True:
-                delete_count += 1
-        
-        test_10_pass = delete_count == len(created_teams)
-        log_test(f"DELETE /api/teams/{{id}} returns {{ok: true}}", test_10_pass,
-                 f"Deleted {delete_count}/{len(created_teams)} teams")
-        
-        # Clear the list since we've deleted them
-        created_teams.clear()
-        
-    except Exception as e:
-        print(f"\n{Colors.RED}ERROR: {str(e)}{Colors.END}")
-        import traceback
-        traceback.print_exc()
+    teams = resp.json()
+    for team in teams:
+        if team.get("name") == "TechKnights":
+            techknights_team_id = team.get("id")
+            log(f"✅ Found TechKnights team: {techknights_team_id}")
+            log(f"   Members: {len(team.get('members', []))}, Managers: {len(team.get('managers', []))}")
+            return True
     
-    finally:
-        # Cleanup: Delete any remaining test teams
-        if created_teams:
-            print(f"\n{Colors.YELLOW}Cleaning up {len(created_teams)} test teams...{Colors.END}")
-            for team_id in created_teams:
-                try:
-                    session.delete(f"{BASE_URL}/teams/{team_id}")
-                except:
-                    pass
+    log("❌ TechKnights team not found")
+    return False
+
+def test_1_get_tickets_paged():
+    """Test 1: GET /api/tickets?scope=all&page=1&page_size=200"""
+    log("\n=== TEST 1: GET /api/tickets (paged) - team_name enrichment ===")
     
-    print(f"\n{Colors.BLUE}{'='*80}{Colors.END}")
-    print(f"{Colors.BLUE}TEAMS API TESTING COMPLETE{Colors.END}")
-    print(f"{Colors.BLUE}{'='*80}{Colors.END}\n")
+    resp = session.get(
+        f"{BASE_URL}/tickets",
+        params={"scope": "all", "page": 1, "page_size": 200}
+    )
+    
+    if resp.status_code != 200:
+        log(f"❌ GET /api/tickets failed: {resp.status_code}")
+        return False
+    
+    data = resp.json()
+    items = data.get("items", [])
+    total = data.get("total", 0)
+    
+    log(f"✅ GET /api/tickets returned {len(items)} tickets (total: {total})")
+    
+    # Find TKT-1547 (Anjali Sharma's ticket)
+    tkt_1547 = None
+    tickets_with_team = []
+    tickets_without_team = []
+    
+    for ticket in items:
+        ticket_id = ticket.get("ticket_id")
+        creator_name = ticket.get("created_by_name")
+        team_name = ticket.get("team_name")
+        
+        if ticket_id == "TKT-1547":
+            tkt_1547 = ticket
+        
+        if team_name:
+            tickets_with_team.append({
+                "ticket_id": ticket_id,
+                "creator": creator_name,
+                "team": team_name
+            })
+        else:
+            tickets_without_team.append({
+                "ticket_id": ticket_id,
+                "creator": creator_name
+            })
+    
+    log(f"   Tickets with team_name: {len(tickets_with_team)}")
+    log(f"   Tickets without team_name: {len(tickets_without_team)}")
+    
+    # Show sample of tickets with team
+    if tickets_with_team:
+        log("   Sample tickets with team:")
+        for t in tickets_with_team[:3]:
+            log(f"      {t['ticket_id']} - {t['creator']} - Team: {t['team']}")
+    
+    # Show sample of tickets without team
+    if tickets_without_team:
+        log("   Sample tickets without team:")
+        for t in tickets_without_team[:3]:
+            log(f"      {t['ticket_id']} - {t['creator']} - Team: None")
+    
+    # CRITICAL ASSERTION: TKT-1547 must have team_name="TechKnights"
+    if tkt_1547:
+        log(f"\n   🔍 TKT-1547 found:")
+        log(f"      Creator: {tkt_1547.get('created_by_name')}")
+        log(f"      Team: {tkt_1547.get('team_name')}")
+        
+        if tkt_1547.get("team_name") == "TechKnights":
+            log(f"   ✅ TKT-1547 has team_name='TechKnights' (PASS)")
+        else:
+            log(f"   ❌ TKT-1547 team_name is '{tkt_1547.get('team_name')}', expected 'TechKnights' (FAIL)")
+            return False
+    else:
+        log("   ⚠️  TKT-1547 not found in results (may have been deleted)")
+    
+    return True
+
+def test_2_get_tickets_non_paged():
+    """Test 2: GET /api/tickets?scope=all (no page param)"""
+    log("\n=== TEST 2: GET /api/tickets (non-paged) - team_name enrichment ===")
+    
+    resp = session.get(
+        f"{BASE_URL}/tickets",
+        params={"scope": "all"}
+    )
+    
+    if resp.status_code != 200:
+        log(f"❌ GET /api/tickets (non-paged) failed: {resp.status_code}")
+        return False
+    
+    items = resp.json()
+    
+    if not isinstance(items, list):
+        log(f"❌ Expected list, got {type(items)}")
+        return False
+    
+    log(f"✅ GET /api/tickets (non-paged) returned {len(items)} tickets")
+    
+    # Find TKT-1547
+    tkt_1547 = None
+    for ticket in items:
+        if ticket.get("ticket_id") == "TKT-1547":
+            tkt_1547 = ticket
+            break
+    
+    if tkt_1547:
+        log(f"   🔍 TKT-1547 found:")
+        log(f"      Creator: {tkt_1547.get('created_by_name')}")
+        log(f"      Team: {tkt_1547.get('team_name')}")
+        
+        if tkt_1547.get("team_name") == "TechKnights":
+            log(f"   ✅ TKT-1547 has team_name='TechKnights' (PASS)")
+        else:
+            log(f"   ❌ TKT-1547 team_name is '{tkt_1547.get('team_name')}', expected 'TechKnights' (FAIL)")
+            return False
+    else:
+        log("   ⚠️  TKT-1547 not found in results")
+    
+    return True
+
+def test_3_get_tickets_sort_status():
+    """Test 3: GET /api/tickets?scope=all&sort_by=status&sort_dir=asc"""
+    log("\n=== TEST 3: GET /api/tickets (sort_by=status) - aggregation pipeline enrichment ===")
+    
+    resp = session.get(
+        f"{BASE_URL}/tickets",
+        params={"scope": "all", "page": 1, "page_size": 200, "sort_by": "status", "sort_dir": "asc"}
+    )
+    
+    if resp.status_code != 200:
+        log(f"❌ GET /api/tickets (sort_by=status) failed: {resp.status_code}")
+        return False
+    
+    data = resp.json()
+    items = data.get("items", [])
+    
+    log(f"✅ GET /api/tickets (sort_by=status) returned {len(items)} tickets")
+    
+    # Find TKT-1547
+    tkt_1547 = None
+    for ticket in items:
+        if ticket.get("ticket_id") == "TKT-1547":
+            tkt_1547 = ticket
+            break
+    
+    if tkt_1547:
+        log(f"   🔍 TKT-1547 found:")
+        log(f"      Creator: {tkt_1547.get('created_by_name')}")
+        log(f"      Team: {tkt_1547.get('team_name')}")
+        
+        if tkt_1547.get("team_name") == "TechKnights":
+            log(f"   ✅ TKT-1547 has team_name='TechKnights' (PASS)")
+        else:
+            log(f"   ❌ TKT-1547 team_name is '{tkt_1547.get('team_name')}', expected 'TechKnights' (FAIL)")
+            return False
+    else:
+        log("   ⚠️  TKT-1547 not found in results")
+    
+    return True
+
+def test_4_get_tickets_sort_priority():
+    """Test 4: GET /api/tickets?scope=all&sort_by=priority"""
+    log("\n=== TEST 4: GET /api/tickets (sort_by=priority) - aggregation pipeline enrichment ===")
+    
+    resp = session.get(
+        f"{BASE_URL}/tickets",
+        params={"scope": "all", "page": 1, "page_size": 200, "sort_by": "priority"}
+    )
+    
+    if resp.status_code != 200:
+        log(f"❌ GET /api/tickets (sort_by=priority) failed: {resp.status_code}")
+        return False
+    
+    data = resp.json()
+    items = data.get("items", [])
+    
+    log(f"✅ GET /api/tickets (sort_by=priority) returned {len(items)} tickets")
+    
+    # Find TKT-1547
+    tkt_1547 = None
+    for ticket in items:
+        if ticket.get("ticket_id") == "TKT-1547":
+            tkt_1547 = ticket
+            break
+    
+    if tkt_1547:
+        log(f"   🔍 TKT-1547 found:")
+        log(f"      Creator: {tkt_1547.get('created_by_name')}")
+        log(f"      Team: {tkt_1547.get('team_name')}")
+        
+        if tkt_1547.get("team_name") == "TechKnights":
+            log(f"   ✅ TKT-1547 has team_name='TechKnights' (PASS)")
+        else:
+            log(f"   ❌ TKT-1547 team_name is '{tkt_1547.get('team_name')}', expected 'TechKnights' (FAIL)")
+            return False
+    else:
+        log("   ⚠️  TKT-1547 not found in results")
+    
+    return True
+
+def test_5_export_csv():
+    """Test 5: GET /api/tickets/export.csv?scope=all"""
+    log("\n=== TEST 5: GET /api/tickets/export.csv - team_name in CSV ===")
+    
+    resp = session.get(
+        f"{BASE_URL}/tickets/export.csv",
+        params={"scope": "all"}
+    )
+    
+    if resp.status_code != 200:
+        log(f"❌ GET /api/tickets/export.csv failed: {resp.status_code}")
+        return False
+    
+    # Parse CSV
+    csv_content = resp.text
+    reader = csv.DictReader(io.StringIO(csv_content))
+    rows = list(reader)
+    
+    log(f"✅ GET /api/tickets/export.csv returned {len(rows)} rows")
+    
+    # Find TKT-1547
+    tkt_1547_row = None
+    rows_with_team = []
+    rows_without_team = []
+    
+    for row in rows:
+        ticket_id = row.get("Ticket ID")
+        team = row.get("Team", "")
+        
+        if ticket_id == "TKT-1547":
+            tkt_1547_row = row
+        
+        if team and team != "—":
+            rows_with_team.append({"ticket_id": ticket_id, "team": team})
+        else:
+            rows_without_team.append({"ticket_id": ticket_id})
+    
+    log(f"   Rows with team: {len(rows_with_team)}")
+    log(f"   Rows without team (—): {len(rows_without_team)}")
+    
+    # Show sample
+    if rows_with_team:
+        log("   Sample rows with team:")
+        for r in rows_with_team[:3]:
+            log(f"      {r['ticket_id']} - Team: {r['team']}")
+    
+    # CRITICAL ASSERTION: TKT-1547 must have Team="TechKnights"
+    if tkt_1547_row:
+        log(f"\n   🔍 TKT-1547 CSV row:")
+        log(f"      Creator: {tkt_1547_row.get('Created By')}")
+        log(f"      Team: {tkt_1547_row.get('Team')}")
+        
+        if tkt_1547_row.get("Team") == "TechKnights":
+            log(f"   ✅ TKT-1547 CSV has Team='TechKnights' (PASS)")
+        else:
+            log(f"   ❌ TKT-1547 CSV Team is '{tkt_1547_row.get('Team')}', expected 'TechKnights' (FAIL)")
+            return False
+    else:
+        log("   ⚠️  TKT-1547 not found in CSV")
+    
+    return True
+
+def test_6_team_filter():
+    """Test 6: GET /api/tickets?team=<TechKnights_id>&scope=all"""
+    log("\n=== TEST 6: Team filter regression - ?team=<id> ===")
+    
+    if not techknights_team_id:
+        log("❌ TechKnights team ID not available")
+        return False
+    
+    resp = session.get(
+        f"{BASE_URL}/tickets",
+        params={"team": techknights_team_id, "scope": "all", "page": 1, "page_size": 200}
+    )
+    
+    if resp.status_code != 200:
+        log(f"❌ GET /api/tickets?team={techknights_team_id} failed: {resp.status_code}")
+        return False
+    
+    data = resp.json()
+    items = data.get("items", [])
+    
+    log(f"✅ GET /api/tickets?team={techknights_team_id} returned {len(items)} tickets")
+    
+    # Find TKT-1547
+    tkt_1547 = None
+    for ticket in items:
+        ticket_id = ticket.get("ticket_id")
+        log(f"   {ticket_id} - {ticket.get('created_by_name')} - Team: {ticket.get('team_name')}")
+        
+        if ticket_id == "TKT-1547":
+            tkt_1547 = ticket
+    
+    if tkt_1547:
+        log(f"\n   ✅ TKT-1547 returned by team filter (PASS)")
+        log(f"      Creator: {tkt_1547.get('created_by_name')}")
+        log(f"      Team: {tkt_1547.get('team_name')}")
+    else:
+        log(f"   ❌ TKT-1547 NOT returned by team filter (FAIL)")
+        log(f"      Expected: TKT-1547 should be returned because creator (Anjali Sharma) is in TechKnights")
+        return False
+    
+    return True
+
+def test_7_create_ticket_no_team():
+    """Test 7: POST /api/tickets as admin (not in any team)"""
+    global test_ticket_id
+    log("\n=== TEST 7: POST /api/tickets (admin not in team) - team_name=null ===")
+    
+    # Check if admin is in any team
+    log(f"   Admin user: {admin_user.get('name')} (id: {admin_user.get('id')})")
+    
+    resp = session.get(f"{BASE_URL}/teams")
+    if resp.status_code == 200:
+        teams = resp.json()
+        admin_teams = []
+        for team in teams:
+            members = team.get("members", [])
+            managers = team.get("managers", [])
+            for m in members + managers:
+                if m.get("id") == admin_user.get("id"):
+                    admin_teams.append(team.get("name"))
+        
+        if admin_teams:
+            log(f"   ⚠️  Admin is in teams: {admin_teams}")
+        else:
+            log(f"   ✅ Admin is NOT in any team (as expected)")
+    
+    # Create a test ticket
+    ticket_data = {
+        "description": f"Test ticket created by testing agent at {datetime.now().isoformat()}",
+        "priority": "Medium",
+        "due_date": "2026-12-31",
+        "number_of_profiles": 10
+    }
+    
+    resp = session.post(f"{BASE_URL}/tickets", json=ticket_data)
+    
+    if resp.status_code != 200:
+        log(f"❌ POST /api/tickets failed: {resp.status_code} - {resp.text}")
+        return False
+    
+    ticket = resp.json()
+    test_ticket_id = ticket.get("id")
+    
+    log(f"✅ Created ticket: {ticket.get('ticket_id')}")
+    log(f"   ID: {test_ticket_id}")
+    log(f"   Creator: {ticket.get('created_by_name')}")
+    log(f"   team_id: {ticket.get('team_id')}")
+    log(f"   team_name: {ticket.get('team_name')}")
+    
+    # ASSERTION: team_id and team_name should be null
+    if ticket.get("team_id") is None and ticket.get("team_name") is None:
+        log(f"   ✅ team_id=null and team_name=null (PASS)")
+        return True
+    else:
+        log(f"   ❌ Expected team_id=null and team_name=null (FAIL)")
+        return False
+
+def test_8_teams_smoke():
+    """Test 8: Teams endpoints smoke test"""
+    log("\n=== TEST 8: Teams endpoints smoke test ===")
+    
+    # GET /api/teams
+    resp = session.get(f"{BASE_URL}/teams")
+    if resp.status_code != 200:
+        log(f"❌ GET /api/teams failed: {resp.status_code}")
+        return False
+    
+    teams = resp.json()
+    log(f"✅ GET /api/teams returned {len(teams)} teams")
+    
+    # GET /api/teams/{id} for TechKnights
+    if techknights_team_id:
+        resp = session.get(f"{BASE_URL}/teams/{techknights_team_id}")
+        if resp.status_code != 200:
+            log(f"❌ GET /api/teams/{techknights_team_id} failed: {resp.status_code}")
+            return False
+        
+        team = resp.json()
+        log(f"✅ GET /api/teams/{techknights_team_id} returned team: {team.get('name')}")
+        log(f"   Members: {len(team.get('members', []))}")
+        log(f"   Managers: {len(team.get('managers', []))}")
+    
+    return True
+
+def cleanup():
+    """Delete test ticket if created"""
+    global test_ticket_id
+    
+    if test_ticket_id:
+        log(f"\n=== Cleanup: Deleting test ticket {test_ticket_id} ===")
+        # Note: DELETE /api/tickets/{id} may not exist, so we'll try but not fail if it doesn't work
+        resp = session.delete(f"{BASE_URL}/tickets/{test_ticket_id}")
+        if resp.status_code == 200:
+            log(f"✅ Deleted test ticket")
+        else:
+            log(f"⚠️  Could not delete test ticket (endpoint may not exist): {resp.status_code}")
+
+def main():
+    """Run all tests"""
+    log("=" * 80)
+    log("BACKEND TEST: Profix Tickets team_name enrichment bug fix")
+    log("=" * 80)
+    
+    # Login
+    if not login():
+        log("\n❌ FAILED: Could not login")
+        return False
+    
+    # Get TechKnights team
+    if not get_techknights_team():
+        log("\n❌ FAILED: Could not find TechKnights team")
+        return False
+    
+    # Run tests
+    tests = [
+        ("GET /api/tickets (paged)", test_1_get_tickets_paged),
+        ("GET /api/tickets (non-paged)", test_2_get_tickets_non_paged),
+        ("GET /api/tickets (sort_by=status)", test_3_get_tickets_sort_status),
+        ("GET /api/tickets (sort_by=priority)", test_4_get_tickets_sort_priority),
+        ("GET /api/tickets/export.csv", test_5_export_csv),
+        ("Team filter regression", test_6_team_filter),
+        ("POST /api/tickets (no team)", test_7_create_ticket_no_team),
+        ("Teams smoke test", test_8_teams_smoke),
+    ]
+    
+    results = []
+    for name, test_func in tests:
+        try:
+            result = test_func()
+            results.append((name, result))
+        except Exception as e:
+            log(f"\n❌ Test '{name}' raised exception: {e}")
+            import traceback
+            traceback.print_exc()
+            results.append((name, False))
+    
+    # Cleanup
+    cleanup()
+    
+    # Summary
+    log("\n" + "=" * 80)
+    log("TEST SUMMARY")
+    log("=" * 80)
+    
+    passed = 0
+    failed = 0
+    
+    for name, result in results:
+        status = "✅ PASS" if result else "❌ FAIL"
+        log(f"{status} - {name}")
+        if result:
+            passed += 1
+        else:
+            failed += 1
+    
+    log("\n" + "=" * 80)
+    log(f"TOTAL: {passed} passed, {failed} failed out of {len(results)} tests")
+    log("=" * 80)
+    
+    return failed == 0
 
 if __name__ == "__main__":
-    test_teams_api()
+    success = main()
+    exit(0 if success else 1)

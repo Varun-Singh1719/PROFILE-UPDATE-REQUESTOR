@@ -117,6 +117,114 @@ user_problem_statement: |
   3. Clicking a Team Name in the Teams list opens the View drawer.
 
 backend:
+  - task: "Profix Tickets — team_name enrichment (bug fix Jul 16 2026)"
+    implemented: true
+    working: true
+    file: "backend/routers/tickets.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            BUG: In Profix (All Requests / Unassigned / other Ticket tables)
+            the "Team" column was empty for every row, even for tickets whose
+            creator is an active member of a team.
+
+            ROOT CAUSE: `create_ticket` was reading `team_id` off the
+            CONTACT document (`db.contacts.find_one({...}, {"team_id": 1})`)
+            — but team membership is stored on the TEAM document
+            (`member_ids` / `manager_ids`), not on the contact. So every
+            newly-created ticket got `team_id=None`, `team_name=None`.
+            Legacy tickets were never enriched.
+
+            FIX (backend/routers/tickets.py):
+            1. `_resolve_user_team(user_id)` helper — queries teams via
+               member_ids (preferred) then manager_ids (fallback).
+            2. `create_ticket` now uses that helper — new tickets carry
+               the correct denormalized team_id / team_name.
+            3. `_team_map_for_users(ids)` batch resolver + name-based
+               fallback (`_team_map_for_names`) for legacy tickets whose
+               created_by_id no longer matches a current contact.
+            4. `_enrich_tickets_with_team` applied at read time on
+               GET /api/tickets (both paged and full-list branches) and
+               GET /api/tickets/export.csv — so legacy tickets and
+               tickets whose creator was later reassigned show the CURRENT
+               team.
+            5. Team filter (`?team=<id>`) rewritten: parse_filters stashes
+               it under `_pending_team_filter`, and
+               `_apply_pending_team_filter` expands it to an $or matching
+               team_id OR current member/manager ids OR (name fallback)
+               current member/manager names — so the dropdown still
+               filters legacy tickets correctly.
+
+            Verified via curl on fresh Atlas DB:
+              • Anjali Sharma's TKT-1547 now returns team_name='TechKnights'
+                (was null before the fix).
+              • Tickets by users not in any team correctly stay
+                team_name=None.
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ ALL TESTS PASSED (8/8) - Bug fix verified completely
+            
+            Comprehensive testing of team_name enrichment bug fix completed:
+            
+            **TEST RESULTS:**
+            
+            1. ✅ GET /api/tickets?scope=all&page=1&page_size=200 (paged):
+               - Returned 102 tickets total
+               - 40 tickets have team_name populated (creators in teams)
+               - 62 tickets have team_name=null (creators not in teams)
+               - TKT-1547 (Anjali Sharma) correctly shows team_name='TechKnights' ✅
+            
+            2. ✅ GET /api/tickets?scope=all (non-paged):
+               - Returned 102 tickets
+               - TKT-1547 correctly shows team_name='TechKnights' ✅
+            
+            3. ✅ GET /api/tickets?sort_by=status&sort_dir=asc (aggregation pipeline):
+               - Returned 102 tickets
+               - TKT-1547 correctly shows team_name='TechKnights' ✅
+               - Enrichment works in status aggregation pipeline
+            
+            4. ✅ GET /api/tickets?sort_by=priority (aggregation pipeline):
+               - Returned 102 tickets
+               - TKT-1547 correctly shows team_name='TechKnights' ✅
+               - Enrichment works in priority aggregation pipeline
+            
+            5. ✅ GET /api/tickets/export.csv?scope=all:
+               - Returned 102 CSV rows
+               - 40 rows have team names, 62 rows show "—" (dash)
+               - TKT-1547 CSV row has Team='TechKnights' ✅
+               - CSV export correctly enriches team_name
+            
+            6. ✅ Team filter regression (?team=<TechKnights_id>):
+               - Returned 2 tickets for TechKnights team
+               - TKT-1547 (Anjali Sharma) correctly returned ✅
+               - TKT-1543 (Sakshi Jha) also returned
+               - Team filter works for legacy tickets (even though persisted team_id was null)
+            
+            7. ✅ POST /api/tickets (admin not in any team):
+               - Created TKT-1103 as Admin User
+               - team_id=null and team_name=null ✅
+               - Correctly handles users not in any team
+            
+            8. ✅ Teams endpoints smoke test:
+               - GET /api/teams: returned 11 teams
+               - GET /api/teams/{id}: returned TechKnights with 10 members, 1 manager
+               - Teams API working correctly
+            
+            **KEY FINDINGS:**
+            - Legacy ticket TKT-1547 (created before fix) now correctly shows team_name='TechKnights'
+            - Enrichment works across ALL code paths: paged, non-paged, status sort, priority sort, CSV export
+            - Team filter correctly matches legacy tickets whose persisted team_id is null
+            - New tickets created by users not in teams correctly have team_name=null
+            - 40 out of 102 tickets have team enrichment (creators are team members/managers)
+            - 62 tickets correctly show null team (creators not in any team)
+            
+            NO ISSUES FOUND. Bug fix is complete and working as specified.
+
   - task: "Teams — description, created_by, updated_by; GET /api/teams/{id}; managers can span multiple teams"
     implemented: true
     working: true
@@ -379,6 +487,35 @@ test_plan:
   test_priority: "high_first"
 
 agent_communication:
+    - agent: "testing"
+      message: |
+        ✅ PROFIX TICKETS TEAM_NAME ENRICHMENT BUG FIX VERIFIED — ALL TESTS PASSED (8/8)
+        
+        Completed comprehensive testing of the team_name enrichment bug fix (Jul 16 2026).
+        
+        **CRITICAL VERIFICATION:**
+        - TKT-1547 (Anjali Sharma, TechKnights member) now correctly shows team_name='TechKnights' in ALL endpoints ✅
+        - Legacy tickets (created before fix) are enriched at read time ✅
+        - Team filter works for legacy tickets even though persisted team_id is null ✅
+        
+        **TEST COVERAGE:**
+        1. ✅ GET /api/tickets?scope=all&page=1&page_size=200 - TKT-1547 enriched
+        2. ✅ GET /api/tickets?scope=all (non-paged) - TKT-1547 enriched
+        3. ✅ GET /api/tickets?sort_by=status (aggregation) - TKT-1547 enriched
+        4. ✅ GET /api/tickets?sort_by=priority (aggregation) - TKT-1547 enriched
+        5. ✅ GET /api/tickets/export.csv - TKT-1547 CSV row has Team='TechKnights'
+        6. ✅ Team filter (?team=<TechKnights_id>) - TKT-1547 returned correctly
+        7. ✅ POST /api/tickets (admin not in team) - team_name=null as expected
+        8. ✅ Teams endpoints smoke test - GET /api/teams and GET /api/teams/{id} working
+        
+        **DATA ANALYSIS:**
+        - Total tickets: 102
+        - Tickets with team_name: 40 (creators are team members/managers)
+        - Tickets without team_name: 62 (creators not in any team)
+        - Team filter for TechKnights returned 2 tickets (TKT-1547, TKT-1543)
+        
+        **NO ISSUES FOUND.** Bug fix is complete and working correctly across all code paths.
+
     - agent: "main"
       message: |
         Manage → Teams enhancements (Jul 16, 2026):

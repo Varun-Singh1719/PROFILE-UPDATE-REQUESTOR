@@ -38,6 +38,146 @@ async def _ticket_view_filter(user: dict) -> dict:
     return {"$or": [{"created_by_id": {"$in": ids}}, {"assigned_to_id": {"$in": ids}}]}
 
 
+async def _resolve_user_team(user_id: str) -> tuple:
+    """Return `(team_id, team_name)` for the team the user is a MEMBER of.
+
+    Falls back to a team the user MANAGES if they're only a manager. A user
+    is a member of at most one team (backend-enforced), but may manage many.
+    Returns `(None, None)` if the user isn't attached to any team.
+    """
+    if not user_id:
+        return (None, None)
+    t = await db.teams.find_one({"member_ids": user_id}, {"_id": 0, "id": 1, "name": 1})
+    if not t:
+        t = await db.teams.find_one(
+            {"manager_ids": user_id},
+            {"_id": 0, "id": 1, "name": 1},
+            sort=[("name", 1)],
+        )
+    if not t:
+        return (None, None)
+    return (t.get("id"), t.get("name"))
+
+
+async def _team_map_for_users(user_ids) -> dict:
+    """Batch resolver: {user_id: {"team_id": ..., "team_name": ...}}.
+
+    Preloads all teams once, then loops through their member_ids / manager_ids
+    to build the reverse map. O(#teams + #members) — no per-ticket query.
+    Prefers `member` team over `manager` team when a user is both.
+    """
+    ids = [u for u in (user_ids or []) if u]
+    if not ids:
+        return {}
+    id_set = set(ids)
+    teams = await db.teams.find(
+        {"$or": [{"member_ids": {"$in": ids}}, {"manager_ids": {"$in": ids}}]},
+        {"_id": 0, "id": 1, "name": 1, "member_ids": 1, "manager_ids": 1},
+    ).to_list(2000)
+    out: dict = {}
+    # First pass: members (unique per user).
+    for t in teams:
+        for uid in (t.get("member_ids") or []):
+            if uid in id_set:
+                out[uid] = {"team_id": t.get("id"), "team_name": t.get("name")}
+    # Second pass: managers — only fill if not already resolved as a member.
+    for t in sorted(teams, key=lambda x: (x.get("name") or "")):
+        for uid in (t.get("manager_ids") or []):
+            if uid in id_set and uid not in out:
+                out[uid] = {"team_id": t.get("id"), "team_name": t.get("name")}
+    return out
+
+
+async def _team_map_for_names(names) -> dict:
+    """NAME-based fallback resolver: {creator_name: {team_id, team_name}}.
+
+    Used for legacy tickets whose `created_by_id` was seeded from a previous
+    DB (so it doesn't match any current contact). We look up each name in
+    `contacts` to find their current id, then reuse `_team_map_for_users`.
+    """
+    ns = list({(n or "").strip() for n in (names or []) if n})
+    ns = [n for n in ns if n]
+    if not ns:
+        return {}
+    docs = await db.contacts.find(
+        {"name": {"$in": ns}},
+        {"_id": 0, "id": 1, "name": 1},
+    ).to_list(2000)
+    name_to_id = {d["name"]: d["id"] for d in docs}
+    id_map = await _team_map_for_users(list(name_to_id.values()))
+    return {name: id_map[cid] for name, cid in name_to_id.items() if cid in id_map}
+
+
+def _enrich_tickets_with_team(items: list, team_map: dict, name_map: dict = None) -> list:
+    """Overlay `team_id` / `team_name` on each ticket from the current
+    teams collection so the UI always reflects reality (handles legacy
+    tickets created before the enrichment fix, and tickets whose creator
+    was moved to a different team afterwards).
+
+    `name_map` is an optional fallback keyed by creator name — used when
+    the `created_by_id` no longer maps to a current contact (data seeded
+    from an older DB, name-column-only imports, etc.).
+    """
+    for t in items:
+        creator_id = t.get("created_by_id")
+        info = team_map.get(creator_id) if creator_id else None
+        if not info and name_map:
+            info = name_map.get((t.get("created_by_name") or "").strip())
+        if info:
+            t["team_id"] = info["team_id"]
+            t["team_name"] = info["team_name"]
+        else:
+            # Preserve any existing value only if it's a real team; otherwise
+            # explicitly null it out so the UI shows the empty state.
+            if not t.get("team_name"):
+                t["team_id"] = t.get("team_id") or None
+                t["team_name"] = None
+    return items
+
+
+async def _apply_pending_team_filter(query: dict) -> dict:
+    """`parse_filters` stashes the `team` filter under `_pending_team_filter`
+    because it needs an async DB lookup to be complete. Convert it here into
+    a concrete `$or` clause and merge into the query dict. No-op when the
+    marker is absent."""
+    tm_list = query.pop("_pending_team_filter", None)
+    if not tm_list:
+        return query
+    # Fetch the requested teams and derive all user_ids that belong to them
+    # (members + managers) so tickets can be matched by creator even if the
+    # ticket's team_id was never populated.
+    team_docs = await db.teams.find(
+        {"id": {"$in": tm_list}},
+        {"_id": 0, "id": 1, "member_ids": 1, "manager_ids": 1},
+    ).to_list(2000)
+    user_ids: set = set()
+    for t in team_docs:
+        user_ids.update(t.get("member_ids") or [])
+        user_ids.update(t.get("manager_ids") or [])
+    id_filter = {"$in": tm_list} if len(tm_list) > 1 else tm_list[0]
+    or_clause = [{"team_id": id_filter}]
+    if user_ids:
+        or_clause.append({"created_by_id": {"$in": list(user_ids)}})
+        # NAME-based fallback — legacy tickets whose created_by_id no longer
+        # matches any current contact. Look up contact names for these ids
+        # and add a `created_by_name` clause too.
+        contacts = await db.contacts.find(
+            {"id": {"$in": list(user_ids)}},
+            {"_id": 0, "name": 1},
+        ).to_list(2000)
+        creator_names = [c["name"] for c in contacts if c.get("name")]
+        if creator_names:
+            or_clause.append({"created_by_name": {"$in": creator_names}})
+    # Merge into existing query, preserving any pre-existing $and / $or.
+    team_filter = or_clause[0] if len(or_clause) == 1 else {"$or": or_clause}
+    if not query:
+        return team_filter
+    if "$and" in query:
+        query["$and"].append(team_filter)
+        return query
+    return {"$and": [query, team_filter]}
+
+
 async def _check_ticket_action_scope(user: dict, ticket: dict, action: str) -> bool:
     """Check whether `user` is allowed to perform `action` (view/edit/assign/approve)
     on the given ticket, considering scope. Returns True/False.
@@ -119,7 +259,11 @@ def parse_filters(status, priority, created_by, assigned_to, q, created_on, upda
             query["assigned_to_id"] = {"$in": concrete} if len(concrete) > 1 else concrete[0]
     tm_list = _csv_list(team)
     if tm_list:
-        query["team_id"] = {"$in": tm_list} if len(tm_list) > 1 else tm_list[0]
+        # Match either the denormalized team_id on the ticket OR tickets whose
+        # creator currently belongs to one of the requested teams (legacy
+        # tickets never got team_id populated correctly — this fallback keeps
+        # the filter working across the whole dataset).
+        query["_pending_team_filter"] = tm_list
     # ---- Split search: exact ID match + description substring (Jul 2026) ----
     # `id_q`  → numeric only, EXACT match on `ticket_id` (accepts either "1102"
     #          or "TKT-1102" from the caller; we normalise to full form).
@@ -188,6 +332,7 @@ async def list_tickets(
     sort_dir: str = "desc",
 ):
     query = parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date, date_from, date_to, date_field, team=team, id_q=id_q, desc_q=desc_q)
+    query = await _apply_pending_team_filter(query)
 
     role = user["role"]
     uid = user["id"]
@@ -266,8 +411,19 @@ async def list_tickets(
             items = await db.tickets.aggregate(pipeline).to_list(page_size)
         else:
             items = await db.tickets.find(query, {"_id": 0}).sort(sort_field, sort_order).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+        # Enrich with current team info (handles legacy tickets missing team_name).
+        creator_ids = list({t.get("created_by_id") for t in items if t.get("created_by_id")})
+        creator_names = list({t.get("created_by_name") for t in items if t.get("created_by_name")})
+        team_map = await _team_map_for_users(creator_ids)
+        name_map = await _team_map_for_names(creator_names)
+        _enrich_tickets_with_team(items, team_map, name_map)
         return {"items": items, "total": total, "page": page, "page_size": page_size}
     items = await db.tickets.find(query, {"_id": 0}).sort("updated_on", -1).to_list(2000)
+    creator_ids = list({t.get("created_by_id") for t in items if t.get("created_by_id")})
+    creator_names = list({t.get("created_by_name") for t in items if t.get("created_by_name")})
+    team_map = await _team_map_for_users(creator_ids)
+    name_map = await _team_map_for_names(creator_names)
+    _enrich_tickets_with_team(items, team_map, name_map)
     return items
 
 
@@ -291,6 +447,7 @@ async def export_tickets_csv(
     date_field: Optional[str] = "created_at",
 ):
     query = parse_filters(status, priority, created_by, assigned_to, q, created_on, updated_on, due_date, date_from, date_to, date_field, team=team, id_q=id_q, desc_q=desc_q)
+    query = await _apply_pending_team_filter(query)
     role = user["role"]; uid = user["id"]
     if scope == "mine":
         if role == "Research":
@@ -311,6 +468,13 @@ async def export_tickets_csv(
     if view_filter:
         query = {"$and": [query, view_filter]} if query else view_filter
     items = await db.tickets.find(query, {"_id": 0}).sort("updated_on", -1).to_list(20000)
+    # Enrich with current team info from teams collection (handles legacy
+    # tickets that were created before the fix).
+    creator_ids = list({t.get("created_by_id") for t in items if t.get("created_by_id")})
+    creator_names = list({t.get("created_by_name") for t in items if t.get("created_by_name")})
+    team_map = await _team_map_for_users(creator_ids)
+    name_map = await _team_map_for_names(creator_names)
+    _enrich_tickets_with_team(items, team_map, name_map)
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(["Ticket ID", "Status", "Priority", "Created By", "Team", "Assigned To", "Profiles", "Due Date", "Created On", "Updated On"])
@@ -341,13 +505,10 @@ async def create_ticket(body: TicketCreate, user=Depends(get_current_user)):
     if body.number_of_profiles < 0:
         raise HTTPException(400, "No. of Records must be greater than 0")
     # Denormalise the creator's team onto the ticket so list/filter/export
-    # can show "Team" without per-row joins.
-    creator = await db.contacts.find_one({"id": user["id"]}, {"_id": 0, "team_id": 1}) or {}
-    team_id = creator.get("team_id")
-    team_name = None
-    if team_id:
-        team_doc = await db.teams.find_one({"id": team_id}, {"_id": 0, "name": 1})
-        team_name = (team_doc or {}).get("name")
+    # can show "Team" without per-row joins. Team membership is stored on
+    # the TEAMS collection (member_ids / manager_ids), NOT on the contact,
+    # so we look it up via _resolve_user_team.
+    team_id, team_name = await _resolve_user_team(user["id"])
     count = await db.tickets.count_documents({})
     doc = {
         "id": str(uuid.uuid4()),
