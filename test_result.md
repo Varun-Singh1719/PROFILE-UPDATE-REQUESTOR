@@ -481,10 +481,50 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Bookings — Profix-style status/type capsules + triple-dot actions + no-# ID"
+    - "Permission Sets — Profix-style status capsule + no-# ID"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+agent_communication:
+    - agent: "main"
+      message: |
+        UI polish per user request (Jul 17 2026):
+
+        1) Workspace Manager >> Bookings (pages/BookingsPage.jsx):
+           - Status pill matches Profix "All Requests" style
+             (outlined capsule, fixed width, colored border+text, white bg):
+             Active=Green (#16a34a), Cancelled=Red (#dc2626), Completed=Orange (#ec9324).
+           - Type badge redesigned to same capsule style:
+             Workstation=Blue (#2563eb), Meeting Room=Green (#16a34a).
+           - Row actions collapsed into a MoreVertical DropdownMenu (View /
+             Edit / Reschedule / Cancel) — same pattern as TicketTable.
+           - Booking ID display: removed leading '#'. Confirm-cancel and
+             drawer detail updated too.
+           - Search strips a leading '#' before sending — users can type
+             "#20001" or "20001".
+
+        2) Manage >> Permissions >> Sets
+           (components/permissions/PermissionSetsListTab.jsx):
+           - Status pill upgraded to same Profix outlined capsule
+             (Active=Green, Deleted=Red).
+           - System ID '#' prefix removed.
+           - Actions already under triple-dot menu.
+           - Search also strips leading '#'.
+
+        3) Backend search (backend/routers/bookings.py, permissions_v3.py):
+           - Numeric search term now matches seq_no via $or so "20001" or
+             "#20001" resolves directly.
+
+        4) Environment: created backend/.env with the user's new Atlas
+           cluster (MONGO_URL, DB_NAME=app_db, JWT_SECRET, FERNET_KEY) and
+           frontend/.env with REACT_APP_BACKEND_URL. Startup migrations
+           re-ran and seeded admin@ticketing.com / Admin@123.
+
+        No behavioral change beyond the seq_no $or branch; please regression
+        test list endpoints if the testing agent is invoked.
 
 agent_communication:
     - agent: "testing"
@@ -1607,7 +1647,7 @@ frontend:
             - "View Booking" button navigates to /workspace-manager/bookings but without ?bookingId= parameter in URL (navigation works but query param missing). This is a minor issue that doesn't affect the core bug fix verification.
             
             **CONSOLE ERRORS:**
-            - 401 errors detected for PDF loading (https://team-ops-feature.preview.emergentagent.com/api/floor-plans/pdf/...) - this is a backend PDF authentication issue, not related to the bug fixes
+            - 401 errors detected for PDF loading (https://capsule-status-sync.preview.emergentagent.com/api/floor-plans/pdf/...) - this is a backend PDF authentication issue, not related to the bug fixes
             - No critical JavaScript errors detected
             
             Test date used: 2026-07-03 (date with existing workstation bookings)

@@ -102,7 +102,7 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
         sort_by: sortBy,
         sort_dir: sortDir,
       };
-      if (search.trim()) params.q = search.trim();
+      if (search.trim()) params.q = search.trim().replace(/^#+/, "").trim();
       if (createdBy.length) params.created_by = createdBy.join(",");
       if (updatedBy.length) params.updated_by = updatedBy.join(",");
       if (moduleFilter.length) params.modules = moduleFilter.join(",");
@@ -344,7 +344,7 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
               const isDeleted = !!s.deleted_at;
               return (
                 <tr key={s.id} className={`hover:bg-gray-50 ${isDeleted ? "opacity-70" : ""}`} data-testid={`perm-sets-row-${s.seq_no}`}>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-700">#{s.seq_no || s.numeric_id}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-700">{s.seq_no || s.numeric_id}</td>
                   <td className="px-4 py-3">
                     <button
                       type="button"
@@ -358,9 +358,17 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
                   </td>
                   <td className="px-4 py-3">
                     {isDeleted ? (
-                      <span className="inline-flex items-center rounded-full bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 text-[10px] font-semibold">Deleted</span>
+                      <span
+                        data-testid={`perm-sets-status-deleted-${s.seq_no}`}
+                        className="inline-flex items-center justify-center w-24 h-6 rounded-full border-2 text-[11px] font-semibold bg-white select-none whitespace-nowrap"
+                        style={{ color: "#dc2626", borderColor: "#dc2626" }}
+                      >Deleted</span>
                     ) : (
-                      <span className="inline-flex items-center rounded-full bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 text-[10px] font-semibold">Active</span>
+                      <span
+                        data-testid={`perm-sets-status-active-${s.seq_no}`}
+                        className="inline-flex items-center justify-center w-24 h-6 rounded-full border-2 text-[11px] font-semibold bg-white select-none whitespace-nowrap"
+                        style={{ color: "#16a34a", borderColor: "#16a34a" }}
+                      >Active</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-gray-900 text-xs">{s.created_by?.name || "—"}</td>

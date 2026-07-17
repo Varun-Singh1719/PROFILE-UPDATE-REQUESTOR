@@ -311,10 +311,15 @@ async def list_v3_sets(
         query["deleted_at"] = {"$in": [None]}
 
     if q:
-        query["$or"] = [
-            {"title":       {"$regex": q, "$options": "i"}},
-            {"description": {"$regex": q, "$options": "i"}},
+        q_clean = q.strip().lstrip("#").strip()
+        or_clauses = [
+            {"title":       {"$regex": q_clean, "$options": "i"}},
+            {"description": {"$regex": q_clean, "$options": "i"}},
         ]
+        if q_clean.isdigit():
+            or_clauses.append({"seq_no": int(q_clean)})
+            or_clauses.append({"numeric_id": int(q_clean)})
+        query["$or"] = or_clauses
 
     def _split(v):
         return [x.strip() for x in (v or "").split(",") if x.strip()]

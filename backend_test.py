@@ -19,7 +19,7 @@ import io
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://728cf97c-5468-450b-8461-6044a99ed25f.preview.emergentagent.com/api"
+BASE_URL = "https://capsule-status-sync.preview.emergentagent.com/api"
 ADMIN_EMAIL = "admin@ticketing.com"
 ADMIN_PASSWORD = "Admin@123"
 

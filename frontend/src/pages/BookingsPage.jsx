@@ -12,7 +12,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ClipboardList, Search, RefreshCw, Download, X, Eye, Pencil, Trash2,
   Calendar, ChevronDown, Loader2, ArrowUp, ArrowDown,
-  AlertCircle, Repeat, ChevronUp,
+  AlertCircle, Repeat, ChevronUp, MoreVertical,
 } from "lucide-react";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
@@ -26,6 +26,9 @@ import { Checkbox } from "../components/ui/checkbox";
 import { toast } from "../lib/notify";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { confirm as confirmDialog } from '../lib/dialog';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+} from "../components/ui/dropdown-menu";
 
 // ---------------------------------------------------------------------------- helpers
 const todayIso = () => {
@@ -62,10 +65,18 @@ const fmtTime = (iso) => {
 };
 const fmtTimeRange = (s, e) => `${fmtTime(s)} – ${fmtTime(e)}`;
 
+// StatusBadge — matches Profix "All Requests" style: outlined pill, fixed size.
+// Active = Green, Cancelled = Red, Completed = Orange.
 const STATUS_PILL = {
-  Active:    { bg: "bg-emerald-50",  fg: "text-emerald-700",  ring: "ring-emerald-200" },
-  Cancelled: { bg: "bg-gray-100",    fg: "text-gray-600",     ring: "ring-gray-200"    },
-  Completed: { bg: "bg-orange-50",   fg: "text-[#ec9324]",    ring: "ring-orange-200"  },
+  Active:    { text: "#16a34a", border: "#16a34a" },
+  Cancelled: { text: "#dc2626", border: "#dc2626" },
+  Completed: { text: "#ec9324", border: "#ec9324" },
+};
+
+// TypeBadge — Workstation = Blue, Meeting Room = Green (outlined pill, same size).
+const TYPE_PILL = {
+  Workstation:      { text: "#2563eb", border: "#2563eb" },
+  "Meeting Room":   { text: "#16a34a", border: "#16a34a" },
 };
 
 const useDebounced = (value, delay = 300) => {
@@ -172,7 +183,11 @@ export default function BookingsPage() {
     if (teamId.length > 0) p.team_id = teamId.join(",");
     if (employeeId.length > 0) p.employee_id = employeeId.join(",");
     if (createdById.length > 0) p.created_by_id = createdById.join(",");
-    if (debouncedSearch) p.search = debouncedSearch;
+    if (debouncedSearch) {
+      // Strip leading '#' so searches like "#123" or "123" both work
+      const cleaned = String(debouncedSearch).replace(/^\s*#+/, "").trim();
+      if (cleaned) p.search = cleaned;
+    }
     return p;
   }, [page, pageSize, sort, direction, status, typeFilter, dateFrom, dateTo, teamId, employeeId, createdById, debouncedSearch]);
 
@@ -249,7 +264,7 @@ export default function BookingsPage() {
   };
   const onCancel = async (b) => {
     if (b.status === "Cancelled") { toast.info("Already cancelled"); return; }
-    const ok = await confirmDialog({ title: 'Cancel booking', message: `Cancel booking #${b.seq_no} (${b.title})?`, confirmLabel: 'Cancel booking', confirmVariant: 'destructive' });
+    const ok = await confirmDialog({ title: 'Cancel booking', message: `Cancel booking ${b.seq_no} (${b.title})?`, confirmLabel: 'Cancel booking', confirmVariant: 'destructive' });
     if (!ok) return;
     try {
       // Route to the correct backend endpoint based on booking type.
@@ -615,13 +630,11 @@ function BookingRow({ booking: b, selected, onToggle, onView, onEdit, onCancel }
       </td>
       <td className="px-3 py-2 font-mono">
         <button onClick={onView} className="text-[#ec9324] hover:underline font-semibold" data-testid={`bookings-row-id-${b.id}`}>
-          #{b.seq_no}
+          {b.seq_no}
         </button>
       </td>
       <td className="px-3 py-2">
-        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-semibold ring-1 ring-blue-200">
-          {b.type}
-        </span>
+        <TypeBadge type={b.type}/>
       </td>
       <td className="px-3 py-2 font-medium text-gray-900 max-w-[180px] truncate" title={b.room_name}>{b.room_name}</td>
       <td className="px-3 py-2 text-gray-800 max-w-[160px] truncate" title={b.organizer?.name}>{b.organizer?.name || "—"}</td>
@@ -646,22 +659,71 @@ function BookingRow({ booking: b, selected, onToggle, onView, onEdit, onCancel }
       </td>
       <td className="px-3 py-2 text-gray-600 max-w-[140px] truncate" title={b.created_by?.name}>{b.created_by?.name || "—"}</td>
       <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDateTime(b.created_at)}</td>
-      <td className="px-3 py-2">
-        <div className="flex items-center justify-center gap-0.5">
-          <IconBtn label="View" onClick={onView} icon={Eye} testid={`bookings-action-view-${b.id}`} color="gray"/>
-          <IconBtn label="Edit / Reschedule" onClick={onEdit} icon={Pencil} testid={`bookings-action-edit-${b.id}`} color="orange" disabled={isCancelled}/>
-          <IconBtn label="Cancel" onClick={onCancel} icon={Trash2} testid={`bookings-action-cancel-${b.id}`} color="red" disabled={isCancelled}/>
-        </div>
+      <td className="px-3 py-2 text-center">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800"
+              data-testid={`bookings-row-actions-${b.id}`}
+              aria-label="Row actions"
+              title="Actions"
+            >
+              <MoreVertical size={15}/>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuItem onClick={onView} data-testid={`bookings-action-view-${b.id}`}>
+              <Eye size={13} className="mr-2"/> View
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onEdit} disabled={isCancelled} data-testid={`bookings-action-edit-${b.id}`}>
+              <Pencil size={13} className="mr-2"/> Edit / Reschedule
+            </DropdownMenuItem>
+            <DropdownMenuSeparator/>
+            <DropdownMenuItem
+              onClick={onCancel}
+              disabled={isCancelled}
+              data-testid={`bookings-action-cancel-${b.id}`}
+              className="text-red-600 focus:text-red-700"
+            >
+              <Trash2 size={13} className="mr-2"/> Cancel
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </td>
     </tr>
   );
 }
 
+// StatusBadge — outlined pill, transparent bg, colored border + text (matches Profix).
+// Fixed width for symmetry.
 function StatusBadge({ status }) {
-  const s = STATUS_PILL[status] || STATUS_PILL.Active;
+  const c = STATUS_PILL[status] || { text: "#6b7280", border: "#d1d5db" };
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full ${s.bg} ${s.fg} text-[10px] font-bold ring-1 ${s.ring}`}>
+    <span
+      data-testid={`bookings-status-${(status || "").toLowerCase()}`}
+      className="inline-flex items-center justify-center w-24 h-6 text-[11px] font-semibold rounded-full border-2 select-none whitespace-nowrap bg-white"
+      style={{ color: c.text, borderColor: c.border }}
+    >
       {status}
+    </span>
+  );
+}
+
+// TypeBadge — outlined pill matching StatusBadge dimensions.
+// Workstation = Blue, Meeting Room = Green.
+function TypeBadge({ type }) {
+  const label = type === "workstation" ? "Workstation"
+    : type === "meeting_room" ? "Meeting Room"
+    : type;
+  const c = TYPE_PILL[label] || { text: "#6b7280", border: "#d1d5db" };
+  return (
+    <span
+      data-testid={`bookings-type-${(label || "").toLowerCase().replace(/\s/g, "-")}`}
+      className="inline-flex items-center justify-center w-28 h-6 text-[11px] font-semibold rounded-full border-2 select-none whitespace-nowrap bg-white"
+      style={{ color: c.text, borderColor: c.border }}
+    >
+      {label}
     </span>
   );
 }
@@ -830,7 +892,7 @@ function BookingDetailsDrawer({ booking: b, editing, onStartEdit, onExitEdit, on
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 text-sm bg-gray-50">
           {/* Card: Booking Information */}
           <ModernCard title="Booking Information">
-            <ModernRow label="Booking ID" value={<span className="font-mono">#{b.seq_no}</span>}/>
+            <ModernRow label="Booking ID" value={<span className="font-mono">{b.seq_no}</span>}/>
             <ModernRow label="Type" value={b.type}/>
             <ModernRow label="Status" value={<StatusBadge status={b.status}/>}/>
             <ModernRow label="Booked By" value={b.created_by?.name || "—"}/>

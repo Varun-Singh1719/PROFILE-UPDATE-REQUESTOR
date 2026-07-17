@@ -249,16 +249,19 @@ async def _build_query(
     if organizer_ids_set:
         q["organizer.id"] = {"$in": list(organizer_ids_set)}
 
-    # Search — case-insensitive partial on room_name OR title
+    # Search — case-insensitive partial on room_name OR title; numeric matches seq_no
     if search:
-        s = search.strip()
+        s = search.strip().lstrip("#").strip()
         if s:
             import re
             esc = re.escape(s)
-            q["$or"] = [
+            or_clauses = [
                 {"room_name": {"$regex": esc, "$options": "i"}},
                 {"title": {"$regex": esc, "$options": "i"}},
             ]
+            if s.isdigit():
+                or_clauses.append({"seq_no": int(s)})
+            q["$or"] = or_clauses
 
     return q
 
@@ -308,15 +311,18 @@ async def _build_workstation_query(
     if team_ids:
         q["team_id"] = {"$in": team_ids}
     if search:
-        s = search.strip()
+        s = search.strip().lstrip("#").strip()
         if s:
             import re
             esc = re.escape(s)
-            q["$or"] = [
+            or_clauses = [
                 {"seat_label": {"$regex": esc, "$options": "i"}},
                 {"plan_name": {"$regex": esc, "$options": "i"}},
                 {"employee.name": {"$regex": esc, "$options": "i"}},
             ]
+            if s.isdigit():
+                or_clauses.append({"seq_no": int(s)})
+            q["$or"] = or_clauses
     return q
 
 
