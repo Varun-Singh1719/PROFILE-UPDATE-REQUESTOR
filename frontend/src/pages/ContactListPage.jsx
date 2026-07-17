@@ -1024,7 +1024,7 @@ export default function ContactListPage() {
         </DialogContent>
       </Dialog>
 
-      <div className="mt-6 shrink-0 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
+      <div className="shrink-0 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
         {/* Prominent chip when filtering by a permission set (deep-link from Permission Sets tab) */}
         {psetFilter.length > 0 && (
           <div className="mb-2 flex flex-wrap items-center gap-2" data-testid="contact-pset-chip-row">
