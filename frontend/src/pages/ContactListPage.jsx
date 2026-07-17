@@ -1104,8 +1104,9 @@ export default function ContactListPage() {
         </div>
       </div>
 
-      <div className="mt-6 flex-1 flex flex-col bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto max-h-[60vh] overflow-y-auto flex-1">
+      <div className="mt-6 flex-1 min-h-0 flex flex-col bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto"
+             style={{ maxHeight: "calc(100vh - 15rem)" }}>
           <table className="w-full text-sm">
             <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200 sticky top-0 z-10">
               <tr>

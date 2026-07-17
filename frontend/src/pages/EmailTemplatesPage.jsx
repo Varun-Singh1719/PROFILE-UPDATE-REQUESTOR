@@ -28,13 +28,36 @@ import {
 
 function fmt(iso) { if (!iso) return "—"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
 
-// "Type" is a UI-only grouping: meeting-flow templates vs. everything else (the core
-// Profix product transactional/security templates). Derived from `kind` so backend stays
-// untouched.
+// "Type" is a UI-only grouping derived from the template `kind` so the
+// backend contract stays untouched. It maps every seeded/system kind to the
+// module that actually consumes the email:
+//   Employee  — account/admin lifecycle (welcome, password reset, forgot pwd)
+//   Workspace — workstation & seat-booking flows
+//   Meeting   — meeting-room flows (frontend-only templates)
+//   Profix    — ticketing (request/reply lifecycle) — default
 function templateType(tpl) {
-  if (tpl?.local || (tpl?.kind || "").startsWith("meeting_")) return "Meeting";
+  const k = (tpl?.kind || "").toLowerCase();
+  if (tpl?.local || k.startsWith("meeting_")) return "Meeting";
+  if (k.startsWith("workstation_") || k.startsWith("workspace_") || k.startsWith("seat_")) return "Workspace";
+  if (
+    k === "new_employee" ||
+    k === "admin_password_reset" ||
+    k === "forgot_password" ||
+    k.startsWith("employee_") ||
+    k.startsWith("user_") ||
+    k.startsWith("account_")
+  ) return "Employee";
   return "Profix";
 }
+
+// Type → capsule color (matches the Profix status-badge language used across
+// the app: outlined pill, colored border+text on a white bg).
+const TYPE_COLORS = {
+  Profix:    { text: "#ec9324", border: "#ec9324" }, // brand orange
+  Employee:  { text: "#7c3aed", border: "#7c3aed" }, // purple
+  Workspace: { text: "#2563eb", border: "#2563eb" }, // blue
+  Meeting:   { text: "#16a34a", border: "#16a34a" }, // green
+};
 
 const CATEGORIES = ["transactional", "onboarding", "security", "notification", "marketing"];
 
@@ -469,11 +492,19 @@ export default function EmailTemplatesPage() {
                     {t.system && !t.local && <span className="ml-2 inline-flex text-[10px] bg-gray-100 text-gray-600 rounded px-1.5 py-0.5">SYSTEM</span>}
                   </td>
                   <td className="px-4 py-3" data-testid={`type-${t.kind}`}>
-                    {templateType(t) === "Meeting" ? (
-                      <span className="inline-flex items-center text-[11px] font-bold tracking-wider bg-orange-50 border border-orange-200 text-[#ec9324] rounded px-2 py-0.5">Meeting</span>
-                    ) : (
-                      <span className="inline-flex items-center text-[11px] font-bold tracking-wider bg-slate-100 border border-slate-200 text-slate-700 rounded px-2 py-0.5">Profix</span>
-                    )}
+                    {(() => {
+                      const tt = templateType(t);
+                      const c = TYPE_COLORS[tt] || TYPE_COLORS.Profix;
+                      return (
+                        <span
+                          data-testid={`type-badge-${t.kind}`}
+                          className="inline-flex items-center justify-center w-24 h-6 rounded-full border-2 text-[11px] font-semibold bg-white select-none whitespace-nowrap"
+                          style={{ color: c.text, borderColor: c.border }}
+                        >
+                          {tt}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-3 text-gray-600 font-mono text-xs">{t.kind}</td>
                   <td className="px-4 py-3">
