@@ -16,11 +16,15 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../com
 import notify from "../lib/notify";
 import {
   Search, Plus, Eye, Pencil, Copy, Trash2, Mail, FileText, Bold, Italic, List, ListOrdered, Link as LinkIcon, RotateCcw,
-  ArrowUp, ArrowDown, ChevronsUpDown,
+  ArrowUp, ArrowDown, ChevronsUpDown, MoreVertical,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
 import { confirm as confirmDialog, prompt as promptDialog } from '../lib/dialog';
+import ViewEmailTemplateModal from "../components/ViewEmailTemplateModal";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+} from "../components/ui/dropdown-menu";
 
 function fmt(iso) { if (!iso) return "—"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
 
@@ -231,6 +235,7 @@ export default function EmailTemplatesPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState(null);
+  const [view, setView] = useState(null); // Pixel-perfect email preview modal.
   // Sortable column state — default sort is by template Name (asc).
   const [sortBy, setSortBy] = useState("name");
   const [sortDir, setSortDir] = useState("asc");
@@ -458,7 +463,7 @@ export default function EmailTemplatesPage() {
               {sortedItems.map((t) => (
                 <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50/80" data-testid={`template-row-${t.kind}`}>
                   <td className="px-4 py-3 font-medium text-gray-900">
-                    <button type="button" onClick={() => setPreview(t)} className="text-left hover:text-[#ec9324] hover:underline focus:outline-none" data-testid={`preview-${t.kind}`}>
+                    <button type="button" onClick={() => setView(t)} className="text-left hover:text-[#ec9324] hover:underline focus:outline-none" data-testid={`preview-${t.kind}`}>
                       {t.name}
                     </button>
                     {t.system && !t.local && <span className="ml-2 inline-flex text-[10px] bg-gray-100 text-gray-600 rounded px-1.5 py-0.5">SYSTEM</span>}
@@ -496,35 +501,63 @@ export default function EmailTemplatesPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-500 text-xs">{fmt(t.updated_at)}</td>
                   <td className="px-4 py-3 text-right">
-                    <div className="inline-flex gap-2">
-                      <IconAction label="Preview" onClick={() => setPreview(t)} testId={`view-${t.kind}`}>
-                        <Eye size={14}/>
-                      </IconAction>
-                      {isAdmin && (
-                        <>
-                          {permEdit.isVisible && (
-                          <IconAction label="Edit" onClick={() => openEdit(t)} testId={`edit-${t.kind}`}>
-                            <Pencil size={14}/>
-                          </IconAction>
-                          )}
-                          {permEdit.isVisible && (
-                          <IconAction label="Duplicate" onClick={() => duplicate(t)} testId={`duplicate-${t.kind}`}>
-                            <Copy size={14}/>
-                          </IconAction>
-                          )}
-                          {(!t.system || t.local) && permDelete.isVisible && (
-                            <IconAction
-                              label={t.local ? "Reset to default" : "Delete"}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0 hover:bg-gray-100 focus-visible:ring-1 focus-visible:ring-[#ec9324]/40"
+                          data-testid={`row-menu-${t.kind}`}
+                          aria-label="Row actions"
+                          title="Actions"
+                        >
+                          <MoreVertical size={16} />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-40">
+                        <DropdownMenuItem
+                          onClick={() => setView(t)}
+                          data-testid={`view-${t.kind}`}
+                          className="cursor-pointer"
+                        >
+                          <Eye size={14} className="mr-2 text-gray-500" /> View
+                        </DropdownMenuItem>
+                        {isAdmin && permEdit.isVisible && (
+                          <DropdownMenuItem
+                            onClick={() => openEdit(t)}
+                            data-testid={`edit-${t.kind}`}
+                            className="cursor-pointer"
+                          >
+                            <Pencil size={14} className="mr-2 text-gray-500" /> Edit
+                          </DropdownMenuItem>
+                        )}
+                        {isAdmin && permEdit.isVisible && (
+                          <DropdownMenuItem
+                            onClick={() => duplicate(t)}
+                            data-testid={`duplicate-${t.kind}`}
+                            className="cursor-pointer"
+                          >
+                            <Copy size={14} className="mr-2 text-gray-500" /> Duplicate
+                          </DropdownMenuItem>
+                        )}
+                        {isAdmin && (!t.system || t.local) && permDelete.isVisible && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
                               onClick={() => remove(t)}
-                              testId={`delete-${t.kind}`}
-                              className="hover:bg-red-50 hover:text-red-600 hover:border-red-300"
+                              data-testid={`delete-${t.kind}`}
+                              className="cursor-pointer text-red-600 focus:text-red-700 focus:bg-red-50"
                             >
-                              {t.local ? <RotateCcw size={14}/> : <Trash2 size={14}/>}
-                            </IconAction>
-                          )}
-                        </>
-                      )}
-                    </div>
+                              {t.local ? (
+                                <><RotateCcw size={14} className="mr-2" /> Reset to default</>
+                              ) : (
+                                <><Trash2 size={14} className="mr-2" /> Delete</>
+                              )}
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </td>
                 </tr>
               ))}
@@ -599,7 +632,17 @@ export default function EmailTemplatesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Preview modal */}
+      {/* Pixel-perfect email preview modal — replaces the old plain preview */}
+      <ViewEmailTemplateModal
+        open={!!view}
+        onOpenChange={(o) => { if (!o) setView(null); }}
+        template={view}
+        canEdit={isAdmin && permEdit.isVisible && permEdit.canUse}
+        onEdit={(tpl) => { setView(null); setTimeout(() => openEdit(tpl), 180); }}
+      />
+
+      {/* Legacy quick preview modal — kept for the row-name shortcut (still used by
+          the "Preview" action in the kebab menu for local/meeting templates). */}
       <Dialog open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
