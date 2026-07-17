@@ -6,6 +6,7 @@ import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import DeferredSearchInput from "../components/DeferredSearchInput";
+import Pagination from "../components/Pagination";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from "../components/ui/dialog";
@@ -33,6 +34,9 @@ export default function NotificationsOutboxPage() {
   const { fn: permFn } = useEffectivePage("manage", "notifications");
   const permDelete = permFn("delete");
   const [items, setItems] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   const [q, setQ] = useState("");
   const [kind, setKind] = useState([]);
   const [status, setStatus] = useState([]);
@@ -47,14 +51,20 @@ export default function NotificationsOutboxPage() {
           q: q || undefined,
           kind: kind.length ? kind.join(",") : undefined,
           status: status.length ? status.join(",") : undefined,
-          limit: 200,
+          page,
+          page_size: pageSize,
         },
       });
-      setItems(r.data);
+      const data = r.data || {};
+      setItems(Array.isArray(data) ? data : (data.items || []));
+      setTotal(Array.isArray(data) ? data.length : (data.total || 0));
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [q, kind, status]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [q, kind, status, page, pageSize]);
+
+  // Reset to page 1 whenever filters change
+  useEffect(() => { setPage(1); /* eslint-disable-next-line */ }, [q, kind, status]);
 
   const remove = async (n) => {
     const ok = await confirmDialog({ title: 'Delete log entry', message: 'Delete this notification log entry?', confirmLabel: 'Delete', confirmVariant: 'destructive' });
@@ -117,8 +127,9 @@ export default function NotificationsOutboxPage() {
         </div>
       </div>
 
-      <div className="mt-6 bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto max-h-[calc(100vh-14rem)] overflow-y-auto">
+      <div className="mt-6 flex-1 min-h-0 flex flex-col bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto"
+             style={{ maxHeight: "calc(100vh - 15rem)" }}>
           <table className="w-full text-sm">
             <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200 sticky top-0 z-10">
               <tr>
@@ -175,6 +186,16 @@ export default function NotificationsOutboxPage() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          label="Notifications"
+          testIdPrefix="outbox-pg"
+          className="mt-auto"
+        />
       </div>
 
       <Dialog open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>

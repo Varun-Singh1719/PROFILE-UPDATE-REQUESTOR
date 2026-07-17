@@ -8,6 +8,7 @@ import { useEffectivePage } from "../context/EffectivePermissionsContext";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
+import DeferredSearchInput from "../components/DeferredSearchInput";
 import { Search, Plus, RefreshCw, Download, X, Send } from "lucide-react";
 import Pagination from "../components/Pagination";
 import notify from "../lib/notify";
@@ -307,51 +308,25 @@ export default function TicketListPage({
       <div className="sticky top-0 z-30 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
         <div className="flex flex-nowrap gap-2 items-center bg-white p-3 rounded-xl shadow-soft border border-gray-100 overflow-x-auto" data-testid="tickets-filter-bar">
         {/* ── ID search (numeric, exact match) ───────────────────────────── */}
-        <div className="relative w-28 shrink-0">
-          <Input
-            placeholder="ID"
-            data-testid="search-id-input"
-            className="pr-9 h-9"
-            value={idInput}
-            inputMode="numeric"
-            onChange={(e) => setIdInput(e.target.value.replace(/[^0-9]/g, ""))}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); setIdQuery(idInput.trim()); } }}
-            aria-label="Search by ID"
-          />
-          <button
-            type="button"
-            onClick={() => setIdQuery(idInput.trim())}
-            data-testid="search-id-btn"
-            aria-label="Search ID"
-            title="Search"
-            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center text-gray-600"
-          >
-            <Send size={13} strokeWidth={2} />
-          </button>
-        </div>
+        <DeferredSearchInput
+          className="w-28 shrink-0"
+          placeholder="ID"
+          testId="search-id-input"
+          value={idQuery}
+          onCommit={(v) => { setIdInput(v); setIdQuery(v); }}
+          showLeftIcon={false}
+          numericOnly
+          ariaLabel="Search by ID"
+        />
         {/* ── Description search (substring, all chars allowed) ──────────── */}
-        <div className="relative flex-1 min-w-[200px] shrink">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16}/>
-          <Input
-            placeholder="Search description..."
-            data-testid="search-desc-input"
-            className="pl-9 pr-9 h-9"
-            value={descInput}
-            onChange={(e) => setDescInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); setDescQuery(descInput.trim()); } }}
-            aria-label="Search by description"
-          />
-          <button
-            type="button"
-            onClick={() => setDescQuery(descInput.trim())}
-            data-testid="search-desc-btn"
-            aria-label="Search description"
-            title="Search"
-            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center text-gray-600"
-          >
-            <Send size={13} strokeWidth={2} />
-          </button>
-        </div>
+        <DeferredSearchInput
+          className="flex-1 min-w-[200px] shrink"
+          placeholder="Search description..."
+          testId="search-desc-input"
+          value={descQuery}
+          onCommit={(v) => { setDescInput(v); setDescQuery(v); }}
+          ariaLabel="Search by description"
+        />
         {!lockedStatus && (
           <MultiSelectFilter
             label="Status"

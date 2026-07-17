@@ -34,6 +34,8 @@ async def list_notifications(
     kind: Optional[str] = None,
     status: Optional[str] = None,
     q: Optional[str] = None,
+    page: Optional[int] = None,
+    page_size: int = 50,
     limit: int = 200,
 ):
     query = {}
@@ -49,6 +51,19 @@ async def list_notifications(
             {"to_name": {"$regex": q, "$options": "i"}},
             {"subject": {"$regex": q, "$options": "i"}},
         ]
+    # Paginated shape when `page` is provided; array for backward compat otherwise.
+    if page is not None:
+        p = max(1, int(page or 1))
+        ps = max(1, min(int(page_size or 50), 500))
+        total = await db.notifications_outbox.count_documents(query)
+        items = (
+            await db.notifications_outbox
+            .find(query, {"_id": 0})
+            .sort("created_at", -1)
+            .skip((p - 1) * ps).limit(ps)
+            .to_list(ps)
+        )
+        return {"items": items, "total": total, "page": p, "page_size": ps}
     items = await db.notifications_outbox.find(query, {"_id": 0}).sort("created_at", -1).to_list(min(limit, 1000))
     return items
 

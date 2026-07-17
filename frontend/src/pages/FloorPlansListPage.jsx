@@ -9,6 +9,7 @@ import Layout from "../components/Layout";
 import notify from '../lib/notify';
 import { confirm as confirmDialog } from '../lib/dialog';
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
+import Pagination from "../components/Pagination";
 
 function fmtDate(iso) {
   if (!iso) return "—";
@@ -39,6 +40,9 @@ export default function FloorPlansListPage() {
   const fileInputRef = useRef(null);
   const [cloneName, setCloneName] = useState("");
   const [working, setWorking] = useState(false);
+  // Client-side pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
 
   const load = async () => {
     setLoading(true);
@@ -165,8 +169,9 @@ export default function FloorPlansListPage() {
             <button onClick={() => setShowCreate(true)} className="mt-4 px-4 py-2 bg-[#ec9324] text-white rounded-lg">Create floor plan</button>
           </div>
         ) : (
+          <>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-            {plans.map(p => (
+            {plans.slice((page - 1) * pageSize, page * pageSize).map(p => (
               <PlanCard
                 key={p.id}
                 plan={p}
@@ -177,6 +182,18 @@ export default function FloorPlansListPage() {
               />
             ))}
           </div>
+          <div className="mt-4 bg-white rounded-xl border border-gray-100 shadow-soft overflow-hidden">
+            <Pagination
+              page={page}
+              pageSize={pageSize}
+              total={plans.length}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              label="Floor Plans"
+              testIdPrefix="floor-plans-pg"
+            />
+          </div>
+          </>
         )}
 
       {/* Create Modal */}

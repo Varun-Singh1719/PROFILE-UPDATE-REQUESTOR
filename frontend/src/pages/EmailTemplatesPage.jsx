@@ -22,6 +22,7 @@ import { useAuth } from "../context/AuthContext";
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
 import { confirm as confirmDialog, prompt as promptDialog } from '../lib/dialog';
 import ViewEmailTemplateModal from "../components/ViewEmailTemplateModal";
+import Pagination from "../components/Pagination";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "../components/ui/dropdown-menu";
@@ -262,6 +263,9 @@ export default function EmailTemplatesPage() {
   // Sortable column state — default sort is by template Name (asc).
   const [sortBy, setSortBy] = useState("name");
   const [sortDir, setSortDir] = useState("asc");
+  // Client-side pagination (list is a merged frontend+backend collection)
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
 
   const toggleSort = (col) => {
     if (sortBy === col) {
@@ -324,6 +328,14 @@ export default function EmailTemplatesPage() {
     });
     return arr;
   }, [items, sortBy, sortDir]);
+
+  // Reset to page 1 whenever filters or sort change
+  useEffect(() => { setPage(1); }, [q, category, status, sortBy, sortDir]);
+
+  const pagedItems = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return sortedItems.slice(start, start + pageSize);
+  }, [sortedItems, page, pageSize]);
 
   const openCreate = () => {
     setEditing(null);
@@ -467,8 +479,9 @@ export default function EmailTemplatesPage() {
         </div>
       </div>
 
-      <div className="mt-6 bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto max-h-[calc(100vh-14rem)] overflow-y-auto">
+      <div className="mt-6 flex-1 min-h-0 flex flex-col bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto"
+             style={{ maxHeight: "calc(100vh - 15rem)" }}>
           <table className="w-full text-sm">
             <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200 sticky top-0 z-10">
               <tr>
@@ -483,7 +496,7 @@ export default function EmailTemplatesPage() {
               </tr>
             </thead>
             <tbody>
-              {sortedItems.map((t) => (
+              {pagedItems.map((t) => (
                 <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50/80" data-testid={`template-row-${t.kind}`}>
                   <td className="px-4 py-3 font-medium text-gray-900">
                     <button type="button" onClick={() => setView(t)} className="text-left hover:text-[#ec9324] hover:underline focus:outline-none" data-testid={`preview-${t.kind}`}>
@@ -598,6 +611,16 @@ export default function EmailTemplatesPage() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={sortedItems.length}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          label="Templates"
+          testIdPrefix="templates-pg"
+          className="mt-auto"
+        />
       </div>
 
       {/* Edit / Create modal */}

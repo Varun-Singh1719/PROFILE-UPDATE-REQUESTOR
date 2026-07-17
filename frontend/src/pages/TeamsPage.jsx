@@ -12,6 +12,7 @@ import notify from "../lib/notify";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import DeferredSearchInput from "../components/DeferredSearchInput";
 import ViewTeamDrawer from "../components/ViewTeamDrawer";
+import Pagination from "../components/Pagination";
 import { Plus, Pencil, Users, Trash2, Sparkles, Check, X } from "lucide-react";
 import { confirm as confirmDialog } from '../lib/dialog';
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
@@ -161,6 +162,15 @@ export default function TeamsPage() {
     });
   }, [teams, search]);
 
+  // Client-side pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  useEffect(() => { setPage(1); }, [search]);
+  const pagedTeams = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredTeams.slice(start, start + pageSize);
+  }, [filteredTeams, page, pageSize]);
+
   const openCreate = async () => {
     setEditing(null);
     // Always refetch the latest used colours right before opening so we never
@@ -270,8 +280,9 @@ export default function TeamsPage() {
       </div>
       </div>
 
-      <div className="mt-6 bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto max-h-[calc(100vh-14rem)] overflow-y-auto">
+      <div className="mt-6 flex-1 min-h-0 flex flex-col bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto"
+             style={{ maxHeight: "calc(100vh - 15rem)" }}>
           <table className="w-full text-sm">
             <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200 sticky top-0 z-10">
               <tr>
@@ -284,7 +295,7 @@ export default function TeamsPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredTeams.map((t) => (
+              {pagedTeams.map((t) => (
                 <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50/80" data-testid={`team-row-${t.name}`}>
                   <td className="px-4 py-3">
                     <div
@@ -366,6 +377,16 @@ export default function TeamsPage() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={filteredTeams.length}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          label="Teams"
+          testIdPrefix="teams-pg"
+          className="mt-auto"
+        />
       </div>
 
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditing(null); setForm(EMPTY_FORM); } }}>
