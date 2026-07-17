@@ -441,6 +441,7 @@ export default function EmailTemplatesPage() {
   return (
     <Layout
       title="Email Templates"
+      contentClassName="w-full px-4 pt-4 pb-3 flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden"
       actions={isAdmin && permCreate.isVisible && (
         <Button onClick={openCreate} className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9" data-testid="add-template-btn" disabled={!permCreate.canUse}>
           <Plus size={16} className="mr-2"/> New Template
@@ -448,7 +449,7 @@ export default function EmailTemplatesPage() {
       )}
     >
       <TooltipProvider delayDuration={150}>
-      <div className="sticky top-14 z-30 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
+      <div className="shrink-0 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
         <div className="flex flex-wrap gap-3 items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100" data-testid="templates-filter-bar">
         <DeferredSearchInput
           className="flex-1 min-w-[240px]"
@@ -480,8 +481,7 @@ export default function EmailTemplatesPage() {
       </div>
 
       <div className="mt-6 flex-1 min-h-0 flex flex-col bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">
-        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto"
-             style={{ maxHeight: "calc(100vh - 15rem)" }}>
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
           <table className="w-full text-sm">
             <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200 sticky top-0 z-10">
               <tr>

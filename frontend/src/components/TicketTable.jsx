@@ -101,11 +101,11 @@ export default function TicketTable({
   );
 
   return (
-    <div className="bg-white rounded-xl shadow-soft border border-gray-100">
-      {/* NO nested overflow at all — thead's `sticky` references the page-level
-          scroll container so it stays visible below the sticky filter. */}
+    <div className="w-full">
+      {/* Sticky thead — references the nearest scrolling ancestor (usually
+          the parent card in TicketListPage, or the page for legacy pages). */}
       <table className="w-full text-sm text-left whitespace-nowrap">
-          <thead className="text-xs text-gray-700 uppercase bg-gray-50 sticky top-[72px] z-20 font-bold tracking-wider border-b border-gray-200 shadow-[0_1px_0_rgba(0,0,0,0.05)]">
+          <thead className="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0 z-20 font-bold tracking-wider border-b border-gray-200 shadow-[0_1px_0_rgba(0,0,0,0.05)]">
             <tr>
               {selectable && showCheckbox && (
                 <th className="px-4 py-3 w-10">

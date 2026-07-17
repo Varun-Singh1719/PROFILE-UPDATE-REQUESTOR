@@ -239,6 +239,7 @@ export default function TicketListPage({
   return (
     <Layout
       title={title}
+      contentClassName="w-full px-4 pt-4 pb-3 flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden"
       actions={
         <div className="flex gap-2 items-center">
           {selected.length > 0 && isDQ && (
@@ -305,7 +306,7 @@ export default function TicketListPage({
         </div>
       }
     >
-      <div className="sticky top-0 z-30 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
+      <div className="shrink-0 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
         <div className="flex flex-nowrap gap-2 items-center bg-white p-3 rounded-xl shadow-soft border border-gray-100 overflow-x-auto" data-testid="tickets-filter-bar">
         {/* ── ID search (numeric, exact match) ───────────────────────────── */}
         <DeferredSearchInput
@@ -398,36 +399,36 @@ export default function TicketListPage({
       </div>
       </div>
 
-      <div className="mt-3 flex flex-col">
-        <TicketTable
-          tickets={tickets}
-          selectable={selectable}
-          selected={selected}
-          onToggle={toggle}
-          onToggleAll={toggleAll}
-          basePath={basePath}
-          showView={!isDQ}
-          members={members}
-          isAdmin={isAdmin}
-          isDQ={isDQ}
-          currentUserId={user?.id || ""}
-          onUpdateStatus={updateStatus}
-          onReassign={reassign}
-          onAssignSelf={assignSelf}
-        />
-        {/* Pagination footer — pinned below the table */}
-        <div className="mt-2 pt-3 bg-white rounded-xl shadow-soft border border-gray-100">
-          <Pagination
-            page={page}
-            pageSize={pageSize}
-            total={total}
-            onPageChange={setPage}
-            onPageSizeChange={setPageSize}
-            label="Tickets"
-            testIdPrefix="tickets-pg"
-            className="border-t-0"
+      <div className="mt-3 flex-1 min-h-0 flex flex-col bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
+          <TicketTable
+            tickets={tickets}
+            selectable={selectable}
+            selected={selected}
+            onToggle={toggle}
+            onToggleAll={toggleAll}
+            basePath={basePath}
+            showView={!isDQ}
+            members={members}
+            isAdmin={isAdmin}
+            isDQ={isDQ}
+            currentUserId={user?.id || ""}
+            onUpdateStatus={updateStatus}
+            onReassign={reassign}
+            onAssignSelf={assignSelf}
           />
         </div>
+        {/* Pagination footer — pinned inside the card, above the viewport bottom */}
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          label="Tickets"
+          testIdPrefix="tickets-pg"
+          className="mt-auto border-t border-gray-100"
+        />
       </div>
     </Layout>
   );

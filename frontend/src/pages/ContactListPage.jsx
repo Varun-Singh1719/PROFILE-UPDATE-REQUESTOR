@@ -834,6 +834,7 @@ export default function ContactListPage() {
   return (
     <Layout
       title="Employee List"
+      contentClassName="w-full px-4 pt-4 pb-3 flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden"
       actions={
         <div className="flex items-center gap-2">
           {anySelected && (
@@ -1023,7 +1024,7 @@ export default function ContactListPage() {
         </DialogContent>
       </Dialog>
 
-      <div className="mt-6 sticky top-14 z-30 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
+      <div className="mt-6 shrink-0 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
         {/* Prominent chip when filtering by a permission set (deep-link from Permission Sets tab) */}
         {psetFilter.length > 0 && (
           <div className="mb-2 flex flex-wrap items-center gap-2" data-testid="contact-pset-chip-row">
@@ -1105,8 +1106,7 @@ export default function ContactListPage() {
       </div>
 
       <div className="mt-6 flex-1 min-h-0 flex flex-col bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">
-        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto"
-             style={{ maxHeight: "calc(100vh - 15rem)" }}>
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
           <table className="w-full text-sm">
             <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200 sticky top-0 z-10">
               <tr>

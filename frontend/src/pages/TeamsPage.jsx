@@ -258,6 +258,7 @@ export default function TeamsPage() {
   return (
     <Layout
       title="Teams"
+      contentClassName="w-full px-4 pt-4 pb-3 flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden"
       actions={
         permCreate.isVisible ? (
         <Button
@@ -271,7 +272,7 @@ export default function TeamsPage() {
         ) : null
       }
     >
-      <div className="sticky top-14 z-30 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
+      <div className="shrink-0 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
       <div className="bg-white p-4 rounded-xl shadow-soft border border-gray-100">
         <DeferredSearchInput
           className="max-w-md"
@@ -284,8 +285,7 @@ export default function TeamsPage() {
       </div>
 
       <div className="mt-6 flex-1 min-h-0 flex flex-col bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">
-        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto"
-             style={{ maxHeight: "calc(100vh - 15rem)" }}>
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
           <table className="w-full text-sm">
             <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200 sticky top-0 z-10">
               <tr>

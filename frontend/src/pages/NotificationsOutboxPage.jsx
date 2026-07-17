@@ -80,6 +80,7 @@ export default function NotificationsOutboxPage() {
   return (
     <Layout
       title="Notifications Outbox"
+      contentClassName="w-full px-4 pt-4 pb-3 flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden"
       actions={
         <Button
           variant="outline"
@@ -94,7 +95,7 @@ export default function NotificationsOutboxPage() {
         </Button>
       }
     >
-      <div className="sticky top-14 z-30 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
+      <div className="shrink-0 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
         <div className="flex flex-wrap gap-3 items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100" data-testid="outbox-filter-bar">
         <DeferredSearchInput
           className="flex-1 min-w-[240px]"
@@ -131,8 +132,7 @@ export default function NotificationsOutboxPage() {
       </div>
 
       <div className="mt-6 flex-1 min-h-0 flex flex-col bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">
-        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto"
-             style={{ maxHeight: "calc(100vh - 15rem)" }}>
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
           <table className="w-full text-sm">
             <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200 sticky top-0 z-10">
               <tr>
