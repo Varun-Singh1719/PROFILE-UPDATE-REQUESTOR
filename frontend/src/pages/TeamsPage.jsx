@@ -13,9 +13,12 @@ import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import DeferredSearchInput from "../components/DeferredSearchInput";
 import ViewTeamDrawer from "../components/ViewTeamDrawer";
 import Pagination from "../components/Pagination";
-import { Plus, Pencil, Users, Trash2, Sparkles, Check, X } from "lucide-react";
+import { Plus, Pencil, Users, Trash2, Sparkles, Check, X, MoreVertical, Eye } from "lucide-react";
 import { confirm as confirmDialog } from '../lib/dialog';
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+} from "../components/ui/dropdown-menu";
 import {
   TEAM_PALETTES,
   teamBackground,
@@ -342,34 +345,46 @@ export default function TeamsPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-500 text-xs">{t.created_on?.slice(0, 10)}</td>
                   <td className="px-4 py-3 text-right">
-                    <div className="inline-flex gap-2">
-                      {permEdit.isVisible && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openEdit(t)}
-                        data-testid={`edit-team-${t.name}`}
-                        className="border-gray-300 text-gray-700 hover:bg-[#ec9324]/10 hover:text-[#ec9324] hover:border-[#ec9324] h-8 w-8 p-0"
-                        aria-label="Edit team"
-                        disabled={!permEdit.canUse}
-                      >
-                        <Pencil size={14} />
-                      </Button>
-                      )}
-                      {permDelete.isVisible && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => remove(t)}
-                        data-testid={`delete-team-${t.name}`}
-                        className="border-gray-300 text-gray-700 hover:bg-red-50 hover:text-red-600 hover:border-red-300 h-8 w-8 p-0"
-                        aria-label="Delete team"
-                        disabled={!permDelete.canUse}
-                      >
-                        <Trash2 size={14} />
-                      </Button>
-                      )}
-                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-center p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800"
+                          data-testid={`team-actions-${t.name}`}
+                          aria-label="Row actions"
+                          title="Actions"
+                        >
+                          <MoreVertical size={15}/>
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-40">
+                        <DropdownMenuItem onClick={() => openView(t)} data-testid={`view-team-${t.name}`}>
+                          <Eye size={13} className="mr-2 text-gray-500"/> View
+                        </DropdownMenuItem>
+                        {permEdit.isVisible && (
+                          <DropdownMenuItem
+                            onClick={() => openEdit(t)}
+                            data-testid={`edit-team-${t.name}`}
+                            disabled={!permEdit.canUse}
+                          >
+                            <Pencil size={13} className="mr-2 text-gray-500"/> Edit
+                          </DropdownMenuItem>
+                        )}
+                        {permDelete.isVisible && (
+                          <>
+                            <DropdownMenuSeparator/>
+                            <DropdownMenuItem
+                              onClick={() => remove(t)}
+                              data-testid={`delete-team-${t.name}`}
+                              disabled={!permDelete.canUse}
+                              className="text-red-600 focus:text-red-700"
+                            >
+                              <Trash2 size={13} className="mr-2"/> Delete
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </td>
                 </tr>
               ))}

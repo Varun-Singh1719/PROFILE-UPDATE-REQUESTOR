@@ -24,7 +24,7 @@ import Pagination from "../components/Pagination";
 import notify from "../lib/notify";
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
 import { __busyBridge } from "../context/BusyContext";
-import { Search, UserPlus, Pencil, Eye, EyeOff, Copy, RefreshCw, KeyRound, X, Mail, Phone, Calendar, IdCard, Briefcase, UsersRound, Download, ChevronLeft, ChevronRight, MoreHorizontal, ShieldCheck, Upload, FileSpreadsheet, History, CheckCircle2, AlertTriangle, FileDown, Loader2 } from "lucide-react";
+import { Search, UserPlus, Pencil, Eye, EyeOff, Copy, RefreshCw, KeyRound, X, Mail, Phone, Calendar, IdCard, Briefcase, UsersRound, Download, ChevronLeft, ChevronRight, MoreHorizontal, MoreVertical, ShieldCheck, Upload, FileSpreadsheet, History, CheckCircle2, AlertTriangle, FileDown, Loader2 } from "lucide-react";
 import { teamBackground } from "../lib/teamColors";
 import { confirm as confirmDialog } from '../lib/dialog';
 
@@ -537,16 +537,16 @@ function UploadHistoryModal({ open, onClose }) {
         <div className="border border-gray-200 rounded-lg overflow-hidden">
           <div className="max-h-[55vh] overflow-y-auto">
             <table className="w-full text-sm" data-testid="upload-history-table">
-              <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200 sticky top-0">
+              <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200 sticky top-0 z-10">
                 <tr>
-                  <th className="px-3 py-2 text-left">File</th>
-                  <th className="px-3 py-2 text-left">Uploaded By</th>
-                  <th className="px-3 py-2 text-left">When</th>
-                  <th className="px-3 py-2 text-right">Total</th>
-                  <th className="px-3 py-2 text-right">Success</th>
-                  <th className="px-3 py-2 text-right">Failed</th>
-                  <th className="px-3 py-2 text-left">Status</th>
-                  <th className="px-3 py-2 text-right">Errors</th>
+                  <th className="px-4 py-3 text-left">File</th>
+                  <th className="px-4 py-3 text-left">Uploaded By</th>
+                  <th className="px-4 py-3 text-left">When</th>
+                  <th className="px-4 py-3 text-right">Total</th>
+                  <th className="px-4 py-3 text-right">Success</th>
+                  <th className="px-4 py-3 text-right">Failed</th>
+                  <th className="px-4 py-3 text-left">Status</th>
+                  <th className="px-4 py-3 text-right">Errors</th>
                 </tr>
               </thead>
               <tbody>
@@ -1131,7 +1131,7 @@ export default function ContactListPage() {
                 </th>
                 <th className="px-4 py-3 text-left">Permission Sets</th>
                 <th className="px-4 py-3 text-left">Active</th>
-                <th className="px-4 py-3 text-right">Edit</th>
+                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1202,17 +1202,36 @@ export default function ContactListPage() {
                     />
                   </td>
                   <td className="px-4 py-3 text-right">
-                    {permEdit.isVisible && (
-                    <Button
-                      size="sm" variant="outline" onClick={() => openEdit(c)}
-                      data-testid={`edit-${c.email}`}
-                      className="border-gray-300 text-gray-700 hover:bg-[#ec9324]/10 hover:text-[#ec9324] hover:border-[#ec9324] h-8 w-8 p-0"
-                      aria-label="Edit employee"
-                      disabled={!permEdit.canUse}
-                    >
-                      <Pencil size={14}/>
-                    </Button>
-                    )}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-center p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800"
+                          data-testid={`row-actions-${c.email}`}
+                          aria-label="Row actions"
+                          title="Actions"
+                        >
+                          <MoreVertical size={15}/>
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-40">
+                        <DropdownMenuItem
+                          onClick={() => setDetailContact(c)}
+                          data-testid={`view-${c.email}`}
+                        >
+                          <Eye size={13} className="mr-2 text-gray-500"/> View
+                        </DropdownMenuItem>
+                        {permEdit.isVisible && (
+                          <DropdownMenuItem
+                            onClick={() => openEdit(c)}
+                            data-testid={`edit-${c.email}`}
+                            disabled={!permEdit.canUse}
+                          >
+                            <Pencil size={13} className="mr-2 text-gray-500"/> Edit
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </td>
                 </tr>
               ))}

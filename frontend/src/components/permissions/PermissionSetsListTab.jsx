@@ -309,7 +309,7 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
       {/* TABLE — the only scrollable region */}
       <div className="flex-1 min-h-0 overflow-auto" data-testid="perm-sets-table-wrapper">
         <table className="w-full text-sm">
-          <thead className="text-[11px] uppercase tracking-wider text-gray-600 bg-gray-50 sticky top-0 z-10 border-b border-gray-200">
+          <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200 sticky top-0 z-10">
             <tr>
               <th className="px-4 py-3 text-left cursor-pointer select-none" onClick={() => toggleSort("seq_no")} data-testid="perm-sets-sort-id">
                 <span className="inline-flex items-center gap-1">System ID <SortIcon col="seq_no"/></span>

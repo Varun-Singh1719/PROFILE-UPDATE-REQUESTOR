@@ -10,10 +10,13 @@ import Pagination from "../components/Pagination";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from "../components/ui/dialog";
-import { Search, Mail, RefreshCw, Trash2, Eye, AlertCircle, Clock, CheckCircle2 } from "lucide-react";
+import { Search, Mail, RefreshCw, Trash2, Eye, AlertCircle, Clock, CheckCircle2, MoreVertical } from "lucide-react";
 import notify from "../lib/notify";
 import { confirm as confirmDialog } from '../lib/dialog';
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+} from "../components/ui/dropdown-menu";
 
 const KIND_LABEL = {
   new_employee: "New employee credentials",
@@ -164,18 +167,37 @@ export default function NotificationsOutboxPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <div className="inline-flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => setPreview(n)} data-testid={`view-outbox-${n.id}`}
-                          className="h-8 w-8 p-0 border-gray-300 hover:bg-[#ec9324]/10 hover:text-[#ec9324] hover:border-[#ec9324]" aria-label="View">
-                          <Eye size={14}/>
-                        </Button>
-                        {permDelete.isVisible && (
-                        <Button size="sm" variant="outline" onClick={() => remove(n)} data-testid={`delete-outbox-${n.id}`}
-                          className="h-8 w-8 p-0 border-gray-300 hover:bg-red-50 hover:text-red-600 hover:border-red-300" aria-label="Delete" disabled={!permDelete.canUse}>
-                          <Trash2 size={14}/>
-                        </Button>
-                        )}
-                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800"
+                            data-testid={`row-actions-${n.id}`}
+                            aria-label="Row actions"
+                            title="Actions"
+                          >
+                            <MoreVertical size={15}/>
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
+                          <DropdownMenuItem onClick={() => setPreview(n)} data-testid={`view-outbox-${n.id}`}>
+                            <Eye size={13} className="mr-2 text-gray-500"/> View
+                          </DropdownMenuItem>
+                          {permDelete.isVisible && (
+                            <>
+                              <DropdownMenuSeparator/>
+                              <DropdownMenuItem
+                                onClick={() => remove(n)}
+                                data-testid={`delete-outbox-${n.id}`}
+                                disabled={!permDelete.canUse}
+                                className="text-red-600 focus:text-red-700"
+                              >
+                                <Trash2 size={13} className="mr-2"/> Delete
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </td>
                   </tr>
                 );

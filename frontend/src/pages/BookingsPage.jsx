@@ -517,24 +517,24 @@ export default function BookingsPage() {
           ) : rows.length === 0 ? (
             <EmptyState />
           ) : (
-            <table className="w-full text-xs" data-testid="bookings-table">
-              <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10">
-                <tr className="text-left text-gray-600 uppercase tracking-wide text-[10px] font-bold">
-                  <th className="px-3 py-2 w-8">
+            <table className="w-full text-sm" data-testid="bookings-table">
+              <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200 sticky top-0 z-10">
+                <tr>
+                  <th className="px-4 py-3 text-left w-10">
                     <Checkbox checked={allOnPageSelected} onCheckedChange={toggleAllOnPage} data-testid="bookings-select-all"/>
                   </th>
                   <ThSort label="Booking ID" field="seq_no" currentSort={sort} currentDir={direction} onSort={onSort}/>
-                  <th className="px-3 py-2">Type</th>
+                  <th className="px-4 py-3 text-left">Type</th>
                   <ThSort label="Seat / Room" field="room_name" currentSort={sort} currentDir={direction} onSort={onSort}/>
                   <ThSort label="Employee Name" field="organizer" currentSort={sort} currentDir={direction} onSort={onSort}/>
-                  <th className="px-3 py-2">Team</th>
+                  <th className="px-4 py-3 text-left">Team</th>
                   <ThSort label="Booked For Date" field="date" currentSort={sort} currentDir={direction} onSort={onSort}/>
-                  <th className="px-3 py-2">Time</th>
-                  <th className="px-3 py-2">Recurring</th>
+                  <th className="px-4 py-3 text-left">Time</th>
+                  <th className="px-4 py-3 text-left">Recurring</th>
                   <ThSort label="Status" field="status" currentSort={sort} currentDir={direction} onSort={onSort}/>
-                  <th className="px-3 py-2">Booked By</th>
+                  <th className="px-4 py-3 text-left">Booked By</th>
                   <ThSort label="Booked On" field="created_at" currentSort={sort} currentDir={direction} onSort={onSort}/>
-                  <th className="px-3 py-2 w-24 text-center">Actions</th>
+                  <th className="px-4 py-3 text-right w-16">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white">
@@ -611,7 +611,7 @@ function FilterLabel({ children }) {
 function ThSort({ label, field, currentSort, currentDir, onSort }) {
   const active = currentSort === field;
   return (
-    <th className="px-3 py-2 cursor-pointer select-none hover:text-gray-900" onClick={() => onSort(field)} data-testid={`bookings-th-${field}`}>
+    <th className="px-4 py-3 text-left cursor-pointer select-none hover:text-[#ec9324]" onClick={() => onSort(field)} data-testid={`bookings-th-${field}`}>
       <span className="inline-flex items-center gap-1">
         {label}
         {active && (currentDir === "asc" ? <ArrowUp size={10}/> : <ArrowDown size={10}/>)}
@@ -625,25 +625,25 @@ function BookingRow({ booking: b, selected, onToggle, onView, onEdit, onCancel }
   const isCancelled = b.status === "Cancelled";
   return (
     <tr className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${isCancelled ? "opacity-70" : ""}`} data-testid={`bookings-row-${b.id}`}>
-      <td className="px-3 py-2">
+      <td className="px-4 py-3">
         <Checkbox checked={selected} onCheckedChange={onToggle} data-testid={`bookings-row-checkbox-${b.id}`}/>
       </td>
-      <td className="px-3 py-2 font-mono">
+      <td className="px-4 py-3 font-mono">
         <button onClick={onView} className="text-[#ec9324] hover:underline font-semibold" data-testid={`bookings-row-id-${b.id}`}>
           {b.seq_no}
         </button>
       </td>
-      <td className="px-3 py-2">
+      <td className="px-4 py-3">
         <TypeBadge type={b.type}/>
       </td>
-      <td className="px-3 py-2 font-medium text-gray-900 max-w-[180px] truncate" title={b.room_name}>{b.room_name}</td>
-      <td className="px-3 py-2 text-gray-800 max-w-[160px] truncate" title={b.organizer?.name}>{b.organizer?.name || "—"}</td>
-      <td className="px-3 py-2 text-gray-600">{b.organizer_team_name || "—"}</td>
-      <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{fmtDate(b.start_at)}</td>
-      <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
+      <td className="px-4 py-3 font-medium text-gray-900 max-w-[180px] truncate" title={b.room_name}>{b.room_name}</td>
+      <td className="px-4 py-3 text-gray-800 max-w-[160px] truncate" title={b.organizer?.name}>{b.organizer?.name || "—"}</td>
+      <td className="px-4 py-3 text-gray-600">{b.organizer_team_name || "—"}</td>
+      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{fmtDate(b.start_at)}</td>
+      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
         {(b.type === "Workstation" || b.type === "workstation") ? "9:30 am – 6:30 pm" : fmtTimeRange(b.start_at, b.end_at)}
       </td>
-      <td className="px-3 py-2">
+      <td className="px-4 py-3">
         {b.recurring ? (
           <span className="relative group inline-flex items-center gap-1 text-emerald-700 font-semibold">
             Yes <Repeat size={11}/>
@@ -654,12 +654,12 @@ function BookingRow({ booking: b, selected, onToggle, onView, onEdit, onCancel }
           </span>
         ) : <span className="text-gray-400">No</span>}
       </td>
-      <td className="px-3 py-2">
+      <td className="px-4 py-3">
         <StatusBadge status={b.status}/>
       </td>
-      <td className="px-3 py-2 text-gray-600 max-w-[140px] truncate" title={b.created_by?.name}>{b.created_by?.name || "—"}</td>
-      <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDateTime(b.created_at)}</td>
-      <td className="px-3 py-2 text-center">
+      <td className="px-4 py-3 text-gray-600 max-w-[140px] truncate" title={b.created_by?.name}>{b.created_by?.name || "—"}</td>
+      <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{fmtDateTime(b.created_at)}</td>
+      <td className="px-4 py-3 text-center">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -998,7 +998,7 @@ function BookingDetailsDrawer({ booking: b, editing, onStartEdit, onExitEdit, on
             <ModernCard title={`Attendees (${b.attendees.length})`}>
               <div className="space-y-1.5">
                 {b.attendees.map((a, i) => (
-                  <div key={i} className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-3 py-2">
+                  <div key={i} className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-3">
                     <div className="min-w-0">
                       <div className="text-gray-900 font-medium truncate">{a.name || a.email || "—"}</div>
                       {a.email && <div className="text-[11px] text-gray-500 truncate">{a.email}</div>}
