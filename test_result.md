@@ -363,7 +363,51 @@ backend:
             the new Date rule is evaluated against the request's booking date.
 
 frontend:
-  - task: "TeamsPage — view drawer, chips, description, multi-team managers"
+  - task: "MultiSelectFilter — portal-based popup (fix dropdown clipped inside filter bar)"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/ui/MultiSelectFilter.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            BUG: On the "All Requests" page (and other pages that host the
+            filter bar), clicking any filter dropdown (Status / Priority /
+            Team / Created By / Assigned To / Booked By, etc.) rendered the
+            popup INSIDE the filter card. It looked squashed/clipped and
+            options could not be read or clicked. Same problem repeated on
+            Workspace Manager >> Bookings.
+
+            ROOT CAUSE: The filter card uses `overflow-x-auto` to keep the
+            row on a single line. Per CSS spec, once one axis has a non-
+            visible overflow, the browser makes the other axis effectively
+            clipped too, so any `absolute`-positioned child (like our
+            dropdown popup) is chopped at the card edge.
+
+            FIX (frontend/src/components/ui/MultiSelectFilter.jsx):
+            • Popup is now rendered via `createPortal(..., document.body)`
+              so it lives outside every clipping ancestor.
+            • Position is computed with `getBoundingClientRect()` of the
+              trigger and applied via `position: fixed` (top/left, or
+              bottom/right when close to the viewport edge).
+            • `useLayoutEffect` runs before paint so there's no visible
+              (0,0) → anchor jump. Popup reflows on scroll/resize.
+            • Outside-click handler now treats clicks inside the portal
+              popup as "inside" so the popup doesn't self-close.
+            • Public API unchanged — no callers were modified. This
+              propagates the fix to every MultiSelectFilter usage across
+              the app (Bookings, Notifications, Permissions, Teams,
+              Contacts, Ticket List, etc.).
+            • DateFilter is unaffected — it already uses a Radix Dialog
+              which portals by itself.
+
+            Verified with playwright screenshots on:
+              - /admin/open-tickets: Status / Priority / Assigned To all
+                pop out cleanly, fully visible.
+              - /workspace-manager/bookings: Booked By popup fully visible.
     implemented: true
     working: "NA"
     file: "frontend/src/pages/TeamsPage.jsx, frontend/src/components/ViewTeamDrawer.jsx, frontend/src/components/ui/MultiSelectFilter.jsx"
@@ -482,8 +526,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Bookings — Profix-style status/type capsules + triple-dot actions + no-# ID"
-    - "Permission Sets — Profix-style status capsule + no-# ID"
+    - "MultiSelectFilter — portal-based popup (fix dropdown clipped inside filter bar)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"

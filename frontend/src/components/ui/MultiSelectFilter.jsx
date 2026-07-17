@@ -31,7 +31,8 @@
  *   fullWidth        — when true, wrapper takes 100% width (form-field usage).
  *                      Default: false (inline filter-chip usage).
  */
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, ChevronUp, Check, Search, X } from "lucide-react";
 
 export default function MultiSelectFilter({
@@ -56,17 +57,44 @@ export default function MultiSelectFilter({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const rootRef = useRef(null);
+  const triggerRef = useRef(null);
+  const popupRef = useRef(null);
   const inputRef = useRef(null);
+  // Portal-based popup position (viewport coords, will be turned into fixed inset).
+  const [popupPos, setPopupPos] = useState({ top: 0, left: 0, width: 0, direction: "down" });
 
-  // Outside click + Escape to close
+  // Recompute popup position — called on open, scroll, resize.
+  const updatePosition = () => {
+    const btn = triggerRef.current;
+    if (!btn) return;
+    const rect = btn.getBoundingClientRect();
+    const vpH = window.innerHeight;
+    const spaceBelow = vpH - rect.bottom;
+    const estimatedHeight = 320; // rough max popup height (search + list)
+    const direction = spaceBelow < estimatedHeight && rect.top > spaceBelow ? "up" : "down";
+    setPopupPos({
+      top: direction === "down" ? rect.bottom + 4 : rect.top - 4,
+      left: align === "right" ? rect.right : rect.left,
+      width: rect.width,
+      direction,
+    });
+  };
+
+  // Outside click + Escape to close (popup lives in a portal, so we must
+  // treat clicks inside popupRef as inside too).
   useEffect(() => {
     if (!open) return;
     const onDoc = (e) => {
-      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
+      const inTrigger = rootRef.current && rootRef.current.contains(e.target);
+      const inPopup = popupRef.current && popupRef.current.contains(e.target);
+      if (!inTrigger && !inPopup) setOpen(false);
     };
     const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    const onScrollOrResize = () => updatePosition();
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
     // Auto-focus the search field only when we actually show one
     if (options.length > searchThreshold) {
       setTimeout(() => inputRef.current?.focus(), 30);
@@ -74,8 +102,16 @@ export default function MultiSelectFilter({
     return () => {
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
     };
-  }, [open, options.length, searchThreshold]);
+  }, [open, options.length, searchThreshold, align]);
+
+  // Position the popup right before the browser paints it — prevents the
+  // initial "jump" from (0,0) to the anchor rect.
+  useLayoutEffect(() => {
+    if (open) updatePosition();
+  }, [open]);
 
   // Reset search whenever the popup closes so re-opening is fresh
   useEffect(() => { if (!open) setQuery(""); }, [open]);
@@ -157,6 +193,7 @@ export default function MultiSelectFilter({
   return (
     <div ref={rootRef} className={`relative ${fullWidth ? "block w-full" : "inline-block"} ${className}`} data-testid={tid}>
       <button
+        ref={triggerRef}
         type="button"
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
@@ -187,14 +224,25 @@ export default function MultiSelectFilter({
         </span>
       </button>
 
-      {open && (
+      {open && typeof document !== "undefined" && createPortal(
         <div
+          ref={popupRef}
           role="listbox"
           aria-multiselectable="true"
           data-testid={tid ? `${tid}-popup` : undefined}
-          className={`absolute z-50 mt-1 bg-white border border-gray-200 shadow-lg rounded-md py-1
-                      ${fullWidth ? "w-full" : "min-w-[240px] max-w-[360px]"}
-                      ${align === "right" ? "right-0" : "left-0"}`}
+          style={{
+            position: "fixed",
+            top: popupPos.direction === "down" ? popupPos.top : undefined,
+            bottom: popupPos.direction === "up"
+              ? Math.max(0, window.innerHeight - popupPos.top)
+              : undefined,
+            left: align === "right" ? undefined : popupPos.left,
+            right: align === "right" ? Math.max(0, window.innerWidth - popupPos.left) : undefined,
+            minWidth: fullWidth ? popupPos.width : Math.max(popupPos.width, 240),
+            maxWidth: fullWidth ? popupPos.width : 360,
+            zIndex: 9999,
+          }}
+          className="bg-white border border-gray-200 shadow-lg rounded-md py-1"
         >
           {showSearch && (
             <div className="px-2 pt-1 pb-2 border-b border-gray-100">
@@ -289,7 +337,8 @@ export default function MultiSelectFilter({
               );
             })}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
