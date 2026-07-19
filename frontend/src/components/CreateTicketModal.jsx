@@ -7,7 +7,7 @@ import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import SingleSelect from "./SingleSelect";
 import notify from "../lib/notify";
-import { Upload, Loader2, X, Paperclip, Plus } from "lucide-react";
+import { Upload, Loader2, X, Paperclip, Plus, Calendar as CalendarIcon } from "lucide-react";
 
 /**
  * CreateTicketModal — In-page popup to create a new ProfiX request.
@@ -118,7 +118,8 @@ export default function CreateTicketModal({ open, onOpenChange, onCreated }) {
         className="max-w-2xl p-0 overflow-hidden bg-white"
         data-testid="new-request-modal"
       >
-        {/* Header */}
+        {/* Header — shadcn Dialog already renders its own close (X) button at
+            top-right, so we don't add a second one here. */}
         <div className="px-6 pt-5 pb-4 border-b border-gray-100 flex items-center justify-between">
           <div className="flex items-center gap-2 text-gray-900 font-semibold text-lg">
             <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-[#ec9324]/10 text-[#ec9324]">
@@ -126,15 +127,6 @@ export default function CreateTicketModal({ open, onOpenChange, onCreated }) {
             </span>
             Create New Request
           </div>
-          <button
-            type="button"
-            onClick={() => onOpenChange?.(false)}
-            className="text-gray-400 hover:text-gray-700 shrink-0"
-            aria-label="Close"
-            data-testid="new-request-modal-close"
-          >
-            <X size={18} />
-          </button>
         </div>
 
         {/* Body — form only */}
@@ -177,14 +169,20 @@ export default function CreateTicketModal({ open, onOpenChange, onCreated }) {
               </div>
               <div>
                 <Label htmlFor="mod-due">Due Date</Label>
-                <Input
-                  id="mod-due"
-                  type="date"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                  data-testid="ticket-due-date-input"
-                  className="mt-1.5"
-                />
+                <div className="relative mt-1.5">
+                  <Input
+                    id="mod-due"
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    data-testid="ticket-due-date-input"
+                    className="pr-9 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                  />
+                  <CalendarIcon
+                    size={16}
+                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+                  />
+                </div>
               </div>
             </div>
 
