@@ -24,6 +24,7 @@ import { useAuth } from "../context/AuthContext";
 import { useEffectivePermissionsState } from "../context/EffectivePermissionsContext";
 import MyWorkspaceDashboard from "../components/MyWorkspaceDashboard";
 import WorkspaceOverallDashboard from "../components/WorkspaceOverallDashboard";
+import CreateTicketModal from "../components/CreateTicketModal";
 
 const TABS = [
   { key: "workspace_manager", label: "Workspace Manager", icon: LayoutGrid },
@@ -236,6 +237,7 @@ function ProfixDashboardBody({ navigate, headerActions }) {
   const [dateFilter, setDateFilter] = useState(getCurrentMonthRange());
   const [refreshTick, setRefreshTick] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const params = useMemo(() => dateFilterToParams(dateFilter), [dateFilter]);
 
@@ -281,7 +283,7 @@ function ProfixDashboardBody({ navigate, headerActions }) {
         <div className="flex items-center gap-2 flex-wrap">
           <DateFilter value={dateFilter} onChange={setDateFilter} className="h-9" />
           <Button
-            onClick={() => navigate("/admin/create")}
+            onClick={() => setCreateOpen(true)}
             data-testid="create-new-ticket-btn"
             className="bg-[#ec9324] hover:bg-[#d4811f] text-white shadow-sm h-9"
           >
@@ -358,6 +360,11 @@ function ProfixDashboardBody({ navigate, headerActions }) {
         {recent.length === 0 && <div className="text-sm text-gray-400">No recent updates.</div>}
         {recent.map((t) => <RecentUpdateCard key={t.id} ticket={t} basePath="/admin/tickets" />)}
       </div>
+      <CreateTicketModal
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => setRefreshTick((v) => v + 1)}
+      />
     </Layout>
   );
 }

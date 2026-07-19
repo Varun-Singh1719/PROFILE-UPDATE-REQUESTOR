@@ -11,6 +11,7 @@ import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import DeferredSearchInput from "../components/DeferredSearchInput";
 import { Search, Plus, RefreshCw, Download, X, Send } from "lucide-react";
 import Pagination from "../components/Pagination";
+import CreateTicketModal from "../components/CreateTicketModal";
 import notify from "../lib/notify";
 import { StatusBadge } from "../components/Badges";
 import DateFilter, { dateFilterToParams } from "../components/DateFilter";
@@ -53,6 +54,7 @@ export default function TicketListPage({
   const [assigneeFilter, setAssigneeFilter] = useState([]);
   const [teamFilter, setTeamFilter] = useState([]);
   const [dateFilter, setDateFilter] = useState({ field: "created_at", mode: "between", from: null, to: null });
+  const [createOpen, setCreateOpen] = useState(false);
 
   // URL-backed multi-select filters (status / priority / assigned_to via URL param)
   // Parse comma-separated URL params into arrays.
@@ -298,7 +300,7 @@ export default function TicketListPage({
             </Button>
           )}
           {(isRA || isAdmin) && permCreate.isVisible && (
-            <Button onClick={() => navigate(isAdmin ? "/admin/create" : "/ra/create")} data-testid="create-new-ticket-btn"
+            <Button onClick={() => setCreateOpen(true)} data-testid="create-new-ticket-btn"
               className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9" disabled={!permCreate.canUse}>
               <Plus size={16} className="mr-1"/> New Request
             </Button>
@@ -430,6 +432,11 @@ export default function TicketListPage({
           className="mt-auto border-t border-gray-100"
         />
       </div>
+      <CreateTicketModal
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => load()}
+      />
     </Layout>
   );
 }
