@@ -35,7 +35,18 @@ fernet = Fernet(FERNET_KEY.encode()) if FERNET_KEY else None
 
 # ---------- DB ----------
 mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
+# Explicit timeouts so any Atlas hiccup fails fast (returns 500) rather than
+# hanging past Cloudflare's ~100s origin-timeout and surfacing as a 502.
+#   • serverSelectionTimeoutMS — how long to wait for a suitable server.
+#   • connectTimeoutMS         — TCP connect timeout.
+#   • socketTimeoutMS          — read timeout on an already-open socket.
+client = AsyncIOMotorClient(
+    mongo_url,
+    serverSelectionTimeoutMS=15000,
+    connectTimeoutMS=15000,
+    socketTimeoutMS=45000,
+    retryWrites=True,
+)
 db = client[os.environ['DB_NAME']]
 
 # ---------- App ----------
