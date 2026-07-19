@@ -1,7 +1,9 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { StatusBadge, PriorityBadge } from "./Badges";
-import { Calendar, User, Clock } from "lucide-react";
+import Calendar from "@mui/icons-material/CalendarTodayOutlined";
+import User from "@mui/icons-material/PersonOutlined";
+import Clock from "@mui/icons-material/AccessTime";
 
 function fmt(iso) {
   if (!iso) return "-";
@@ -23,9 +25,9 @@ export default function TicketCard({ ticket, basePath = "/tickets" }) {
       <div className="text-xs font-mono text-[#ec9324] font-semibold">{ticket.ticket_id}</div>
       <h3 className="mt-1 text-base font-semibold text-gray-900 line-clamp-2 pr-24">{ticket.subject}</h3>
       <div className="mt-4 space-y-1.5 text-xs text-gray-500">
-        <div className="flex items-center gap-1.5"><User size={12}/> Assigned: <span className="text-gray-700 font-medium">{ticket.assigned_to_name || "Unassigned"}</span></div>
-        <div className="flex items-center gap-1.5"><Clock size={12}/> Updated: <span className="text-gray-700">{fmt(ticket.updated_on)}</span></div>
-        {ticket.due_date && <div className="flex items-center gap-1.5"><Calendar size={12}/> Due: <span className="text-gray-700">{ticket.due_date}</span></div>}
+        <div className="flex items-center gap-1.5"><User sx={{ fontSize: 12 }}/> Assigned: <span className="text-gray-700 font-medium">{ticket.assigned_to_name || "Unassigned"}</span></div>
+        <div className="flex items-center gap-1.5"><Clock sx={{ fontSize: 12 }}/> Updated: <span className="text-gray-700">{fmt(ticket.updated_on)}</span></div>
+        {ticket.due_date && <div className="flex items-center gap-1.5"><Calendar sx={{ fontSize: 12 }}/> Due: <span className="text-gray-700">{ticket.due_date}</span></div>}
       </div>
     </div>
   );

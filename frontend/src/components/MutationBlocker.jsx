@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useBusy } from "../context/BusyContext";
-import { Loader2 } from "lucide-react";
+import Loader2 from "@mui/icons-material/Autorenew";
 
 /**
  * MutationBlocker — full-screen blocker rendered ONLY while a mutating
@@ -51,7 +51,7 @@ export default function MutationBlocker() {
           data-testid="mutation-blocker-spinner"
           className="bg-white rounded-2xl shadow-2xl px-5 py-3.5 flex items-center gap-3 border border-[#ec9324]/20 animate-in fade-in zoom-in-95 duration-200 min-w-[240px]"
         >
-          <Loader2 className="animate-spin text-[#ec9324] flex-shrink-0" size={22} />
+          <Loader2 className="animate-spin text-[#ec9324] flex-shrink-0" sx={{ fontSize: 22 }}/>
           <span className="text-sm font-semibold text-gray-800" data-testid="mutation-blocker-label">
             {label || "Saving…"}
           </span>

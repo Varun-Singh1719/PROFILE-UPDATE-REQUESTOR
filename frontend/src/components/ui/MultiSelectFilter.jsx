@@ -33,7 +33,11 @@
  */
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronUp, Check, Search, X } from "lucide-react";
+import ChevronDown from "@mui/icons-material/KeyboardArrowDown";
+import ChevronUp from "@mui/icons-material/KeyboardArrowUp";
+import Check from "@mui/icons-material/Check";
+import Search from "@mui/icons-material/SearchOutlined";
+import X from "@mui/icons-material/Close";
 
 export default function MultiSelectFilter({
   label,
@@ -215,12 +219,12 @@ export default function MultiSelectFilter({
               data-testid={tid ? `${tid}-clear` : undefined}
               className="text-gray-400 hover:text-gray-700 cursor-pointer inline-flex"
             >
-              <X size={12} />
+              <X sx={{ fontSize: 12 }}/>
             </span>
           )}
           {open
-            ? <ChevronUp size={14} className="text-gray-500" />
-            : <ChevronDown size={14} className="text-gray-500" />}
+            ? <ChevronUp sx={{ fontSize: 14 }} className="text-gray-500"/>
+            : <ChevronDown sx={{ fontSize: 14 }} className="text-gray-500"/>}
         </span>
       </button>
 
@@ -259,7 +263,7 @@ export default function MultiSelectFilter({
           {showSearch && (
             <div className="px-2 pt-1 pb-2 border-b border-gray-100">
               <div className="relative">
-                <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search sx={{ fontSize: 12 }} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400"/>
                 <input
                   ref={inputRef}
                   type="text"
@@ -310,7 +314,7 @@ export default function MultiSelectFilter({
                   >
                     {single
                       ? (checked && <span className="w-1.5 h-1.5 rounded-full bg-white" />)
-                      : <Check size={12} strokeWidth={3} />}
+                      : <Check sx={{ fontSize: 12 }}/>}
                   </span>
 
                   {/* Column 1 — Name (left aligned) */}

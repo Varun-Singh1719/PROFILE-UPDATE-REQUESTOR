@@ -1,7 +1,12 @@
 import React from "react";
 import Layout from "../components/Layout";
 import { useAuth } from "../context/AuthContext";
-import { Briefcase, Mail, Calendar, IdCard, UsersRound, ShieldCheck } from "lucide-react";
+import Briefcase from "@mui/icons-material/WorkOutlined";
+import Mail from "@mui/icons-material/MailOutlined";
+import Calendar from "@mui/icons-material/CalendarTodayOutlined";
+import IdCard from "@mui/icons-material/BadgeOutlined";
+import UsersRound from "@mui/icons-material/GroupsOutlined";
+import ShieldCheck from "@mui/icons-material/GppGoodOutlined";
 import { teamBackground } from "../lib/teamColors";
 
 function InfoRow({ icon: Icon, label, value }) {

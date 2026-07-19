@@ -8,7 +8,12 @@
  * Rendered only when `dashboard.is_manager` is true.
  */
 import React, { useMemo, useState } from "react";
-import { Users, MapPin, Hourglass, Home, ChevronDown, ChevronUp } from "lucide-react";
+import Users from "@mui/icons-material/PeopleOutlined";
+import MapPin from "@mui/icons-material/PlaceOutlined";
+import Hourglass from "@mui/icons-material/HourglassEmpty";
+import Home from "@mui/icons-material/HomeOutlined";
+import ChevronDown from "@mui/icons-material/KeyboardArrowDown";
+import ChevronUp from "@mui/icons-material/KeyboardArrowUp";
 import UserAvatar from "./UserAvatar";
 
 const PILL = {
@@ -44,7 +49,7 @@ export default function MyTeamToday({ team = [], managedTeams = [] }) {
     >
       <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-gray-100 flex-wrap gap-2">
         <div className="inline-flex items-center gap-2 flex-wrap">
-          <Users size={16} className="text-[#ec9324]" />
+          <Users sx={{ fontSize: 16 }} className="text-[#ec9324]"/>
           <h3 className="font-semibold text-gray-900">My Team Today</h3>
           {teamsLabel && (
             <span className="text-[11px] text-gray-500">· {teamsLabel}</span>
@@ -96,7 +101,7 @@ export default function MyTeamToday({ team = [], managedTeams = [] }) {
               <div className="mt-2 text-[11px] text-gray-600 inline-flex items-center gap-1 min-w-0">
                 {m.status === "assigned" && (
                   <>
-                    <MapPin size={12} className="text-[#ec9324] flex-shrink-0" />
+                    <MapPin sx={{ fontSize: 12 }} className="text-[#ec9324] flex-shrink-0"/>
                     <span className="truncate">{m.seat_label || "Seat"}</span>
                     {m.team_name && (
                       <>
@@ -111,7 +116,7 @@ export default function MyTeamToday({ team = [], managedTeams = [] }) {
                 )}
                 {m.status === "requested" && (
                   <>
-                    <Hourglass size={12} className="text-amber-600 flex-shrink-0" />
+                    <Hourglass sx={{ fontSize: 12 }} className="text-amber-600 flex-shrink-0"/>
                     <span className="truncate">
                       Awaiting approval{m.seat_label ? ` · ${m.seat_label}` : ""}
                     </span>
@@ -119,7 +124,7 @@ export default function MyTeamToday({ team = [], managedTeams = [] }) {
                 )}
                 {m.status === "off" && (
                   <>
-                    <Home size={12} className="text-gray-400 flex-shrink-0" />
+                    <Home sx={{ fontSize: 12 }} className="text-gray-400 flex-shrink-0"/>
                     <span className="truncate">Not on site today</span>
                   </>
                 )}
@@ -138,11 +143,11 @@ export default function MyTeamToday({ team = [], managedTeams = [] }) {
         >
           {expanded ? (
             <>
-              <ChevronUp size={13} /> Show less
+              <ChevronUp sx={{ fontSize: 13 }}/> Show less
             </>
           ) : (
             <>
-              <ChevronDown size={13} /> Show {team.length - COLLAPSED_LIMIT} more member{team.length - COLLAPSED_LIMIT > 1 ? "s" : ""}
+              <ChevronDown sx={{ fontSize: 13 }}/> Show {team.length - COLLAPSED_LIMIT} more member{team.length - COLLAPSED_LIMIT > 1 ? "s" : ""}
             </>
           )}
         </button>

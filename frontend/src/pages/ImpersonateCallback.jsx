@@ -13,7 +13,8 @@
  *   • Closing the impersonated tab ends the impersonation session.
  */
 import React, { useEffect, useState } from "react";
-import { Loader2, ShieldAlert } from "lucide-react";
+import Loader2 from "@mui/icons-material/Autorenew";
+import ShieldAlert from "@mui/icons-material/GppMaybeOutlined";
 
 export default function ImpersonateCallback() {
   const [err, setErr] = useState(null);
@@ -44,14 +45,14 @@ export default function ImpersonateCallback() {
       <div className="bg-white border border-gray-200 rounded-2xl shadow-sm px-6 py-8 max-w-sm w-full text-center">
         {err ? (
           <>
-            <ShieldAlert size={32} className="mx-auto text-red-500"/>
+            <ShieldAlert sx={{ fontSize: 32 }} className="mx-auto text-red-500"/>
             <h2 className="mt-3 text-base font-semibold text-gray-900">Impersonation failed</h2>
             <p className="mt-2 text-sm text-gray-600">{err}</p>
             <a href="/" className="mt-4 inline-block text-sm font-medium text-[#ec9324] hover:underline">Go to home</a>
           </>
         ) : (
           <>
-            <Loader2 size={28} className="mx-auto animate-spin text-[#ec9324]"/>
+            <Loader2 sx={{ fontSize: 28 }} className="mx-auto animate-spin text-[#ec9324]"/>
             <h2 className="mt-3 text-base font-semibold text-gray-900">Starting impersonated session…</h2>
             <p className="mt-1 text-sm text-gray-600">Hold on while we log you in as the selected user.</p>
           </>

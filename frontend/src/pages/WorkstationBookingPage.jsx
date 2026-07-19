@@ -42,11 +42,21 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import {
-  Armchair, Calendar as CalendarIcon, Loader2, Users, AlertTriangle,
-  Repeat, RefreshCw, Trash2, ChevronDown, X, ShieldAlert,
-  MousePointerClick, Wand2, CheckCircle2, Pencil,
-} from "lucide-react";
+import Armchair from "@mui/icons-material/Chair";
+import CalendarIcon from "@mui/icons-material/CalendarTodayOutlined";
+import Loader2 from "@mui/icons-material/Autorenew";
+import Users from "@mui/icons-material/PeopleOutlined";
+import AlertTriangle from "@mui/icons-material/WarningAmber";
+import Repeat from "@mui/icons-material/RepeatOutlined";
+import RefreshCw from "@mui/icons-material/Refresh";
+import Trash2 from "@mui/icons-material/DeleteOutlined";
+import ChevronDown from "@mui/icons-material/KeyboardArrowDown";
+import X from "@mui/icons-material/Close";
+import ShieldAlert from "@mui/icons-material/GppMaybeOutlined";
+import MousePointerClick from "@mui/icons-material/TouchApp";
+import Wand2 from "@mui/icons-material/AutoFixHighOutlined";
+import CheckCircle2 from "@mui/icons-material/CheckCircleOutlined";
+import Pencil from "@mui/icons-material/EditOutlined";
 import { toast } from "../lib/notify";
 import Layout from "../components/Layout";
 import api, { formatApiError } from "../lib/api";
@@ -665,7 +675,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
           title="Refresh availability"
           aria-label="Refresh availability"
         >
-          <RefreshCw size={16} className={availLoading ? "animate-spin" : ""} />
+          <RefreshCw sx={{ fontSize: 16 }} className={availLoading ? "animate-spin" : ""}/>
         </Button>
         ) : null
       }
@@ -675,7 +685,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 lg:px-6 py-3 border-b bg-white">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-[#ec9324]/10 flex items-center justify-center">
-              <Armchair className="text-[#ec9324]" size={18} />
+              <Armchair className="text-[#ec9324]" sx={{ fontSize: 18 }}/>
             </div>
             {livePlans.length > 1 && (
               <div className="flex items-center gap-2">
@@ -727,7 +737,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                     className="text-sm rounded-md border border-gray-300 pl-8 pr-2 py-1.5 bg-white"
                     data-testid="ws-date-filter"
                   />
-                  <CalendarIcon size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <CalendarIcon sx={{ fontSize: 14 }} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400"/>
                 </div>
               )}
               <Button
@@ -744,7 +754,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
         {/* ============================== Body ============================== */}
         {planLoading ? (
           <div className="flex-1 flex items-center justify-center">
-            <Loader2 className="animate-spin text-[#ec9324]" size={28} />
+            <Loader2 className="animate-spin text-[#ec9324]" sx={{ fontSize: 28 }}/>
           </div>
         ) : noLivePlans ? (
           <NoLivePlanEmptyState />
@@ -767,7 +777,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                 />
               ) : (
                 <div className="h-full flex items-center justify-center text-gray-400 text-sm">
-                  {availLoading ? <Loader2 className="animate-spin" /> : "No floor plan to render"}
+                  {availLoading ? <Loader2 className="animate-spin"/> : "No floor plan to render"}
                 </div>
               )}
             </div>
@@ -776,7 +786,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
             <div ref={formRef} className="lg:w-1/4 w-full lg:max-w-[420px] flex flex-col bg-white">
               {!canEdit && (
                 <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 flex items-center gap-2 text-xs text-amber-800">
-                  <ShieldAlert size={14} /> Only Super Admin can {isRequestMode ? "submit workstation requests" : "create or modify workstation bookings"}.
+                  <ShieldAlert sx={{ fontSize: 14 }}/> Only Super Admin can {isRequestMode ? "submit workstation requests" : "create or modify workstation bookings"}.
                 </div>
               )}
 
@@ -785,7 +795,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
               ) : (
                 <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
                   <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                    <Armchair size={16} /> Booking Form
+                    <Armchair sx={{ fontSize: 16 }}/> Booking Form
                   </h2>
 
                   {/* Booking Mode toggle — Manual Selection vs Team Auto Assignment.
@@ -808,7 +818,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                         }`}
                         data-testid="ws-mode-manual"
                       >
-                        <MousePointerClick size={13} /> Manual Selection
+                        <MousePointerClick sx={{ fontSize: 13 }}/> Manual Selection
                       </button>
                       <button
                         type="button"
@@ -821,7 +831,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                         }`}
                         data-testid="ws-mode-auto"
                       >
-                        <Wand2 size={13} /> Team Auto Assignment
+                        <Wand2 sx={{ fontSize: 13 }}/> Team Auto Assignment
                       </button>
                     </div>
                   )}
@@ -874,7 +884,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                             </span>
                           </div>
                           <div className="text-[11px] text-gray-600 flex items-center gap-1">
-                            <Users size={11} />
+                            <Users sx={{ fontSize: 11 }}/>
                             {teamPool.length} available for booking on {fmtDate(date)}
                           </div>
                         </div>
@@ -883,7 +893,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                       {/* Awaiting-team hint */}
                       {autoPhase === "awaiting-team" && (
                         <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-[12px] text-gray-600 flex items-start gap-2">
-                          <AlertTriangle size={13} className="mt-[1px] flex-shrink-0" />
+                          <AlertTriangle sx={{ fontSize: 13 }} className="mt-[1px] flex-shrink-0"/>
                           <span>Pick a team above to enable auto-assignment.</span>
                         </div>
                       )}
@@ -894,7 +904,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                           className="rounded-md border border-blue-100 bg-blue-50 p-3 text-[12px] text-blue-900 flex items-start gap-2"
                           data-testid="ws-auto-instruction"
                         >
-                          <MousePointerClick size={14} className="mt-[1px] flex-shrink-0" />
+                          <MousePointerClick sx={{ fontSize: 14 }} className="mt-[1px] flex-shrink-0"/>
                           <div>
                             Click a <strong>starting workstation</strong> on the floor map.
                             {teamMemberCount > 0 && (
@@ -915,7 +925,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                           data-testid="ws-auto-proposed"
                         >
                           <div className="flex items-center gap-1.5 text-emerald-800 text-sm font-semibold">
-                            <CheckCircle2 size={15} /> Proposed Selection
+                            <CheckCircle2 sx={{ fontSize: 15 }}/> Proposed Selection
                           </div>
                           <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11.5px]">
                             <div className="text-gray-600">Team</div>
@@ -962,13 +972,13 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                                       className="text-emerald-500 hover:text-emerald-800 rounded-full hover:bg-emerald-100 w-4 h-4 flex items-center justify-center"
                                       aria-label={`Remove ${s.label || s.id}`}
                                     >
-                                      <X size={10} />
+                                      <X sx={{ fontSize: 10 }}/>
                                     </button>
                                   </span>
                                 ))}
                             </div>
                             <div className="mt-2 text-[10.5px] text-emerald-800/80 flex items-center gap-1">
-                              <Pencil size={10} /> Click Modify (or seats on the map) to add / remove workstations.
+                              <Pencil sx={{ fontSize: 10 }}/> Click Modify (or seats on the map) to add / remove workstations.
                             </div>
                           </div>
                         </div>
@@ -1071,7 +1081,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                             </div>
 
                             <div className="mt-2 text-[11px] text-gray-600 flex items-center gap-1">
-                              <Users size={12} /> Team pool: {teamPool.length} available · {seatCount} required
+                              <Users sx={{ fontSize: 12 }}/> Team pool: {teamPool.length} available · {seatCount} required
                             </div>
 
                             {allocationMode === "manual" && (
@@ -1095,7 +1105,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
 
                             {teamPool.length < seatCount && (
                               <div className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-1.5 flex items-start gap-1">
-                                <AlertTriangle size={12} className="mt-[1px]" />
+                                <AlertTriangle sx={{ fontSize: 12 }} className="mt-[1px]"/>
                                 <span>Not enough available team members ({teamPool.length}) for {seatCount} workstation(s).</span>
                               </div>
                             )}
@@ -1145,7 +1155,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                   <div className="border border-gray-200 rounded-md p-3 space-y-2 bg-gray-50">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-semibold text-gray-700 flex items-center gap-1">
-                        <Repeat size={12} /> Recurring
+                        <Repeat sx={{ fontSize: 12 }}/> Recurring
                       </label>
                       <button
                         type="button"
@@ -1245,9 +1255,9 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                       data-testid="ws-save-button"
                     >
                       {saving ? (
-                        <><Loader2 className="animate-spin mr-2" size={14}/>{submitInProgressLabel}</>
+                        <><Loader2 className="animate-spin mr-2" sx={{ fontSize: 14 }}/>{submitInProgressLabel}</>
                       ) : bookingMode === "auto" ? (
-                        <><CheckCircle2 size={14} className="mr-1.5"/>Confirm Booking</>
+                        <><CheckCircle2 sx={{ fontSize: 14 }} className="mr-1.5"/>Confirm Booking</>
                       ) : (
                         submitLabel
                       )}
@@ -1266,7 +1276,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                         data-testid="ws-modify-button"
                         title="Clear the current proposal and pick a new starting workstation"
                       >
-                        <Pencil size={13} className="mr-1"/> Modify
+                        <Pencil sx={{ fontSize: 13 }} className="mr-1"/> Modify
                       </Button>
                     )}
                     <Button
@@ -1296,7 +1306,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
         <DialogContent data-testid="ws-auto-suggestion-dialog" className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-amber-700">
-              <AlertTriangle size={18} /> Not enough consecutive seats
+              <AlertTriangle sx={{ fontSize: 18 }}/> Not enough consecutive seats
             </DialogTitle>
             <DialogDescription className="text-sm text-gray-700 pt-2">
               {autoSuggestion && (
@@ -1357,7 +1367,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
               className="bg-[#ec9324] hover:bg-[#d8821a] text-white"
               data-testid="ws-suggestion-use"
             >
-              <CheckCircle2 size={14} className="mr-1.5" /> Use Suggested Block
+              <CheckCircle2 sx={{ fontSize: 14 }} className="mr-1.5"/> Use Suggested Block
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1374,7 +1384,7 @@ function NoLivePlanEmptyState() {
     <div className="flex-1 flex items-center justify-center bg-gray-50 px-6 py-12">
       <div className="max-w-md text-center" data-testid="ws-no-active-plan">
         <div className="mx-auto w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mb-4">
-          <AlertTriangle className="text-amber-600" size={32} />
+          <AlertTriangle className="text-amber-600" sx={{ fontSize: 32 }}/>
         </div>
         <h2 className="text-lg font-semibold text-gray-900">No Active Floor Plan Available</h2>
         <p className="mt-2 text-sm text-gray-600">
@@ -1395,7 +1405,7 @@ function NoSeatsEmptyState({ planId, navigate }) {
     <div className="flex-1 flex items-center justify-center px-6 py-12">
       <div className="text-center max-w-xs" data-testid="ws-no-seats">
         <div className="mx-auto w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center mb-3">
-          <Armchair className="text-gray-500" size={28} />
+          <Armchair className="text-gray-500" sx={{ fontSize: 28 }}/>
         </div>
         <h3 className="text-sm font-semibold text-gray-900">Add Workstation to Floor</h3>
         <p className="mt-2 text-xs text-gray-600">

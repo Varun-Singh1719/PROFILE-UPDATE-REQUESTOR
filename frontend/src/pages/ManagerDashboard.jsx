@@ -6,7 +6,12 @@ import MetricCard from "../components/MetricCard";
 import RecentUpdateCard from "../components/RecentUpdateCard";
 import DateFilter, { getCurrentMonthRange, dateFilterToParams } from "../components/DateFilter";
 import { Button } from "../components/ui/button";
-import { Ticket, AlertCircle, CheckCircle2, Loader, Users, Plus } from "lucide-react";
+import Ticket from "@mui/icons-material/ConfirmationNumberOutlined";
+import AlertCircle from "@mui/icons-material/ErrorOutlined";
+import CheckCircle2 from "@mui/icons-material/CheckCircleOutlined";
+import Loader from "@mui/icons-material/Autorenew";
+import Users from "@mui/icons-material/PeopleOutlined";
+import Plus from "@mui/icons-material/Add";
 
 export default function ManagerDashboard() {
   const [stats, setStats] = useState({});
@@ -36,7 +41,7 @@ export default function ManagerDashboard() {
             data-testid="create-new-ticket-btn"
             className="bg-[#ec9324] hover:bg-[#d4811f] text-white shadow-sm h-9"
           >
-            <Plus size={16} className="mr-1.5" /> New Request
+            <Plus sx={{ fontSize: 16 }} className="mr-1.5"/> New Request
           </Button>
         </>
       }
@@ -49,7 +54,7 @@ export default function ManagerDashboard() {
       </div>
 
       <h2 className="text-xl font-semibold text-gray-900 mt-12 mb-4 flex items-center gap-2">
-        <Users size={20} className="text-[#ec9324]"/> DQ Team Performance
+        <Users sx={{ fontSize: 20 }} className="text-[#ec9324]"/> DQ Team Performance
       </h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         {dqs.length === 0 && <div className="text-sm text-gray-400">No DQ members yet.</div>}

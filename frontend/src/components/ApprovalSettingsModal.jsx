@@ -12,7 +12,15 @@
  *     request auto-approves it (matches current backend behaviour).
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { X, RotateCcw, Save, CheckSquare, Square, Info, Settings, Calendar as CalendarIcon, Clock } from "lucide-react";
+import X from "@mui/icons-material/Close";
+import RotateCcw from "@mui/icons-material/RestartAlt";
+import Save from "@mui/icons-material/SaveOutlined";
+import CheckSquare from "@mui/icons-material/CheckBoxOutlined";
+import Square from "@mui/icons-material/CheckBoxOutlineBlank";
+import Info from "@mui/icons-material/InfoOutlined";
+import Settings from "@mui/icons-material/SettingsOutlined";
+import CalendarIcon from "@mui/icons-material/CalendarTodayOutlined";
+import Clock from "@mui/icons-material/AccessTime";
 import api from "../lib/api";
 import notify from "../lib/notify";
 import { Calendar } from "./ui/calendar";
@@ -368,7 +376,7 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
             aria-label="Close"
             data-testid="settings-close-btn"
           >
-            <X size={18} />
+            <X sx={{ fontSize: 18 }}/>
           </button>
         </div>
 
@@ -392,7 +400,7 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
               data-testid="settings-select-all"
               type="button"
             >
-              {allChecked ? <CheckSquare size={14} /> : <Square size={14} />}
+              {allChecked ? <CheckSquare sx={{ fontSize: 14 }}/> : <Square sx={{ fontSize: 14 }}/>}
               Select all (Entire Matrix)
             </button>
           </div>
@@ -413,7 +421,7 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
                         <span>{r.label}</span>
                         {!r.enforced && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 inline-flex items-center gap-1">
-                            <Info size={10} /> Config only
+                            <Info sx={{ fontSize: 10 }}/> Config only
                           </span>
                         )}
                         <button
@@ -481,7 +489,7 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
                                 aria-label={`Configure ${c.label} for ${r.label}`}
                                 title={`Configure ${c.label}`}
                               >
-                                <Settings size={13} />
+                                <Settings sx={{ fontSize: 13 }}/>
                               </button>
                               {configured && (
                                 <button
@@ -525,7 +533,7 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
             className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             data-testid="settings-reset-btn"
           >
-            <RotateCcw size={14} /> {resetting ? "Resetting…" : "Reset to Default"}
+            <RotateCcw sx={{ fontSize: 14 }}/> {resetting ? "Resetting…" : "Reset to Default"}
           </button>
           <div className="flex items-center gap-2">
             <button
@@ -544,7 +552,7 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
               className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-md bg-[#ec9324] hover:bg-[#d4811f] text-white disabled:opacity-70"
               data-testid="settings-save-btn"
             >
-              <Save size={14} /> {saving ? "Saving…" : "Save"}
+              <Save sx={{ fontSize: 14 }}/> {saving ? "Saving…" : "Save"}
             </button>
           </div>
         </div>

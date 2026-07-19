@@ -6,17 +6,15 @@
  * Team colours pulled from the real `TEAM_PALETTES` used in the Teams module.
  */
 import React from "react";
-import {
-  Users,
-  Map as MapIcon,
-  RefreshCw,
-  ChevronLeft,
-  ChevronRight,
-  DoorOpen,
-  MapPin,
-  Clock,
-  Armchair,
-} from "lucide-react";
+import Users from "@mui/icons-material/PeopleOutlined";
+import MapIcon from "@mui/icons-material/MapOutlined";
+import RefreshCw from "@mui/icons-material/Refresh";
+import ChevronLeft from "@mui/icons-material/ChevronLeft";
+import ChevronRight from "@mui/icons-material/ChevronRight";
+import DoorOpen from "@mui/icons-material/MeetingRoomOutlined";
+import MapPin from "@mui/icons-material/PlaceOutlined";
+import Clock from "@mui/icons-material/AccessTime";
+import Armchair from "@mui/icons-material/Chair";
 import Layout from "../components/Layout";
 import { teamBackground, teamInitials } from "../lib/teamColors";
 
@@ -119,7 +117,7 @@ export default function WMOverallPreview() {
               Seat allotted · F3-B12
             </div>
             <button className="h-9 w-9 rounded-md border border-gray-200 bg-white text-gray-500 hover:text-[#ec9324] hover:border-[#ec9324] inline-flex items-center justify-center" title="Refresh">
-              <RefreshCw size={14} />
+              <RefreshCw sx={{ fontSize: 14 }}/>
             </button>
           </div>
         </div>
@@ -145,7 +143,7 @@ export default function WMOverallPreview() {
                 </div>
                 <div className="mt-4 flex gap-2 flex-wrap">
                   <button className="inline-flex items-center gap-1.5 bg-[#ec9324] hover:bg-[#d4811f] text-white text-xs font-semibold px-3.5 py-2 rounded-md shadow-sm">
-                    <MapIcon size={13} /> View floor plan
+                    <MapIcon sx={{ fontSize: 13 }}/> View floor plan
                   </button>
                   <button className="inline-flex items-center gap-1.5 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold px-3.5 py-2 rounded-md">
                     Book for tomorrow
@@ -157,7 +155,7 @@ export default function WMOverallPreview() {
               </div>
               <div className="flex-shrink-0 w-32 h-32 rounded-lg border border-gray-200 bg-white flex items-center justify-center text-gray-400">
                 <div className="text-center">
-                  <MapIcon size={22} className="mx-auto text-[#ec9324] mb-1" />
+                  <MapIcon sx={{ fontSize: 22 }} className="mx-auto text-[#ec9324] mb-1"/>
                   <div className="text-[10px]">Mini floor-plan</div>
                 </div>
               </div>
@@ -171,9 +169,9 @@ export default function WMOverallPreview() {
               <div className="flex items-center justify-between mb-2">
                 <div className="text-[11px] uppercase tracking-widest text-gray-500 font-bold">This week</div>
                 <div className="inline-flex items-center gap-1">
-                  <button className="p-1 rounded hover:bg-gray-100"><ChevronLeft size={13}/></button>
+                  <button className="p-1 rounded hover:bg-gray-100"><ChevronLeft sx={{ fontSize: 13 }}/></button>
                   <button className="text-[10px] font-semibold text-[#ec9324] px-2 py-0.5 rounded hover:bg-orange-50">Today</button>
-                  <button className="p-1 rounded hover:bg-gray-100"><ChevronRight size={13}/></button>
+                  <button className="p-1 rounded hover:bg-gray-100"><ChevronRight sx={{ fontSize: 13 }}/></button>
                 </div>
               </div>
               <div className="text-[10px] text-gray-500 mb-2 flex items-center gap-2 flex-wrap">
@@ -233,7 +231,7 @@ export default function WMOverallPreview() {
           {/* Occupancy right now */}
           <div className="lg:col-span-4 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
             <div className="px-5 pt-4 pb-3 flex items-center gap-2 border-b border-gray-100">
-              <Armchair size={16} className="text-[#ec9324]" />
+              <Armchair sx={{ fontSize: 16 }} className="text-[#ec9324]"/>
               <h3 className="font-semibold text-gray-900">Occupancy right now</h3>
             </div>
             <div className="p-4 flex items-center gap-5">
@@ -270,7 +268,7 @@ export default function WMOverallPreview() {
           <div className="lg:col-span-8 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
             <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-gray-100">
               <div className="inline-flex items-center gap-2">
-                <DoorOpen size={16} className="text-[#ec9324]" />
+                <DoorOpen sx={{ fontSize: 16 }} className="text-[#ec9324]"/>
                 <h3 className="font-semibold text-gray-900">Meeting rooms today</h3>
               </div>
               <span className="text-[10px] font-semibold text-gray-500">34/48 booked</span>
@@ -279,7 +277,7 @@ export default function WMOverallPreview() {
               {ROOMS.map((r) => (
                 <div key={r.name} className="flex items-center gap-3 p-2 rounded-lg border border-gray-100 hover:bg-gray-50">
                   <span className="h-9 w-9 rounded-md bg-[#ec9324]/10 text-[#ec9324] inline-flex items-center justify-center">
-                    <DoorOpen size={16} />
+                    <DoorOpen sx={{ fontSize: 16 }}/>
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
@@ -305,7 +303,7 @@ export default function WMOverallPreview() {
         <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
           <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-gray-100 flex-wrap gap-2">
             <div className="inline-flex items-center gap-2 flex-wrap">
-              <Users size={16} className="text-[#ec9324]" />
+              <Users sx={{ fontSize: 16 }} className="text-[#ec9324]"/>
               <h3 className="font-semibold text-gray-900">All teams today</h3>
               <span className="text-[11px] text-gray-500">· {TEAMS.length} teams · {TEAMS.reduce((s, t) => s + t.count, 0)} seats allocated</span>
             </div>
@@ -327,11 +325,11 @@ export default function WMOverallPreview() {
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-2">
                   <div className="inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded px-1.5 py-1">
-                    <MapPin size={11} className="text-[#ec9324]" />
+                    <MapPin sx={{ fontSize: 11 }} className="text-[#ec9324]"/>
                     <span className="truncate">{t.seatFrom} → {t.seatTo}</span>
                   </div>
                   <button className="flex-shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold text-white bg-[#ec9324] hover:bg-[#d4811f] px-2 py-1 rounded">
-                    <MapIcon size={11} /> View on map
+                    <MapIcon sx={{ fontSize: 11 }}/> View on map
                   </button>
                 </div>
               </div>
@@ -342,7 +340,7 @@ export default function WMOverallPreview() {
         {/* Row 4 — Recent activity */}
         <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
           <div className="px-5 pt-4 pb-3 border-b border-gray-100 flex items-center gap-2">
-            <Clock size={16} className="text-[#ec9324]" />
+            <Clock sx={{ fontSize: 16 }} className="text-[#ec9324]"/>
             <h3 className="font-semibold text-gray-900">Recent activity</h3>
             <span className="ml-auto text-[10px] font-semibold text-gray-500">last 4h</span>
           </div>

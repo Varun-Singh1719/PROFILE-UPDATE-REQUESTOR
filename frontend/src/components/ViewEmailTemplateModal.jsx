@@ -15,7 +15,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "./ui/dialog";
 import { Button } from "./ui/button";
-import { Pencil, Mail } from "lucide-react";
+import Pencil from "@mui/icons-material/EditOutlined";
+import Mail from "@mui/icons-material/MailOutlined";
 
 /* ── Sample values for every known placeholder used across templates.
  *    Missing keys fall back to a friendly stand-in so unfamiliar templates
@@ -107,7 +108,7 @@ export default function ViewEmailTemplateModal({
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
               <DialogTitle className="flex items-center gap-2 text-base font-semibold text-gray-900">
-                <Mail size={16} className="text-[#ec9324]" />
+                <Mail sx={{ fontSize: 16 }} className="text-[#ec9324]"/>
                 <span className="truncate" data-testid="view-tpl-title">
                   {template?.name || "Email Template"}
                 </span>
@@ -135,7 +136,7 @@ export default function ViewEmailTemplateModal({
                 className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-8"
                 data-testid="view-tpl-edit-btn"
               >
-                <Pencil size={14} className="mr-1.5" /> Edit
+                <Pencil sx={{ fontSize: 14 }} className="mr-1.5"/> Edit
               </Button>
             )}
           </div>

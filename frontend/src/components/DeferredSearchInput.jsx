@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Input } from "./ui/input";
-import { Search } from "lucide-react";
+import Search from "@mui/icons-material/SearchOutlined";
 import SendIcon from "@mui/icons-material/Send";
 
 /**
@@ -66,10 +66,7 @@ export default function DeferredSearchInput({
   return (
     <div className={`relative ${className}`}>
       {showLeftIcon && (
-        <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-          size={16}
-        />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" sx={{ fontSize: 16 }}/>
       )}
       <Input
         placeholder={placeholder}
@@ -89,7 +86,7 @@ export default function DeferredSearchInput({
         title="Search"
         className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center text-gray-600"
       >
-        <SendIcon sx={{ fontSize: 14 }} />
+        <SendIcon sx={{ fontSize: 14 }}/>
       </button>
     </div>
   );

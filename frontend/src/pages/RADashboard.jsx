@@ -6,7 +6,11 @@ import MetricCard from "../components/MetricCard";
 import RecentUpdateCard from "../components/RecentUpdateCard";
 import DateFilter, { getCurrentMonthRange, dateFilterToParams } from "../components/DateFilter";
 import { Button } from "../components/ui/button";
-import { Ticket, AlertCircle, CheckCircle2, Loader, Plus } from "lucide-react";
+import Ticket from "@mui/icons-material/ConfirmationNumberOutlined";
+import AlertCircle from "@mui/icons-material/ErrorOutlined";
+import CheckCircle2 from "@mui/icons-material/CheckCircleOutlined";
+import Loader from "@mui/icons-material/Autorenew";
+import Plus from "@mui/icons-material/Add";
 
 export default function RADashboard() {
   const [stats, setStats] = useState({});
@@ -33,7 +37,7 @@ export default function RADashboard() {
             data-testid="create-new-ticket-btn"
             className="bg-[#ec9324] hover:bg-[#d4811f] text-white shadow-sm h-9"
           >
-            <Plus size={16} className="mr-1.5" /> New Request
+            <Plus sx={{ fontSize: 16 }} className="mr-1.5"/> New Request
           </Button>
         </>
       }

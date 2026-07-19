@@ -5,7 +5,10 @@ import Layout from "../components/Layout";
 import MetricCard from "../components/MetricCard";
 import RecentUpdateCard from "../components/RecentUpdateCard";
 import DateFilter, { getCurrentMonthRange, dateFilterToParams } from "../components/DateFilter";
-import { Ticket, AlertCircle, CheckCircle2, Loader } from "lucide-react";
+import Ticket from "@mui/icons-material/ConfirmationNumberOutlined";
+import AlertCircle from "@mui/icons-material/ErrorOutlined";
+import CheckCircle2 from "@mui/icons-material/CheckCircleOutlined";
+import Loader from "@mui/icons-material/Autorenew";
 
 export default function DQDashboard() {
   const [stats, setStats] = useState({});

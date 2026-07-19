@@ -14,10 +14,24 @@ import {
 } from "../components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip";
 import notify from "../lib/notify";
-import {
-  Search, Plus, Eye, Pencil, Copy, Trash2, Mail, FileText, Bold, Italic, List, ListOrdered, Link as LinkIcon, RotateCcw,
-  ArrowUp, ArrowDown, ChevronsUpDown, MoreVertical,
-} from "lucide-react";
+import Search from "@mui/icons-material/SearchOutlined";
+import Plus from "@mui/icons-material/Add";
+import Eye from "@mui/icons-material/Visibility";
+import Pencil from "@mui/icons-material/EditOutlined";
+import Copy from "@mui/icons-material/ContentCopy";
+import Trash2 from "@mui/icons-material/DeleteOutlined";
+import Mail from "@mui/icons-material/MailOutlined";
+import FileText from "@mui/icons-material/DescriptionOutlined";
+import Bold from "@mui/icons-material/FormatBold";
+import Italic from "@mui/icons-material/FormatItalic";
+import List from "@mui/icons-material/FormatListBulleted";
+import ListOrdered from "@mui/icons-material/FormatListNumbered";
+import LinkIcon from "@mui/icons-material/InsertLink";
+import RotateCcw from "@mui/icons-material/RestartAlt";
+import ArrowUp from "@mui/icons-material/ArrowUpward";
+import ArrowDown from "@mui/icons-material/ArrowDownward";
+import ChevronsUpDown from "@mui/icons-material/UnfoldMore";
+import MoreVertical from "@mui/icons-material/MoreVert";
 import { useAuth } from "../context/AuthContext";
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
 import { confirm as confirmDialog, prompt as promptDialog } from '../lib/dialog';
@@ -173,21 +187,21 @@ function RichTextEditor({ value, onChange, testId = "rte" }) {
     <div className="border border-gray-300 rounded-md overflow-hidden">
       <div className="flex items-center gap-1 bg-gray-50 border-b border-gray-200 px-2 py-1.5">
         <button type="button" onClick={() => exec("bold")} title="Bold" className="p-1.5 rounded hover:bg-gray-200" data-testid={`${testId}-bold`}>
-          <Bold size={14}/>
+          <Bold sx={{ fontSize: 14 }}/>
         </button>
         <button type="button" onClick={() => exec("italic")} title="Italic" className="p-1.5 rounded hover:bg-gray-200" data-testid={`${testId}-italic`}>
-          <Italic size={14}/>
+          <Italic sx={{ fontSize: 14 }}/>
         </button>
         <span className="w-px h-5 bg-gray-300 mx-1"/>
         <button type="button" onClick={() => exec("insertUnorderedList")} title="Bullet list" className="p-1.5 rounded hover:bg-gray-200" data-testid={`${testId}-ul`}>
-          <List size={14}/>
+          <List sx={{ fontSize: 14 }}/>
         </button>
         <button type="button" onClick={() => exec("insertOrderedList")} title="Numbered list" className="p-1.5 rounded hover:bg-gray-200" data-testid={`${testId}-ol`}>
-          <ListOrdered size={14}/>
+          <ListOrdered sx={{ fontSize: 14 }}/>
         </button>
         <span className="w-px h-5 bg-gray-300 mx-1"/>
         <button type="button" onClick={addLink} title="Link" className="p-1.5 rounded hover:bg-gray-200" data-testid={`${testId}-link`}>
-          <LinkIcon size={14}/>
+          <LinkIcon sx={{ fontSize: 14 }}/>
         </button>
         <span className="ml-auto text-[10px] text-gray-400">Use <code className="px-1 bg-gray-100 rounded">{`{{name}}`}</code> for placeholders</span>
       </div>
@@ -444,7 +458,7 @@ export default function EmailTemplatesPage() {
       contentClassName="w-full px-4 pt-4 pb-3 flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden"
       actions={isAdmin && permCreate.isVisible && (
         <Button onClick={openCreate} className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9" data-testid="add-template-btn" disabled={!permCreate.canUse}>
-          <Plus size={16} className="mr-2"/> New Template
+          <Plus sx={{ fontSize: 16 }} className="mr-2"/> New Template
         </Button>
       )}
     >
@@ -555,7 +569,7 @@ export default function EmailTemplatesPage() {
                           aria-label="Row actions"
                           title="Actions"
                         >
-                          <MoreVertical size={16} />
+                          <MoreVertical sx={{ fontSize: 16 }}/>
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-40">
@@ -564,7 +578,7 @@ export default function EmailTemplatesPage() {
                           data-testid={`view-${t.kind}`}
                           className="cursor-pointer"
                         >
-                          <Eye size={14} className="mr-2 text-gray-500" /> View
+                          <Eye sx={{ fontSize: 14 }} className="mr-2 text-gray-500"/> View
                         </DropdownMenuItem>
                         {isAdmin && permEdit.isVisible && (
                           <DropdownMenuItem
@@ -572,7 +586,7 @@ export default function EmailTemplatesPage() {
                             data-testid={`edit-${t.kind}`}
                             className="cursor-pointer"
                           >
-                            <Pencil size={14} className="mr-2 text-gray-500" /> Edit
+                            <Pencil sx={{ fontSize: 14 }} className="mr-2 text-gray-500"/> Edit
                           </DropdownMenuItem>
                         )}
                         {isAdmin && permEdit.isVisible && (
@@ -581,7 +595,7 @@ export default function EmailTemplatesPage() {
                             data-testid={`duplicate-${t.kind}`}
                             className="cursor-pointer"
                           >
-                            <Copy size={14} className="mr-2 text-gray-500" /> Duplicate
+                            <Copy sx={{ fontSize: 14 }} className="mr-2 text-gray-500"/> Duplicate
                           </DropdownMenuItem>
                         )}
                         {isAdmin && (!t.system || t.local) && permDelete.isVisible && (
@@ -593,9 +607,9 @@ export default function EmailTemplatesPage() {
                               className="cursor-pointer text-red-600 focus:text-red-700 focus:bg-red-50"
                             >
                               {t.local ? (
-                                <><RotateCcw size={14} className="mr-2" /> Reset to default</>
+                                <><RotateCcw sx={{ fontSize: 14 }} className="mr-2"/> Reset to default</>
                               ) : (
-                                <><Trash2 size={14} className="mr-2" /> Delete</>
+                                <><Trash2 sx={{ fontSize: 14 }} className="mr-2"/> Delete</>
                               )}
                             </DropdownMenuItem>
                           </>
@@ -700,7 +714,7 @@ export default function EmailTemplatesPage() {
       <Dialog open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><FileText size={16}/> {preview?.name}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><FileText sx={{ fontSize: 16 }}/> {preview?.name}</DialogTitle>
             <DialogDescription>Kind: <code>{preview?.kind}</code> • Category: {preview?.category} • Status: {preview?.status}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">

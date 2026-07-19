@@ -32,7 +32,7 @@ import PendingApprovalsPage from "./pages/PendingApprovalsPage";
 import BookingsPage from "./pages/BookingsPage";
 import ProfilePage from "./pages/ProfilePage";
 import WMOverallPreview from "./pages/WMOverallPreview";
-import { Loader2 } from "lucide-react";
+import Loader2 from "@mui/icons-material/Autorenew";
 
 // v3 role model — every authenticated user (Super Admin or Admin) lands at /admin.
 // Routing inside the admin shell is gated by Permission Sets, not by role.
@@ -41,7 +41,7 @@ const roleHome = () => "/admin";
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();
   if (loading || user === null)
-    return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#ec9324]" size={32}/></div>;
+    return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#ec9324]" sx={{ fontSize: 32 }}/></div>;
   if (!user) return <Navigate to="/login" replace />;
   if (roles && !roles.includes(user.role)) {
     return <Navigate to={roleHome()} replace />;
@@ -51,7 +51,7 @@ function ProtectedRoute({ children, roles }) {
 
 function HomeRedirect() {
   const { user, loading } = useAuth();
-  if (loading || user === null) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#ec9324]" size={32}/></div>;
+  if (loading || user === null) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#ec9324]" sx={{ fontSize: 32 }}/></div>;
   if (!user) return <Navigate to="/login" replace />;
   return <Navigate to={roleHome()} replace />;
 }

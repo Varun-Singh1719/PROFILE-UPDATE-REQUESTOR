@@ -1,7 +1,12 @@
 import React from "react";
 import Layout from "../components/Layout";
 import { Button } from "../components/ui/button";
-import { Armchair, MapPin, CalendarCheck, Users, Sparkles, ArrowRight } from "lucide-react";
+import Armchair from "@mui/icons-material/Chair";
+import MapPin from "@mui/icons-material/PlaceOutlined";
+import CalendarCheck from "@mui/icons-material/EventAvailableOutlined";
+import Users from "@mui/icons-material/PeopleOutlined";
+import Sparkles from "@mui/icons-material/AutoAwesomeOutlined";
+import ArrowRight from "@mui/icons-material/ArrowForward";
 
 const FEATURES = [
   {
@@ -30,7 +35,7 @@ export default function DeskBookingPage() {
       title="Desk Booking"
       actions={
         <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1 text-xs font-semibold">
-          <Sparkles size={12}/> Coming Soon
+          <Sparkles sx={{ fontSize: 12 }}/> Coming Soon
         </span>
       }
     >
@@ -43,7 +48,7 @@ export default function DeskBookingPage() {
             A modern desk-booking experience designed for distributed and hybrid teams. Find your team, book a zone, and check in — all from one place.
           </p>
           <Button disabled className="mt-5 bg-white text-blue-700 hover:bg-white/90 font-semibold cursor-not-allowed">
-            Request Early Access <ArrowRight size={14} className="ml-1.5"/>
+            Request Early Access <ArrowRight sx={{ fontSize: 14 }} className="ml-1.5"/>
           </Button>
         </div>
       </div>

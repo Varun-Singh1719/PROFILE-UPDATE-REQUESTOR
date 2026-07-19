@@ -11,7 +11,12 @@ import {
 import notify from "../lib/notify";
 import { useAuth } from "../context/AuthContext";
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
-import { ArrowLeft, Paperclip, Calendar, User, Hash, Activity } from "lucide-react";
+import ArrowLeft from "@mui/icons-material/ArrowBack";
+import Paperclip from "@mui/icons-material/AttachFile";
+import Calendar from "@mui/icons-material/CalendarTodayOutlined";
+import User from "@mui/icons-material/PersonOutlined";
+import Hash from "@mui/icons-material/TagOutlined";
+import Activity from "@mui/icons-material/Timeline";
 
 function fmt(iso) { if (!iso) return "-"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
 
@@ -102,7 +107,7 @@ export default function TicketDetailPage() {
       }
     >
       <button onClick={() => navigate(-1)} className="text-sm text-gray-500 hover:text-gray-900 flex items-center gap-1 mb-4" data-testid="back-btn">
-        <ArrowLeft size={14}/> Back
+        <ArrowLeft sx={{ fontSize: 14 }}/> Back
       </button>
 
       <div className="bg-white rounded-xl shadow-soft border border-gray-100 p-6">
@@ -139,7 +144,7 @@ export default function TicketDetailPage() {
                   className="inline-flex items-center gap-2 text-[#ec9324] font-medium hover:underline bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs"
                   data-testid={`attachment-link-${i}`}
                 >
-                  <Paperclip size={12}/> {a.filename || `Attachment ${i + 1}`}
+                  <Paperclip sx={{ fontSize: 12 }}/> {a.filename || `Attachment ${i + 1}`}
                 </a>
               ))}
             </div>
@@ -167,7 +172,7 @@ export default function TicketDetailPage() {
           </div>
         </div>
         <div className="bg-white rounded-xl shadow-soft border border-gray-100 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2"><Activity size={18}/> Activity</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2"><Activity sx={{ fontSize: 18 }}/> Activity</h2>
           <div className="space-y-3">
             {activity.length === 0 && <div className="text-sm text-gray-400">No activity yet.</div>}
             {activity.map((a) => (

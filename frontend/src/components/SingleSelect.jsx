@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
-import { ChevronsUpDown, X, Search } from "lucide-react";
+import ChevronsUpDown from "@mui/icons-material/UnfoldMore";
+import X from "@mui/icons-material/Close";
+import Search from "@mui/icons-material/SearchOutlined";
 
 /**
  * SingleSelect dropdown — plain list style (no checkboxes).
@@ -96,10 +98,10 @@ export default function SingleSelect({
               data-testid={testId ? `${testId}-clear` : undefined}
               aria-label="Clear"
             >
-              <X size={12} />
+              <X sx={{ fontSize: 12 }}/>
             </span>
           )}
-          <ChevronsUpDown size={13} className="text-gray-400" />
+          <ChevronsUpDown sx={{ fontSize: 13 }} className="text-gray-400"/>
         </span>
       </button>
 
@@ -108,7 +110,7 @@ export default function SingleSelect({
           {searchable && (
             <div className="px-2 py-2 border-b border-gray-100">
               <div className="relative">
-                <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search sx={{ fontSize: 13 }} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400"/>
                 <input
                   type="text"
                   autoFocus

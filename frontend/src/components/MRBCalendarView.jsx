@@ -1,9 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import {
-  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
-  X, Calendar as CalendarIcon, Users, MapPin, Clock, User, Building2,
-  Pencil, Trash2, AlertCircle, Loader2,
-} from "lucide-react";
+import ChevronLeft from "@mui/icons-material/ChevronLeft";
+import ChevronRight from "@mui/icons-material/ChevronRight";
+import ChevronsLeft from "@mui/icons-material/KeyboardDoubleArrowLeft";
+import ChevronsRight from "@mui/icons-material/KeyboardDoubleArrowRight";
+import X from "@mui/icons-material/Close";
+import CalendarIcon from "@mui/icons-material/CalendarTodayOutlined";
+import Users from "@mui/icons-material/PeopleOutlined";
+import MapPin from "@mui/icons-material/PlaceOutlined";
+import Clock from "@mui/icons-material/AccessTime";
+import User from "@mui/icons-material/PersonOutlined";
+import Building2 from "@mui/icons-material/ApartmentOutlined";
+import Pencil from "@mui/icons-material/EditOutlined";
+import Trash2 from "@mui/icons-material/DeleteOutlined";
+import AlertCircle from "@mui/icons-material/ErrorOutlined";
+import Loader2 from "@mui/icons-material/Autorenew";
 import api from "../lib/api";
 import { Button } from "./ui/button";
 import { toast } from "../lib/notify";
@@ -80,7 +90,7 @@ function MiniMonth({ value, onChange }) {
           className="p-1 text-gray-500 hover:text-[#ec9324] hover:bg-orange-50 rounded"
           data-testid="mrb-mini-prev"
           aria-label="Previous month"
-        ><ChevronLeft size={14}/></button>
+        ><ChevronLeft sx={{ fontSize: 14 }}/></button>
         <div className="text-[12px] font-bold text-gray-800">{monthLabel}</div>
         <button
           type="button"
@@ -88,7 +98,7 @@ function MiniMonth({ value, onChange }) {
           className="p-1 text-gray-500 hover:text-[#ec9324] hover:bg-orange-50 rounded"
           data-testid="mrb-mini-next"
           aria-label="Next month"
-        ><ChevronRight size={14}/></button>
+        ><ChevronRight sx={{ fontSize: 14 }}/></button>
       </div>
       <div className="grid grid-cols-7 gap-y-1 text-[9px] font-bold text-gray-400 mb-1 text-center">
         {["M","T","W","T","F","S","S"].map((d, i) => <div key={i}>{d}</div>)}
@@ -156,24 +166,24 @@ function EventPreview({ booking, anchor, onClose, onMore, onEdit, onCancel, canE
           <div className="text-[10px] font-bold uppercase tracking-wider text-[#ec9324]">Meeting</div>
           <div className="text-sm font-bold text-gray-900 truncate" title={booking.title}>{booking.title}</div>
         </div>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-700 p-0.5" data-testid="mrb-preview-close"><X size={14}/></button>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-700 p-0.5" data-testid="mrb-preview-close"><X sx={{ fontSize: 14 }}/></button>
       </div>
       <div className="px-3 py-2 space-y-1.5 text-[12px]">
-        <div className="flex items-center gap-1.5 text-gray-700"><MapPin size={12} className="text-gray-400"/> {booking.room_name}</div>
-        <div className="flex items-center gap-1.5 text-gray-700"><Clock size={12} className="text-gray-400"/>
+        <div className="flex items-center gap-1.5 text-gray-700"><MapPin sx={{ fontSize: 12 }} className="text-gray-400"/> {booking.room_name}</div>
+        <div className="flex items-center gap-1.5 text-gray-700"><Clock sx={{ fontSize: 12 }} className="text-gray-400"/>
           {new Date(booking.start_at).toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short" })}
           <span className="text-gray-300">·</span>
           {fmtTime(booking.start_at)} – {fmtTime(booking.end_at)}
         </div>
-        <div className="flex items-center gap-1.5 text-gray-700"><User size={12} className="text-gray-400"/>
+        <div className="flex items-center gap-1.5 text-gray-700"><User sx={{ fontSize: 12 }} className="text-gray-400"/>
           {booking.organizer?.name || booking.organizer?.email || "—"}
         </div>
         {booking.organizer_team_name ? (
-          <div className="flex items-center gap-1.5 text-[#ec9324] font-semibold"><Building2 size={12}/> {booking.organizer_team_name}</div>
+          <div className="flex items-center gap-1.5 text-[#ec9324] font-semibold"><Building2 sx={{ fontSize: 12 }}/> {booking.organizer_team_name}</div>
         ) : null}
         {attendees.length > 0 && (
           <div className="pt-1.5 border-t border-gray-100 mt-1.5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1 flex items-center gap-1"><Users size={10}/> Attendees</div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1 flex items-center gap-1"><Users sx={{ fontSize: 10 }}/> Attendees</div>
             <div className="flex flex-wrap gap-1">
               {firstThree.map(a => (
                 <span key={`${a.type}-${a.id}`} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${a.type === 'team' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-orange-50 text-[#ec9324] border-orange-200'}`}>
@@ -203,14 +213,14 @@ function EventPreview({ booking, anchor, onClose, onMore, onEdit, onCancel, canE
               onClick={onEdit}
               className="inline-flex items-center gap-1 text-[11px] text-gray-700 hover:text-[#ec9324] px-2 py-1 rounded hover:bg-orange-50"
               data-testid="mrb-preview-edit"
-            ><Pencil size={11}/> Edit</button>
+            ><Pencil sx={{ fontSize: 11 }}/> Edit</button>
           )}
           {canCancel && (
             <button
               onClick={onCancel}
               className="inline-flex items-center gap-1 text-[11px] text-red-600 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50"
               data-testid="mrb-preview-cancel"
-            ><Trash2 size={11}/> Cancel</button>
+            ><Trash2 sx={{ fontSize: 11 }}/> Cancel</button>
           )}
         </div>
       </div>
@@ -232,13 +242,13 @@ function EventDetails({ booking, onClose, onEdit, onCancel, canEdit, canCancel }
             <div className="text-[10px] font-bold uppercase tracking-wider text-[#ec9324]">Meeting Details</div>
             <div className="text-base font-bold text-gray-900 truncate">{booking.title}</div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 p-1" data-testid="mrb-details-close"><X size={16}/></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 p-1" data-testid="mrb-details-close"><X sx={{ fontSize: 16 }}/></button>
         </div>
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 text-[13px]">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <div className="text-[10px] font-bold uppercase text-gray-500 mb-0.5">Meeting Room</div>
-              <div className="text-gray-800 flex items-center gap-1.5"><MapPin size={12} className="text-gray-400"/> {booking.room_name}</div>
+              <div className="text-gray-800 flex items-center gap-1.5"><MapPin sx={{ fontSize: 12 }} className="text-gray-400"/> {booking.room_name}</div>
             </div>
             <div>
               <div className="text-[10px] font-bold uppercase text-gray-500 mb-0.5">Date</div>
@@ -246,7 +256,7 @@ function EventDetails({ booking, onClose, onEdit, onCancel, canEdit, canCancel }
             </div>
             <div>
               <div className="text-[10px] font-bold uppercase text-gray-500 mb-0.5">Time</div>
-              <div className="text-gray-800 flex items-center gap-1.5"><Clock size={12} className="text-gray-400"/> {fmtTime(booking.start_at)} – {fmtTime(booking.end_at)}</div>
+              <div className="text-gray-800 flex items-center gap-1.5"><Clock sx={{ fontSize: 12 }} className="text-gray-400"/> {fmtTime(booking.start_at)} – {fmtTime(booking.end_at)}</div>
             </div>
             <div>
               <div className="text-[10px] font-bold uppercase text-gray-500 mb-0.5">Organizer</div>
@@ -260,7 +270,7 @@ function EventDetails({ booking, onClose, onEdit, onCancel, canEdit, canCancel }
               <div className="flex flex-wrap gap-1.5">
                 {teamAttendees.map(t => (
                   <span key={`t-${t.id}`} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-purple-50 text-purple-700 border-purple-200">
-                    <Users size={10}/> {t.name}
+                    <Users sx={{ fontSize: 10 }}/> {t.name}
                   </span>
                 ))}
               </div>
@@ -285,12 +295,12 @@ function EventDetails({ booking, onClose, onEdit, onCancel, canEdit, canCancel }
           <Button variant="outline" onClick={onClose} data-testid="mrb-details-close-btn">Close</Button>
           {canEdit && (
             <Button onClick={onEdit} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="mrb-details-edit">
-              <Pencil size={14} className="mr-1.5"/> Edit
+              <Pencil sx={{ fontSize: 14 }} className="mr-1.5"/> Edit
             </Button>
           )}
           {canCancel && (
             <Button onClick={onCancel} variant="outline" className="text-red-600 hover:bg-red-50 border-red-200" data-testid="mrb-details-cancel">
-              <Trash2 size={14} className="mr-1.5"/> Cancel Meeting
+              <Trash2 sx={{ fontSize: 14 }} className="mr-1.5"/> Cancel Meeting
             </Button>
           )}
         </div>
@@ -357,7 +367,7 @@ function DayGrid({ rooms, bookings, date, onPickSlot, onPickEvent, hoverSlot, se
     return (
       <div className="flex-1 flex items-center justify-center p-10 text-center text-gray-500">
         <div>
-          <Building2 size={32} className="mx-auto text-gray-300 mb-2"/>
+          <Building2 sx={{ fontSize: 32 }} className="mx-auto text-gray-300 mb-2"/>
           <div className="text-sm font-semibold text-gray-700">No meeting rooms available</div>
           <div className="text-[12px] text-gray-500 mt-1">Add rooms in <span className="font-semibold">Floor Calibration → Meeting Room Calibration</span> and publish a Live floor plan.</div>
         </div>
@@ -653,15 +663,15 @@ export default function MRBCalendarView({ user, onClose, onPickSlot, onReschedul
       {/* Top bar */}
       <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between gap-3 flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          <CalendarIcon size={20} className="text-[#ec9324]"/>
+          <CalendarIcon sx={{ fontSize: 20 }} className="text-[#ec9324]"/>
           <div className="text-lg font-bold text-gray-900 truncate">Check Availability</div>
           <span className="ml-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Day View</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="inline-flex items-center bg-gray-100 rounded-md p-0.5">
-            <button onClick={goPrevDay} className="p-1 hover:bg-white rounded text-gray-700" aria-label="Previous day" data-testid="mrb-cal-prev"><ChevronLeft size={16}/></button>
+            <button onClick={goPrevDay} className="p-1 hover:bg-white rounded text-gray-700" aria-label="Previous day" data-testid="mrb-cal-prev"><ChevronLeft sx={{ fontSize: 16 }}/></button>
             <button onClick={goToday}   className="px-2 text-[11px] font-bold uppercase tracking-wider text-gray-700 hover:text-[#ec9324]" data-testid="mrb-cal-today">Today</button>
-            <button onClick={goNextDay} className="p-1 hover:bg-white rounded text-gray-700" aria-label="Next day" data-testid="mrb-cal-next"><ChevronRight size={16}/></button>
+            <button onClick={goNextDay} className="p-1 hover:bg-white rounded text-gray-700" aria-label="Next day" data-testid="mrb-cal-next"><ChevronRight sx={{ fontSize: 16 }}/></button>
           </div>
           <div className="text-sm font-semibold text-gray-700 px-2 hidden md:block" data-testid="mrb-cal-current-date">{fmtLongDate(date)}</div>
           <Button
@@ -670,7 +680,7 @@ export default function MRBCalendarView({ user, onClose, onPickSlot, onReschedul
             className="border-gray-200 text-gray-700 hover:bg-gray-50"
             data-testid="mrb-cal-close"
           >
-            <X size={14} className="mr-1.5"/> Close
+            <X sx={{ fontSize: 14 }} className="mr-1.5"/> Close
           </Button>
         </div>
       </div>
@@ -690,7 +700,7 @@ export default function MRBCalendarView({ user, onClose, onPickSlot, onReschedul
             aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
             data-testid="mrb-cal-sidebar-toggle"
           >
-            {sidebarOpen ? <ChevronsLeft size={14}/> : <ChevronsRight size={14}/>}
+            {sidebarOpen ? <ChevronsLeft sx={{ fontSize: 14 }}/> : <ChevronsRight sx={{ fontSize: 14 }}/>}
           </button>
 
           {sidebarOpen ? (
@@ -702,7 +712,7 @@ export default function MRBCalendarView({ user, onClose, onPickSlot, onReschedul
             </div>
           ) : (
             <div className="pt-12 flex flex-col items-center text-gray-400">
-              <CalendarIcon size={16}/>
+              <CalendarIcon sx={{ fontSize: 16 }}/>
             </div>
           )}
         </div>
@@ -711,7 +721,7 @@ export default function MRBCalendarView({ user, onClose, onPickSlot, onReschedul
         <div className="flex-1 flex flex-col overflow-hidden relative">
           {loading && (
             <div className="absolute top-2 right-3 text-[11px] text-gray-500 inline-flex items-center gap-1 z-30 bg-white/80 px-2 py-0.5 rounded">
-              <Loader2 size={11} className="animate-spin"/> Loading…
+              <Loader2 sx={{ fontSize: 11 }} className="animate-spin"/> Loading…
             </div>
           )}
           <DayGrid

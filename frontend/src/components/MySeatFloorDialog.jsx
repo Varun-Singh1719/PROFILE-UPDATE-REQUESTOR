@@ -9,7 +9,7 @@
  * mapping that leverages its native "team"/"occupied" render paths.
  */
 import React, { useMemo } from "react";
-import { X } from "lucide-react";
+import X from "@mui/icons-material/Close";
 import WorkstationFloorMap from "./WorkstationFloorMap";
 
 const USER_SEAT_COLOR = "#dc2626"; // red-600 — reserved for the current user
@@ -103,7 +103,7 @@ export default function MySeatFloorDialog({ open, onClose, floorData, dateLabel 
               aria-label="Close"
               data-testid="my-seat-floor-close"
             >
-              <X size={18} />
+              <X sx={{ fontSize: 18 }}/>
             </button>
           </div>
         </div>

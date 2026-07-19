@@ -17,19 +17,17 @@
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Armchair,
-  CalendarPlus,
-  Map as MapIcon,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  Users,
-  CheckCircle2,
-  RefreshCw,
-  Info,
-  BadgeCheck,
-} from "lucide-react";
+import Armchair from "@mui/icons-material/Chair";
+import CalendarPlus from "@mui/icons-material/EventNoteOutlined";
+import MapIcon from "@mui/icons-material/MapOutlined";
+import ChevronLeft from "@mui/icons-material/ChevronLeft";
+import ChevronRight from "@mui/icons-material/ChevronRight";
+import Clock from "@mui/icons-material/AccessTime";
+import Users from "@mui/icons-material/PeopleOutlined";
+import CheckCircle2 from "@mui/icons-material/CheckCircleOutlined";
+import RefreshCw from "@mui/icons-material/Refresh";
+import Info from "@mui/icons-material/InfoOutlined";
+import BadgeCheck from "@mui/icons-material/VerifiedOutlined";
 import api from "../lib/api";
 import UserAvatar from "./UserAvatar";
 import { useAuth } from "../context/AuthContext";
@@ -191,7 +189,7 @@ export default function MyWorkspaceDashboard({ showTeamSection = false } = {}) {
             title="Refresh"
             data-testid="my-workspace-refresh"
           >
-            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+            <RefreshCw sx={{ fontSize: 14 }} className={loading ? "animate-spin" : ""}/>
           </button>
         </div>
       </div>
@@ -236,7 +234,7 @@ export default function MyWorkspaceDashboard({ showTeamSection = false } = {}) {
                       className="inline-flex items-center gap-1.5 bg-[#ec9324] hover:bg-[#d4811f] text-white text-xs font-semibold px-3.5 py-2 rounded-md shadow-sm"
                       data-testid="my-seat-view-floor-btn"
                     >
-                      <MapIcon size={13} /> View floor plan
+                      <MapIcon sx={{ fontSize: 13 }}/> View floor plan
                     </button>
                     <button
                       type="button"
@@ -268,14 +266,14 @@ export default function MyWorkspaceDashboard({ showTeamSection = false } = {}) {
                       onClick={() => navigate("/workspace-manager/workstation-booking")}
                       className="inline-flex items-center gap-1.5 bg-[#ec9324] hover:bg-[#d4811f] text-white text-xs font-semibold px-3.5 py-2 rounded-md shadow-sm"
                     >
-                      <Armchair size={13} /> Book a desk
+                      <Armchair sx={{ fontSize: 13 }}/> Book a desk
                     </button>
                     <button
                       type="button"
                       onClick={openFloor}
                       className="inline-flex items-center gap-1.5 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold px-3.5 py-2 rounded-md"
                     >
-                      <MapIcon size={13} /> View floor plan
+                      <MapIcon sx={{ fontSize: 13 }}/> View floor plan
                     </button>
                   </div>
                 </div>
@@ -365,7 +363,7 @@ function ThisWeekCard({ weekData, weekLoading, onPrev, onNext, onToday, today })
             title="Previous Week"
             aria-label="Previous Week"
           >
-            <ChevronLeft size={15} />
+            <ChevronLeft sx={{ fontSize: 15 }}/>
             <span className="pointer-events-none absolute top-full right-0 mt-1 px-1.5 py-0.5 rounded bg-gray-800 text-white text-[10px] font-semibold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
               Previous Week
             </span>
@@ -387,7 +385,7 @@ function ThisWeekCard({ weekData, weekLoading, onPrev, onNext, onToday, today })
             title="Next Week"
             aria-label="Next Week"
           >
-            <ChevronRight size={15} />
+            <ChevronRight sx={{ fontSize: 15 }}/>
             <span className="pointer-events-none absolute top-full right-0 mt-1 px-1.5 py-0.5 rounded bg-gray-800 text-white text-[10px] font-semibold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
               Next Week
             </span>
@@ -435,7 +433,7 @@ function ThisWeekCard({ weekData, weekLoading, onPrev, onNext, onToday, today })
       </div>
 
       {weekLoading && (
-        <div className="mt-2 text-[11px] text-gray-400 inline-flex items-center gap-1"><RefreshCw size={11} className="animate-spin" /> Updating…</div>
+        <div className="mt-2 text-[11px] text-gray-400 inline-flex items-center gap-1"><RefreshCw sx={{ fontSize: 11 }} className="animate-spin"/> Updating…</div>
       )}
     </div>
   );
@@ -448,7 +446,7 @@ function UpcomingMeetingsCard({ meetings, loading }) {
          data-testid="my-workspace-meetings-card">
       <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-gray-100">
         <div className="inline-flex items-center gap-2">
-          <CalendarPlus size={16} className="text-emerald-600" />
+          <CalendarPlus sx={{ fontSize: 16 }} className="text-emerald-600"/>
           <h3 className="font-semibold text-gray-900">Upcoming Meetings</h3>
         </div>
         <span className="text-[11px] font-medium text-gray-500">{meetings.length}</span>
@@ -537,7 +535,7 @@ function TeamOnFloorCard({ team, navigate }) {
          data-testid="my-workspace-team-card">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-gray-900 inline-flex items-center gap-1.5">
-          <Users size={15} className="text-[#ec9324]" /> Team on floor
+          <Users sx={{ fontSize: 15 }} className="text-[#ec9324]"/> Team on floor
         </h3>
         {team.length > 0 && (
           <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">

@@ -3,8 +3,14 @@
  * Receives a diff object: { added[], removed[], moved[], rotated[], resized[], counts }
  */
 import React, { useState } from 'react';
-import { X, AlertTriangle, Plus, Minus, Move, RotateCw, Maximize2, DoorOpen } from 'lucide-react';
-
+import X from "@mui/icons-material/Close";
+import AlertTriangle from "@mui/icons-material/WarningAmber";
+import Plus from "@mui/icons-material/Add";
+import Minus from "@mui/icons-material/Remove";
+import Move from "@mui/icons-material/OpenWith";
+import RotateCw from "@mui/icons-material/RotateRight";
+import Maximize2 from "@mui/icons-material/OpenInFull";
+import DoorOpen from "@mui/icons-material/MeetingRoomOutlined";
 const ROWS = [
   { key: 'added',   Icon: Plus,      color: 'text-emerald-700 bg-emerald-50',  label: 'Seats added' },
   { key: 'removed', Icon: Minus,     color: 'text-red-700 bg-red-50',          label: 'Seats removed' },
@@ -27,10 +33,10 @@ export default function PublishDialog({ diff, roomDiff, onCancel, onConfirm, bus
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b">
           <h2 className="font-bold text-gray-900 flex items-center gap-2">
-            <AlertTriangle size={18} className="text-amber-500" />
+            <AlertTriangle sx={{ fontSize: 18 }} className="text-amber-500"/>
             Publish to Live?
           </h2>
-          <button onClick={onCancel} className="text-gray-400 hover:text-gray-700"><X size={18}/></button>
+          <button onClick={onCancel} className="text-gray-400 hover:text-gray-700"><X sx={{ fontSize: 18 }}/></button>
         </div>
 
         <div className="p-5">
@@ -61,7 +67,7 @@ export default function PublishDialog({ diff, roomDiff, onCancel, onConfirm, bus
               {/* Meeting rooms summary */}
               {(roomAdded > 0 || roomRemoved > 0) && (
                 <div className="flex items-start gap-3 p-2.5 rounded-lg text-orange-800 bg-orange-50" data-testid="diff-row-rooms">
-                  <DoorOpen size={16} className="mt-0.5 flex-shrink-0" />
+                  <DoorOpen sx={{ fontSize: 16 }} className="mt-0.5 flex-shrink-0"/>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold">
                       Meeting rooms: {roomAdded > 0 ? `${roomAdded} added` : ''}{roomAdded > 0 && roomRemoved > 0 ? ', ' : ''}{roomRemoved > 0 ? `${roomRemoved} removed` : ''}

@@ -9,11 +9,23 @@
  * Data source: GET /api/bookings  (see backend/routers/bookings.py)
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ClipboardList, Search, RefreshCw, Download, X, Eye, Pencil, Trash2,
-  Calendar, ChevronDown, Loader2, ArrowUp, ArrowDown,
-  AlertCircle, Repeat, ChevronUp, MoreVertical,
-} from "lucide-react";
+import ClipboardList from "@mui/icons-material/AssignmentOutlined";
+import Search from "@mui/icons-material/SearchOutlined";
+import RefreshCw from "@mui/icons-material/Refresh";
+import Download from "@mui/icons-material/FileDownloadOutlined";
+import X from "@mui/icons-material/Close";
+import Eye from "@mui/icons-material/Visibility";
+import Pencil from "@mui/icons-material/EditOutlined";
+import Trash2 from "@mui/icons-material/DeleteOutlined";
+import Calendar from "@mui/icons-material/CalendarTodayOutlined";
+import ChevronDown from "@mui/icons-material/KeyboardArrowDown";
+import Loader2 from "@mui/icons-material/Autorenew";
+import ArrowUp from "@mui/icons-material/ArrowUpward";
+import ArrowDown from "@mui/icons-material/ArrowDownward";
+import AlertCircle from "@mui/icons-material/ErrorOutlined";
+import Repeat from "@mui/icons-material/RepeatOutlined";
+import ChevronUp from "@mui/icons-material/KeyboardArrowUp";
+import MoreVertical from "@mui/icons-material/MoreVert";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
@@ -371,7 +383,7 @@ export default function BookingsPage() {
               className="h-9 w-9"
               title="Export"
               aria-label="Export"
-            ><Download size={16}/></Button>
+            ><Download sx={{ fontSize: 16 }}/></Button>
             {exportOpen && (
               <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-md shadow-lg z-30 py-1 text-xs" data-testid="bookings-export-menu">
                 <button onClick={() => downloadExport("csv")} className="w-full text-left px-3 py-1.5 hover:bg-gray-50" data-testid="bookings-export-csv">CSV (all filtered)</button>
@@ -396,7 +408,7 @@ export default function BookingsPage() {
             title="Refresh"
             aria-label="Refresh"
           >
-            <RefreshCw size={16} className={refreshing ? "animate-spin" : ""}/>
+            <RefreshCw sx={{ fontSize: 16 }} className={refreshing ? "animate-spin" : ""}/>
           </Button>
         </>
       }
@@ -486,7 +498,7 @@ export default function BookingsPage() {
               className="ml-auto text-[11px] text-gray-500 hover:text-[#ec9324] underline"
               data-testid="bookings-reset-filters"
             >Clear All</button>
-            {refreshing && <Loader2 size={14} className="animate-spin text-gray-400"/>}
+            {refreshing && <Loader2 sx={{ fontSize: 14 }} className="animate-spin text-gray-400"/>}
           </div>
         </div>
 
@@ -498,10 +510,10 @@ export default function BookingsPage() {
             </div>
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => downloadExport("xlsx", true)} data-testid="bookings-bulk-export">
-                <Download size={12} className="mr-1"/> Export Selected
+                <Download sx={{ fontSize: 12 }} className="mr-1"/> Export Selected
               </Button>
               <Button size="sm" variant="destructive" className="text-xs h-7" onClick={() => setConfirmBulkCancel(true)} data-testid="bookings-bulk-cancel">
-                <Trash2 size={12} className="mr-1"/> Bulk Cancel
+                <Trash2 sx={{ fontSize: 12 }} className="mr-1"/> Bulk Cancel
               </Button>
               <Button size="sm" variant="ghost" className="text-xs h-7" onClick={clearSelection} data-testid="bookings-bulk-clear">Clear</Button>
             </div>
@@ -512,7 +524,7 @@ export default function BookingsPage() {
         <div className="flex-1 min-h-0 overflow-auto" data-testid="bookings-table-wrapper">
           {loading ? (
             <div className="flex items-center justify-center py-16 text-gray-400">
-              <Loader2 className="animate-spin" size={24}/>
+              <Loader2 className="animate-spin" sx={{ fontSize: 24 }}/>
             </div>
           ) : rows.length === 0 ? (
             <EmptyState />
@@ -614,7 +626,7 @@ function ThSort({ label, field, currentSort, currentDir, onSort }) {
     <th className="px-4 py-3 text-left cursor-pointer select-none hover:text-[#ec9324]" onClick={() => onSort(field)} data-testid={`bookings-th-${field}`}>
       <span className="inline-flex items-center gap-1">
         {label}
-        {active && (currentDir === "asc" ? <ArrowUp size={10}/> : <ArrowDown size={10}/>)}
+        {active && (currentDir === "asc" ? <ArrowUp sx={{ fontSize: 10 }}/> : <ArrowDown sx={{ fontSize: 10 }}/>)}
       </span>
     </th>
   );
@@ -646,7 +658,7 @@ function BookingRow({ booking: b, selected, onToggle, onView, onEdit, onCancel }
       <td className="px-4 py-3">
         {b.recurring ? (
           <span className="relative group inline-flex items-center gap-1 text-emerald-700 font-semibold">
-            Yes <Repeat size={11}/>
+            Yes <Repeat sx={{ fontSize: 11 }}/>
             <span className="pointer-events-none absolute left-0 top-5 z-20 px-2 py-1 rounded bg-gray-900 text-white text-[10px] whitespace-nowrap shadow opacity-0 group-hover:opacity-100 transition-opacity">
               {(b.recurring.frequency || "").toUpperCase()} · until {b.recurring.end_date}
               {b.recurring.days?.length ? ` · ${b.recurring.days.join(",")}` : ""}
@@ -669,15 +681,15 @@ function BookingRow({ booking: b, selected, onToggle, onView, onEdit, onCancel }
               aria-label="Row actions"
               title="Actions"
             >
-              <MoreVertical size={15}/>
+              <MoreVertical sx={{ fontSize: 15 }}/>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-40">
             <DropdownMenuItem onClick={onView} data-testid={`bookings-action-view-${b.id}`}>
-              <Eye size={13} className="mr-2"/> View
+              <Eye sx={{ fontSize: 13 }} className="mr-2"/> View
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onEdit} disabled={isCancelled} data-testid={`bookings-action-edit-${b.id}`}>
-              <Pencil size={13} className="mr-2"/> Edit / Reschedule
+              <Pencil sx={{ fontSize: 13 }} className="mr-2"/> Edit / Reschedule
             </DropdownMenuItem>
             <DropdownMenuSeparator/>
             <DropdownMenuItem
@@ -686,7 +698,7 @@ function BookingRow({ booking: b, selected, onToggle, onView, onEdit, onCancel }
               data-testid={`bookings-action-cancel-${b.id}`}
               className="text-red-600 focus:text-red-700"
             >
-              <Trash2 size={13} className="mr-2"/> Cancel
+              <Trash2 sx={{ fontSize: 13 }} className="mr-2"/> Cancel
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -755,7 +767,7 @@ function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-6 text-center" data-testid="bookings-empty">
       <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-3">
-        <ClipboardList className="text-gray-400" size={28}/>
+        <ClipboardList className="text-gray-400" sx={{ fontSize: 28 }}/>
       </div>
       <div className="text-sm font-bold text-gray-800 uppercase tracking-wide">No Bookings Available</div>
       <div className="text-xs text-gray-500 mt-1 max-w-sm">
@@ -872,7 +884,7 @@ function BookingDetailsDrawer({ booking: b, editing, onStartEdit, onExitEdit, on
                 data-testid="bookings-drawer-close"
                 aria-label="Close"
               >
-                <X size={16}/>
+                <X sx={{ fontSize: 16 }}/>
               </button>
               {!editing && !isCancelled && (
                 <button
@@ -881,7 +893,7 @@ function BookingDetailsDrawer({ booking: b, editing, onStartEdit, onExitEdit, on
                   className="inline-flex items-center gap-1 px-2.5 h-8 rounded-md bg-white/20 hover:bg-white/30 text-xs font-semibold transition-colors"
                   aria-label="Edit booking"
                 >
-                  <Pencil size={13}/> Edit
+                  <Pencil sx={{ fontSize: 13 }}/> Edit
                 </button>
               )}
             </div>
@@ -1025,7 +1037,7 @@ function BookingDetailsDrawer({ booking: b, editing, onStartEdit, onExitEdit, on
                 className="text-xs bg-[#ec9324] hover:bg-[#d4811f] text-white"
                 data-testid="bookings-drawer-save"
               >
-                {saving ? <Loader2 size={12} className="animate-spin mr-1"/> : null}
+                {saving ? <Loader2 sx={{ fontSize: 12 }} className="animate-spin mr-1"/> : null}
                 {saving ? "Saving…" : "Save Changes"}
               </Button>
             </>
@@ -1033,7 +1045,7 @@ function BookingDetailsDrawer({ booking: b, editing, onStartEdit, onExitEdit, on
             <>
               <Button size="sm" variant="outline" onClick={onClose} className="text-xs">Close</Button>
               <Button size="sm" variant="destructive" disabled={isCancelled} onClick={onCancel} className="text-xs" data-testid="bookings-drawer-cancel">
-                <Trash2 size={12} className="mr-1"/> Cancel Booking
+                <Trash2 sx={{ fontSize: 12 }} className="mr-1"/> Cancel Booking
               </Button>
             </>
           )}
@@ -1099,7 +1111,7 @@ function ConfirmModal({ title, message, confirmLabel, confirmVariant = "default"
         <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-5 pointer-events-auto animate-in zoom-in-95 duration-150" data-testid="bookings-confirm-modal">
           <div className="flex items-start gap-3">
             <div className="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
-              <AlertCircle size={18} className="text-red-600"/>
+              <AlertCircle sx={{ fontSize: 18 }} className="text-red-600"/>
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="text-sm font-bold text-gray-900">{title}</h3>

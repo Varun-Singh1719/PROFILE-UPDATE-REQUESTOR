@@ -20,7 +20,19 @@
  * and approved requests also appear as bookings in the Bookings module.
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, X, Loader2, Calendar, User, Clock, MapPin, RefreshCw, ShieldAlert, CheckSquare, Square, Settings, Sparkles } from "lucide-react";
+import Check from "@mui/icons-material/Check";
+import X from "@mui/icons-material/Close";
+import Loader2 from "@mui/icons-material/Autorenew";
+import Calendar from "@mui/icons-material/CalendarTodayOutlined";
+import User from "@mui/icons-material/PersonOutlined";
+import Clock from "@mui/icons-material/AccessTime";
+import MapPin from "@mui/icons-material/PlaceOutlined";
+import RefreshCw from "@mui/icons-material/Refresh";
+import ShieldAlert from "@mui/icons-material/GppMaybeOutlined";
+import CheckSquare from "@mui/icons-material/CheckBoxOutlined";
+import Square from "@mui/icons-material/CheckBoxOutlineBlank";
+import Settings from "@mui/icons-material/SettingsOutlined";
+import Sparkles from "@mui/icons-material/AutoAwesomeOutlined";
 import { toast } from "../lib/notify";
 import Layout from "../components/Layout";
 import api, { formatApiError } from "../lib/api";
@@ -354,7 +366,7 @@ export default function PendingApprovalsPage() {
             disabled={!permRefresh.canUse}
             hidden={!permRefresh.isVisible}
           >
-            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+            <RefreshCw sx={{ fontSize: 16 }} className={loading ? "animate-spin" : ""}/>
           </button>
         </>
       }
@@ -369,7 +381,7 @@ export default function PendingApprovalsPage() {
           {/* Auto Approval toggle */}
           <div className="ml-auto flex items-center gap-2">
             <div className="inline-flex items-center gap-2 h-9 px-3 rounded-md border border-gray-200 bg-white">
-              <Sparkles size={14} className="text-[#ec9324]" />
+              <Sparkles sx={{ fontSize: 14 }} className="text-[#ec9324]"/>
               <span className="text-xs font-medium text-gray-700">Auto Approval</span>
               <button
                 type="button"
@@ -403,7 +415,7 @@ export default function PendingApprovalsPage() {
               aria-label="Approval settings"
               data-testid="approval-settings-btn"
             >
-              <Settings size={16} />
+              <Settings sx={{ fontSize: 16 }}/>
             </button>
             )}
           </div>
@@ -411,7 +423,7 @@ export default function PendingApprovalsPage() {
 
         {!canApprove && (
           <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 flex items-center gap-2 text-xs text-amber-800">
-            <ShieldAlert size={14} /> Only Super Admin can approve or decline workstation requests.
+            <ShieldAlert sx={{ fontSize: 14 }}/> Only Super Admin can approve or decline workstation requests.
           </div>
         )}
 
@@ -421,7 +433,7 @@ export default function PendingApprovalsPage() {
           <div className="flex-1 min-w-0 relative bg-gray-100" style={{ flexBasis: "70%" }}>
             {plansLoading ? (
               <div className="h-full flex items-center justify-center text-gray-400 text-sm">
-                <Loader2 className="animate-spin mr-2" /> Loading floor plans…
+                <Loader2 className="animate-spin mr-2"/> Loading floor plans…
               </div>
             ) : plans.length === 0 ? (
               <div className="h-full flex items-center justify-center text-gray-500 text-sm">
@@ -430,7 +442,7 @@ export default function PendingApprovalsPage() {
             ) : !focusRequest ? (
               <div className="h-full flex items-center justify-center text-gray-500 text-sm px-6 text-center">
                 <div>
-                  <MapPin className="mx-auto mb-2 text-gray-400" />
+                  <MapPin className="mx-auto mb-2 text-gray-400"/>
                   Select a pending request on the right to view it on the floor plan.
                 </div>
               </div>
@@ -450,7 +462,7 @@ export default function PendingApprovalsPage() {
               />
             ) : (
               <div className="h-full flex items-center justify-center text-gray-400 text-sm">
-                {availLoading ? <Loader2 className="animate-spin" /> : "No floor plan to render"}
+                {availLoading ? <Loader2 className="animate-spin"/> : "No floor plan to render"}
               </div>
             )}
           </div>
@@ -474,7 +486,7 @@ export default function PendingApprovalsPage() {
                   className="inline-flex items-center gap-1.5 text-[12px] text-gray-700 hover:text-[#ec9324]"
                   data-testid="pa-select-all"
                 >
-                  {isAllSelected ? <CheckSquare size={14} className="text-[#ec9324]"/> : <Square size={14}/>}
+                  {isAllSelected ? <CheckSquare sx={{ fontSize: 14 }} className="text-[#ec9324]"/> : <Square sx={{ fontSize: 14 }}/>}
                   {isAllSelected ? "Unselect all" : "Select all"}
                 </button>
                 <div className="flex items-center gap-2">
@@ -489,7 +501,7 @@ export default function PendingApprovalsPage() {
                     className="h-7 px-2 bg-green-600 hover:bg-green-700 text-white text-[11px]"
                     data-testid="pa-bulk-approve"
                   >
-                    <Check size={12} className="mr-1"/> Approve
+                    <Check sx={{ fontSize: 12 }} className="mr-1"/> Approve
                   </Button>
                   )}
                   {permReject.isVisible && (
@@ -501,7 +513,7 @@ export default function PendingApprovalsPage() {
                     className="h-7 px-2 text-red-600 border-red-200 hover:bg-red-50 text-[11px]"
                     data-testid="pa-bulk-decline"
                   >
-                    <X size={12} className="mr-1"/> Decline
+                    <X sx={{ fontSize: 12 }} className="mr-1"/> Decline
                   </Button>
                   )}
                 </div>
@@ -511,7 +523,7 @@ export default function PendingApprovalsPage() {
             <div className="flex-1 overflow-y-auto p-3 space-y-3">
               {loading ? (
                 <div className="text-center text-sm text-gray-500 py-10">
-                  <Loader2 className="inline animate-spin mr-2" /> Loading…
+                  <Loader2 className="inline animate-spin mr-2"/> Loading…
                 </div>
               ) : requests.length === 0 ? (
                 <div className="text-center text-sm text-gray-400 py-10">
@@ -560,19 +572,19 @@ export default function PendingApprovalsPage() {
 
                           <div className="mt-2 space-y-1 text-[12px] text-gray-700">
                             <div className="flex items-center gap-1.5">
-                              <User size={12} className="text-gray-400" />
+                              <User sx={{ fontSize: 12 }} className="text-gray-400"/>
                               <span className="truncate">For: <strong>{(req.employee || {}).name || "—"}</strong></span>
                             </div>
                             <div className="flex items-center gap-1.5">
-                              <Calendar size={12} className="text-gray-400" />
+                              <Calendar sx={{ fontSize: 12 }} className="text-gray-400"/>
                               <span>For date: <strong>{fmtDate(req.date)}</strong></span>
                             </div>
                             <div className="flex items-center gap-1.5">
-                              <User size={12} className="text-gray-400" />
+                              <User sx={{ fontSize: 12 }} className="text-gray-400"/>
                               <span className="truncate">Requested by: {(req.requested_by || {}).name || "—"}</span>
                             </div>
                             <div className="flex items-center gap-1.5">
-                              <Clock size={12} className="text-gray-400" />
+                              <Clock sx={{ fontSize: 12 }} className="text-gray-400"/>
                               <span>{fmtDateTime(req.requested_on)}</span>
                             </div>
                           </div>
@@ -586,7 +598,7 @@ export default function PendingApprovalsPage() {
                               className="flex-1 bg-green-600 hover:bg-green-700 text-white"
                               data-testid={`pa-approve-${req.id}`}
                             >
-                              {busy ? <Loader2 className="animate-spin" size={14} /> : <><Check size={14} className="mr-1" /> Approve</>}
+                              {busy ? <Loader2 className="animate-spin" sx={{ fontSize: 14 }}/> : <><Check sx={{ fontSize: 14 }} className="mr-1"/> Approve</>}
                             </Button>
                             )}
                             {permReject.isVisible && (
@@ -598,7 +610,7 @@ export default function PendingApprovalsPage() {
                               className="flex-1 text-red-600 border-red-200 hover:bg-red-50"
                               data-testid={`pa-decline-${req.id}`}
                             >
-                              {busy ? <Loader2 className="animate-spin" size={14} /> : <><X size={14} className="mr-1" /> Decline</>}
+                              {busy ? <Loader2 className="animate-spin" sx={{ fontSize: 14 }}/> : <><X sx={{ fontSize: 14 }} className="mr-1"/> Decline</>}
                             </Button>
                             )}
                           </div>
@@ -642,7 +654,7 @@ export default function PendingApprovalsPage() {
                 : "bg-red-600 hover:bg-red-700 text-white"}
               data-testid="pa-bulk-confirm"
             >
-              {bulkProcessing ? <Loader2 className="animate-spin mr-2" size={14}/> : null}
+              {bulkProcessing ? <Loader2 className="animate-spin mr-2" sx={{ fontSize: 14 }}/> : null}
               Confirm {bulkAction === "approve" ? "Approve" : "Decline"}
             </Button>
           </DialogFooter>

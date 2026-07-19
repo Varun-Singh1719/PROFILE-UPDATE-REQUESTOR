@@ -24,7 +24,34 @@ import Pagination from "../components/Pagination";
 import notify from "../lib/notify";
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
 import { __busyBridge } from "../context/BusyContext";
-import { Search, UserPlus, Pencil, Eye, EyeOff, Copy, RefreshCw, KeyRound, X, Mail, Phone, Calendar, IdCard, Briefcase, UsersRound, Download, ChevronLeft, ChevronRight, MoreHorizontal, MoreVertical, ShieldCheck, Upload, FileSpreadsheet, History, CheckCircle2, AlertTriangle, FileDown, Loader2 } from "lucide-react";
+import Search from "@mui/icons-material/SearchOutlined";
+import UserPlus from "@mui/icons-material/PersonAddOutlined";
+import Pencil from "@mui/icons-material/EditOutlined";
+import Eye from "@mui/icons-material/Visibility";
+import EyeOff from "@mui/icons-material/VisibilityOff";
+import Copy from "@mui/icons-material/ContentCopy";
+import RefreshCw from "@mui/icons-material/Refresh";
+import KeyRound from "@mui/icons-material/KeyOutlined";
+import X from "@mui/icons-material/Close";
+import Mail from "@mui/icons-material/MailOutlined";
+import Phone from "@mui/icons-material/PhoneOutlined";
+import Calendar from "@mui/icons-material/CalendarTodayOutlined";
+import IdCard from "@mui/icons-material/BadgeOutlined";
+import Briefcase from "@mui/icons-material/WorkOutlined";
+import UsersRound from "@mui/icons-material/GroupsOutlined";
+import Download from "@mui/icons-material/FileDownloadOutlined";
+import ChevronLeft from "@mui/icons-material/ChevronLeft";
+import ChevronRight from "@mui/icons-material/ChevronRight";
+import MoreHorizontal from "@mui/icons-material/MoreHoriz";
+import MoreVertical from "@mui/icons-material/MoreVert";
+import ShieldCheck from "@mui/icons-material/GppGoodOutlined";
+import Upload from "@mui/icons-material/FileUploadOutlined";
+import FileSpreadsheet from "@mui/icons-material/TableChartOutlined";
+import History from "@mui/icons-material/HistoryOutlined";
+import CheckCircle2 from "@mui/icons-material/CheckCircleOutlined";
+import AlertTriangle from "@mui/icons-material/WarningAmber";
+import FileDown from "@mui/icons-material/FileDownloadOutlined";
+import Loader2 from "@mui/icons-material/Autorenew";
 import { teamBackground } from "../lib/teamColors";
 import { confirm as confirmDialog } from '../lib/dialog';
 
@@ -77,7 +104,7 @@ function PasswordField({ contactId, testIdPrefix = "contact" }) {
   return (
     <div>
       <Label className="flex items-center gap-1.5">
-        <KeyRound size={14} className="text-gray-500"/> Password
+        <KeyRound sx={{ fontSize: 14 }} className="text-gray-500"/> Password
       </Label>
       <div className="mt-1 flex items-center gap-2">
         <Input
@@ -97,7 +124,7 @@ function PasswordField({ contactId, testIdPrefix = "contact" }) {
           aria-label={show ? "Hide password" : "Show password"}
           title={show ? "Hide" : "Show"}
         >
-          {show ? <EyeOff size={16} /> : <Eye size={16} />}
+          {show ? <EyeOff sx={{ fontSize: 16 }}/> : <Eye sx={{ fontSize: 16 }}/>}
         </Button>
         {pwd && (
           <Button
@@ -110,7 +137,7 @@ function PasswordField({ contactId, testIdPrefix = "contact" }) {
             title="Copy"
             aria-label="Copy password"
           >
-            <Copy size={16} />
+            <Copy sx={{ fontSize: 16 }}/>
           </Button>
         )}
         <Button
@@ -124,7 +151,7 @@ function PasswordField({ contactId, testIdPrefix = "contact" }) {
           title="Reset password"
           aria-label="Reset password"
         >
-          <RefreshCw size={16} />
+          <RefreshCw sx={{ fontSize: 16 }}/>
         </Button>
       </div>
       <div className="text-xs text-gray-500 mt-1">Click the eye icon to reveal. Reset generates a new password.</div>
@@ -149,23 +176,23 @@ function EmployeeDetailModal({ contact, open, onClose }) {
         </DialogHeader>
         <div className="space-y-3 mt-2 text-sm">
           <div className="flex items-center gap-2 text-gray-700">
-            <Mail size={14} className="text-gray-400"/>
+            <Mail sx={{ fontSize: 14 }} className="text-gray-400"/>
             <span>{contact.email}</span>
           </div>
           <div className="flex items-center gap-2 text-gray-700">
-            <Phone size={14} className="text-gray-400"/>
+            <Phone sx={{ fontSize: 14 }} className="text-gray-400"/>
             <span>{contact.phone || <span className="text-gray-400">No phone</span>}</span>
           </div>
           <div className="flex items-center gap-2 text-gray-700">
-            <IdCard size={14} className="text-gray-400"/>
+            <IdCard sx={{ fontSize: 14 }} className="text-gray-400"/>
             <span><span className="text-gray-500">Emp ID:</span> {contact.emp_id || "—"}</span>
           </div>
           <div className="flex items-center gap-2 text-gray-700">
-            <Calendar size={14} className="text-gray-400"/>
+            <Calendar sx={{ fontSize: 14 }} className="text-gray-400"/>
             <span><span className="text-gray-500">DOJ:</span> {contact.doj || "—"}</span>
           </div>
           <div className="flex items-center gap-2 text-gray-700">
-            <UsersRound size={14} className="text-gray-400"/>
+            <UsersRound sx={{ fontSize: 14 }} className="text-gray-400"/>
             <span>
               <span className="text-gray-500">Team:</span>{" "}
               {contact.team_name ? (
@@ -177,11 +204,11 @@ function EmployeeDetailModal({ contact, open, onClose }) {
             </span>
           </div>
           <div className="flex items-center gap-2 text-gray-700">
-            <Briefcase size={14} className="text-gray-400"/>
+            <Briefcase sx={{ fontSize: 14 }} className="text-gray-400"/>
             <span><span className="text-gray-500">Manager(s):</span> {(contact.manager_names || []).join(", ") || <span className="text-gray-400">—</span>}</span>
           </div>
           <div className="flex items-start gap-2 text-gray-700">
-            <ShieldCheck size={14} className="text-gray-400 mt-1"/>
+            <ShieldCheck sx={{ fontSize: 14 }} className="text-gray-400 mt-1"/>
             <div className="flex-1">
               <div className="text-gray-500 mb-1">Permission Sets:</div>
               {(contact.permission_sets || []).length === 0 ? (
@@ -342,7 +369,7 @@ function BulkUploadModal({ open, onClose, onComplete }) {
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Upload size={18} className="text-[#ec9324]"/> Upload Employees (.xlsx)
+            <Upload sx={{ fontSize: 18 }} className="text-[#ec9324]"/> Upload Employees (.xlsx)
           </DialogTitle>
           <DialogDescription>
             Bulk-add employees from an Excel file. Download the sample template to see the required columns.
@@ -357,7 +384,7 @@ function BulkUploadModal({ open, onClose, onComplete }) {
                 className="border-[#ec9324] text-[#ec9324] hover:bg-[#ec9324]/10"
                 data-testid="download-sample-template-btn"
               >
-                <FileSpreadsheet size={14} className="mr-2"/> Download Sample Template
+                <FileSpreadsheet sx={{ fontSize: 14 }} className="mr-2"/> Download Sample Template
               </Button>
               <span className="text-xs text-gray-500">Only <b>.xlsx</b> files · Max ~5000 rows recommended</span>
             </div>
@@ -372,7 +399,7 @@ function BulkUploadModal({ open, onClose, onComplete }) {
               }`}
               data-testid="upload-dropzone"
             >
-              <Upload size={32} className="mx-auto text-gray-400 mb-2"/>
+              <Upload sx={{ fontSize: 32 }} className="mx-auto text-gray-400 mb-2"/>
               <div className="text-sm font-medium text-gray-700">
                 {file ? file.name : "Drag & drop your .xlsx file here"}
               </div>
@@ -405,7 +432,7 @@ function BulkUploadModal({ open, onClose, onComplete }) {
                 className="bg-[#ec9324] hover:bg-[#d4811f] text-white"
                 data-testid="start-upload-btn"
               >
-                {uploading ? (<><Loader2 size={14} className="mr-2 animate-spin"/>Uploading…</>) : (<><Upload size={14} className="mr-2"/>Upload</>)}
+                {uploading ? (<><Loader2 sx={{ fontSize: 14 }} className="mr-2 animate-spin"/>Uploading…</>) : (<><Upload sx={{ fontSize: 14 }} className="mr-2"/>Upload</>)}
               </Button>
             </DialogFooter>
           </div>
@@ -420,13 +447,13 @@ function BulkUploadModal({ open, onClose, onComplete }) {
               </div>
               <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
                 <div className="text-2xl font-bold text-green-700 flex items-center justify-center gap-1" data-testid="upload-success">
-                  <CheckCircle2 size={20}/> {result.success}
+                  <CheckCircle2 sx={{ fontSize: 20 }}/> {result.success}
                 </div>
                 <div className="text-xs text-green-600 uppercase tracking-wider">Success</div>
               </div>
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
                 <div className="text-2xl font-bold text-red-700 flex items-center justify-center gap-1" data-testid="upload-failed">
-                  <AlertTriangle size={20}/> {result.failed}
+                  <AlertTriangle sx={{ fontSize: 20 }}/> {result.failed}
                 </div>
                 <div className="text-xs text-red-600 uppercase tracking-wider">Failed</div>
               </div>
@@ -469,7 +496,7 @@ function BulkUploadModal({ open, onClose, onComplete }) {
                   className="border-red-300 text-red-700 hover:bg-red-50 w-full"
                   data-testid="download-error-report-btn"
                 >
-                  <FileDown size={14} className="mr-2"/> Download Error Report (.xlsx)
+                  <FileDown sx={{ fontSize: 14 }} className="mr-2"/> Download Error Report (.xlsx)
                 </Button>
               </>
             )}
@@ -527,7 +554,7 @@ function UploadHistoryModal({ open, onClose }) {
       <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <History size={18} className="text-[#ec9324]"/> Upload History
+            <History sx={{ fontSize: 18 }} className="text-[#ec9324]"/> Upload History
           </DialogTitle>
           <DialogDescription>
             Past bulk-upload sessions. Click an error count to download the per-row error report.
@@ -552,7 +579,7 @@ function UploadHistoryModal({ open, onClose }) {
               <tbody>
                 {loading && (
                   <tr><td colSpan={8} className="text-center py-8 text-gray-400">
-                    <Loader2 size={18} className="inline animate-spin mr-2"/> Loading…
+                    <Loader2 sx={{ fontSize: 18 }} className="inline animate-spin mr-2"/> Loading…
                   </td></tr>
                 )}
                 {!loading && items.length === 0 && (
@@ -575,7 +602,7 @@ function UploadHistoryModal({ open, onClose }) {
                           className="border-red-300 text-red-700 hover:bg-red-50 h-7"
                           data-testid={`download-error-${u.id}`}
                         >
-                          <FileDown size={12} className="mr-1"/> Report
+                          <FileDown sx={{ fontSize: 12 }} className="mr-1"/> Report
                         </Button>
                       ) : <span className="text-gray-300 text-xs">—</span>}
                     </td>
@@ -617,7 +644,7 @@ function GeneratedPasswordModal({ password, email, onClose }) {
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-center gap-2 font-mono text-sm">
             <span className="flex-1 break-all" data-testid="generated-password-value">{password}</span>
             <Button size="icon" variant="outline" onClick={copy} className="border-gray-300" aria-label="Copy" data-testid="copy-generated-password">
-              <Copy size={16} />
+              <Copy sx={{ fontSize: 16 }}/>
             </Button>
           </div>
         </div>
@@ -863,7 +890,7 @@ export default function ContactListPage() {
                   aria-label="Export CSV"
                   disabled={!permExport.canUse}
                 >
-                  <Download size={16}/>
+                  <Download sx={{ fontSize: 16 }}/>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Export CSV</TooltipContent>
@@ -878,7 +905,7 @@ export default function ContactListPage() {
                   aria-label="Upload History"
                   disabled={!permImport.canUse}
                 >
-                  <History size={16}/>
+                  <History sx={{ fontSize: 16 }}/>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Upload History</TooltipContent>
@@ -893,7 +920,7 @@ export default function ContactListPage() {
                   aria-label="Upload Employees"
                   disabled={!permImport.canUse}
                 >
-                  <Upload size={16}/>
+                  <Upload sx={{ fontSize: 16 }}/>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Upload Employees</TooltipContent>
@@ -902,7 +929,7 @@ export default function ContactListPage() {
           </TooltipProvider>
           {permCreate.isVisible && (
           <Button onClick={openCreate} className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9" data-testid="add-contact-btn" disabled={!permCreate.canUse}>
-            <UserPlus size={16} className="mr-2"/> Add Employee
+            <UserPlus sx={{ fontSize: 16 }} className="mr-2"/> Add Employee
           </Button>
           )}
         </div>
@@ -985,7 +1012,7 @@ export default function ContactListPage() {
               </div>
               <div className="col-span-2">
                 <Label className="flex items-center gap-1.5">
-                  <ShieldCheck size={14} className="text-gray-500" /> Permission Sets
+                  <ShieldCheck sx={{ fontSize: 14 }} className="text-gray-500"/> Permission Sets
                 </Label>
                 <MultiSelectFilter
                   label="Permission Sets"
@@ -1051,7 +1078,7 @@ export default function ContactListPage() {
                     }}
                     className="rounded-full p-0.5 hover:bg-[#ec9324]/20"
                     aria-label="Remove filter"
-                  ><X size={11}/></button>
+                  ><X sx={{ fontSize: 11 }}/></button>
                 </span>
               );
             })}
@@ -1211,7 +1238,7 @@ export default function ContactListPage() {
                           aria-label="Row actions"
                           title="Actions"
                         >
-                          <MoreVertical size={15}/>
+                          <MoreVertical sx={{ fontSize: 15 }}/>
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-40">
@@ -1219,7 +1246,7 @@ export default function ContactListPage() {
                           onClick={() => setDetailContact(c)}
                           data-testid={`view-${c.email}`}
                         >
-                          <Eye size={13} className="mr-2 text-gray-500"/> View
+                          <Eye sx={{ fontSize: 13 }} className="mr-2 text-gray-500"/> View
                         </DropdownMenuItem>
                         {permEdit.isVisible && (
                           <DropdownMenuItem
@@ -1227,7 +1254,7 @@ export default function ContactListPage() {
                             data-testid={`edit-${c.email}`}
                             disabled={!permEdit.canUse}
                           >
-                            <Pencil size={13} className="mr-2 text-gray-500"/> Edit
+                            <Pencil sx={{ fontSize: 13 }} className="mr-2 text-gray-500"/> Edit
                           </DropdownMenuItem>
                         )}
                       </DropdownMenuContent>

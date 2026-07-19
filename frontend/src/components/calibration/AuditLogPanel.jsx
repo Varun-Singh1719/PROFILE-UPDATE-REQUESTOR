@@ -2,7 +2,9 @@
  * Slide-out audit log panel for the current floor plan.
  */
 import React, { useEffect, useState } from 'react';
-import { X, Activity, Loader2 } from 'lucide-react';
+import X from "@mui/icons-material/Close";
+import Activity from "@mui/icons-material/Timeline";
+import Loader2 from "@mui/icons-material/Autorenew";
 import api from '../../lib/api';
 
 function fmtDate(iso) {
@@ -37,10 +39,10 @@ export default function AuditLogPanel({ planId, open, onClose }) {
     <div className="fixed top-0 right-0 h-full w-96 bg-white border-l shadow-2xl z-40 flex flex-col" data-testid="audit-log-panel">
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <div className="flex items-center gap-2">
-          <Activity size={18} className="text-[#ec9324]" />
+          <Activity sx={{ fontSize: 18 }} className="text-[#ec9324]"/>
           <h2 className="font-bold text-gray-900">Audit Log</h2>
         </div>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={18}/></button>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X sx={{ fontSize: 18 }}/></button>
       </div>
       <div className="flex-1 overflow-y-auto">
         {loading ? (

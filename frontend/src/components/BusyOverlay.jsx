@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useBusy } from "../context/BusyContext";
-import { Loader2 } from "lucide-react";
+import Loader2 from "@mui/icons-material/Autorenew";
 
 /**
  * BusyOverlay — content-area page loader (READ requests only).
@@ -49,7 +49,7 @@ export default function BusyOverlay() {
           data-testid="busy-overlay-spinner"
           className="bg-white rounded-2xl shadow-2xl px-5 py-3.5 flex items-center gap-3 border border-[#ec9324]/20 animate-in fade-in zoom-in-95 duration-200 min-w-[220px]"
         >
-          <Loader2 className="animate-spin text-[#ec9324] flex-shrink-0" size={20} />
+          <Loader2 className="animate-spin text-[#ec9324] flex-shrink-0" sx={{ fontSize: 20 }}/>
           <span className="text-sm font-medium text-gray-800" data-testid="busy-overlay-label">
             {label || "Loading…"}
           </span>

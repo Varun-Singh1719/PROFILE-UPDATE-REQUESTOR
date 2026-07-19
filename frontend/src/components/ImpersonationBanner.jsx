@@ -8,7 +8,8 @@
  * original tab's localStorage session).
  */
 import React from "react";
-import { ShieldAlert, LogOut } from "lucide-react";
+import ShieldAlert from "@mui/icons-material/GppMaybeOutlined";
+import LogOut from "@mui/icons-material/LogoutOutlined";
 import { useAuth } from "../context/AuthContext";
 
 export default function ImpersonationBanner() {
@@ -23,7 +24,7 @@ export default function ImpersonationBanner() {
       data-testid="impersonation-banner"
       role="status"
     >
-      <ShieldAlert size={13} className="text-amber-700 shrink-0"/>
+      <ShieldAlert sx={{ fontSize: 13 }} className="text-amber-700 shrink-0"/>
       <div className="flex-1 min-w-0 truncate">
         You are impersonating <span className="font-semibold">{label}</span>
         {user.email && user.email !== label && <> · <span className="text-amber-800">{user.email}</span></>}
@@ -38,7 +39,7 @@ export default function ImpersonationBanner() {
         className="inline-flex items-center gap-1 h-6 px-2 rounded-md text-[11px] font-semibold text-amber-900 bg-white border border-amber-300 hover:bg-amber-100"
         data-testid="impersonation-exit-btn"
       >
-        <LogOut size={11}/> Exit impersonation
+        <LogOut sx={{ fontSize: 11 }}/> Exit impersonation
       </button>
     </div>
   );

@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Clock } from 'lucide-react';
+import Clock from "@mui/icons-material/AccessTime";
 
 /**
  * Orange-themed time picker (HH:MM in 24-hour internal format).
@@ -153,7 +153,7 @@ export default function TimePickerOrange({
         <span className={value ? 'text-gray-900' : 'text-gray-400'}>
           {value ? toDisplay(value, format) : placeholder}
         </span>
-        <Clock size={14} className="text-gray-400 shrink-0" />
+        <Clock sx={{ fontSize: 14 }} className="text-gray-400 shrink-0"/>
       </button>
 
       {open && popupRect && createPortal(

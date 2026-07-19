@@ -3,13 +3,31 @@ import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { usePermissions } from "../hooks/usePermissions";
 import { useEffectivePermissionsState } from "../context/EffectivePermissionsContext";
-import {
-  LayoutDashboard, Ticket, Users, Inbox, LogOut, Mail,
-  ChevronDown, ChevronRight, Briefcase, Settings, Shield,
-  Armchair, Send, MailPlus, PanelLeftClose, PanelLeftOpen,
-  Search, Menu, X, CalendarClock, ClipboardList,
-  Map, Crosshair, BookUser, CircleDot,
-} from "lucide-react";
+import LayoutDashboard from "@mui/icons-material/DashboardOutlined";
+import Ticket from "@mui/icons-material/ConfirmationNumberOutlined";
+import Users from "@mui/icons-material/PeopleOutlined";
+import Inbox from "@mui/icons-material/InboxOutlined";
+import LogOut from "@mui/icons-material/LogoutOutlined";
+import Mail from "@mui/icons-material/MailOutlined";
+import ChevronDown from "@mui/icons-material/KeyboardArrowDown";
+import ChevronRight from "@mui/icons-material/ChevronRight";
+import Briefcase from "@mui/icons-material/WorkOutlined";
+import Settings from "@mui/icons-material/SettingsOutlined";
+import Shield from "@mui/icons-material/ShieldOutlined";
+import Armchair from "@mui/icons-material/Chair";
+import Send from "@mui/icons-material/Send";
+import MailPlus from "@mui/icons-material/ForwardToInboxOutlined";
+import PanelLeftClose from "@mui/icons-material/MenuOpen";
+import PanelLeftOpen from "@mui/icons-material/Menu";
+import Search from "@mui/icons-material/SearchOutlined";
+import Menu from "@mui/icons-material/Menu";
+import X from "@mui/icons-material/Close";
+import CalendarClock from "@mui/icons-material/EventOutlined";
+import ClipboardList from "@mui/icons-material/AssignmentOutlined";
+import Map from "@mui/icons-material/MapOutlined";
+import Crosshair from "@mui/icons-material/GpsFixed";
+import BookUser from "@mui/icons-material/ContactPageOutlined";
+import CircleDot from "@mui/icons-material/RadioButtonChecked";
 import AddTaskIcon from "./icons/AddTaskIcon";
 import EventSeatRoundedIcon from "./icons/EventSeatRoundedIcon";
 
@@ -139,7 +157,7 @@ function NavGroup({ item, collapsed, currentPath, can, isSuperAdmin, isPageViewV
         }`}
       >
         <span className="flex items-center gap-3"><GroupIcon size={18}/>{item.label}</span>
-        {open ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
+        {open ? <ChevronDown sx={{ fontSize: 14 }}/> : <ChevronRight sx={{ fontSize: 14 }}/>}
       </button>
       {open && (
         <div className="mt-1 ml-3 pl-3 border-l border-gray-200 space-y-1">
@@ -198,7 +216,7 @@ function SearchPalette({ open, onClose, items }) {
     <div className="fixed inset-0 bg-black/40 z-[60] flex items-start justify-center pt-24 px-4" onClick={onClose} data-testid="search-palette">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2 px-3 py-2.5 border-b border-gray-100">
-          <Search size={16} className="text-gray-400"/>
+          <Search sx={{ fontSize: 16 }} className="text-gray-400"/>
           <input
             ref={inputRef}
             value={q}
@@ -317,7 +335,7 @@ export default function Sidebar() {
           data-testid="sidebar-hamburger"
           className="fixed top-3 left-3 z-40 p-2 rounded-lg bg-white shadow-lg border border-gray-200"
         >
-          <Menu size={18}/>
+          <Menu sx={{ fontSize: 18 }}/>
         </button>
         {mobileOpen && (
           <div className="fixed inset-0 z-50 flex" data-testid="sidebar-mobile-drawer">
@@ -371,7 +389,7 @@ function SidebarHeader({ collapsed, user, onToggle, mobile, onSearch }) {
             className="p-1.5 rounded hover:bg-gray-100 text-gray-500"
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {mobile ? <X size={16}/> : (collapsed ? <PanelLeftOpen size={16}/> : <PanelLeftClose size={16}/>)}
+            {mobile ? <X sx={{ fontSize: 16 }}/> : (collapsed ? <PanelLeftOpen sx={{ fontSize: 16 }}/> : <PanelLeftClose sx={{ fontSize: 16 }}/>)}
           </button>
         </Tip>
       </div>
@@ -381,7 +399,7 @@ function SidebarHeader({ collapsed, user, onToggle, mobile, onSearch }) {
           data-testid="sidebar-search-btn"
           className={`mt-2 flex items-center gap-2 text-xs text-gray-500 hover:bg-gray-50 border border-gray-200 rounded-md transition-colors ${collapsed ? "justify-center w-10 h-8 mx-auto" : "w-full px-2 py-1.5"}`}
         >
-          <Search size={13}/>
+          <Search sx={{ fontSize: 13 }}/>
           {!collapsed && <>
             <span className="flex-1 text-left">Search…</span>
             <kbd className="text-[9px] px-1 bg-gray-100 rounded">⌘K</kbd>
@@ -459,7 +477,7 @@ function SidebarFooter({ collapsed, user, onLogout }) {
         </Tip>
         <Tip label="Logout" show>
           <button onClick={onLogout} data-testid="logout-btn" className="mt-2 w-10 h-10 mx-auto flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900">
-            <LogOut size={16}/>
+            <LogOut sx={{ fontSize: 16 }}/>
           </button>
         </Tip>
       </div>
@@ -469,10 +487,10 @@ function SidebarFooter({ collapsed, user, onLogout }) {
     <div className="px-3 py-3 border-t border-gray-100">
       <div className="px-2 py-1.5 mb-1.5">
         <div className="text-sm font-semibold text-gray-900 truncate" data-testid="sidebar-user-name">{user?.name}</div>
-        <div className="text-xs text-gray-500 truncate flex items-center gap-1"><Mail size={12}/>{user?.email}</div>
+        <div className="text-xs text-gray-500 truncate flex items-center gap-1"><Mail sx={{ fontSize: 12 }}/>{user?.email}</div>
       </div>
       <button onClick={onLogout} data-testid="logout-btn" className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium transition-colors">
-        <LogOut size={16}/> Logout
+        <LogOut sx={{ fontSize: 16 }}/> Logout
       </button>
     </div>
   );

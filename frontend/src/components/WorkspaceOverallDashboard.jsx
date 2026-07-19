@@ -12,10 +12,15 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Users, Map as MapIcon, RefreshCw, ChevronLeft, ChevronRight,
-  DoorOpen, MapPin, Clock, Armchair,
-} from "lucide-react";
+import Users from "@mui/icons-material/PeopleOutlined";
+import MapIcon from "@mui/icons-material/MapOutlined";
+import RefreshCw from "@mui/icons-material/Refresh";
+import ChevronLeft from "@mui/icons-material/ChevronLeft";
+import ChevronRight from "@mui/icons-material/ChevronRight";
+import DoorOpen from "@mui/icons-material/MeetingRoomOutlined";
+import MapPin from "@mui/icons-material/PlaceOutlined";
+import Clock from "@mui/icons-material/AccessTime";
+import Armchair from "@mui/icons-material/Chair";
 import api from "../lib/api";
 import { teamBackground, teamInitials } from "../lib/teamColors";
 import { useAuth } from "../context/AuthContext";
@@ -132,7 +137,7 @@ export default function WorkspaceOverallDashboard() {
             title="Refresh"
             data-testid="workspace-overall-refresh"
           >
-            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+            <RefreshCw sx={{ fontSize: 14 }} className={loading ? "animate-spin" : ""}/>
           </button>
         </div>
       </div>
@@ -174,7 +179,7 @@ export default function WorkspaceOverallDashboard() {
                         onClick={openFloor}
                         className="inline-flex items-center gap-1.5 bg-[#ec9324] hover:bg-[#d4811f] text-white text-xs font-semibold px-3.5 py-2 rounded-md shadow-sm"
                       >
-                        <MapIcon size={13} /> View floor plan
+                        <MapIcon sx={{ fontSize: 13 }}/> View floor plan
                       </button>
                       <button
                         type="button"
@@ -197,14 +202,14 @@ export default function WorkspaceOverallDashboard() {
                         onClick={() => navigate("/workspace-manager/workstation-booking")}
                         className="inline-flex items-center gap-1.5 bg-[#ec9324] hover:bg-[#d4811f] text-white text-xs font-semibold px-3.5 py-2 rounded-md shadow-sm"
                       >
-                        <Armchair size={13} /> Book a desk
+                        <Armchair sx={{ fontSize: 13 }}/> Book a desk
                       </button>
                       <button
                         type="button"
                         onClick={openFloor}
                         className="inline-flex items-center gap-1.5 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold px-3.5 py-2 rounded-md"
                       >
-                        <MapIcon size={13} /> View floor plan
+                        <MapIcon sx={{ fontSize: 13 }}/> View floor plan
                       </button>
                     </div>
                   </div>
@@ -225,7 +230,7 @@ export default function WorkspaceOverallDashboard() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
               <div className="px-5 pt-4 pb-3 flex items-center gap-2 border-b border-gray-100">
-                <Armchair size={16} className="text-[#ec9324]" />
+                <Armchair sx={{ fontSize: 16 }} className="text-[#ec9324]"/>
                 <h3 className="font-semibold text-gray-900">Occupancy right now</h3>
               </div>
               <div className="p-4 flex items-center gap-5">
@@ -261,7 +266,7 @@ export default function WorkspaceOverallDashboard() {
             <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
               <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-gray-100">
                 <div className="inline-flex items-center gap-2">
-                  <DoorOpen size={16} className="text-[#ec9324]" />
+                  <DoorOpen sx={{ fontSize: 16 }} className="text-[#ec9324]"/>
                   <h3 className="font-semibold text-gray-900">Meeting rooms today</h3>
                 </div>
                 <span className="text-[10px] font-semibold text-gray-500">
@@ -277,7 +282,7 @@ export default function WorkspaceOverallDashboard() {
                 {rooms.map((r) => (
                   <div key={r.room_id || r.room_name} className="flex items-center gap-3 p-2 rounded-lg border border-gray-100 hover:bg-gray-50">
                     <span className="h-9 w-9 rounded-md bg-[#ec9324]/10 text-[#ec9324] inline-flex items-center justify-center">
-                      <DoorOpen size={16} />
+                      <DoorOpen sx={{ fontSize: 16 }}/>
                     </span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 min-w-0">
@@ -331,7 +336,7 @@ export default function WorkspaceOverallDashboard() {
                   title="Previous Week"
                   aria-label="Previous Week"
                 >
-                  <ChevronLeft size={15} />
+                  <ChevronLeft sx={{ fontSize: 15 }}/>
                 </button>
                 <button
                   type="button"
@@ -348,7 +353,7 @@ export default function WorkspaceOverallDashboard() {
                   title="Next Week"
                   aria-label="Next Week"
                 >
-                  <ChevronRight size={15} />
+                  <ChevronRight sx={{ fontSize: 15 }}/>
                 </button>
               </div>
             </div>
@@ -390,7 +395,7 @@ export default function WorkspaceOverallDashboard() {
               <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm border border-gray-300 bg-white" /> None</span>
             </div>
             {weekLoading && (
-              <div className="mt-2 text-[10px] text-gray-400 inline-flex items-center gap-1"><RefreshCw size={11} className="animate-spin" /> Updating…</div>
+              <div className="mt-2 text-[10px] text-gray-400 inline-flex items-center gap-1"><RefreshCw sx={{ fontSize: 11 }} className="animate-spin"/> Updating…</div>
             )}
           </div>
 
@@ -432,7 +437,7 @@ export default function WorkspaceOverallDashboard() {
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
         <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-gray-100 flex-wrap gap-2">
           <div className="inline-flex items-center gap-2 flex-wrap">
-            <Users size={16} className="text-[#ec9324]" />
+            <Users sx={{ fontSize: 16 }} className="text-[#ec9324]"/>
             <h3 className="font-semibold text-gray-900">All teams today</h3>
             <span className="text-[11px] text-gray-500">
               · {teams.length} teams · {teams.reduce((s, t) => s + (t.seat_count || 0), 0)} seats allocated
@@ -461,7 +466,7 @@ export default function WorkspaceOverallDashboard() {
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-2">
                   <div className="inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded px-1.5 py-1 min-w-0">
-                    <MapPin size={11} className="text-[#ec9324] flex-shrink-0" />
+                    <MapPin sx={{ fontSize: 11 }} className="text-[#ec9324] flex-shrink-0"/>
                     <span className="truncate">
                       {t.seat_from ? `${t.seat_from}${t.seat_to && t.seat_to !== t.seat_from ? ` → ${t.seat_to}` : ""}` : "—"}
                     </span>
@@ -474,7 +479,7 @@ export default function WorkspaceOverallDashboard() {
                     }`}
                     title={t.seat_from ? "View on floor plan" : "No seats to show"}
                   >
-                    <MapIcon size={11} /> View on map
+                    <MapIcon sx={{ fontSize: 11 }}/> View on map
                   </button>
                 </div>
               </div>
@@ -486,7 +491,7 @@ export default function WorkspaceOverallDashboard() {
       {/* Row 4 — Recent activity */}
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
         <div className="px-5 pt-4 pb-3 border-b border-gray-100 flex items-center gap-2">
-          <Clock size={16} className="text-[#ec9324]" />
+          <Clock sx={{ fontSize: 16 }} className="text-[#ec9324]"/>
           <h3 className="font-semibold text-gray-900">Recent activity</h3>
           <span className="ml-auto text-[10px] font-semibold text-gray-500">last few</span>
         </div>

@@ -3,7 +3,10 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import Seat from './Seat';
 import { resolvePdfUrl } from '../lib/pdfUrl';
-import { ZoomIn, ZoomOut, Maximize2, Bug } from 'lucide-react';
+import ZoomIn from "@mui/icons-material/ZoomIn";
+import ZoomOut from "@mui/icons-material/ZoomOut";
+import Maximize2 from "@mui/icons-material/OpenInFull";
+import Bug from "@mui/icons-material/BugReportOutlined";
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 
@@ -67,21 +70,21 @@ const FloorMap = ({
                 className="p-3 bg-white rounded-lg shadow-lg hover:bg-gray-50 transition-colors"
                 title="Zoom In"
               >
-                <ZoomIn size={20} />
+                <ZoomIn sx={{ fontSize: 20 }}/>
               </button>
               <button
                 onClick={() => zoomOut()}
                 className="p-3 bg-white rounded-lg shadow-lg hover:bg-gray-50 transition-colors"
                 title="Zoom Out"
               >
-                <ZoomOut size={20} />
+                <ZoomOut sx={{ fontSize: 20 }}/>
               </button>
               <button
                 onClick={() => resetTransform()}
                 className="p-3 bg-white rounded-lg shadow-lg hover:bg-gray-50 transition-colors"
                 title="Reset Zoom"
               >
-                <Maximize2 size={20} />
+                <Maximize2 sx={{ fontSize: 20 }}/>
               </button>
               <button
                 onClick={() => setDebugMode(!debugMode)}
@@ -90,7 +93,7 @@ const FloorMap = ({
                 }`}
                 title="Toggle Debug Mode"
               >
-                <Bug size={20} />
+                <Bug sx={{ fontSize: 20 }}/>
               </button>
             </div>
 

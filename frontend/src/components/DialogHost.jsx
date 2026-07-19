@@ -17,7 +17,10 @@
  *   • Buttons have consistent h-9 sizing, focus rings, and hover states.
  */
 import React, { useEffect, useState, useRef } from "react";
-import { AlertTriangle, HelpCircle, Info, X } from "lucide-react";
+import AlertTriangle from "@mui/icons-material/WarningAmber";
+import HelpCircle from "@mui/icons-material/HelpOutlined";
+import Info from "@mui/icons-material/InfoOutlined";
+import X from "@mui/icons-material/Close";
 import { _subscribe, _resolve } from "../lib/dialog";
 
 const TONE_STYLES = {
@@ -35,9 +38,9 @@ function pickTone(opts, kind) {
 
 function pickIcon(opts, kind) {
   if (opts.icon) return opts.icon;
-  if (opts.confirmVariant === "destructive") return <AlertTriangle size={20}/>;
-  if (kind === "confirm" || kind === "prompt") return <HelpCircle size={20}/>;
-  return <Info size={20}/>;
+  if (opts.confirmVariant === "destructive") return <AlertTriangle sx={{ fontSize: 20 }}/>;
+  if (kind === "confirm" || kind === "prompt") return <HelpCircle sx={{ fontSize: 20 }}/>;
+  return <Info sx={{ fontSize: 20 }}/>;
 }
 
 export default function DialogHost() {
@@ -156,7 +159,7 @@ export default function DialogHost() {
             aria-label="Close"
             data-testid="dialog-close-btn"
           >
-            <X size={16}/>
+            <X sx={{ fontSize: 16 }}/>
           </button>
         </div>
 

@@ -1,5 +1,5 @@
 import React from "react";
-import { Check } from "lucide-react";
+import Check from "@mui/icons-material/Check";
 
 /**
  * OrangeCheckbox — always-orange box with white tick, browser-independent.
@@ -49,11 +49,7 @@ export default function OrangeCheckbox({
         style={{ width: size, height: size }}
       >
         {checked && (
-          <Check
-            size={Math.max(10, size - 4)}
-            strokeWidth={3}
-            className="text-white"
-          />
+          <Check size={Math.max(10, size - 4)} className="text-white"/>
         )}
       </span>
     </label>

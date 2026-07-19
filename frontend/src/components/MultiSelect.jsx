@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Check, ChevronsUpDown, X, Search } from "lucide-react";
+import Check from "@mui/icons-material/Check";
+import ChevronsUpDown from "@mui/icons-material/UnfoldMore";
+import X from "@mui/icons-material/Close";
+import Search from "@mui/icons-material/SearchOutlined";
 
 /**
  * MultiSelect dropdown with search.
@@ -69,20 +72,20 @@ export default function MultiSelect({ options = [], value = [], onChange, placeh
                   role="button"
                   tabIndex={0}
                 >
-                  <X size={11} />
+                  <X sx={{ fontSize: 11 }}/>
                 </span>
               )}
             </span>
           ))}
         </div>
-        <ChevronsUpDown size={14} className="ml-2 text-gray-400 flex-shrink-0" />
+        <ChevronsUpDown sx={{ fontSize: 14 }} className="ml-2 text-gray-400 flex-shrink-0"/>
       </button>
 
       {open && (
         <div className="absolute z-50 mt-1 w-full bg-white border border-[#ec9324]/40 rounded-md shadow-lg max-h-72 overflow-hidden flex flex-col">
           <div className="px-2 py-2 border-b border-gray-100">
             <div className="relative">
-              <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search sx={{ fontSize: 14 }} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400"/>
               <input
                 type="text"
                 autoFocus
@@ -122,7 +125,7 @@ export default function MultiSelect({ options = [], value = [], onChange, placeh
                       sel ? "bg-[#ec9324] border-[#ec9324] text-white" : "border-gray-300"
                     }`}
                   >
-                    {sel && <Check size={12} />}
+                    {sel && <Check sx={{ fontSize: 12 }}/>}
                   </span>
                   <div className="flex-1 text-left">
                     <div className="font-medium text-gray-900">{o.label}</div>

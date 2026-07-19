@@ -3,7 +3,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { Eye, EyeOff, KeyRound, Loader2, CheckCircle2 } from "lucide-react";
+import Eye from "@mui/icons-material/Visibility";
+import EyeOff from "@mui/icons-material/VisibilityOff";
+import KeyRound from "@mui/icons-material/KeyOutlined";
+import Loader2 from "@mui/icons-material/Autorenew";
+import CheckCircle2 from "@mui/icons-material/CheckCircleOutlined";
 import api from "../lib/api";
 import notify from "../lib/notify";
 import { PASSWORD_POLICY, scorePassword } from "../lib/password";
@@ -59,7 +63,7 @@ export default function ChangePasswordModal({ open, onClose, onSuccess }) {
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <KeyRound size={18} className="text-[#ec9324]"/> Change Password
+            <KeyRound sx={{ fontSize: 18 }} className="text-[#ec9324]"/> Change Password
           </DialogTitle>
           <DialogDescription>
             Enter your current password and choose a strong new one.
@@ -79,7 +83,7 @@ export default function ChangePasswordModal({ open, onClose, onSuccess }) {
               />
               <button type="button" onClick={() => setShowOld(v => !v)} tabIndex={-1}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700">
-                {showOld ? <EyeOff size={15}/> : <Eye size={15}/>}
+                {showOld ? <EyeOff sx={{ fontSize: 15 }}/> : <Eye sx={{ fontSize: 15 }}/>}
               </button>
             </div>
           </div>
@@ -96,7 +100,7 @@ export default function ChangePasswordModal({ open, onClose, onSuccess }) {
               />
               <button type="button" onClick={() => setShowNew(v => !v)} tabIndex={-1}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700">
-                {showNew ? <EyeOff size={15}/> : <Eye size={15}/>}
+                {showNew ? <EyeOff sx={{ fontSize: 15 }}/> : <Eye sx={{ fontSize: 15 }}/>}
               </button>
             </div>
             {newP && (
@@ -114,7 +118,7 @@ export default function ChangePasswordModal({ open, onClose, onSuccess }) {
                     const ok = r.test(newP);
                     return (
                       <li key={r.id} className={`flex items-center gap-1.5 ${ok ? "text-emerald-700" : "text-gray-500"}`}>
-                        <CheckCircle2 size={11} className={ok ? "" : "opacity-30"}/> {r.label}
+                        <CheckCircle2 sx={{ fontSize: 11 }} className={ok ? "" : "opacity-30"}/> {r.label}
                       </li>
                     );
                   })}
@@ -138,7 +142,7 @@ export default function ChangePasswordModal({ open, onClose, onSuccess }) {
               />
               <button type="button" onClick={() => setShowConfirm(v => !v)} tabIndex={-1}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700">
-                {showConfirm ? <EyeOff size={15}/> : <Eye size={15}/>}
+                {showConfirm ? <EyeOff sx={{ fontSize: 15 }}/> : <Eye sx={{ fontSize: 15 }}/>}
               </button>
             </div>
             {confirmP && !matches && (
@@ -161,7 +165,7 @@ export default function ChangePasswordModal({ open, onClose, onSuccess }) {
             className="bg-[#ec9324] hover:bg-[#d4811f] text-white"
             data-testid="change-password-submit"
           >
-            {submitting ? (<><Loader2 size={14} className="mr-2 animate-spin"/>Updating…</>) : "Update Password"}
+            {submitting ? (<><Loader2 sx={{ fontSize: 14 }} className="mr-2 animate-spin"/>Updating…</>) : "Update Password"}
           </Button>
         </DialogFooter>
       </DialogContent>

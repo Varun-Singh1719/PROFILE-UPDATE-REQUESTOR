@@ -3,7 +3,11 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import WorkstationSeat from './WorkstationSeat';
 import { resolvePdfUrl } from '../lib/pdfUrl';
-import { ZoomIn, ZoomOut, Maximize2, Search, X } from 'lucide-react';
+import ZoomIn from "@mui/icons-material/ZoomIn";
+import ZoomOut from "@mui/icons-material/ZoomOut";
+import Maximize2 from "@mui/icons-material/OpenInFull";
+import Search from "@mui/icons-material/SearchOutlined";
+import X from "@mui/icons-material/Close";
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 
@@ -180,7 +184,7 @@ const WorkstationFloorMap = ({
               {legendPreset !== "floor-layout" && (
                 <>
                   <div className="bg-white rounded-lg shadow-lg p-2 flex items-center gap-2 w-64">
-                    <Search size={16} className="text-gray-400 flex-none" />
+                    <Search sx={{ fontSize: 16 }} className="text-gray-400 flex-none"/>
                     <input
                       type="text"
                       value={search}
@@ -191,7 +195,7 @@ const WorkstationFloorMap = ({
                     />
                     {search && (
                       <button onClick={() => setSearch('')} className="text-gray-400 hover:text-gray-700" aria-label="Clear search">
-                        <X size={14} />
+                        <X sx={{ fontSize: 14 }}/>
                       </button>
                     )}
                   </div>
@@ -237,13 +241,13 @@ const WorkstationFloorMap = ({
             {/* Top-right zoom controls */}
             <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
               <button onClick={() => zoomIn(0.25, 250, 'easeOut')} className="p-3 bg-white rounded-lg shadow-lg hover:bg-gray-50" title="Zoom In" data-testid="ws-zoom-in">
-                <ZoomIn size={20} />
+                <ZoomIn sx={{ fontSize: 20 }}/>
               </button>
               <button onClick={() => zoomOut(0.25, 250, 'easeOut')} className="p-3 bg-white rounded-lg shadow-lg hover:bg-gray-50" title="Zoom Out" data-testid="ws-zoom-out">
-                <ZoomOut size={20} />
+                <ZoomOut sx={{ fontSize: 20 }}/>
               </button>
               <button onClick={() => resetTransform(300, 'easeOut')} className="p-3 bg-white rounded-lg shadow-lg hover:bg-gray-50" title="Reset Zoom" data-testid="ws-zoom-reset">
-                <Maximize2 size={20} />
+                <Maximize2 sx={{ fontSize: 20 }}/>
               </button>
             </div>
 

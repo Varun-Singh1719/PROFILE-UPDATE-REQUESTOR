@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import notify from "../lib/notify";
-import { Loader2 } from "lucide-react";
+import Loader2 from "@mui/icons-material/Autorenew";
 
 // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
 export default function AuthCallback() {
@@ -46,7 +46,7 @@ export default function AuthCallback() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-white">
       <div className="text-center">
-        <Loader2 className="animate-spin text-[#ec9324] mx-auto" size={32} />
+        <Loader2 className="animate-spin text-[#ec9324] mx-auto" sx={{ fontSize: 32 }}/>
         <div className="mt-3 text-sm text-gray-600" data-testid="auth-callback-status">
           {error || "Completing sign-in..."}
         </div>

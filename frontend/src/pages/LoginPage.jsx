@@ -6,7 +6,9 @@ import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { formatApiError } from "../lib/api";
-import { Loader2, Eye, EyeOff } from "lucide-react";
+import Loader2 from "@mui/icons-material/Autorenew";
+import Eye from "@mui/icons-material/Visibility";
+import EyeOff from "@mui/icons-material/VisibilityOff";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -116,14 +118,14 @@ export default function LoginPage() {
                   data-testid="login-password-toggle"
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 focus:outline-none"
                 >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  {showPassword ? <EyeOff sx={{ fontSize: 16 }}/> : <Eye sx={{ fontSize: 16 }}/>}
                 </button>
               </div>
             </div>
             {error && <div className="text-sm text-red-600 text-center" data-testid="login-error">{error}</div>}
             <Button type="submit" disabled={loading} data-testid="login-submit-btn"
               className="w-full h-11 bg-[#ec9324] hover:bg-[#d4811f] text-white">
-              {loading ? <><Loader2 className="animate-spin mr-2" size={16}/> Signing in...</> : "Sign in"}
+              {loading ? <><Loader2 className="animate-spin mr-2" sx={{ fontSize: 16 }}/> Signing in...</> : "Sign in"}
             </Button>
             <div className="text-center">
               <a href="/forgot-password" data-testid="forgot-password-link" className="text-xs text-gray-500 hover:text-[#ec9324] hover:underline">

@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight, Home } from "lucide-react";
+import ChevronRight from "@mui/icons-material/ChevronRight";
+import Home from "@mui/icons-material/HomeOutlined";
 
 /**
  * Default landing route for section/parent labels. Used when a breadcrumb item is
@@ -37,7 +38,7 @@ export default function Breadcrumbs({ items = [], className = "" }) {
   return (
     <nav data-testid="breadcrumbs" aria-label="Breadcrumb" className={`flex items-center text-sm text-gray-500 ${className}`}>
       <Link to="/admin" className="hover:text-[#ec9324] flex items-center" data-testid="breadcrumb-home" aria-label="Home">
-        <Home size={13}/>
+        <Home sx={{ fontSize: 13 }}/>
       </Link>
       {items.map((c, i) => {
         const isLast = i === items.length - 1;
@@ -45,7 +46,7 @@ export default function Breadcrumbs({ items = [], className = "" }) {
         const slug = `breadcrumb-${c.label.toLowerCase().replace(/\s+/g, "-")}`;
         return (
           <React.Fragment key={`${c.label}-${i}`}>
-            <ChevronRight size={13} className="mx-1.5 text-gray-300"/>
+            <ChevronRight sx={{ fontSize: 13 }} className="mx-1.5 text-gray-300"/>
             {!isLast && target ? (
               <Link
                 to={target}

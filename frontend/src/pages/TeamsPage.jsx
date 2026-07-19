@@ -13,7 +13,15 @@ import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import DeferredSearchInput from "../components/DeferredSearchInput";
 import ViewTeamDrawer from "../components/ViewTeamDrawer";
 import Pagination from "../components/Pagination";
-import { Plus, Pencil, Users, Trash2, Sparkles, Check, X, MoreVertical, Eye } from "lucide-react";
+import Plus from "@mui/icons-material/Add";
+import Pencil from "@mui/icons-material/EditOutlined";
+import Users from "@mui/icons-material/PeopleOutlined";
+import Trash2 from "@mui/icons-material/DeleteOutlined";
+import Sparkles from "@mui/icons-material/AutoAwesomeOutlined";
+import Check from "@mui/icons-material/Check";
+import X from "@mui/icons-material/Close";
+import MoreVertical from "@mui/icons-material/MoreVert";
+import Eye from "@mui/icons-material/Visibility";
 import { confirm as confirmDialog } from '../lib/dialog';
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
 import {
@@ -57,7 +65,7 @@ function SelectionChip({ label, sublabel, onRemove, tone = "member", testId }) {
         aria-label={`Remove ${label}`}
         className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full hover:bg-black/10"
       >
-        <X size={11} strokeWidth={2.5} />
+        <X sx={{ fontSize: 11 }}/>
       </button>
     </span>
   );
@@ -267,7 +275,7 @@ export default function TeamsPage() {
           data-testid="add-team-btn"
           disabled={!permCreate.canUse}
         >
-          <Plus size={16} className="mr-2" /> Add New Team
+          <Plus sx={{ fontSize: 16 }} className="mr-2"/> Add New Team
         </Button>
         ) : null
       }
@@ -333,7 +341,7 @@ export default function TeamsPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-600">
                     <div className="flex items-center gap-1.5 text-xs">
-                      <Users size={14} className="text-gray-400" />
+                      <Users sx={{ fontSize: 14 }} className="text-gray-400"/>
                       <span className="font-medium">{(t.members || []).length}</span>
                       {(t.members || []).slice(0, 3).map((m) => (
                         <span key={m.id} className="bg-gray-100 text-gray-700 rounded px-1.5 py-0.5">{m.name}</span>
@@ -354,12 +362,12 @@ export default function TeamsPage() {
                           aria-label="Row actions"
                           title="Actions"
                         >
-                          <MoreVertical size={15}/>
+                          <MoreVertical sx={{ fontSize: 15 }}/>
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-40">
                         <DropdownMenuItem onClick={() => openView(t)} data-testid={`view-team-${t.name}`}>
-                          <Eye size={13} className="mr-2 text-gray-500"/> View
+                          <Eye sx={{ fontSize: 13 }} className="mr-2 text-gray-500"/> View
                         </DropdownMenuItem>
                         {permEdit.isVisible && (
                           <DropdownMenuItem
@@ -367,7 +375,7 @@ export default function TeamsPage() {
                             data-testid={`edit-team-${t.name}`}
                             disabled={!permEdit.canUse}
                           >
-                            <Pencil size={13} className="mr-2 text-gray-500"/> Edit
+                            <Pencil sx={{ fontSize: 13 }} className="mr-2 text-gray-500"/> Edit
                           </DropdownMenuItem>
                         )}
                         {permDelete.isVisible && (
@@ -379,7 +387,7 @@ export default function TeamsPage() {
                               disabled={!permDelete.canUse}
                               className="text-red-600 focus:text-red-700"
                             >
-                              <Trash2 size={13} className="mr-2"/> Delete
+                              <Trash2 sx={{ fontSize: 13 }} className="mr-2"/> Delete
                             </DropdownMenuItem>
                           </>
                         )}
@@ -529,7 +537,7 @@ export default function TeamsPage() {
                 Team Colour
                 {!editing && (
                   <span className="inline-flex items-center gap-1 text-[10px] font-normal text-[#ec9324] bg-[#ec9324]/10 rounded px-1.5 py-0.5">
-                    <Sparkles size={10}/> auto-assigned
+                    <Sparkles sx={{ fontSize: 10 }}/> auto-assigned
                   </span>
                 )}
               </Label>
@@ -563,7 +571,7 @@ export default function TeamsPage() {
                       {form.initials || teamInitials(form.name)}
                       {isCurrent && (
                         <span className="absolute inset-0 bg-black/30 flex items-center justify-center rounded-full">
-                          <Check size={14} className="text-white"/>
+                          <Check sx={{ fontSize: 14 }} className="text-white"/>
                         </span>
                       )}
                       {taken && (

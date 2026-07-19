@@ -10,10 +10,19 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  ArrowLeft, Pencil, Loader2, Briefcase, Armchair, Shield, LayoutDashboard,
-  ChevronDown, ChevronRight, Users, CalendarClock, User as UserIcon, Settings,
-} from "lucide-react";
+import ArrowLeft from "@mui/icons-material/ArrowBack";
+import Pencil from "@mui/icons-material/EditOutlined";
+import Loader2 from "@mui/icons-material/Autorenew";
+import Briefcase from "@mui/icons-material/WorkOutlined";
+import Armchair from "@mui/icons-material/Chair";
+import Shield from "@mui/icons-material/ShieldOutlined";
+import LayoutDashboard from "@mui/icons-material/DashboardOutlined";
+import ChevronDown from "@mui/icons-material/KeyboardArrowDown";
+import ChevronRight from "@mui/icons-material/ChevronRight";
+import Users from "@mui/icons-material/PeopleOutlined";
+import CalendarClock from "@mui/icons-material/EventOutlined";
+import UserIcon from "@mui/icons-material/PersonOutlined";
+import Settings from "@mui/icons-material/SettingsOutlined";
 import api from "../../lib/api";
 import notify from "../../lib/notify";
 import { Button } from "../ui/button";
@@ -115,7 +124,7 @@ function ModuleSection({ mod, moduleState, defaultOpen = true }) {
         <Icon size={16} className="text-[#ec9324]"/>
         <span className="font-semibold text-gray-900 flex-1">{mod.label || mod.key}</span>
         <span className="text-[11px] text-gray-500">{rows.length} page{rows.length === 1 ? "" : "s"}</span>
-        {open ? <ChevronDown size={16} className="text-gray-400"/> : <ChevronRight size={16} className="text-gray-400"/>}
+        {open ? <ChevronDown sx={{ fontSize: 16 }} className="text-gray-400"/> : <ChevronRight sx={{ fontSize: 16 }} className="text-gray-400"/>}
       </button>
       {open && (
         <div className="border-t border-gray-100 divide-y divide-gray-100">
@@ -210,7 +219,7 @@ export default function PermissionSetView({ setId, catalog, onEdit, onBack }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20 text-gray-400 text-sm">
-        <Loader2 className="animate-spin mr-2" size={16}/> Loading permission set…
+        <Loader2 className="animate-spin mr-2" sx={{ fontSize: 16 }}/> Loading permission set…
       </div>
     );
   }
@@ -236,7 +245,7 @@ export default function PermissionSetView({ setId, catalog, onEdit, onBack }) {
             className="p-2 rounded-md hover:bg-gray-100 text-gray-500 hover:text-gray-900"
             aria-label="Back to list"
             data-testid="perm-view-back"
-          ><ArrowLeft size={16}/></button>
+          ><ArrowLeft sx={{ fontSize: 16 }}/></button>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-mono text-xs text-gray-500">#{doc.seq_no || doc.numeric_id}</span>
@@ -257,7 +266,7 @@ export default function PermissionSetView({ setId, catalog, onEdit, onBack }) {
               className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9 text-xs font-semibold"
               data-testid="perm-view-edit-btn"
             >
-              <Pencil size={13} className="mr-1.5"/> Edit
+              <Pencil sx={{ fontSize: 13 }} className="mr-1.5"/> Edit
             </Button>
           )}
         </div>
@@ -282,7 +291,7 @@ export default function PermissionSetView({ setId, catalog, onEdit, onBack }) {
                 : "border-gray-200 text-gray-500 hover:border-gray-300"
             }`}
           >
-            <Users size={13}/> {assignedCount ?? 0} assigned {(assignedCount === 1) ? "employee" : "employees"} · view list
+            <Users sx={{ fontSize: 13 }}/> {assignedCount ?? 0} assigned {(assignedCount === 1) ? "employee" : "employees"} · view list
           </button>
         </div>
       </div>

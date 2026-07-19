@@ -19,10 +19,18 @@ import React, {
   forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState,
 } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Search, MoreVertical, Eye, Pencil, Copy, Trash2, Loader2,
-  Users, X, ArrowUpDown, ArrowUp, ArrowDown,
-} from "lucide-react";
+import Search from "@mui/icons-material/SearchOutlined";
+import MoreVertical from "@mui/icons-material/MoreVert";
+import Eye from "@mui/icons-material/Visibility";
+import Pencil from "@mui/icons-material/EditOutlined";
+import Copy from "@mui/icons-material/ContentCopy";
+import Trash2 from "@mui/icons-material/DeleteOutlined";
+import Loader2 from "@mui/icons-material/Autorenew";
+import Users from "@mui/icons-material/PeopleOutlined";
+import X from "@mui/icons-material/Close";
+import ArrowUpDown from "@mui/icons-material/SwapVert";
+import ArrowUp from "@mui/icons-material/ArrowUpward";
+import ArrowDown from "@mui/icons-material/ArrowDownward";
 import api from "../../lib/api";
 import notify from "../../lib/notify";
 import { confirm as confirmDialog } from "../../lib/dialog";
@@ -175,8 +183,8 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
   };
 
   const SortIcon = ({ col }) => {
-    if (sortBy !== col) return <ArrowUpDown size={11} className="text-gray-300"/>;
-    return sortDir === "asc" ? <ArrowUp size={11} className="text-[#ec9324]"/> : <ArrowDown size={11} className="text-[#ec9324]"/>;
+    if (sortBy !== col) return <ArrowUpDown sx={{ fontSize: 11 }} className="text-gray-300"/>;
+    return sortDir === "asc" ? <ArrowUp sx={{ fontSize: 11 }} className="text-[#ec9324]"/> : <ArrowDown sx={{ fontSize: 11 }} className="text-[#ec9324]"/>;
   };
 
   // ---- row actions ----
@@ -296,7 +304,7 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
               className="h-9 px-3 rounded-md border border-gray-200 text-xs font-semibold text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] inline-flex items-center gap-1.5"
               data-testid="perm-sets-clear-all"
             >
-              <X size={12}/> Clear all
+              <X sx={{ fontSize: 12 }}/> Clear all
             </button>
           )}
 
@@ -335,7 +343,7 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
           </thead>
           <tbody className="divide-y divide-gray-100 bg-white">
             {loading ? (
-              <tr><td colSpan={10} className="text-center py-16"><Loader2 className="animate-spin inline text-[#ec9324]" size={22}/></td></tr>
+              <tr><td colSpan={10} className="text-center py-16"><Loader2 className="animate-spin inline text-[#ec9324]" sx={{ fontSize: 22 }}/></td></tr>
             ) : items.length === 0 ? (
               <tr><td colSpan={10} className="text-center py-16 text-sm text-gray-500">
                 No permission sets found.
@@ -387,7 +395,7 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
                           : "border-gray-200 text-gray-500 hover:border-gray-300"
                       }`}
                     >
-                      <Users size={11}/> {s.assigned_users_count || 0}
+                      <Users sx={{ fontSize: 11 }}/> {s.assigned_users_count || 0}
                     </button>
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -398,23 +406,23 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
                           data-testid={`perm-sets-actions-${s.seq_no}`}
                           className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800"
                           aria-label="Row actions"
-                        >{busyId === s.id ? <Loader2 size={15} className="animate-spin"/> : <MoreVertical size={15}/>}</button>
+                        >{busyId === s.id ? <Loader2 sx={{ fontSize: 15 }} className="animate-spin"/> : <MoreVertical sx={{ fontSize: 15 }}/>}</button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-40">
                         <DropdownMenuItem onClick={() => onView(s.id)} data-testid={`perm-sets-view-${s.seq_no}`}>
-                          <Eye size={13} className="mr-2"/> View
+                          <Eye sx={{ fontSize: 13 }} className="mr-2"/> View
                         </DropdownMenuItem>
                         {!isDeleted && (
                           <>
                             <DropdownMenuItem onClick={() => onEdit(s.id)} data-testid={`perm-sets-edit-${s.seq_no}`}>
-                              <Pencil size={13} className="mr-2"/> Edit
+                              <Pencil sx={{ fontSize: 13 }} className="mr-2"/> Edit
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => doDuplicate(s)} data-testid={`perm-sets-duplicate-${s.seq_no}`}>
-                              <Copy size={13} className="mr-2"/> Duplicate
+                              <Copy sx={{ fontSize: 13 }} className="mr-2"/> Duplicate
                             </DropdownMenuItem>
                             <DropdownMenuSeparator/>
                             <DropdownMenuItem onClick={() => doDelete(s)} data-testid={`perm-sets-delete-${s.seq_no}`} className="text-red-600 focus:text-red-700">
-                              <Trash2 size={13} className="mr-2"/> Delete
+                              <Trash2 sx={{ fontSize: 13 }} className="mr-2"/> Delete
                             </DropdownMenuItem>
                           </>
                         )}

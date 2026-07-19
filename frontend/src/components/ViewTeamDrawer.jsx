@@ -15,7 +15,11 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from "./ui/sheet";
 import { Button } from "./ui/button";
-import { Pencil, Users, UserCog, Calendar, User as UserIcon } from "lucide-react";
+import Pencil from "@mui/icons-material/EditOutlined";
+import Users from "@mui/icons-material/PeopleOutlined";
+import UserCog from "@mui/icons-material/ManageAccountsOutlined";
+import Calendar from "@mui/icons-material/CalendarTodayOutlined";
+import UserIcon from "@mui/icons-material/PersonOutlined";
 import api from "../lib/api";
 import notify from "../lib/notify";
 import { teamBackground, teamInitials, personInitials, personAvatarBackground } from "../lib/teamColors";
@@ -164,7 +168,7 @@ export default function ViewTeamDrawer({ open, onOpenChange, teamId, onEdit, can
                     className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-8"
                     data-testid="view-team-edit-btn"
                   >
-                    <Pencil size={14} className="mr-1.5" /> Edit
+                    <Pencil sx={{ fontSize: 14 }} className="mr-1.5"/> Edit
                   </Button>
                 )}
               </div>
@@ -244,7 +248,7 @@ export default function ViewTeamDrawer({ open, onOpenChange, teamId, onEdit, can
               <section className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-3">
                   <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
-                    <UserCog size={12} /> Total Managers
+                    <UserCog sx={{ fontSize: 12 }}/> Total Managers
                   </div>
                   <div
                     className="text-xl font-bold text-gray-900"
@@ -255,7 +259,7 @@ export default function ViewTeamDrawer({ open, onOpenChange, teamId, onEdit, can
                 </div>
                 <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-3">
                   <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
-                    <Users size={12} /> Total Members
+                    <Users sx={{ fontSize: 12 }}/> Total Members
                   </div>
                   <div
                     className="text-xl font-bold text-gray-900"
@@ -270,7 +274,7 @@ export default function ViewTeamDrawer({ open, onOpenChange, teamId, onEdit, can
               <section className="rounded-lg border border-gray-200 divide-y divide-gray-100 bg-white">
                 <div className="px-3 py-2 bg-gray-50 rounded-t-lg">
                   <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-600">
-                    <Calendar size={12} /> Audit
+                    <Calendar sx={{ fontSize: 12 }}/> Audit
                   </div>
                 </div>
                 <div className="px-3 py-2">
@@ -278,7 +282,7 @@ export default function ViewTeamDrawer({ open, onOpenChange, teamId, onEdit, can
                     label="Created by"
                     value={
                       <span className="inline-flex items-center gap-1">
-                        <UserIcon size={12} className="text-gray-400" />
+                        <UserIcon sx={{ fontSize: 12 }} className="text-gray-400"/>
                         {team.created_by?.name || "System"}
                       </span>
                     }
@@ -288,7 +292,7 @@ export default function ViewTeamDrawer({ open, onOpenChange, teamId, onEdit, can
                     label="Updated by"
                     value={
                       <span className="inline-flex items-center gap-1">
-                        <UserIcon size={12} className="text-gray-400" />
+                        <UserIcon sx={{ fontSize: 12 }} className="text-gray-400"/>
                         {team.updated_by?.name || team.created_by?.name || "—"}
                       </span>
                     }

@@ -10,7 +10,10 @@ import Pagination from "../components/Pagination";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from "../components/ui/dialog";
-import { RefreshCw, Trash2, Eye, MoreVertical } from "lucide-react";
+import RefreshCw from "@mui/icons-material/Refresh";
+import Trash2 from "@mui/icons-material/DeleteOutlined";
+import Eye from "@mui/icons-material/Visibility";
+import MoreVertical from "@mui/icons-material/MoreVert";
 import notify from "../lib/notify";
 import { confirm as confirmDialog } from '../lib/dialog';
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
@@ -103,7 +106,7 @@ export default function NotificationsOutboxPage() {
           title="Refresh"
           aria-label="Refresh"
         >
-          <RefreshCw size={16}/>
+          <RefreshCw sx={{ fontSize: 16 }}/>
         </Button>
       }
     >
@@ -202,12 +205,12 @@ export default function NotificationsOutboxPage() {
                             aria-label="Row actions"
                             title="Actions"
                           >
-                            <MoreVertical size={15}/>
+                            <MoreVertical sx={{ fontSize: 15 }}/>
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-40">
                           <DropdownMenuItem onClick={() => setPreview(n)} data-testid={`view-outbox-${n.id}`}>
-                            <Eye size={13} className="mr-2 text-gray-500"/> View
+                            <Eye sx={{ fontSize: 13 }} className="mr-2 text-gray-500"/> View
                           </DropdownMenuItem>
                           {permDelete.isVisible && (
                             <>
@@ -218,7 +221,7 @@ export default function NotificationsOutboxPage() {
                                 disabled={!permDelete.canUse}
                                 className="text-red-600 focus:text-red-700"
                               >
-                                <Trash2 size={13} className="mr-2"/> Delete
+                                <Trash2 sx={{ fontSize: 13 }} className="mr-2"/> Delete
                               </DropdownMenuItem>
                             </>
                           )}

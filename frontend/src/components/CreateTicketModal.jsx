@@ -7,7 +7,12 @@ import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import SingleSelect from "./SingleSelect";
 import notify from "../lib/notify";
-import { Upload, Loader2, X, Paperclip, Plus, Calendar as CalendarIcon } from "lucide-react";
+import Upload from "@mui/icons-material/FileUploadOutlined";
+import Loader2 from "@mui/icons-material/Autorenew";
+import X from "@mui/icons-material/Close";
+import Paperclip from "@mui/icons-material/AttachFile";
+import Plus from "@mui/icons-material/Add";
+import CalendarIcon from "@mui/icons-material/CalendarTodayOutlined";
 
 /**
  * CreateTicketModal — In-page popup to create a new ProfiX request.
@@ -123,7 +128,7 @@ export default function CreateTicketModal({ open, onOpenChange, onCreated }) {
         <div className="px-6 pt-5 pb-4 border-b border-gray-100 flex items-center justify-between">
           <div className="flex items-center gap-2 text-gray-900 font-semibold text-lg">
             <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-[#ec9324]/10 text-[#ec9324]">
-              <Plus size={18} />
+              <Plus sx={{ fontSize: 18 }}/>
             </span>
             Create New Request
           </div>
@@ -178,10 +183,7 @@ export default function CreateTicketModal({ open, onOpenChange, onCreated }) {
                     data-testid="ticket-due-date-input"
                     className="pr-9 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                   />
-                  <CalendarIcon
-                    size={16}
-                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
-                  />
+                  <CalendarIcon sx={{ fontSize: 16 }} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"/>
                 </div>
               </div>
             </div>
@@ -220,7 +222,7 @@ export default function CreateTicketModal({ open, onOpenChange, onCreated }) {
               <Label>Attachments</Label>
               <div className="mt-1.5 space-y-2">
                 <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 text-sm text-gray-600 w-fit">
-                  <Upload size={16} /> Add files
+                  <Upload sx={{ fontSize: 16 }}/> Add files
                   <input
                     type="file"
                     multiple
@@ -237,7 +239,7 @@ export default function CreateTicketModal({ open, onOpenChange, onCreated }) {
                         className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-700"
                         data-testid={`attached-file-${i}`}
                       >
-                        <Paperclip size={12} className="text-[#ec9324]" />
+                        <Paperclip sx={{ fontSize: 12 }} className="text-[#ec9324]"/>
                         <span className="max-w-[200px] truncate">
                           {f.name}
                         </span>
@@ -247,7 +249,7 @@ export default function CreateTicketModal({ open, onOpenChange, onCreated }) {
                           className="text-gray-400 hover:text-red-500"
                           data-testid={`remove-file-${i}`}
                         >
-                          <X size={12} />
+                          <X sx={{ fontSize: 12 }}/>
                         </button>
                       </div>
                     ))}
@@ -265,7 +267,7 @@ export default function CreateTicketModal({ open, onOpenChange, onCreated }) {
               >
                 {loading ? (
                   <>
-                    <Loader2 className="animate-spin mr-2" size={16} />{" "}
+                    <Loader2 className="animate-spin mr-2" sx={{ fontSize: 16 }}/>{" "}
                     Creating...
                   </>
                 ) : (

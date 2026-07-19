@@ -1,8 +1,6 @@
 import * as React from "react"
 import { OTPInput, OTPInputContext } from "input-otp"
-import { Minus } from "lucide-react"
-
-import { cn } from "@/lib/utils"
+import Minus from "@mui/icons-material/Remove";import { cn } from "@/lib/utils"
 
 const InputOTP = React.forwardRef(({ className, containerClassName, ...props }, ref) => (
   <OTPInput
@@ -45,7 +43,7 @@ InputOTPSlot.displayName = "InputOTPSlot"
 
 const InputOTPSeparator = React.forwardRef(({ ...props }, ref) => (
   <div ref={ref} role="separator" {...props}>
-    <Minus />
+    <Minus/>
   </div>
 ))
 InputOTPSeparator.displayName = "InputOTPSeparator"

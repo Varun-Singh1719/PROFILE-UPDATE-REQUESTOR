@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Check } from 'lucide-react';
+import ChevronDown from "@mui/icons-material/KeyboardArrowDown";
+import Check from "@mui/icons-material/Check";
 
 /**
  * SelectOrange — a custom dropdown that always opens DOWNWARD below its
@@ -144,7 +145,7 @@ export default function SelectOrange({
         <span className={selected ? 'text-gray-900 truncate' : 'text-gray-400 truncate'}>
           {selected ? selected.label : placeholder}
         </span>
-        <ChevronDown size={14} className={`text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown sx={{ fontSize: 14 }} className={`text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}/>
       </button>
 
       {open && popupRect && createPortal(
@@ -208,7 +209,7 @@ export default function SelectOrange({
                       </span>
                     )}
                   </span>
-                  {isSel && <Check size={14} className="shrink-0" />}
+                  {isSel && <Check sx={{ fontSize: 14 }} className="shrink-0"/>}
                 </button>
               );
             })}

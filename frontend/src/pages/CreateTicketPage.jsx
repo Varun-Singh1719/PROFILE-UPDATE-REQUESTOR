@@ -8,7 +8,14 @@ import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import SingleSelect from "../components/SingleSelect";
 import notify from "../lib/notify";
-import { Upload, Loader2, X, Paperclip, Lightbulb, FileCheck2, Users, AlertCircle } from "lucide-react";
+import Upload from "@mui/icons-material/FileUploadOutlined";
+import Loader2 from "@mui/icons-material/Autorenew";
+import X from "@mui/icons-material/Close";
+import Paperclip from "@mui/icons-material/AttachFile";
+import Lightbulb from "@mui/icons-material/LightbulbOutlined";
+import FileCheck2 from "@mui/icons-material/TaskAltOutlined";
+import Users from "@mui/icons-material/PeopleOutlined";
+import AlertCircle from "@mui/icons-material/ErrorOutlined";
 import { useAuth } from "../context/AuthContext";
 
 export default function CreateTicketPage() {
@@ -144,17 +151,17 @@ export default function CreateTicketPage() {
               <Label>Attachments</Label>
               <div className="mt-1.5 space-y-2">
                 <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 text-sm text-gray-600 w-fit">
-                  <Upload size={16}/> Add files
+                  <Upload sx={{ fontSize: 16 }}/> Add files
                   <input type="file" multiple className="hidden" onChange={handleFilesAdd} data-testid="ticket-file-input"/>
                 </label>
                 {files.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {files.map((f, i) => (
                       <div key={`${f.name}-${f.size}-${i}`} className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-700" data-testid={`attached-file-${i}`}>
-                        <Paperclip size={12} className="text-[#ec9324]"/>
+                        <Paperclip sx={{ fontSize: 12 }} className="text-[#ec9324]"/>
                         <span className="max-w-[200px] truncate">{f.name}</span>
                         <button type="button" onClick={() => removeFile(i)} className="text-gray-400 hover:text-red-500" data-testid={`remove-file-${i}`}>
-                          <X size={12}/>
+                          <X sx={{ fontSize: 12 }}/>
                         </button>
                       </div>
                     ))}
@@ -165,7 +172,7 @@ export default function CreateTicketPage() {
             <div className="flex gap-3 pt-2 border-t border-gray-100 mt-2">
               <Button type="submit" disabled={loading} data-testid="submit-ticket-btn"
                 className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-10 px-5">
-                {loading ? <><Loader2 className="animate-spin mr-2" size={16}/> Creating...</> : "Create Request"}
+                {loading ? <><Loader2 className="animate-spin mr-2" sx={{ fontSize: 16 }}/> Creating...</> : "Create Request"}
               </Button>
               <Button type="button" variant="outline" onClick={() => navigate(-1)} className="h-10 px-5">Cancel</Button>
             </div>
@@ -175,23 +182,23 @@ export default function CreateTicketPage() {
           <aside className="space-y-4 lg:sticky lg:top-4">
             <div className="bg-white rounded-xl shadow-soft border border-gray-100 p-5">
               <div className="flex items-center gap-2 text-gray-900 font-semibold mb-3">
-                <Lightbulb size={16} className="text-[#ec9324]"/> Tips for a faster turnaround
+                <Lightbulb sx={{ fontSize: 16 }} className="text-[#ec9324]"/> Tips for a faster turnaround
               </div>
               <ul className="space-y-3 text-sm text-gray-600">
                 <li className="flex items-start gap-2">
-                  <FileCheck2 size={14} className="text-[#ec9324] mt-0.5 shrink-0"/>
+                  <FileCheck2 sx={{ fontSize: 14 }} className="text-[#ec9324] mt-0.5 shrink-0"/>
                   <span>Be specific in the description — what to fix and the acceptance criteria.</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <Users size={14} className="text-[#ec9324] mt-0.5 shrink-0"/>
+                  <Users sx={{ fontSize: 14 }} className="text-[#ec9324] mt-0.5 shrink-0"/>
                   <span>Set an accurate profile count so DQ can plan capacity correctly.</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <AlertCircle size={14} className="text-[#ec9324] mt-0.5 shrink-0"/>
+                  <AlertCircle sx={{ fontSize: 14 }} className="text-[#ec9324] mt-0.5 shrink-0"/>
                   <span>Use <span className="font-medium text-gray-800">High</span> priority only when the request is blocking downstream work.</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <Paperclip size={14} className="text-[#ec9324] mt-0.5 shrink-0"/>
+                  <Paperclip sx={{ fontSize: 14 }} className="text-[#ec9324] mt-0.5 shrink-0"/>
                   <span>Attach sample files, screenshots or CSVs when they clarify the ask.</span>
                 </li>
               </ul>

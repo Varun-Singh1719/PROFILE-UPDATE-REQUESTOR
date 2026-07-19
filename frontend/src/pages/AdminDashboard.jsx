@@ -18,7 +18,17 @@ import RecentUpdateCard from "../components/RecentUpdateCard";
 import DateFilter, { getCurrentMonthRange, dateFilterToParams } from "../components/DateFilter";
 import { Button } from "../components/ui/button";
 import UserAvatar from "../components/UserAvatar";
-import { Ticket, AlertCircle, CheckCircle2, Loader, Users, Plus, LayoutGrid, ClipboardList, Star, RefreshCw, Lock } from "lucide-react";
+import Ticket from "@mui/icons-material/ConfirmationNumberOutlined";
+import AlertCircle from "@mui/icons-material/ErrorOutlined";
+import CheckCircle2 from "@mui/icons-material/CheckCircleOutlined";
+import Loader from "@mui/icons-material/Autorenew";
+import Users from "@mui/icons-material/PeopleOutlined";
+import Plus from "@mui/icons-material/Add";
+import LayoutGrid from "@mui/icons-material/GridViewOutlined";
+import ClipboardList from "@mui/icons-material/AssignmentOutlined";
+import Star from "@mui/icons-material/StarBorder";
+import RefreshCw from "@mui/icons-material/Refresh";
+import Lock from "@mui/icons-material/LockOutlined";
 import { toast } from "../lib/notify";
 import { useAuth } from "../context/AuthContext";
 import { useEffectivePermissionsState } from "../context/EffectivePermissionsContext";
@@ -135,14 +145,7 @@ export default function AdminDashboard() {
                       : "hover:bg-orange-50 cursor-pointer")
               }`}
             >
-              <Star
-                size={13}
-                className={`transition-all ${
-                  isDefault
-                    ? (active ? "text-white fill-current" : "text-[#ec9324] fill-current")
-                    : (active ? "text-white/70" : "text-gray-400 group-hover:text-[#ec9324]")
-                }`}
-              />
+              <Star sx={{ fontSize: 13 }} className={`transition-all ${ isDefault ? (active ? "text-white fill-current" : "text-[#ec9324] fill-current") : (active ? "text-white/70" : "text-gray-400 group-hover:text-[#ec9324]") }`}/>
               {/* Tooltip */}
               <span
                 className="pointer-events-none absolute top-full mt-1 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded bg-gray-800 text-white text-[10px] font-semibold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20 shadow-md"
@@ -160,7 +163,7 @@ export default function AdminDashboard() {
     return (
       <Layout title="Dashboard">
         <div className="flex items-center justify-center py-20 text-gray-400 text-sm">
-          <Loader className="animate-spin mr-2" size={16} /> Loading…
+          <Loader className="animate-spin mr-2" sx={{ fontSize: 16 }}/> Loading…
         </div>
       </Layout>
     );
@@ -216,7 +219,7 @@ function NoDashboardShared({ productLabel }) {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center px-6">
       <div className="h-16 w-16 rounded-full bg-gray-100 text-gray-400 inline-flex items-center justify-center mb-4">
-        <Lock size={28} />
+        <Lock sx={{ fontSize: 28 }}/>
       </div>
       <h2 className="text-lg font-semibold text-gray-900">No Dashboard Shared</h2>
       <p className="text-sm text-gray-500 mt-2 max-w-md">
@@ -287,7 +290,7 @@ function ProfixDashboardBody({ navigate, headerActions }) {
             data-testid="create-new-ticket-btn"
             className="bg-[#ec9324] hover:bg-[#d4811f] text-white shadow-sm h-9"
           >
-            <Plus size={16} className="mr-1.5" /> New Request
+            <Plus sx={{ fontSize: 16 }} className="mr-1.5"/> New Request
           </Button>
           <button
             type="button"
@@ -296,7 +299,7 @@ function ProfixDashboardBody({ navigate, headerActions }) {
             title="Refresh"
             data-testid="profix-refresh"
           >
-            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+            <RefreshCw sx={{ fontSize: 14 }} className={loading ? "animate-spin" : ""}/>
           </button>
         </div>
       </div>
@@ -309,7 +312,7 @@ function ProfixDashboardBody({ navigate, headerActions }) {
       </div>
 
       <h2 className="text-lg font-semibold text-gray-900 mt-8 mb-3 flex items-center gap-2">
-        <Users size={18} className="text-[#ec9324]"/> DQ Team Performance
+        <Users sx={{ fontSize: 18 }} className="text-[#ec9324]"/> DQ Team Performance
       </h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {dqs.length === 0 && <div className="text-sm text-gray-400">No DQ members yet.</div>}

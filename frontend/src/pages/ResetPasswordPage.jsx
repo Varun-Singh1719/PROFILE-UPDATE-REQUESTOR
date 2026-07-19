@@ -3,7 +3,11 @@ import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import api, { formatApiError } from "../lib/api";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
-import { Loader2, CheckCircle2, AlertTriangle, Eye, EyeOff } from "lucide-react";
+import Loader2 from "@mui/icons-material/Autorenew";
+import CheckCircle2 from "@mui/icons-material/CheckCircleOutlined";
+import AlertTriangle from "@mui/icons-material/WarningAmber";
+import Eye from "@mui/icons-material/Visibility";
+import EyeOff from "@mui/icons-material/VisibilityOff";
 import notify from "../lib/notify";
 
 export default function ResetPasswordPage() {
@@ -44,7 +48,7 @@ export default function ResetPasswordPage() {
             <p className="text-gray-500 mt-1 text-sm">Choose a strong password (minimum 8 characters).</p>
             {!token && (
               <div className="mt-4 p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-xs flex items-start gap-2">
-                <AlertTriangle size={14} className="mt-0.5"/> No reset token detected in URL. Please use the link from your email.
+                <AlertTriangle sx={{ fontSize: 14 }} className="mt-0.5"/> No reset token detected in URL. Please use the link from your email.
               </div>
             )}
             <form onSubmit={submit} className="space-y-4 mt-6">
@@ -59,7 +63,7 @@ export default function ResetPasswordPage() {
                   data-testid="reset-pwd-toggle"
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 focus:outline-none"
                 >
-                  {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+                  {showPwd ? <EyeOff sx={{ fontSize: 16 }}/> : <Eye sx={{ fontSize: 16 }}/>}
                 </button>
               </div>
               <div className="relative">
@@ -73,13 +77,13 @@ export default function ResetPasswordPage() {
                   data-testid="reset-pwd2-toggle"
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 focus:outline-none"
                 >
-                  {showPwd2 ? <EyeOff size={16} /> : <Eye size={16} />}
+                  {showPwd2 ? <EyeOff sx={{ fontSize: 16 }}/> : <Eye sx={{ fontSize: 16 }}/>}
                 </button>
               </div>
               {error && <div className="text-sm text-red-600" data-testid="reset-error">{error}</div>}
               <Button type="submit" disabled={loading || !token} data-testid="reset-submit-btn"
                 className="w-full h-11 bg-[#ec9324] hover:bg-[#d4811f] text-white">
-                {loading ? <><Loader2 className="animate-spin mr-2" size={16}/> Updating…</> : "Update password"}
+                {loading ? <><Loader2 className="animate-spin mr-2" sx={{ fontSize: 16 }}/> Updating…</> : "Update password"}
               </Button>
               <Link to="/login" className="block text-center text-sm text-gray-500 hover:text-[#ec9324]">Back to sign in</Link>
             </form>
@@ -87,7 +91,7 @@ export default function ResetPasswordPage() {
         ) : (
           <div className="text-center" data-testid="reset-success">
             <div className="mx-auto w-12 h-12 rounded-full bg-green-50 text-green-600 flex items-center justify-center">
-              <CheckCircle2 size={22}/>
+              <CheckCircle2 sx={{ fontSize: 22 }}/>
             </div>
             <h2 className="mt-4 text-xl font-bold text-gray-900">Password updated</h2>
             <p className="text-gray-500 mt-2 text-sm">Redirecting you to sign in…</p>

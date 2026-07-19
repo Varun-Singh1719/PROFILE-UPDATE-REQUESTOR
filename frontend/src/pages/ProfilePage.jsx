@@ -13,10 +13,19 @@ import notify from "../lib/notify";
 import { useAuth } from "../context/AuthContext";
 import UserAvatar, { AVATAR_PRESETS, presetUrl, initialsFor, INITIALS_PALETTES } from "../components/UserAvatar";
 import ChangePasswordModal from "../components/ChangePasswordModal";
-import {
-  Camera, Upload, Trash2, KeyRound, ShieldCheck, Mail, Phone, IdCard, Calendar,
-  Users as UsersIcon, Loader2, X, Check,
-} from "lucide-react";
+import Camera from "@mui/icons-material/PhotoCameraOutlined";
+import Upload from "@mui/icons-material/FileUploadOutlined";
+import Trash2 from "@mui/icons-material/DeleteOutlined";
+import KeyRound from "@mui/icons-material/KeyOutlined";
+import ShieldCheck from "@mui/icons-material/GppGoodOutlined";
+import Mail from "@mui/icons-material/MailOutlined";
+import Phone from "@mui/icons-material/PhoneOutlined";
+import IdCard from "@mui/icons-material/BadgeOutlined";
+import Calendar from "@mui/icons-material/CalendarTodayOutlined";
+import UsersIcon from "@mui/icons-material/PeopleOutlined";
+import Loader2 from "@mui/icons-material/Autorenew";
+import X from "@mui/icons-material/Close";
+import Check from "@mui/icons-material/Check";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "../components/ui/dialog";
@@ -130,7 +139,7 @@ function AvatarEditor({ open, profile, onClose, onChange }) {
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Camera size={18} className="text-[#ec9324]"/> Update Avatar
+            <Camera sx={{ fontSize: 18 }} className="text-[#ec9324]"/> Update Avatar
           </DialogTitle>
           <DialogDescription>Upload an image or pick a cartoon avatar.</DialogDescription>
         </DialogHeader>
@@ -185,12 +194,12 @@ function AvatarEditor({ open, profile, onClose, onChange }) {
                     {initialsFor(profile?.name)}
                     {isCurrent && (
                       <span className="absolute inset-0 bg-black/30 flex items-center justify-center rounded-full">
-                        <Check size={18} className="text-white"/>
+                        <Check sx={{ fontSize: 18 }} className="text-white"/>
                       </span>
                     )}
                     {isSaving && (
                       <span className="absolute inset-0 bg-white/70 flex items-center justify-center rounded-full">
-                        <Loader2 size={18} className="animate-spin text-[#ec9324]"/>
+                        <Loader2 sx={{ fontSize: 18 }} className="animate-spin text-[#ec9324]"/>
                       </span>
                     )}
                   </button>
@@ -224,12 +233,12 @@ function AvatarEditor({ open, profile, onClose, onChange }) {
                   </div>
                   {isCurrent && (
                     <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                      <Check size={20} className="text-white"/>
+                      <Check sx={{ fontSize: 20 }} className="text-white"/>
                     </div>
                   )}
                   {isSaving && (
                     <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
-                      <Loader2 size={18} className="animate-spin text-[#ec9324]"/>
+                      <Loader2 sx={{ fontSize: 18 }} className="animate-spin text-[#ec9324]"/>
                     </div>
                   )}
                 </button>
@@ -244,7 +253,7 @@ function AvatarEditor({ open, profile, onClose, onChange }) {
               htmlFor="avatar-upload-input"
               className="block border-2 border-dashed border-gray-300 hover:border-[#ec9324] rounded-xl p-6 text-center cursor-pointer transition-colors"
             >
-              <Upload size={28} className="mx-auto text-gray-400 mb-2"/>
+              <Upload sx={{ fontSize: 28 }} className="mx-auto text-gray-400 mb-2"/>
               <div className="text-sm font-medium text-gray-700">
                 {uploading ? "Uploading…" : "Click to choose an image"}
               </div>
@@ -262,7 +271,7 @@ function AvatarEditor({ open, profile, onClose, onChange }) {
         <DialogFooter className="flex sm:flex-row justify-between items-center w-full">
           {profile?.avatar_kind !== "initials" ? (
             <Button variant="outline" size="sm" onClick={removeAvatar} className="text-red-600 border-red-200 hover:bg-red-50" data-testid="avatar-reset-btn">
-              <Trash2 size={13} className="mr-1.5"/> Reset to initials
+              <Trash2 sx={{ fontSize: 13 }} className="mr-1.5"/> Reset to initials
             </Button>
           ) : <div/>}
           <Button variant="outline" onClick={onClose} data-testid="avatar-close-btn">Close</Button>
@@ -305,7 +314,7 @@ export default function ProfilePage() {
     <Layout title="My Profile" breadcrumbs={[{ label: "Profile" }]}>
       {loading || !profile ? (
         <div className="flex items-center justify-center py-24 text-gray-400">
-          <Loader2 size={20} className="animate-spin mr-2"/> Loading profile…
+          <Loader2 sx={{ fontSize: 20 }} className="animate-spin mr-2"/> Loading profile…
         </div>
       ) : (
         <div className="max-w-3xl space-y-5">
@@ -319,17 +328,17 @@ export default function ProfilePage() {
                 data-testid="profile-edit-avatar-btn"
                 aria-label="Edit avatar"
               >
-                <Camera size={14}/>
+                <Camera sx={{ fontSize: 14 }}/>
               </button>
             </div>
             <div className="flex-1 min-w-0">
               <h1 className="text-2xl font-bold text-gray-900 truncate" data-testid="profile-name">{profile.name || initialsFor(profile.name)}</h1>
               <div className="text-sm text-gray-600 truncate flex items-center gap-1.5 mt-0.5">
-                <Mail size={13} className="text-gray-400"/> {profile.email}
+                <Mail sx={{ fontSize: 13 }} className="text-gray-400"/> {profile.email}
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#ec9324]/10 text-[#ec9324] rounded-full text-xs font-medium">
-                  <ShieldCheck size={11}/> {profile.role}
+                  <ShieldCheck sx={{ fontSize: 11 }}/> {profile.role}
                 </span>
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-medium">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> Online
@@ -361,7 +370,7 @@ export default function ProfilePage() {
             <h2 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wider">Password</h2>
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-start gap-3">
-                <KeyRound size={18} className="text-gray-400 mt-0.5"/>
+                <KeyRound sx={{ fontSize: 18 }} className="text-gray-400 mt-0.5"/>
                 <div>
                   <div className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">Last Updated</div>
                   <div className="text-sm text-gray-900" data-testid="profile-password-last-updated">
@@ -376,7 +385,7 @@ export default function ProfilePage() {
                 className="bg-[#ec9324] hover:bg-[#d4811f] text-white"
                 data-testid="profile-change-password-btn"
               >
-                <KeyRound size={14} className="mr-2"/> Change Password
+                <KeyRound sx={{ fontSize: 14 }} className="mr-2"/> Change Password
               </Button>
             </div>
           </section>

@@ -19,7 +19,10 @@ import {
 import UserAvatar from "./UserAvatar";
 import ChangePasswordModal from "./ChangePasswordModal";
 import LogoutConfirmModal from "./LogoutConfirmModal";
-import { ChevronDown, User as UserIcon, KeyRound, LogOut } from "lucide-react";
+import ChevronDown from "@mui/icons-material/KeyboardArrowDown";
+import UserIcon from "@mui/icons-material/PersonOutlined";
+import KeyRound from "@mui/icons-material/KeyOutlined";
+import LogOut from "@mui/icons-material/LogoutOutlined";
 
 export default function TopBar({ title, actions }) {
   const { user, logout } = useAuth();
@@ -74,7 +77,7 @@ export default function TopBar({ title, actions }) {
               <span className="text-sm font-medium text-gray-800 max-w-[160px] truncate" data-testid="topbar-user-name">
                 {user.name}
               </span>
-              <ChevronDown size={14} className="text-gray-500"/>
+              <ChevronDown sx={{ fontSize: 14 }} className="text-gray-500"/>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-[200px]" data-testid="topbar-user-menu">
@@ -93,14 +96,14 @@ export default function TopBar({ title, actions }) {
               data-testid="topbar-menu-profile"
               className="gap-2 cursor-pointer"
             >
-              <UserIcon size={14} className="text-gray-500"/> Profile
+              <UserIcon sx={{ fontSize: 14 }} className="text-gray-500"/> Profile
             </DropdownMenuItem>
             <DropdownMenuItem
               onSelect={() => setCpOpen(true)}
               data-testid="topbar-menu-change-password"
               className="gap-2 cursor-pointer"
             >
-              <KeyRound size={14} className="text-gray-500"/> Change Password
+              <KeyRound sx={{ fontSize: 14 }} className="text-gray-500"/> Change Password
             </DropdownMenuItem>
             <DropdownMenuSeparator/>
             <DropdownMenuItem
@@ -108,7 +111,7 @@ export default function TopBar({ title, actions }) {
               data-testid="topbar-menu-logout"
               className="gap-2 cursor-pointer text-red-600 focus:text-red-700 focus:bg-red-50"
             >
-              <LogOut size={14}/> Logout
+              <LogOut sx={{ fontSize: 14 }}/> Logout
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -1,11 +1,23 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
-import {
-  CalendarClock, Plus, Trash2, MapPin, Clock, Loader2, Users, Building2,
-  X, Search, UserPlus, ChevronDown, ChevronUp, AlertCircle, Repeat, Pencil,
-  Calendar as CalendarIcon,
-} from "lucide-react";
+import CalendarClock from "@mui/icons-material/EventOutlined";
+import Plus from "@mui/icons-material/Add";
+import Trash2 from "@mui/icons-material/DeleteOutlined";
+import MapPin from "@mui/icons-material/PlaceOutlined";
+import Clock from "@mui/icons-material/AccessTime";
+import Loader2 from "@mui/icons-material/Autorenew";
+import Users from "@mui/icons-material/PeopleOutlined";
+import Building2 from "@mui/icons-material/ApartmentOutlined";
+import X from "@mui/icons-material/Close";
+import Search from "@mui/icons-material/SearchOutlined";
+import UserPlus from "@mui/icons-material/PersonAddOutlined";
+import ChevronDown from "@mui/icons-material/KeyboardArrowDown";
+import ChevronUp from "@mui/icons-material/KeyboardArrowUp";
+import AlertCircle from "@mui/icons-material/ErrorOutlined";
+import Repeat from "@mui/icons-material/RepeatOutlined";
+import Pencil from "@mui/icons-material/EditOutlined";
+import CalendarIcon from "@mui/icons-material/CalendarTodayOutlined";
 import Layout from "../components/Layout";
 import api from "../lib/api";
 import { resolvePdfUrl } from "../lib/pdfUrl";
@@ -364,7 +376,7 @@ export default function MeetingRoomBookingPage() {
               className="bg-[#ec9324] hover:bg-[#d4811f] text-white shadow-sm flex-shrink-0 h-9"
               disabled={!permBook.canUse}
             >
-              <Plus size={16} className="mr-1.5" />
+              <Plus sx={{ fontSize: 16 }} className="mr-1.5"/>
               Book Meeting Room
             </Button>
           ) : null
@@ -395,7 +407,7 @@ export default function MeetingRoomBookingPage() {
               <div className="relative w-full max-w-[640px] max-h-[90vh] flex flex-col bg-white rounded-lg shadow-2xl border border-gray-200 animate-in zoom-in-95 duration-200">
                 <div className="px-5 pt-5 pb-3 border-b border-gray-100 flex items-center justify-between gap-3 bg-white z-10 rounded-t-lg flex-shrink-0">
                   <div className="flex items-center gap-2 min-w-0">
-                    <Plus size={18} className="text-[#ec9324] flex-shrink-0"/>
+                    <Plus sx={{ fontSize: 18 }} className="text-[#ec9324] flex-shrink-0"/>
                     <h2 className="text-base font-bold text-gray-900 truncate">
                       {editing ? "Reschedule Meeting" : "Book Meeting Room"}
                     </h2>
@@ -405,7 +417,7 @@ export default function MeetingRoomBookingPage() {
                     className="p-1.5 rounded text-gray-400 hover:text-gray-800 hover:bg-gray-100"
                     aria-label="Close form"
                     data-testid="mrb-calendar-form-close"
-                  ><X size={16}/></button>
+                  ><X sx={{ fontSize: 16 }}/></button>
                 </div>
                 <div className="px-5 pb-5 pt-3 overflow-y-auto flex-1 min-h-0">
                   <BookingForm
@@ -434,7 +446,7 @@ export default function MeetingRoomBookingPage() {
         {/* LEFT panel — 32% of viewport (reduced 20% from previous 40%) */}
         <div className="w-[32%] min-w-[340px] border-r border-gray-200 bg-white flex flex-col overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
-            <CalendarClock className="text-[#ec9324] flex-shrink-0" size={22} />
+            <CalendarClock className="text-[#ec9324] flex-shrink-0" sx={{ fontSize: 22 }}/>
             <span className="text-sm font-semibold text-gray-700">Upcoming bookings</span>
           </div>
 
@@ -522,7 +534,7 @@ export default function MeetingRoomBookingPage() {
             data-testid="mrb-check-availability-btn"
             className="absolute top-3 right-4 z-20 bg-[#ec9324] hover:bg-[#d4811f] text-white shadow"
           >
-            <CalendarIcon size={16} className="mr-1.5" />
+            <CalendarIcon sx={{ fontSize: 16 }} className="mr-1.5"/>
             Check Availability
           </Button>
           <FloorMapMeetingRooms
@@ -601,7 +613,7 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
           <h3 className="text-sm font-bold text-gray-900" data-testid="mrb-form-heading">
             {isEdit ? "Reschedule Meeting" : "New Meeting"}
           </h3>
-          <button onClick={onCancel} className="text-gray-400 hover:text-gray-700" data-testid="mrb-form-close"><X size={14}/></button>
+          <button onClick={onCancel} className="text-gray-400 hover:text-gray-700" data-testid="mrb-form-close"><X sx={{ fontSize: 14 }}/></button>
         </div>
       )}
 
@@ -632,13 +644,13 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
         />
         {selectedRoom && (
           <div className="mt-1.5 text-[11px] text-gray-600 inline-flex items-center gap-1.5" data-testid="mrb-form-capacity">
-            <Users size={11} className="text-emerald-600"/>
+            <Users sx={{ fontSize: 11 }} className="text-emerald-600"/>
             <span className="font-semibold">{selectedRoom.name}</span> · Capacity: <span className="font-bold text-gray-900">{selectedRoom.capacity}</span> Seats
           </div>
         )}
         {isSelectedRoomBlocked && (
           <div className="mt-1.5 px-2 py-1 bg-amber-50 border border-amber-200 rounded text-[11px] text-amber-800 inline-flex items-center gap-1.5" data-testid="mrb-form-blocked-hint">
-            <AlertCircle size={11}/> This room is already booked at the selected time. Pick another slot or room.
+            <AlertCircle sx={{ fontSize: 11 }}/> This room is already booked at the selected time. Pick another slot or room.
           </div>
         )}
       </Field>
@@ -680,7 +692,7 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
             onClick={() => setPickerOpen(true)}
             className="inline-flex items-center gap-1 text-[11px] text-[#ec9324] hover:text-[#d4811f] font-semibold"
             data-testid="mrb-form-add-attendees"
-          ><UserPlus size={12}/> Add Attendees</button>
+          ><UserPlus sx={{ fontSize: 12 }}/> Add Attendees</button>
         </div>
         {attendees.length === 0 ? (
           <div className="text-[11px] text-gray-400 italic">No attendees added yet.</div>
@@ -688,9 +700,9 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
           <div className="flex flex-wrap gap-1.5" data-testid="mrb-attendee-chips">
             {attendees.map(a => (
               <span key={`${a.type}-${a.id}`} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${a.type === 'team' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
-                {a.type === 'team' ? <Users size={9}/> : null}
+                {a.type === 'team' ? <Users sx={{ fontSize: 9 }}/> : null}
                 {a.name}
-                <button onClick={() => setAttendees(prev => prev.filter(x => !(x.type === a.type && x.id === a.id)))} className="hover:bg-black/5 rounded-full p-0.5" data-testid={`mrb-attendee-remove-${a.type}-${a.id}`}><X size={9}/></button>
+                <button onClick={() => setAttendees(prev => prev.filter(x => !(x.type === a.type && x.id === a.id)))} className="hover:bg-black/5 rounded-full p-0.5" data-testid={`mrb-attendee-remove-${a.type}-${a.id}`}><X sx={{ fontSize: 9 }}/></button>
               </span>
             ))}
           </div>
@@ -701,7 +713,7 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
       {!isEdit && (
       <div className="mt-3 p-2 bg-white rounded border border-gray-200">
         <label className="flex items-center justify-between cursor-pointer">
-          <span className="text-[11px] font-semibold text-gray-700 inline-flex items-center gap-1"><Repeat size={11}/> Recurring</span>
+          <span className="text-[11px] font-semibold text-gray-700 inline-flex items-center gap-1"><Repeat sx={{ fontSize: 11 }}/> Recurring</span>
           <input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} className="accent-[#ec9324]" data-testid="mrb-form-recurring-toggle"/>
         </label>
         {recurring && (
@@ -754,7 +766,7 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
       {conflict && (
         <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded" data-testid="mrb-conflict">
           <div className="flex items-start gap-2">
-            <AlertCircle size={14} className="text-red-600 mt-0.5"/>
+            <AlertCircle sx={{ fontSize: 14 }} className="text-red-600 mt-0.5"/>
             <div className="flex-1 min-w-0">
               <div className="text-xs font-bold text-red-700 mb-1">Conflict Found</div>
               <div className="text-[11px] text-red-700 mb-1">{conflict.room_name} already booked</div>
@@ -855,7 +867,7 @@ function UpcomingBookingsList({ bookings, filterDate, rangeMode, loading, onCanc
   const totalForView = dayGroups.reduce((s, g) => s + g.items.length, 0);
 
   if (loading) {
-    return <div className="flex items-center text-gray-500 text-xs"><Loader2 className="animate-spin mr-2" size={14}/> Loading…</div>;
+    return <div className="flex items-center text-gray-500 text-xs"><Loader2 className="animate-spin mr-2" sx={{ fontSize: 14 }}/> Loading…</div>;
   }
   return (
     <div className="flex-1 min-h-0 overflow-y-auto pr-1" data-testid="mrb-upcoming-list-wrapper">
@@ -909,7 +921,7 @@ function DayGroup({ group, onCancel, onReschedule }) {
                   aria-label="Reschedule"
                   className="p-1 text-gray-600 hover:text-[#ec9324] hover:bg-orange-50 rounded"
                   data-testid={`mrb-reschedule-${b.id}`}
-                ><Pencil size={12}/></button>
+                ><Pencil sx={{ fontSize: 12 }}/></button>
                 <span
                   role="tooltip"
                   className="pointer-events-none absolute right-1/2 translate-x-1/2 -top-7 z-20 px-2 py-0.5 rounded bg-gray-900 text-white text-[10px] font-medium whitespace-nowrap shadow opacity-0 group-hover/edit:opacity-100 transition-opacity"
@@ -921,7 +933,7 @@ function DayGroup({ group, onCancel, onReschedule }) {
                   aria-label="Cancel"
                   className="p-1 text-red-600 hover:bg-red-50 rounded"
                   data-testid={`mrb-cancel-${b.id}`}
-                ><Trash2 size={12}/></button>
+                ><Trash2 sx={{ fontSize: 12 }}/></button>
                 <span
                   role="tooltip"
                   className="pointer-events-none absolute right-1/2 translate-x-1/2 -top-7 z-20 px-2 py-0.5 rounded bg-gray-900 text-white text-[10px] font-medium whitespace-nowrap shadow opacity-0 group-hover/cancel:opacity-100 transition-opacity"
@@ -997,7 +1009,7 @@ function AttendeePicker({ selected, onChange, onClose }) {
       <div className="bg-white rounded-lg shadow-xl w-[460px] max-h-[70vh] flex flex-col">
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
           <div className="text-sm font-bold text-gray-900">Add Attendees</div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700" data-testid="mrb-picker-close"><X size={16}/></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700" data-testid="mrb-picker-close"><X sx={{ fontSize: 16 }}/></button>
         </div>
         <div className="px-4 pt-3 flex items-center gap-1">
           <TabBtn active={tab === 'user'} onClick={() => setTab('user')} testId="mrb-picker-tab-user">Add Employee</TabBtn>
@@ -1005,13 +1017,13 @@ function AttendeePicker({ selected, onChange, onClose }) {
         </div>
         <div className="px-4 pt-3">
           <div className="relative">
-            <Search size={13} className="absolute left-2.5 top-2.5 text-gray-400"/>
+            <Search sx={{ fontSize: 13 }} className="absolute left-2.5 top-2.5 text-gray-400"/>
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={tab === 'user' ? 'Search employees…' : 'Search teams…'} className="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:border-[#ec9324]" data-testid="mrb-picker-search"/>
           </div>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-3" data-testid="mrb-picker-list">
           {loadingList ? (
-            <div className="flex items-center justify-center py-6 text-gray-400 text-xs"><Loader2 className="animate-spin mr-2" size={14}/> Loading…</div>
+            <div className="flex items-center justify-center py-6 text-gray-400 text-xs"><Loader2 className="animate-spin mr-2" sx={{ fontSize: 14 }}/> Loading…</div>
           ) : tab === 'user' ? (
             filteredUsers.length === 0 ? (
               <div className="text-center text-xs text-gray-400 py-6">No employees found.</div>
@@ -1121,7 +1133,7 @@ function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickRoom, oc
     return (
       <div className="absolute inset-0 flex items-center justify-center text-center text-gray-500 px-6" data-testid="mrb-map-empty">
         <div>
-          <Building2 size={48} className="mx-auto mb-3 text-gray-300"/>
+          <Building2 sx={{ fontSize: 48 }} className="mx-auto mb-3 text-gray-300"/>
           <div className="text-base font-bold text-gray-500">NO ACTIVE FLOOR PLAN</div>
           <div className="text-xs text-gray-400 mt-1">Publish a calibrated floor plan to see meeting rooms here.</div>
         </div>

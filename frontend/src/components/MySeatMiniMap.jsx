@@ -8,7 +8,7 @@
  * neutral dots so the layout gives spatial context.
  */
 import React from "react";
-import { MapPin } from "lucide-react";
+import MapPin from "@mui/icons-material/PlaceOutlined";
 
 const PADDING = 220; // world units to show around the user seat
 
@@ -22,7 +22,7 @@ export default function MySeatMiniMap({ mySeat, allSeats = [], onClick }) {
         className="h-40 w-56 rounded-xl border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-xs text-gray-400 hover:border-[#ec9324] hover:text-[#ec9324] transition"
         data-testid="my-seat-mini-map-empty"
       >
-        <MapPin size={16} className="mr-1.5" /> View floor plan
+        <MapPin sx={{ fontSize: 16 }} className="mr-1.5"/> View floor plan
       </button>
     );
   }

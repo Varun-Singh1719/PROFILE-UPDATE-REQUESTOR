@@ -1,9 +1,19 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import {
-  Plus, Copy, Trash2, History, Loader2, MapPin, FileText, Clock, X,
-  Upload, Link2, CheckCircle2, Eye, Pencil,
-} from "lucide-react";
+import Plus from "@mui/icons-material/Add";
+import Copy from "@mui/icons-material/ContentCopy";
+import Trash2 from "@mui/icons-material/DeleteOutlined";
+import History from "@mui/icons-material/HistoryOutlined";
+import Loader2 from "@mui/icons-material/Autorenew";
+import MapPin from "@mui/icons-material/PlaceOutlined";
+import FileText from "@mui/icons-material/DescriptionOutlined";
+import Clock from "@mui/icons-material/AccessTime";
+import X from "@mui/icons-material/Close";
+import Upload from "@mui/icons-material/FileUploadOutlined";
+import Link2 from "@mui/icons-material/InsertLink";
+import CheckCircle2 from "@mui/icons-material/CheckCircleOutlined";
+import Eye from "@mui/icons-material/Visibility";
+import Pencil from "@mui/icons-material/EditOutlined";
 import api from "../lib/api";
 import Layout from "../components/Layout";
 import notify from '../lib/notify';
@@ -153,17 +163,17 @@ export default function FloorPlansListPage() {
           className="px-4 h-9 bg-[#ec9324] hover:bg-[#d6831f] text-white rounded-md flex items-center gap-2 font-semibold shadow-sm transition-colors disabled:opacity-50"
           disabled={!permCreate.canUse}
         >
-          <Plus size={16} /> New Floor Plan
+          <Plus sx={{ fontSize: 16 }}/> New Floor Plan
         </button>
         ) : null
       }
     >
 
         {loading ? (
-          <div className="flex items-center justify-center py-20 text-gray-500"><Loader2 className="animate-spin mr-2" /> Loading…</div>
+          <div className="flex items-center justify-center py-20 text-gray-500"><Loader2 className="animate-spin mr-2"/> Loading…</div>
         ) : plans.length === 0 ? (
           <div className="bg-white border border-dashed border-gray-300 rounded-xl p-12 text-center">
-            <FileText className="mx-auto mb-3 text-gray-400" size={32} />
+            <FileText className="mx-auto mb-3 text-gray-400" sx={{ fontSize: 32 }}/>
             <h2 className="font-semibold text-gray-700">No floor plans yet</h2>
             <p className="text-sm text-gray-500 mt-1">Create your first floor plan to start calibrating seats.</p>
             <button onClick={() => setShowCreate(true)} className="mt-4 px-4 py-2 bg-[#ec9324] text-white rounded-lg">Create floor plan</button>
@@ -210,7 +220,7 @@ export default function FloorPlansListPage() {
               data-testid="create-mode-url"
               className={`flex-1 py-1.5 flex items-center justify-center gap-1.5 transition-colors ${createMode === "url" ? "bg-[#ec9324] text-white font-semibold" : "bg-white text-gray-600 hover:bg-gray-50"}`}
             >
-              <Link2 size={12}/> PDF URL
+              <Link2 sx={{ fontSize: 12 }}/> PDF URL
             </button>
             <button
               type="button"
@@ -218,7 +228,7 @@ export default function FloorPlansListPage() {
               data-testid="create-mode-upload"
               className={`flex-1 py-1.5 flex items-center justify-center gap-1.5 transition-colors border-l border-gray-200 ${createMode === "upload" ? "bg-[#ec9324] text-white font-semibold" : "bg-white text-gray-600 hover:bg-gray-50"}`}
             >
-              <Upload size={12}/> Upload PDF
+              <Upload sx={{ fontSize: 12 }}/> Upload PDF
             </button>
           </div>
 
@@ -235,7 +245,7 @@ export default function FloorPlansListPage() {
               {uploadedPdfPath ? (
                 <div className="flex items-center justify-between gap-2 px-3 py-2 border border-emerald-200 bg-emerald-50 rounded text-xs" data-testid="upload-success">
                   <div className="flex items-center gap-2 min-w-0">
-                    <CheckCircle2 size={14} className="text-emerald-600 flex-shrink-0"/>
+                    <CheckCircle2 sx={{ fontSize: 14 }} className="text-emerald-600 flex-shrink-0"/>
                     <span className="truncate text-emerald-800 font-medium">{uploadedPdfPath.filename}</span>
                   </div>
                   <button
@@ -247,7 +257,7 @@ export default function FloorPlansListPage() {
                 </div>
               ) : (
                 <label className="flex flex-col items-center justify-center gap-1.5 px-3 py-6 border-2 border-dashed border-gray-300 hover:border-[#ec9324] rounded cursor-pointer transition-colors text-center" data-testid="upload-dropzone">
-                  <Upload size={20} className="text-gray-400"/>
+                  <Upload sx={{ fontSize: 20 }} className="text-gray-400"/>
                   <span className="text-xs text-gray-600">
                     {uploading ? "Uploading…" : "Click to choose a PDF (max 15 MB)"}
                   </span>
@@ -305,7 +315,7 @@ function Modal({ title, onClose, children }) {
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <h2 className="font-semibold text-gray-900">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X sx={{ fontSize: 18 }}/></button>
         </div>
         <div className="p-4">{children}</div>
       </div>
@@ -406,7 +416,7 @@ function PlanCard({ plan: p, onClone, onDelete, onToggleLive, perms = {} }) {
           <img src={p.thumbnail} alt={`${p.name} preview`} className="w-full h-full object-cover" />
         ) : (
           <div className="flex flex-col items-center text-gray-400">
-            <FileText size={28} />
+            <FileText sx={{ fontSize: 28 }}/>
             <span className="text-[10px] mt-1">No preview yet</span>
           </div>
         )}
@@ -434,9 +444,9 @@ function PlanCard({ plan: p, onClone, onDelete, onToggleLive, perms = {} }) {
 
         {/* Meta */}
         <div className="text-xs text-gray-500 flex items-center flex-wrap gap-x-3 gap-y-1 mb-3">
-          <span className="inline-flex items-center gap-1"><MapPin size={11} /> {p.live_seat_count} seats</span>
-          <span className="inline-flex items-center gap-1"><History size={11} /> {p.version_count} versions</span>
-          <span className="inline-flex items-center gap-1"><Clock size={11} /> {fmtDate(p.updated_at)}</span>
+          <span className="inline-flex items-center gap-1"><MapPin sx={{ fontSize: 11 }}/> {p.live_seat_count} seats</span>
+          <span className="inline-flex items-center gap-1"><History sx={{ fontSize: 11 }}/> {p.version_count} versions</span>
+          <span className="inline-flex items-center gap-1"><Clock sx={{ fontSize: 11 }}/> {fmtDate(p.updated_at)}</span>
         </div>
 
         {/* Icon-only action row */}
@@ -452,7 +462,7 @@ function PlanCard({ plan: p, onClone, onDelete, onToggleLive, perms = {} }) {
             data-testid={`view-plan-${p.id}`}
             onClick={(e) => { if (p.status !== "live") e.preventDefault(); }}
           >
-            <Eye size={15} />
+            <Eye sx={{ fontSize: 15 }}/>
             <span className={TOOLTIP_CLASS}>
               {p.status === "live" ? "View" : "No live version"}
             </span>
@@ -464,7 +474,7 @@ function PlanCard({ plan: p, onClone, onDelete, onToggleLive, perms = {} }) {
             aria-label="Edit"
             data-testid={`open-plan-${p.id}`}
           >
-            <Pencil size={15} />
+            <Pencil sx={{ fontSize: 15 }}/>
             <span className={TOOLTIP_CLASS}>Edit</span>
           </Link>
           )}

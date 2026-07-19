@@ -10,7 +10,11 @@
  * See `ImpersonateCallback.jsx` for how the new tab consumes the token.
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { Search, LogIn, Loader2, X, ExternalLink } from "lucide-react";
+import Search from "@mui/icons-material/SearchOutlined";
+import LogIn from "@mui/icons-material/LoginOutlined";
+import Loader2 from "@mui/icons-material/Autorenew";
+import X from "@mui/icons-material/Close";
+import ExternalLink from "@mui/icons-material/OpenInNew";
 import api from "../../lib/api";
 import notify from "../../lib/notify";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
@@ -82,7 +86,7 @@ export default function LoginAsDialog({ open, onOpenChange }) {
       <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-6 pt-5 pb-3 border-b border-gray-100">
           <DialogTitle className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
-            <LogIn size={16} className="text-[#ec9324]"/> Login As
+            <LogIn sx={{ fontSize: 16 }} className="text-[#ec9324]"/> Login As
           </DialogTitle>
           <p className="text-xs text-gray-500 mt-1">
             Open a new tab logged in as another user. Your current session stays intact.
@@ -92,7 +96,7 @@ export default function LoginAsDialog({ open, onOpenChange }) {
         <div className="px-6 py-4 space-y-3">
           {/* Search */}
           <div className="relative">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+            <Search sx={{ fontSize: 13 }} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -106,7 +110,7 @@ export default function LoginAsDialog({ open, onOpenChange }) {
                 onClick={() => setSearch("")}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700"
                 aria-label="Clear search"
-              ><X size={12}/></button>
+              ><X sx={{ fontSize: 12 }}/></button>
             )}
           </div>
 
@@ -117,7 +121,7 @@ export default function LoginAsDialog({ open, onOpenChange }) {
           >
             {loading ? (
               <div className="py-12 text-center text-sm text-gray-500">
-                <Loader2 size={20} className="mx-auto animate-spin text-[#ec9324] mb-2"/>
+                <Loader2 sx={{ fontSize: 20 }} className="mx-auto animate-spin text-[#ec9324] mb-2"/>
                 Loading users…
               </div>
             ) : filtered.length === 0 ? (
@@ -180,8 +184,8 @@ export default function LoginAsDialog({ open, onOpenChange }) {
             data-testid="login-as-submit"
           >
             {submitting
-              ? <><Loader2 size={13} className="mr-1.5 animate-spin"/> Opening…</>
-              : <><ExternalLink size={13} className="mr-1.5"/> Submit</>}
+              ? <><Loader2 sx={{ fontSize: 13 }} className="mr-1.5 animate-spin"/> Opening…</>
+              : <><ExternalLink sx={{ fontSize: 13 }} className="mr-1.5"/> Submit</>}
           </Button>
         </DialogFooter>
       </DialogContent>

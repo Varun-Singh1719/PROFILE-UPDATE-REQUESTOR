@@ -24,9 +24,10 @@
  *     stay one row: 1 … 4 5 [6] 7 8 … 25.
  */
 import React from "react";
-import {
-  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
-} from "lucide-react";
+import ChevronLeft from "@mui/icons-material/ChevronLeft";
+import ChevronRight from "@mui/icons-material/ChevronRight";
+import ChevronsLeft from "@mui/icons-material/KeyboardDoubleArrowLeft";
+import ChevronsRight from "@mui/icons-material/KeyboardDoubleArrowRight";
 import { Button } from "./ui/button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -114,7 +115,7 @@ export default function Pagination({
             aria-label="First page"
             className="h-8 w-8 p-0"
             data-testid={`${testIdPrefix}-first`}
-          ><ChevronsLeft size={14}/></Button>
+          ><ChevronsLeft sx={{ fontSize: 14 }}/></Button>
         )}
         <Button
           size="sm" variant="outline"
@@ -123,7 +124,7 @@ export default function Pagination({
           aria-label="Previous page"
           className="h-8 w-8 p-0"
           data-testid={`${testIdPrefix}-prev`}
-        ><ChevronLeft size={14}/></Button>
+        ><ChevronLeft sx={{ fontSize: 14 }}/></Button>
 
         {win.map((p, i) =>
           p === "…" ? (
@@ -148,7 +149,7 @@ export default function Pagination({
           aria-label="Next page"
           className="h-8 w-8 p-0"
           data-testid={`${testIdPrefix}-next`}
-        ><ChevronRight size={14}/></Button>
+        ><ChevronRight sx={{ fontSize: 14 }}/></Button>
         {showFirstLast && (
           <Button
             size="sm" variant="outline"
@@ -157,7 +158,7 @@ export default function Pagination({
             aria-label="Last page"
             className="h-8 w-8 p-0"
             data-testid={`${testIdPrefix}-last`}
-          ><ChevronsRight size={14}/></Button>
+          ><ChevronsRight sx={{ fontSize: 14 }}/></Button>
         )}
       </div>
 

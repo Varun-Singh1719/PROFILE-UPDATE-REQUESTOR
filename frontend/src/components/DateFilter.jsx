@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "./ui/button";
 import { Calendar } from "./ui/calendar";
 import { Dialog, DialogContent, DialogTrigger } from "./ui/dialog";
-import { CalendarIcon, X } from "lucide-react";
+import CalendarIcon from "@mui/icons-material/CalendarTodayOutlined";
+import X from "@mui/icons-material/Close";
 
 function pad(n) { return String(n).padStart(2, "0"); }
 
@@ -134,7 +135,7 @@ export default function DateFilter({
                       hover:border-gray-300 text-xs text-gray-700 focus:outline-none focus:ring-2
                       focus:ring-[#ec9324]/30 ${className}`}
         >
-          <CalendarIcon size={14} className="text-[#ec9324] shrink-0"/>
+          <CalendarIcon sx={{ fontSize: 14 }} className="text-[#ec9324] shrink-0"/>
           <span className="truncate max-w-[280px]">{trigger}</span>
           {hasFilter && (
             <span
@@ -144,7 +145,7 @@ export default function DateFilter({
               data-testid={`${testId}-clear`}
               className="ml-1 inline-flex w-4 h-4 items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100"
             >
-              <X size={11}/>
+              <X sx={{ fontSize: 11 }}/>
             </span>
           )}
         </button>

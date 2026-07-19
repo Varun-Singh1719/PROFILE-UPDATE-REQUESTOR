@@ -1,5 +1,18 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { ArrowLeft, LayoutGrid, MapPin, Clock, Loader2, FileText, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Users, Building2, Check, X, ExternalLink } from "lucide-react";
+import ArrowLeft from "@mui/icons-material/ArrowBack";
+import LayoutGrid from "@mui/icons-material/GridViewOutlined";
+import MapPin from "@mui/icons-material/PlaceOutlined";
+import Clock from "@mui/icons-material/AccessTime";
+import Loader2 from "@mui/icons-material/Autorenew";
+import FileText from "@mui/icons-material/DescriptionOutlined";
+import CalendarIcon from "@mui/icons-material/CalendarTodayOutlined";
+import ChevronLeft from "@mui/icons-material/ChevronLeft";
+import ChevronRight from "@mui/icons-material/ChevronRight";
+import Users from "@mui/icons-material/PeopleOutlined";
+import Building2 from "@mui/icons-material/ApartmentOutlined";
+import Check from "@mui/icons-material/Check";
+import X from "@mui/icons-material/Close";
+import ExternalLink from "@mui/icons-material/OpenInNew";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import Layout from "../components/Layout";
@@ -65,7 +78,7 @@ function FloorPlanCard({ plan, onOpen }) {
           <img src={plan.thumbnail} alt={`${plan.name} preview`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"/>
         ) : (
           <div className="flex flex-col items-center text-gray-400">
-            <FileText size={32}/>
+            <FileText sx={{ fontSize: 32 }}/>
             <span className="text-[11px] mt-1">No preview yet</span>
           </div>
         )}
@@ -78,8 +91,8 @@ function FloorPlanCard({ plan, onOpen }) {
       <div className="p-4">
         <h3 className="font-bold text-gray-900 truncate text-base group-hover:text-[#ec9324] transition-colors">{plan.name}</h3>
         <div className="mt-1.5 text-xs text-gray-500 flex items-center gap-3 flex-wrap">
-          <span className="inline-flex items-center gap-1"><MapPin size={11}/> {plan.live_seat_count} live seats</span>
-          <span className="inline-flex items-center gap-1"><Clock size={11}/> {fmt(plan.last_published_at || plan.updated_at)}</span>
+          <span className="inline-flex items-center gap-1"><MapPin sx={{ fontSize: 11 }}/> {plan.live_seat_count} live seats</span>
+          <span className="inline-flex items-center gap-1"><Clock sx={{ fontSize: 11 }}/> {fmt(plan.last_published_at || plan.updated_at)}</span>
         </div>
       </div>
     </button>
@@ -132,7 +145,7 @@ function DateStepper({ value, onChange }) {
           aria-label="Previous Date"
           title="Previous Date"
         >
-          <ChevronLeft size={16}/>
+          <ChevronLeft sx={{ fontSize: 16 }}/>
         </button>
 
         {/* Date pill.
@@ -152,7 +165,7 @@ function DateStepper({ value, onChange }) {
           title="Pick a date"
         >
           <div className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-[13px] font-medium border border-gray-300 rounded-md bg-white min-w-0 pointer-events-none">
-            <CalendarIcon size={14} className="text-[#ec9324] flex-shrink-0"/>
+            <CalendarIcon sx={{ fontSize: 14 }} className="text-[#ec9324] flex-shrink-0"/>
             <span className="tabular-nums truncate">{displayLabel}</span>
           </div>
           <input
@@ -173,7 +186,7 @@ function DateStepper({ value, onChange }) {
           aria-label="Next Date"
           title="Next Date"
         >
-          <ChevronRight size={16}/>
+          <ChevronRight sx={{ fontSize: 16 }}/>
         </button>
       </div>
       {!isToday && (
@@ -350,7 +363,7 @@ function PlanInteractiveView({ plan, onBack, hideBack = false, embedded = false 
         <div className="flex-1 relative min-w-0">
           {loading || !availability ? (
             <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-              <Loader2 className="animate-spin mr-2" size={20}/> Loading floor plan…
+              <Loader2 className="animate-spin mr-2" sx={{ fontSize: 20 }}/> Loading floor plan…
             </div>
           ) : (
             <WorkstationFloorMap
@@ -383,7 +396,7 @@ function PlanInteractiveView({ plan, onBack, hideBack = false, embedded = false 
             aria-label="Expand panel"
             title="Show panel"
           >
-            <ChevronLeft size={14} className="text-[#ec9324]"/>
+            <ChevronLeft sx={{ fontSize: 14 }} className="text-[#ec9324]"/>
             <span className="mt-2 text-[10px] font-semibold tracking-wide text-gray-600 [writing-mode:vertical-rl] rotate-180 select-none whitespace-nowrap">
               Upcoming Meetings
               {filteredMeetings.length > 0 && (
@@ -406,7 +419,7 @@ function PlanInteractiveView({ plan, onBack, hideBack = false, embedded = false 
                 aria-label="Collapse panel"
                 title="Collapse"
               >
-                <ChevronRight size={16}/>
+                <ChevronRight sx={{ fontSize: 16 }}/>
               </button>
             </div>
 
@@ -418,7 +431,7 @@ function PlanInteractiveView({ plan, onBack, hideBack = false, embedded = false 
             {/* Filter by Team (multi-select) */}
             <div className="px-4 pt-3 pb-3 border-b border-gray-100" data-testid="floor-layout-team-filter">
               <div className="text-[11px] font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
-                <Users size={12} className="text-[#ec9324]"/>
+                <Users sx={{ fontSize: 12 }} className="text-[#ec9324]"/>
                 Filter by Team
               </div>
               <TeamFilter
@@ -439,7 +452,7 @@ function PlanInteractiveView({ plan, onBack, hideBack = false, embedded = false 
               <div className="rounded-lg border border-gray-200 overflow-hidden">
                 <div className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-[#ec9324]/10 to-transparent">
                   <div className="inline-flex items-center gap-2">
-                    <LayoutGrid size={14} className="text-[#ec9324]"/>
+                    <LayoutGrid sx={{ fontSize: 14 }} className="text-[#ec9324]"/>
                     <span className="text-[12px] font-semibold text-gray-800">Total Seats</span>
                   </div>
                   <span className="text-lg font-extrabold text-gray-900 tabular-nums" data-testid="floor-layout-stat-total">
@@ -457,7 +470,7 @@ function PlanInteractiveView({ plan, onBack, hideBack = false, embedded = false 
             {/* Upcoming Meetings */}
             <div className="px-4 pt-3 pb-1 flex items-center justify-between flex-shrink-0">
               <div className="inline-flex items-center gap-2 text-sm font-semibold text-gray-700 min-w-0">
-                <Building2 size={14} className="text-emerald-600 flex-shrink-0"/>
+                <Building2 sx={{ fontSize: 14 }} className="text-emerald-600 flex-shrink-0"/>
                 <span className="truncate">Upcoming Meetings</span>
               </div>
               <span className="text-[11px] font-medium text-gray-500">{filteredMeetings.length}</span>
@@ -476,11 +489,11 @@ function PlanInteractiveView({ plan, onBack, hideBack = false, embedded = false 
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-100 whitespace-nowrap">{rb.room_name}</span>
                   </div>
                   <div className="mt-1 flex items-center gap-1.5 text-[11px] text-gray-600">
-                    <Clock size={11}/>
+                    <Clock sx={{ fontSize: 11 }}/>
                     {fmtTime(rb.start_at)} – {fmtTime(rb.end_at)}
                   </div>
                   <div className="mt-1 flex items-center gap-1.5 text-[11px] text-gray-600">
-                    <Users size={11}/>
+                    <Users sx={{ fontSize: 11 }}/>
                     {(rb.organizer || {}).name || "—"}
                     {rb.attendees?.length ? ` · ${rb.attendees.length} attendee${rb.attendees.length > 1 ? "s" : ""}` : ""}
                   </div>
@@ -517,7 +530,7 @@ function PlanInteractiveView({ plan, onBack, hideBack = false, embedded = false 
           aria-label="Back to floor plans"
           title="Back to floor plans"
         >
-          <ArrowLeft size={14}/> Back
+          <ArrowLeft sx={{ fontSize: 14 }}/> Back
         </button>
       ) : null}
     >
@@ -668,7 +681,7 @@ function SeatDetailDialog({ detail, onClose, navigate }) {
               className="flex-1 bg-[#ec9324] hover:bg-[#d8821a] text-white"
               data-testid="floor-detail-open-full"
             >
-              <ExternalLink size={14} className="mr-1.5"/>
+              <ExternalLink sx={{ fontSize: 14 }} className="mr-1.5"/>
               {isPending ? "View Request" : "View Booking"}
             </Button>
           )}
@@ -729,7 +742,7 @@ function TeamFilter({ teams, value, onChange }) {
               onClick={(e) => { e.stopPropagation(); toggle(t.id); }}
               className="hover:bg-black/20 rounded-full p-0.5 cursor-pointer"
             >
-              <X size={9}/>
+              <X sx={{ fontSize: 9 }}/>
             </span>
           </span>
         ))}
@@ -743,7 +756,7 @@ function TeamFilter({ teams, value, onChange }) {
               title="Clear selection"
             >Clear</span>
           )}
-          <ChevronRight size={14} className={`transform transition ${open ? "rotate-90" : ""}`}/>
+          <ChevronRight sx={{ fontSize: 14 }} className={`transform transition ${open ? "rotate-90" : ""}`}/>
         </span>
       </button>
       {open && (
@@ -767,7 +780,7 @@ function TeamFilter({ teams, value, onChange }) {
                   aria-hidden="true"
                 />
                 <span className="flex-1 truncate">{t.name}</span>
-                {active && <Check size={12} className="text-[#ec9324]"/>}
+                {active && <Check sx={{ fontSize: 12 }} className="text-[#ec9324]"/>}
               </button>
             );
           })}
@@ -846,7 +859,7 @@ export function FloorLayoutView({ embedded = false } = {}) {
   if (!loading && sortedPlans.length === 0) {
     const emptyBody = (
       <div className="flex flex-col items-center justify-center text-center min-h-[70vh] px-6" data-testid="floor-layout-empty-state">
-        <LayoutGrid className="text-gray-300 mb-5" size={56} aria-hidden="true"/>
+        <LayoutGrid className="text-gray-300 mb-5" sx={{ fontSize: 56 }} aria-hidden="true"/>
         <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-500" data-testid="floor-layout-empty-title">
           NO FLOOR LAYOUT AVAILABLE
         </h1>

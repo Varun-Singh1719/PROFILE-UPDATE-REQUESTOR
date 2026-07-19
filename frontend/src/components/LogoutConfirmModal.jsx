@@ -1,7 +1,7 @@
 import React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "./ui/dialog";
 import { Button } from "./ui/button";
-import { LogOut } from "lucide-react";
+import LogOut from "@mui/icons-material/LogoutOutlined";
 
 export default function LogoutConfirmModal({ open, onCancel, onConfirm }) {
   return (
@@ -9,7 +9,7 @@ export default function LogoutConfirmModal({ open, onCancel, onConfirm }) {
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <LogOut size={18} className="text-[#ec9324]"/> Logout
+            <LogOut sx={{ fontSize: 18 }} className="text-[#ec9324]"/> Logout
           </DialogTitle>
           <DialogDescription>Are you sure you want to logout?</DialogDescription>
         </DialogHeader>

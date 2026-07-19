@@ -9,7 +9,12 @@ import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import DeferredSearchInput from "../components/DeferredSearchInput";
-import { Search, Plus, RefreshCw, Download, X, Send } from "lucide-react";
+import Search from "@mui/icons-material/SearchOutlined";
+import Plus from "@mui/icons-material/Add";
+import RefreshCw from "@mui/icons-material/Refresh";
+import Download from "@mui/icons-material/FileDownloadOutlined";
+import X from "@mui/icons-material/Close";
+import Send from "@mui/icons-material/Send";
 import Pagination from "../components/Pagination";
 import CreateTicketModal from "../components/CreateTicketModal";
 import notify from "../lib/notify";
@@ -291,18 +296,18 @@ export default function TicketListPage({
           )}
           {permRefresh.isVisible && (
             <Button variant="outline" onClick={load} data-testid="refresh-btn" size="icon" className="h-9 w-9" title="Refresh" aria-label="Refresh" disabled={!permRefresh.canUse}>
-              <RefreshCw size={16}/>
+              <RefreshCw sx={{ fontSize: 16 }}/>
             </Button>
           )}
           {permExport.isVisible && (
             <Button variant="outline" onClick={exportCsv} data-testid="export-tickets-csv" size="icon" className="h-9 w-9 border-gray-300" title="Export CSV" aria-label="Export CSV" disabled={!permExport.canUse}>
-              <Download size={16}/>
+              <Download sx={{ fontSize: 16 }}/>
             </Button>
           )}
           {(isRA || isAdmin) && permCreate.isVisible && (
             <Button onClick={() => setCreateOpen(true)} data-testid="create-new-ticket-btn"
               className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9" disabled={!permCreate.canUse}>
-              <Plus size={16} className="mr-1"/> New Request
+              <Plus sx={{ fontSize: 16 }} className="mr-1"/> New Request
             </Button>
           )}
         </div>
@@ -395,7 +400,7 @@ export default function TicketListPage({
             className="h-9 text-xs text-gray-600 hover:text-[#ec9324] hover:bg-[#ec9324]/10 px-2 gap-1 shrink-0"
             title="Clear all filters"
           >
-            <X size={14}/> Clear all
+            <X sx={{ fontSize: 14 }}/> Clear all
           </Button>
         )}
       </div>

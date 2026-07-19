@@ -2,13 +2,38 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
-import {
-  Download, Upload, X, ZoomIn, ZoomOut, Maximize2, ChevronLeft, ChevronRight,
-  Minus, MoreVertical, Wand2, MapPin, Trash2, Square, Lasso,
-  Undo2, Redo2, Maximize, Settings, Check, Cloud, Lock, Unlock,
-  History, Activity, ArrowLeft, Save, Send, AlertCircle, Grid,
-  ChevronsLeft, ChevronsRight
-} from 'lucide-react';
+import Download from "@mui/icons-material/FileDownloadOutlined";
+import Upload from "@mui/icons-material/FileUploadOutlined";
+import X from "@mui/icons-material/Close";
+import ZoomIn from "@mui/icons-material/ZoomIn";
+import ZoomOut from "@mui/icons-material/ZoomOut";
+import Maximize2 from "@mui/icons-material/OpenInFull";
+import ChevronLeft from "@mui/icons-material/ChevronLeft";
+import ChevronRight from "@mui/icons-material/ChevronRight";
+import Minus from "@mui/icons-material/Remove";
+import MoreVertical from "@mui/icons-material/MoreVert";
+import Wand2 from "@mui/icons-material/AutoFixHighOutlined";
+import MapPin from "@mui/icons-material/PlaceOutlined";
+import Trash2 from "@mui/icons-material/DeleteOutlined";
+import Square from "@mui/icons-material/CheckBoxOutlineBlank";
+import Lasso from "@mui/icons-material/SelectAll";
+import Undo2 from "@mui/icons-material/Undo";
+import Redo2 from "@mui/icons-material/Redo";
+import Maximize from "@mui/icons-material/OpenInFull";
+import Settings from "@mui/icons-material/SettingsOutlined";
+import Check from "@mui/icons-material/Check";
+import Cloud from "@mui/icons-material/CloudOutlined";
+import Lock from "@mui/icons-material/LockOutlined";
+import Unlock from "@mui/icons-material/LockOpenOutlined";
+import History from "@mui/icons-material/HistoryOutlined";
+import Activity from "@mui/icons-material/Timeline";
+import ArrowLeft from "@mui/icons-material/ArrowBack";
+import Save from "@mui/icons-material/SaveOutlined";
+import Send from "@mui/icons-material/Send";
+import AlertCircle from "@mui/icons-material/ErrorOutlined";
+import Grid from "@mui/icons-material/GridOn";
+import ChevronsLeft from "@mui/icons-material/KeyboardDoubleArrowLeft";
+import ChevronsRight from "@mui/icons-material/KeyboardDoubleArrowRight";
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 import api from '../lib/api';
@@ -83,7 +108,7 @@ const SeatIcon = ({ size = 10, label, rotation = 0, isSelected = false, isLocked
         }}>{label}</div>
       )}
       {isLocked && (
-        <Lock size={Math.max(6, size * 0.4)} style={{ position: 'absolute', top: -size * 0.15, right: -size * 0.15, color: '#475569', background: 'white', borderRadius: '50%', padding: 1 }} />
+        <Lock size={Math.max(6, size * 0.4)} style={{ position: 'absolute', top: -size * 0.15, right: -size * 0.15, color: '#475569', background: 'white', borderRadius: '50%', padding: 1 }}/>
       )}
       {/* Selected state — no bounding-box border. The green chair fill + the
           green drop-shadow glow on the SVG silhouette are the only visual
@@ -1124,7 +1149,7 @@ export default function SeatCalibrationPage() {
           title="Expand calibration panel"
           className="w-10 bg-white border-l flex flex-col items-center pt-3 gap-2 hover:bg-gray-50"
         >
-          <ChevronsLeft size={18} className="text-gray-600"/>
+          <ChevronsLeft sx={{ fontSize: 18 }} className="text-gray-600"/>
           <span className="text-[9px] uppercase tracking-wide text-gray-400 [writing-mode:vertical-rl]">Tools</span>
         </button>
       ) : (
@@ -1138,7 +1163,7 @@ export default function SeatCalibrationPage() {
               title="Collapse panel"
               className="p-1 hover:bg-gray-100 rounded flex-shrink-0 text-gray-500 hover:text-gray-700"
             >
-              <ChevronsRight size={16}/>
+              <ChevronsRight sx={{ fontSize: 16 }}/>
             </button>
           </div>
           <div className="text-xs text-gray-500 mb-3">
@@ -1164,7 +1189,7 @@ export default function SeatCalibrationPage() {
           <div className="grid grid-cols-2 gap-2 mb-2">
             <button onClick={() => saveDraft()} disabled={saving || !draftDirty} data-testid="save-draft-btn"
               className="py-2 bg-white border border-gray-200 hover:border-[#ec9324] hover:text-[#ec9324] text-gray-700 rounded text-xs flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-              <Save size={13}/>{saving ? 'Saving…' : 'Save Draft'}
+              <Save sx={{ fontSize: 13 }}/>{saving ? 'Saving…' : 'Save Draft'}
             </button>
             <LiveToggle
               plan={plan}
@@ -1206,7 +1231,7 @@ export default function SeatCalibrationPage() {
               {validationError && (
                 <div className="flex items-start justify-between gap-2 mt-1">
                   <span>{validationError}</span>
-                  <button onClick={() => setValidationError('')} className="text-red-700"><X size={12}/></button>
+                  <button onClick={() => setValidationError('')} className="text-red-700"><X sx={{ fontSize: 12 }}/></button>
                 </div>
               )}
             </div>
@@ -1215,10 +1240,10 @@ export default function SeatCalibrationPage() {
           {/* History / Audit toggles */}
           <div className="grid grid-cols-2 gap-2 mb-3">
             <button onClick={() => { setShowAuditPanel(false); setShowVersionPanel(true); }} className="py-1.5 text-xs border border-gray-200 hover:bg-gray-50 rounded flex items-center justify-center gap-1" data-testid="open-versions-btn">
-              <History size={12}/> Versions
+              <History sx={{ fontSize: 12 }}/> Versions
             </button>
             <button onClick={() => { setShowVersionPanel(false); setShowAuditPanel(true); }} className="py-1.5 text-xs border border-gray-200 hover:bg-gray-50 rounded flex items-center justify-center gap-1" data-testid="open-audit-btn">
-              <Activity size={12}/> Audit
+              <Activity sx={{ fontSize: 12 }}/> Audit
             </button>
           </div>
 
@@ -1262,18 +1287,18 @@ export default function SeatCalibrationPage() {
 
           {/* Bay controls */}
           <div className="mb-3 p-2 bg-gray-50 border border-gray-200 rounded">
-            <div className="text-[10px] font-semibold mb-1.5 text-gray-700">BAY {isBayLocked(currentBay) && <Lock size={10} className="inline"/>}</div>
+            <div className="text-[10px] font-semibold mb-1.5 text-gray-700">BAY {isBayLocked(currentBay) && <Lock sx={{ fontSize: 10 }} className="inline"/>}</div>
             <div className="flex items-center gap-1 mb-1">
-              <button onClick={() => { const idx = BAY_LIST.indexOf(currentBay); setCurrentBay(BAY_LIST[Math.max(0, idx - 1)] || BAY_LIST[0]); }} className="p-1 bg-white border border-gray-200 rounded hover:border-[#ec9324]"><ChevronLeft size={12}/></button>
+              <button onClick={() => { const idx = BAY_LIST.indexOf(currentBay); setCurrentBay(BAY_LIST[Math.max(0, idx - 1)] || BAY_LIST[0]); }} className="p-1 bg-white border border-gray-200 rounded hover:border-[#ec9324]"><ChevronLeft sx={{ fontSize: 12 }}/></button>
               <select value={currentBay} onChange={(e) => setCurrentBay(e.target.value)} className="flex-1 px-1.5 py-1 border border-gray-200 rounded text-xs font-bold bg-white focus:outline-none focus:border-[#ec9324]" data-testid="bay-select">
                 {BAY_LIST.map(l => <option key={l} value={l}>Bay {l}</option>)}
               </select>
-              <button onClick={() => { const idx = BAY_LIST.indexOf(currentBay); setCurrentBay(BAY_LIST[Math.min(BAY_LIST.length - 1, idx + 1)] || BAY_LIST[BAY_LIST.length - 1]); }} className="p-1 bg-white border border-gray-200 rounded hover:border-[#ec9324]"><ChevronRight size={12}/></button>
+              <button onClick={() => { const idx = BAY_LIST.indexOf(currentBay); setCurrentBay(BAY_LIST[Math.min(BAY_LIST.length - 1, idx + 1)] || BAY_LIST[BAY_LIST.length - 1]); }} className="p-1 bg-white border border-gray-200 rounded hover:border-[#ec9324]"><ChevronRight sx={{ fontSize: 12 }}/></button>
             </div>
             <div className="flex justify-between items-center text-[10px] text-gray-600">
               <span>{currentBaySeats.length} seat(s)</span>
               <button onClick={() => toggleBayLock(currentBay, !isBayLocked(currentBay))} className="flex items-center gap-0.5 hover:text-[#ec9324]" data-testid="bay-lock-toggle">
-                {isBayLocked(currentBay) ? <><Unlock size={10}/> unlock bay</> : <><Lock size={10}/> lock bay</>}
+                {isBayLocked(currentBay) ? <><Unlock sx={{ fontSize: 10 }}/> unlock bay</> : <><Lock sx={{ fontSize: 10 }}/> lock bay</>}
               </button>
             </div>
           </div>
@@ -1281,7 +1306,7 @@ export default function SeatCalibrationPage() {
           {/* Snap to grid */}
           <div className="mb-3 p-2 bg-gray-50 rounded">
             <label className="flex items-center justify-between text-[10px] font-semibold text-gray-700 gap-2">
-              <span className="inline-flex items-center"><Grid size={10} className="mr-1"/>SNAP TO GRID</span>
+              <span className="inline-flex items-center"><Grid sx={{ fontSize: 10 }} className="mr-1"/>SNAP TO GRID</span>
               <select
                 value={String(snapGrid)}
                 onChange={(e) => setSnapGrid(parseInt(e.target.value, 10))}
@@ -1328,7 +1353,7 @@ export default function SeatCalibrationPage() {
                       onClick={() => { applyDraftChanges(); setSelectedSeats([]); }}
                       className="flex-1 py-1 bg-[#ec9324] hover:bg-[#d6831f] text-white rounded text-[10px] font-semibold flex items-center justify-center gap-0.5"
                       data-testid="apply-draft-btn"
-                    ><Check size={10}/> Apply</button>
+                    ><Check sx={{ fontSize: 10 }}/> Apply</button>
                     <button
                       onClick={cancelDraftChanges}
                       className="flex-1 py-1 border border-gray-200 hover:bg-gray-50 text-gray-600 rounded text-[10px]"
@@ -1394,8 +1419,8 @@ export default function SeatCalibrationPage() {
 
           {/* Undo/Redo */}
           <div className="grid grid-cols-2 gap-2 mb-3">
-            <button onClick={undo} disabled={historyIndex <= 0} className="py-1.5 bg-gray-200 hover:bg-gray-300 rounded text-xs flex items-center justify-center gap-1 disabled:opacity-40" data-testid="undo-btn"><Undo2 size={12}/> Undo</button>
-            <button onClick={redo} disabled={historyIndex >= history.length - 1} className="py-1.5 bg-gray-200 hover:bg-gray-300 rounded text-xs flex items-center justify-center gap-1 disabled:opacity-40" data-testid="redo-btn"><Redo2 size={12}/> Redo</button>
+            <button onClick={undo} disabled={historyIndex <= 0} className="py-1.5 bg-gray-200 hover:bg-gray-300 rounded text-xs flex items-center justify-center gap-1 disabled:opacity-40" data-testid="undo-btn"><Undo2 sx={{ fontSize: 12 }}/> Undo</button>
+            <button onClick={redo} disabled={historyIndex >= history.length - 1} className="py-1.5 bg-gray-200 hover:bg-gray-300 rounded text-xs flex items-center justify-center gap-1 disabled:opacity-40" data-testid="redo-btn"><Redo2 sx={{ fontSize: 12 }}/> Redo</button>
           </div>
 
           {/* View toggles */}
@@ -1412,9 +1437,9 @@ export default function SeatCalibrationPage() {
 
           {/* Import/Export */}
           <div className="space-y-1.5">
-            <button onClick={exportConfig} disabled={totalMapped === 0} className="w-full py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-xs flex items-center justify-center gap-1 disabled:opacity-40"><Download size={12}/> Export JSON</button>
+            <button onClick={exportConfig} disabled={totalMapped === 0} className="w-full py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-xs flex items-center justify-center gap-1 disabled:opacity-40"><Download sx={{ fontSize: 12 }}/> Export JSON</button>
             <label className="w-full py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-xs flex items-center justify-center gap-1 cursor-pointer">
-              <Upload size={12}/> Import JSON
+              <Upload sx={{ fontSize: 12 }}/> Import JSON
               <input type="file" accept=".json" onChange={importConfig} className="hidden"/>
             </label>
           </div>
@@ -1443,10 +1468,10 @@ export default function SeatCalibrationPage() {
               <div className="absolute top-3 right-3 z-20 bg-white rounded-lg shadow-lg p-1.5">
                 <div className="text-[10px] font-semibold text-center text-gray-700">ZOOM {(currentZoom * 100).toFixed(0)}%</div>
                 <div className="grid grid-cols-2 gap-1 mt-1">
-                  <button onClick={() => zoomIn()} className="p-1 hover:bg-gray-100 rounded" data-testid="zoom-in-btn"><ZoomIn size={13}/></button>
-                  <button onClick={() => zoomOut()} className="p-1 hover:bg-gray-100 rounded" data-testid="zoom-out-btn"><ZoomOut size={13}/></button>
-                  <button onClick={() => { resetTransform(); requestAnimationFrame(() => centerFloorPlan(true)); }} className="p-1 hover:bg-gray-100 rounded" title="Reset zoom" data-testid="zoom-reset-btn"><Maximize2 size={13}/></button>
-                  <button onClick={() => centerFloorPlan(true)} className="p-1 hover:bg-gray-100 rounded" title="Center floor plan" data-testid="zoom-center-btn"><Maximize size={13}/></button>
+                  <button onClick={() => zoomIn()} className="p-1 hover:bg-gray-100 rounded" data-testid="zoom-in-btn"><ZoomIn sx={{ fontSize: 13 }}/></button>
+                  <button onClick={() => zoomOut()} className="p-1 hover:bg-gray-100 rounded" data-testid="zoom-out-btn"><ZoomOut sx={{ fontSize: 13 }}/></button>
+                  <button onClick={() => { resetTransform(); requestAnimationFrame(() => centerFloorPlan(true)); }} className="p-1 hover:bg-gray-100 rounded" title="Reset zoom" data-testid="zoom-reset-btn"><Maximize2 sx={{ fontSize: 13 }}/></button>
+                  <button onClick={() => centerFloorPlan(true)} className="p-1 hover:bg-gray-100 rounded" title="Center floor plan" data-testid="zoom-center-btn"><Maximize sx={{ fontSize: 13 }}/></button>
                 </div>
                 <select
                   className="text-[10px] p-0.5 border rounded w-full mt-1"
@@ -1723,7 +1748,7 @@ export default function SeatCalibrationPage() {
       {/* Unsaved indicator */}
       {draftDirty && (
         <div className="fixed bottom-3 left-3 px-3 py-1.5 bg-blue-600 text-white rounded text-xs shadow-lg flex items-center gap-2 z-30" data-testid="dirty-indicator">
-          <AlertCircle size={12}/>
+          <AlertCircle sx={{ fontSize: 12 }}/>
           Unsaved draft · auto-saving in 30s
         </div>
       )}
@@ -1891,7 +1916,7 @@ function RoomToolPanel({ roomTool, setRoomTool, roomsArray, selectedRooms, setSe
               className="w-full py-1.5 border border-red-200 text-red-600 hover:bg-red-50 rounded text-[10px] font-semibold flex items-center justify-center gap-1"
               data-testid="room-delete-selected"
             >
-              <Trash2 size={11}/> Delete {selectedRooms.length > 1 ? 'rooms' : 'room'}
+              <Trash2 sx={{ fontSize: 11 }}/> Delete {selectedRooms.length > 1 ? 'rooms' : 'room'}
             </button>
             <div className="text-[9px] text-gray-500 leading-relaxed pt-1">
               Move: drag or arrow keys (Shift=5px, Ctrl=10px). Resize: drag handles (single selection).

@@ -1,5 +1,5 @@
 import React from "react";
-import { Loader2 } from "lucide-react";
+import Loader2 from "@mui/icons-material/Autorenew";
 import { useAction } from "../hooks/useAction";
 
 /**
@@ -78,7 +78,7 @@ export default function ActionButton({
     >
       {loading ? (
         <>
-          <Loader2 className="animate-spin" size={iconSize} />
+          <Loader2 className="animate-spin" size={iconSize}/>
           <span>{loadingText || "Processing…"}</span>
         </>
       ) : (

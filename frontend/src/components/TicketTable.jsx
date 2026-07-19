@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { StatusBadge, PriorityBadge } from "./Badges";
 import { Checkbox } from "./ui/checkbox";
 import { Button } from "./ui/button";
-import { MoreVertical, Eye } from "lucide-react";
+import MoreVertical from "@mui/icons-material/MoreVert";
+import Eye from "@mui/icons-material/Visibility";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub,
   DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuSeparator, DropdownMenuLabel,
@@ -49,7 +50,7 @@ export default function TicketTable({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button size="sm" variant="ghost" data-testid={`row-actions-${t.ticket_id}`} className="h-8 w-8 p-0" title="Actions" aria-label="Actions">
-          <MoreVertical size={16} />
+          <MoreVertical sx={{ fontSize: 16 }}/>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
@@ -59,7 +60,7 @@ export default function TicketTable({
             onClick={() => navigate(`${basePath}/${t.id}`)}
             data-testid={`row-action-view-${t.ticket_id}`}
           >
-            <Eye size={14} className="mr-2" /> View
+            <Eye sx={{ fontSize: 14 }} className="mr-2"/> View
           </DropdownMenuItem>
         )}
 

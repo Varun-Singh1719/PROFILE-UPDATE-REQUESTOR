@@ -15,11 +15,27 @@
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import {
-  Save, Loader2, Search, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp,
-  Copy, Eye, EyeOff, Briefcase, Armchair, History, Sparkles, Plus,
-  RefreshCw, CheckCircle2, Settings, LayoutDashboard, ListChecks, LogIn,
-} from "lucide-react";
+import Save from "@mui/icons-material/SaveOutlined";
+import Loader2 from "@mui/icons-material/Autorenew";
+import Search from "@mui/icons-material/SearchOutlined";
+import ChevronDown from "@mui/icons-material/KeyboardArrowDown";
+import ChevronRight from "@mui/icons-material/ChevronRight";
+import ChevronsDown from "@mui/icons-material/KeyboardDoubleArrowDown";
+import ChevronsUp from "@mui/icons-material/KeyboardDoubleArrowUp";
+import Copy from "@mui/icons-material/ContentCopy";
+import Eye from "@mui/icons-material/Visibility";
+import EyeOff from "@mui/icons-material/VisibilityOff";
+import Briefcase from "@mui/icons-material/WorkOutlined";
+import Armchair from "@mui/icons-material/Chair";
+import History from "@mui/icons-material/HistoryOutlined";
+import Sparkles from "@mui/icons-material/AutoAwesomeOutlined";
+import Plus from "@mui/icons-material/Add";
+import RefreshCw from "@mui/icons-material/Refresh";
+import CheckCircle2 from "@mui/icons-material/CheckCircleOutlined";
+import Settings from "@mui/icons-material/SettingsOutlined";
+import LayoutDashboard from "@mui/icons-material/DashboardOutlined";
+import ListChecks from "@mui/icons-material/ChecklistOutlined";
+import LogIn from "@mui/icons-material/LoginOutlined";
 import api from "../lib/api";
 import Layout from "../components/Layout";
 import notify from "../lib/notify";
@@ -111,7 +127,7 @@ function VisChip({ visible, onClick, testId }) {
         visible ? "border-gray-200 text-gray-700 bg-white hover:border-gray-400"
                 : "border-red-200 text-red-700 bg-red-50 hover:bg-red-100"
       }`}>
-      {visible ? <Eye size={12} /> : <EyeOff size={12} />}
+      {visible ? <Eye sx={{ fontSize: 12 }}/> : <EyeOff sx={{ fontSize: 12 }}/>}
       {visible ? "Shown" : "Hidden"}
     </button>
   );
@@ -137,7 +153,7 @@ function PageDetail({ page, state, onView, onEdit, onFunction, onEnableAll, onHi
         {["view", "edit"].map((kind) => {
           const v = state[kind] || emptyRW();
           const onCh = kind === "view" ? onView : onEdit;
-          const Icon = kind === "view" ? Eye : (props) => <Sparkles {...props} />;
+          const Icon = kind === "view" ? Eye : (props) => <Sparkles {...props}/>;
           return (
             <div key={kind}
                  className={`rounded-lg border p-3 transition-colors ${v.enabled ? "border-[#ec9324]/40 bg-orange-50/50" : "border-gray-200 bg-white"}`}
@@ -269,7 +285,7 @@ function DashboardModuleCard({ mod, state, expanded, onToggle, onClear, Icon, up
             {configuredCount}/{(mod.pages || []).length} configured
           </span>
         )}
-        {expanded ? <ChevronDown size={16} className="text-gray-400 ml-1" /> : <ChevronRight size={16} className="text-gray-400 ml-1" />}
+        {expanded ? <ChevronDown sx={{ fontSize: 16 }} className="text-gray-400 ml-1"/> : <ChevronRight sx={{ fontSize: 16 }} className="text-gray-400 ml-1"/>}
       </button>
 
       {expanded && (
@@ -437,7 +453,7 @@ function ModuleAccordion({ mod, state, expanded, onToggle, search, onSelectAll, 
         <div className="flex-1 text-left">
           <div className="font-bold text-sm text-gray-900">{mod.label}</div>
         </div>
-        {expanded ? <ChevronDown size={16} className="text-gray-400 ml-1" /> : <ChevronRight size={16} className="text-gray-400 ml-1" />}
+        {expanded ? <ChevronDown sx={{ fontSize: 16 }} className="text-gray-400 ml-1"/> : <ChevronRight sx={{ fontSize: 16 }} className="text-gray-400 ml-1"/>}
       </button>
 
       {expanded && (
@@ -646,7 +662,7 @@ function CopyFromDialog({ open, onOpenChange, onCopy, catalog, currentState }) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl p-0 overflow-hidden" data-testid="perm-copy-dialog">
         <div className="px-5 pt-4 pb-3 border-b border-gray-100 flex items-center gap-2">
-          <Copy size={16} className="text-[#ec9324]" />
+          <Copy sx={{ fontSize: 16 }} className="text-[#ec9324]"/>
           <div className="flex-1">
             <div className="font-semibold text-gray-900">
               {preview ? `Review changes — Copy from "${preview.title}"` : "Copy from an existing Permission Set"}
@@ -667,17 +683,17 @@ function CopyFromDialog({ open, onOpenChange, onCopy, catalog, currentState }) {
         {!preview ? (
           <>
             <div className="px-5 py-3 border-b border-gray-100">
-              <div className="relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <div className="relative"><Search sx={{ fontSize: 14 }} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
                 <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…"
                   className="w-full h-9 pl-9 pr-3 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]" /></div>
             </div>
             <div className="max-h-[420px] overflow-y-auto">
-              {loading && <div className="p-6 text-center text-xs text-gray-400"><Loader2 className="animate-spin inline mr-1.5" size={13} /> Loading…</div>}
+              {loading && <div className="p-6 text-center text-xs text-gray-400"><Loader2 className="animate-spin inline mr-1.5" sx={{ fontSize: 13 }}/> Loading…</div>}
               {!loading && items.length === 0 && <div className="p-8 text-center text-xs text-gray-400">No permission sets found.</div>}
               {!loading && items.map((p) => (
                 <button key={p.id} type="button" onClick={() => pickSet(p.id)}
                   className="w-full flex items-start gap-3 px-5 py-3 border-b border-gray-100 hover:bg-orange-50/60 text-left" data-testid={`perm-copy-item-${p.id}`}>
-                  <span className="h-8 w-8 rounded-md bg-orange-50 border border-orange-200 inline-flex items-center justify-center text-[#ec9324]"><Copy size={14} /></span>
+                  <span className="h-8 w-8 rounded-md bg-orange-50 border border-orange-200 inline-flex items-center justify-center text-[#ec9324]"><Copy sx={{ fontSize: 14 }}/></span>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold text-gray-900">{p.title}</div>
                     <div className="text-[11px] text-gray-500 truncate">{p.description || "—"}<span className="ml-2 text-[10px] px-1 py-0.5 rounded bg-gray-100">v{p.version || 1}</span></div>
@@ -697,7 +713,7 @@ function CopyFromDialog({ open, onOpenChange, onCopy, catalog, currentState }) {
             <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/60 flex items-center justify-end gap-2">
               <Button variant="outline" onClick={() => setPreview(null)} className="rounded-md">Cancel</Button>
               <Button onClick={applyCopy} disabled={confirming} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="perm-copy-confirm">
-                {confirming ? <Loader2 className="animate-spin mr-1.5" size={13} /> : <CheckCircle2 size={13} className="mr-1.5" />}
+                {confirming ? <Loader2 className="animate-spin mr-1.5" sx={{ fontSize: 13 }}/> : <CheckCircle2 sx={{ fontSize: 13 }} className="mr-1.5"/>}
                 Apply copy
               </Button>
             </div>
@@ -790,7 +806,7 @@ function AuditLogTab({ resourceId, catalog, focusResourceId, onClearResource }) 
         )}
         <button type="button" onClick={load}
           className="ml-auto h-9 px-3 rounded-md border border-gray-200 text-[11px] font-semibold text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] inline-flex items-center gap-1.5"
-          data-testid="perm-audit-refresh"><RefreshCw size={12} /> Refresh</button>
+          data-testid="perm-audit-refresh"><RefreshCw sx={{ fontSize: 12 }}/> Refresh</button>
         <div className="text-[10px] text-gray-500 ml-1">{total} entr{total === 1 ? "y" : "ies"}</div>
       </div>
 
@@ -798,7 +814,7 @@ function AuditLogTab({ resourceId, catalog, focusResourceId, onClearResource }) 
       <div className="p-3 max-h-[calc(100vh-260px)] overflow-y-auto">
         {loading && (
           <div className="text-center text-xs text-gray-400 py-10">
-            <Loader2 className="animate-spin inline mr-1.5" size={13} /> Loading audit history…
+            <Loader2 className="animate-spin inline mr-1.5" sx={{ fontSize: 13 }}/> Loading audit history…
           </div>
         )}
         {!loading && rows.length === 0 && (
@@ -846,7 +862,7 @@ function AuditLogTab({ resourceId, catalog, focusResourceId, onClearResource }) 
                       <button type="button" onClick={() => setExpanded((e) => ({ ...e, [i]: !e[i] }))}
                         className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-[#ec9324] hover:underline"
                         data-testid={`perm-audit-expand-${i}`}>
-                        {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                        {isOpen ? <ChevronDown sx={{ fontSize: 12 }}/> : <ChevronRight sx={{ fontSize: 12 }}/>}
                         {isOpen ? "Hide" : "Show"} before/after diff{rows2.length ? ` (${rows2.length})` : ""}
                       </button>
                     )}
@@ -1018,7 +1034,7 @@ export default function PermissionsPage() {
     return (
       <Layout title="Permissions">
         <div className="flex items-center justify-center py-20 text-gray-400 text-sm">
-          <Loader2 className="animate-spin mr-2" size={16} /> Loading catalog…
+          <Loader2 className="animate-spin mr-2" sx={{ fontSize: 16 }}/> Loading catalog…
         </div>
       </Layout>
     );
@@ -1041,7 +1057,7 @@ export default function PermissionsPage() {
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold"
             data-testid="perm-login-as-btn"
           >
-            <LogIn size={13}/> Login As
+            <LogIn sx={{ fontSize: 13 }}/> Login As
           </button>
           {tab === "sets" && (
             <Button
@@ -1049,14 +1065,14 @@ export default function PermissionsPage() {
               className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9 text-xs font-semibold"
               data-testid="perm-sets-add-btn"
             >
-              <Plus size={13} className="mr-1.5"/> Add Permission Set
+              <Plus sx={{ fontSize: 13 }} className="mr-1.5"/> Add Permission Set
             </Button>
           )}
           {tab === "editor" && (
             <>
-              <button type="button" onClick={() => setCopyOpen(true)}  className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-copy-btn"><Copy size={13} /> Copy from set</button>
+              <button type="button" onClick={() => setCopyOpen(true)}  className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-copy-btn"><Copy sx={{ fontSize: 13 }}/> Copy from set</button>
               <Button onClick={doSave} disabled={saving} className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9 text-xs font-semibold" data-testid="perm-save-btn">
-                {saving ? <Loader2 className="animate-spin mr-1.5" size={13} /> : <Save size={13} className="mr-1.5" />}
+                {saving ? <Loader2 className="animate-spin mr-1.5" sx={{ fontSize: 13 }}/> : <Save sx={{ fontSize: 13 }} className="mr-1.5"/>}
                 {editingId ? "Update set" : "Save as new set"}
               </Button>
             </>
@@ -1072,19 +1088,19 @@ export default function PermissionsPage() {
             className={`h-9 px-4 rounded-t-md text-xs font-semibold inline-flex items-center gap-1.5 border border-b-0 ${
               tab === "sets" ? "bg-white border-gray-200 text-[#ec9324]" : "bg-transparent border-transparent text-gray-500 hover:text-gray-800"
             }`}>
-            <ListChecks size={13} /> Permission Sets
+            <ListChecks sx={{ fontSize: 13 }}/> Permission Sets
           </button>
           <button type="button" onClick={() => goToTab("editor")} data-testid="perm-tab-editor"
             className={`h-9 px-4 rounded-t-md text-xs font-semibold inline-flex items-center gap-1.5 border border-b-0 ${
               tab === "editor" ? "bg-white border-gray-200 text-[#ec9324]" : "bg-transparent border-transparent text-gray-500 hover:text-gray-800"
             }`}>
-            <Sparkles size={13} /> Editor {editingId ? <span className="text-[10px] text-gray-500">(editing)</span> : <span className="text-[10px] text-gray-500">(new)</span>}
+            <Sparkles sx={{ fontSize: 13 }}/> Editor {editingId ? <span className="text-[10px] text-gray-500">(editing)</span> : <span className="text-[10px] text-gray-500">(new)</span>}
           </button>
           <button type="button" onClick={() => goToTab("audit")} data-testid="perm-tab-audit"
             className={`h-9 px-4 rounded-t-md text-xs font-semibold inline-flex items-center gap-1.5 border border-b-0 ${
               tab === "audit" ? "bg-white border-gray-200 text-[#ec9324]" : "bg-transparent border-transparent text-gray-500 hover:text-gray-800"
             }`}>
-            <History size={13} /> Audit log
+            <History sx={{ fontSize: 13 }}/> Audit log
           </button>
           <div className="flex-1 border-b border-gray-200 -mb-px" />
           {tab === "sets" && (
@@ -1097,7 +1113,7 @@ export default function PermissionsPage() {
               aria-label="Refresh"
               className="mb-1 inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold disabled:opacity-60"
             >
-              <RefreshCw size={13} className={refreshingList ? "animate-spin" : ""}/> Refresh
+              <RefreshCw sx={{ fontSize: 13 }} className={refreshingList ? "animate-spin" : ""}/> Refresh
             </button>
           )}
         </div>
@@ -1162,9 +1178,9 @@ export default function PermissionsPage() {
               onCommit={setSearch}
             />
             <button type="button" onClick={() => setExpanded(Object.fromEntries(catalog.map((m) => [m.key, true])))}
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-expand-all"><ChevronsDown size={13} /> Expand all</button>
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-expand-all"><ChevronsDown sx={{ fontSize: 13 }}/> Expand all</button>
             <button type="button" onClick={() => setExpanded(Object.fromEntries(catalog.map((m) => [m.key, false])))}
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-collapse-all"><ChevronsUp size={13} /> Collapse all</button>
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324] text-xs font-semibold" data-testid="perm-collapse-all"><ChevronsUp sx={{ fontSize: 13 }}/> Collapse all</button>
           </div>
 
           <div className="mt-3 space-y-3">

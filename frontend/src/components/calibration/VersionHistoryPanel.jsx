@@ -3,7 +3,11 @@
  * Supports rollback (with confirmation) and compare-two-versions.
  */
 import React, { useEffect, useState } from 'react';
-import { X, History, RotateCcw, GitCompare, Loader2 } from 'lucide-react';
+import X from "@mui/icons-material/Close";
+import History from "@mui/icons-material/HistoryOutlined";
+import RotateCcw from "@mui/icons-material/RestartAlt";
+import GitCompare from "@mui/icons-material/CompareArrows";
+import Loader2 from "@mui/icons-material/Autorenew";
 import api from '../../lib/api';
 import notify from '../../lib/notify';
 import { confirm as confirmDialog } from '../../lib/dialog';
@@ -67,10 +71,10 @@ export default function VersionHistoryPanel({ planId, liveVersionId, open, onClo
     <div className="fixed top-0 right-0 h-full w-96 bg-white border-l shadow-2xl z-40 flex flex-col" data-testid="version-history-panel">
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <div className="flex items-center gap-2">
-          <History size={18} className="text-[#ec9324]" />
+          <History sx={{ fontSize: 18 }} className="text-[#ec9324]"/>
           <h2 className="font-bold text-gray-900">Version History</h2>
         </div>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={18}/></button>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X sx={{ fontSize: 18 }}/></button>
       </div>
 
       {compareIds.length > 0 && (
@@ -135,7 +139,7 @@ export default function VersionHistoryPanel({ planId, liveVersionId, open, onClo
                         title="Add to compare"
                         className={`p-1.5 rounded ${sel ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
                       >
-                        <GitCompare size={13}/>
+                        <GitCompare sx={{ fontSize: 13 }}/>
                       </button>
                       {!isLive && (
                         <button
@@ -144,7 +148,7 @@ export default function VersionHistoryPanel({ planId, liveVersionId, open, onClo
                           title="Restore this version"
                           className="p-1.5 rounded bg-amber-100 hover:bg-amber-200 text-amber-800"
                         >
-                          <RotateCcw size={13}/>
+                          <RotateCcw sx={{ fontSize: 13 }}/>
                         </button>
                       )}
                     </div>
