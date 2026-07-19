@@ -99,10 +99,10 @@ export default function NotificationsOutboxPage() {
     try {
       const r = await api.post(`/notifications/outbox/${n.id}/retry`);
       const newStatus = r?.data?.status || "queued";
-      notify.success(newStatus === "sent" ? "Retried — email sent" : "Retried — re-queued");
+      notify.success(newStatus === "sent" ? "Resent — email sent" : "Resent — re-queued");
       load();
     } catch (e) {
-      notify.error(e?.response?.data?.detail || "Retry failed");
+      notify.error(e?.response?.data?.detail || "Resend failed");
     }
   };
 
@@ -292,7 +292,7 @@ export default function NotificationsOutboxPage() {
                               data-testid={`retry-outbox-${n.id}`}
                               className="text-[#ec9324] focus:text-[#d4811f]"
                             >
-                              <RestartAlt sx={{ fontSize: 14 }} className="mr-2"/> Retry
+                              <RestartAlt sx={{ fontSize: 14 }} className="mr-2"/> Resend
                             </DropdownMenuItem>
                           )}
                           {permDelete.isVisible && (
