@@ -351,7 +351,7 @@ PERMISSION_MODULES_V3 = [
                 ],
             },
             {
-                "key": "notifications", "label": "Notifications", "route": "/admin/notifications",
+                "key": "notifications", "label": "Outbox", "route": "/admin/notifications",
                 "functions": [
                     {"key": "mark_read", "label": "Mark as Read", "scoped": False},
                     {"key": "delete",    "label": "Delete",        "scoped": False},

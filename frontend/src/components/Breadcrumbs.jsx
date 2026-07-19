@@ -20,7 +20,7 @@ const DEFAULT_SECTION_ROUTES = {
   "Teams": "/admin/teams",
   "Permissions": "/admin/permissions",
   "Email Templates": "/admin/email-templates",
-  "Notifications": "/admin/notifications",
+  "Outbox": "/admin/notifications",
   "Employee List": "/admin/contacts",
   "Tickets": "/admin/open-tickets",
   "All Requests": "/admin/open-tickets",

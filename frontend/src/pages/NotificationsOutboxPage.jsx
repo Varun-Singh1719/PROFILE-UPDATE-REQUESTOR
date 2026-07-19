@@ -94,7 +94,7 @@ export default function NotificationsOutboxPage() {
 
   return (
     <Layout
-      title="Notifications Outbox"
+      title="Outbox"
       contentClassName="w-full px-4 pt-4 pb-3 flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden"
       actions={
         <Button
@@ -243,7 +243,7 @@ export default function NotificationsOutboxPage() {
           total={total}
           onPageChange={setPage}
           onPageSizeChange={setPageSize}
-          label="Notifications"
+          label="Emails"
           testIdPrefix="outbox-pg"
           className="mt-auto"
         />
