@@ -238,8 +238,8 @@ export default function MultiSelectFilter({
               : undefined,
             left: align === "right" ? undefined : popupPos.left,
             right: align === "right" ? Math.max(0, window.innerWidth - popupPos.left) : undefined,
-            minWidth: fullWidth ? popupPos.width : Math.max(popupPos.width, 240),
-            maxWidth: fullWidth ? popupPos.width : 360,
+            minWidth: popupPos.width,
+            maxWidth: popupPos.width,
             zIndex: 9999,
           }}
           className="bg-white border border-gray-200 shadow-lg rounded-md py-1"

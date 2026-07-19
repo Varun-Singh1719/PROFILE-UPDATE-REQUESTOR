@@ -149,7 +149,9 @@ export default function DateFilter({
           )}
         </button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl p-0 overflow-hidden">
+      <DialogContent
+        className={`${mode === "between" ? "max-w-4xl" : "max-w-md"} p-0 overflow-hidden`}
+      >
         {/* Field selector (hidden when only one field is exposed) */}
         {showFieldSelector && (
           <div className="flex items-center gap-8 px-8 pt-6 pb-5 border-b border-gray-100">
