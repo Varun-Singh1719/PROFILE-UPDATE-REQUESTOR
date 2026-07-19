@@ -238,8 +238,20 @@ export default function MultiSelectFilter({
               : undefined,
             left: align === "right" ? undefined : popupPos.left,
             right: align === "right" ? Math.max(0, window.innerWidth - popupPos.left) : undefined,
+            // Popup sizes to its content (`width: max-content`) so option
+            // labels are never truncated by an arbitrary cap. Bounded below
+            // by the trigger's own width (never look narrower than the chip)
+            // and above by 480px / the right edge of the viewport so it can
+            // never overflow the screen. Same rule everywhere the component
+            // is used → uniform behaviour across every screen.
+            width: "max-content",
             minWidth: popupPos.width,
-            maxWidth: popupPos.width,
+            maxWidth: Math.min(
+              480,
+              (typeof window !== "undefined" ? window.innerWidth : 1440) -
+                (align === "right" ? window.innerWidth - popupPos.left : popupPos.left) -
+                16,
+            ),
             zIndex: 9999,
           }}
           className="bg-white border border-gray-200 shadow-lg rounded-md py-1"
