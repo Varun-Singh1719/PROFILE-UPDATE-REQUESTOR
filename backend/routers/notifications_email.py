@@ -92,6 +92,46 @@ async def delete_notification(notif_id: str, user=Depends(require_role("Super Ad
     return {"ok": True}
 
 
+@api_router.post("/notifications/outbox/{notif_id}/retry")
+async def retry_notification(notif_id: str, user=Depends(require_role("Super Admin"))):
+    """Re-attempt delivery for a failed outbox row.
+
+    Behaviour:
+      • Only rows currently in `status="error"` can be retried.
+      • When EMAIL_PROVIDER=resend, fires a fresh Resend HTTP call and
+        updates the row in-place to `sent`/`error` based on the result.
+      • In the default `outbox` provider (no real send), the row is simply
+        flipped back to `queued` so it's ready for the next real dispatch.
+    """
+    import os
+    from notifications import _send_via_resend  # local import to avoid cycles
+
+    n = await db.notifications_outbox.find_one({"id": notif_id})
+    if not n:
+        raise HTTPException(404, "Not found")
+    if n.get("status") != "error":
+        raise HTTPException(400, "Only failed items can be retried")
+
+    provider = (os.environ.get("EMAIL_PROVIDER") or "outbox").lower()
+    if provider == "resend":
+        ok, err = _send_via_resend(n["to_email"], n["subject"], n["body"])
+        upd = {
+            "status": "sent" if ok else "error",
+            "error": err,
+            "sent_at": now_iso() if ok else None,
+            "retried_at": now_iso(),
+        }
+    else:
+        upd = {"status": "queued", "error": None, "retried_at": now_iso()}
+
+    await db.notifications_outbox.update_one({"id": notif_id}, {"$set": upd})
+    await log_audit(actor=user, action="notification.retry", resource="notification",
+                    resource_id=notif_id, detail=f"Retried notification to {n.get('to_email')}",
+                    severity="info")
+    out = await db.notifications_outbox.find_one({"id": notif_id}, {"_id": 0})
+    return out
+
+
 # ---------- Email Templates ----------
 @api_router.get("/email-templates")
 async def list_email_templates(user=Depends(require_role("Super Admin", "Admin")), q: Optional[str] = None, category: Optional[str] = None, status: Optional[str] = None):
