@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Input } from "./ui/input";
-import { Search, Send } from "lucide-react";
+import { Search } from "lucide-react";
+import SendIcon from "@mui/icons-material/Send";
 
 /**
  * DeferredSearchInput
@@ -88,7 +89,7 @@ export default function DeferredSearchInput({
         title="Search"
         className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center text-gray-600"
       >
-        <Send size={13} strokeWidth={2} />
+        <SendIcon sx={{ fontSize: 14 }} />
       </button>
     </div>
   );
