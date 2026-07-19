@@ -10,7 +10,7 @@ import Pagination from "../components/Pagination";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from "../components/ui/dialog";
-import { Search, Mail, RefreshCw, Trash2, Eye, AlertCircle, Clock, CheckCircle2, MoreVertical } from "lucide-react";
+import { RefreshCw, Trash2, Eye, MoreVertical } from "lucide-react";
 import notify from "../lib/notify";
 import { confirm as confirmDialog } from '../lib/dialog';
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
@@ -24,10 +24,20 @@ const KIND_LABEL = {
   forgot_password: "Forgot password",
 };
 
-const STATUS_STYLES = {
-  queued: { label: "Queued", cls: "bg-amber-50 text-amber-700 border-amber-200", icon: Clock },
-  sent: { label: "Sent", cls: "bg-green-50 text-green-700 border-green-200", icon: CheckCircle2 },
-  error: { label: "Error", cls: "bg-rose-50 text-rose-700 border-rose-200", icon: AlertCircle },
+// Kind capsule — same visual language as Email Templates "Type" column:
+// outlined pill (border-2 rounded-full) with colored border+text on white bg.
+const KIND_COLORS = {
+  new_employee:         { text: "#7c3aed", border: "#7c3aed" }, // purple  — onboarding
+  admin_password_reset: { text: "#dc2626", border: "#dc2626" }, // red     — security
+  forgot_password:      { text: "#2563eb", border: "#2563eb" }, // blue    — auth
+};
+
+// Status capsule — same visual language as Profix "Status" column:
+// outlined pill (w-24 h-6) with colored border+text on white bg.
+const STATUS_PILL = {
+  queued: { label: "Queued", text: "#ec9324", border: "#ec9324" }, // orange (like In Progress)
+  sent:   { label: "Sent",   text: "#16a34a", border: "#16a34a" }, // green  (like Active)
+  error:  { label: "Error",  text: "#dc2626", border: "#dc2626" }, // red    (like Cancelled)
 };
 
 function fmt(iso) { if (!iso) return "—"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
@@ -40,7 +50,8 @@ export default function NotificationsOutboxPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
-  const [q, setQ] = useState("");
+  const [qName, setQName] = useState("");    // Recipient Name search
+  const [qEmail, setQEmail] = useState("");  // Recipient Email search
   const [kind, setKind] = useState([]);
   const [status, setStatus] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -51,7 +62,8 @@ export default function NotificationsOutboxPage() {
     try {
       const r = await api.get("/notifications/outbox", {
         params: {
-          q: q || undefined,
+          q_name: qName || undefined,
+          q_email: qEmail || undefined,
           kind: kind.length ? kind.join(",") : undefined,
           status: status.length ? status.join(",") : undefined,
           page,
@@ -64,10 +76,10 @@ export default function NotificationsOutboxPage() {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [q, kind, status, page, pageSize]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [qName, qEmail, kind, status, page, pageSize]);
 
   // Reset to page 1 whenever filters change
-  useEffect(() => { setPage(1); /* eslint-disable-next-line */ }, [q, kind, status]);
+  useEffect(() => { setPage(1); /* eslint-disable-next-line */ }, [qName, qEmail, kind, status]);
 
   const remove = async (n) => {
     const ok = await confirmDialog({ title: 'Delete log entry', message: 'Delete this notification log entry?', confirmLabel: 'Delete', confirmVariant: 'destructive' });
@@ -98,11 +110,18 @@ export default function NotificationsOutboxPage() {
       <div className="shrink-0 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
         <div className="flex flex-wrap gap-3 items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100" data-testid="outbox-filter-bar">
         <DeferredSearchInput
-          className="flex-1 min-w-[240px]"
-          placeholder="Search recipient or subject…"
-          testId="outbox-search"
-          value={q}
-          onCommit={setQ}
+          className="flex-1 min-w-[220px]"
+          placeholder="Search recipient name…"
+          testId="outbox-search-name"
+          value={qName}
+          onCommit={setQName}
+        />
+        <DeferredSearchInput
+          className="flex-1 min-w-[220px]"
+          placeholder="Search recipient email…"
+          testId="outbox-search-email"
+          value={qEmail}
+          onCommit={setQEmail}
         />
         <MultiSelectFilter
           label="Kind"
@@ -139,6 +158,7 @@ export default function NotificationsOutboxPage() {
                 <th className="px-4 py-3 text-left">When</th>
                 <th className="px-4 py-3 text-left">Kind</th>
                 <th className="px-4 py-3 text-left">Recipient</th>
+                <th className="px-4 py-3 text-left">Email</th>
                 <th className="px-4 py-3 text-left">Subject</th>
                 <th className="px-4 py-3 text-left">Status</th>
                 <th className="px-4 py-3 text-right">Actions</th>
@@ -146,24 +166,30 @@ export default function NotificationsOutboxPage() {
             </thead>
             <tbody>
               {items.map((n) => {
-                const st = STATUS_STYLES[n.status] || STATUS_STYLES.queued;
-                const StIcon = st.icon;
+                const st = STATUS_PILL[n.status] || STATUS_PILL.queued;
+                const kc = KIND_COLORS[n.kind] || { text: "#6b7280", border: "#d1d5db" };
                 return (
                   <tr key={n.id} className="border-b border-gray-100 hover:bg-gray-50/80" data-testid={`outbox-row-${n.id}`}>
                     <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{fmt(n.created_at)}</td>
                     <td className="px-4 py-3">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-[#ec9324]/10 text-[#ec9324] rounded px-2 py-1">
-                        <Mail size={12}/> {KIND_LABEL[n.kind] || n.kind}
+                      <span
+                        data-testid={`outbox-kind-${n.kind}`}
+                        className="inline-flex items-center justify-center h-6 rounded-full border-2 text-[11px] font-semibold bg-white select-none whitespace-nowrap px-3"
+                        style={{ color: kc.text, borderColor: kc.border }}
+                      >
+                        {KIND_LABEL[n.kind] || n.kind}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-700">
-                      <div className="font-medium">{n.to_name}</div>
-                      <div className="text-xs text-gray-500">{n.to_email}</div>
-                    </td>
+                    <td className="px-4 py-3 text-gray-800 font-medium">{n.to_name || "—"}</td>
+                    <td className="px-4 py-3 text-gray-600 text-xs">{n.to_email || "—"}</td>
                     <td className="px-4 py-3 text-gray-700">{n.subject}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded border ${st.cls}`}>
-                        <StIcon size={12}/> {st.label}
+                      <span
+                        data-testid={`outbox-status-${n.status}`}
+                        className="inline-flex items-center justify-center w-24 h-6 rounded-full border-2 text-[11px] font-semibold bg-white select-none whitespace-nowrap"
+                        style={{ color: st.text, borderColor: st.border }}
+                      >
+                        {st.label}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -203,7 +229,7 @@ export default function NotificationsOutboxPage() {
                 );
               })}
               {items.length === 0 && !loading && (
-                <tr><td colSpan={6} className="text-center py-12 text-gray-400">No notifications yet</td></tr>
+                <tr><td colSpan={7} className="text-center py-12 text-gray-400">No notifications yet</td></tr>
               )}
             </tbody>
           </table>

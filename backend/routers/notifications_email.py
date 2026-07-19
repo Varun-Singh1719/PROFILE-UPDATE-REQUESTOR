@@ -34,6 +34,8 @@ async def list_notifications(
     kind: Optional[str] = None,
     status: Optional[str] = None,
     q: Optional[str] = None,
+    q_name: Optional[str] = None,
+    q_email: Optional[str] = None,
     page: Optional[int] = None,
     page_size: int = 50,
     limit: int = 200,
@@ -45,12 +47,20 @@ async def list_notifications(
     status_list = _csv_list(status)
     if status_list:
         query["status"] = {"$in": status_list} if len(status_list) > 1 else status_list[0]
+    # Field-scoped searches: name or email or the legacy combined `q`.
+    ands = []
+    if q_name:
+        ands.append({"to_name": {"$regex": q_name.strip(), "$options": "i"}})
+    if q_email:
+        ands.append({"to_email": {"$regex": q_email.strip(), "$options": "i"}})
     if q:
-        query["$or"] = [
+        ands.append({"$or": [
             {"to_email": {"$regex": q, "$options": "i"}},
             {"to_name": {"$regex": q, "$options": "i"}},
             {"subject": {"$regex": q, "$options": "i"}},
-        ]
+        ]})
+    if ands:
+        query["$and"] = ands
     # Paginated shape when `page` is provided; array for backward compat otherwise.
     if page is not None:
         p = max(1, int(page or 1))
