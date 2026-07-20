@@ -54,10 +54,10 @@ export default function ManagerDashboard() {
       </div>
 
       <h2 className="text-xl font-semibold text-gray-900 mt-12 mb-4 flex items-center gap-2">
-        <Users sx={{ fontSize: 20 }} className="text-[#ec9324]"/> DQ Team Performance
+        <Users sx={{ fontSize: 20 }} className="text-[#ec9324]"/> Team
       </h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        {dqs.length === 0 && <div className="text-sm text-gray-400">No DQ members yet.</div>}
+        {dqs.length === 0 && <div className="text-sm text-gray-400">No team members with Profix access yet.</div>}
         {dqs.map((m) => (
           <button
             key={m.id}

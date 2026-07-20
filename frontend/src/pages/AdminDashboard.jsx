@@ -317,10 +317,10 @@ function ProfixDashboardBody({ navigate, headerActions }) {
       </div>
 
       <h2 className="text-lg font-semibold text-gray-900 mt-8 mb-3 flex items-center gap-2">
-        <Users sx={{ fontSize: 18 }} className="text-[#ec9324]"/> DQ Team Performance
+        <Users sx={{ fontSize: 18 }} className="text-[#ec9324]"/> Team
       </h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {dqs.length === 0 && <div className="text-sm text-gray-400">No DQ members yet.</div>}
+        {dqs.length === 0 && <div className="text-sm text-gray-400">No team members with Profix access yet.</div>}
         {dqs.map((m) => (
           <button
             key={m.id}

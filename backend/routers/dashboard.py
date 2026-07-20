@@ -64,9 +64,42 @@ async def dq_performance(
     # v3 has no "DQ Team" role anymore (legacy collapse); read from a permissive
     # filter so Admin still sees the historical performance leaderboard.
     members = await db.contacts.find(
-        {"role": {"$in": ["Admin", "DQ Team"]}, "status": "Active"},
+        {"role": {"$in": ["Super Admin", "Admin", "DQ Team"]}, "status": "Active"},
         {"_id": 0, "password_hash": 0, "password_encrypted": 0},
     ).to_list(500)
+
+    # Filter down to members who currently have Profix (ticket view) access
+    # via their effective permissions. Super Admins pass through automatically.
+    # Pre-fetch permission sets once (perf: avoid N per-user DB roundtrips).
+    all_set_ids: set = set()
+    for m in members:
+        for sid in (m.get("permission_set_ids") or []):
+            all_set_ids.add(sid)
+    sets_by_id: dict = {}
+    if all_set_ids:
+        set_docs = await db.permission_sets.find(
+            {"id": {"$in": list(all_set_ids)}}, {"_id": 0, "id": 1, "modules": 1}
+        ).to_list(500)
+        sets_by_id = {s["id"]: s for s in set_docs}
+
+    def _set_grants_profix_view(pset: dict) -> bool:
+        val = ((pset.get("modules") or {}).get("profix") or {}).get("ticket", {}).get("view")
+        if val is True:
+            return True
+        if isinstance(val, str) and val in ("all", "team", "respective"):
+            return True
+        return False
+
+    allowed_members = []
+    for m in members:
+        if m.get("role") == "Super Admin":
+            allowed_members.append(m)
+            continue
+        set_ids = m.get("permission_set_ids") or []
+        if any(_set_grants_profix_view(sets_by_id.get(sid, {})) for sid in set_ids):
+            allowed_members.append(m)
+    members = allowed_members
+
     date_match = _date_match(date_from, date_to, date_field)
     view_filter = await _ticket_view_filter(user)
     out = []
