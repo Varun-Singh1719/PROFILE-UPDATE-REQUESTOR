@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip";
 import DeferredSearchInput from "../components/DeferredSearchInput";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
+import SingleSelect from "../components/SingleSelect";
 import notify from "../lib/notify";
 import Edit from "@mui/icons-material/EditOutlined";
 import Loader2 from "@mui/icons-material/Autorenew";
@@ -22,6 +23,7 @@ import CheckCircle from "@mui/icons-material/CheckCircleOutlined";
 import Cancel from "@mui/icons-material/CancelOutlined";
 import Chair from "@mui/icons-material/Chair";
 import EventAvailable from "@mui/icons-material/EventAvailableOutlined";
+import Timer from "@mui/icons-material/AccessTimeOutlined";
 import { useAuth } from "../context/AuthContext";
 
 /**
@@ -58,6 +60,54 @@ const BELL_META = {
   workstation_assigned:         { Icon: Chair,          color: "#ec9324", bg: "#fff7ed" },
   request_closed:               { Icon: EventAvailable, color: "#0284c7", bg: "#f0f9ff" },
 };
+
+// ------- Refresh-rate (bell poll) helpers -------
+const UNIT_TO_MS = { sec: 1000, min: 60 * 1000, hr: 60 * 60 * 1000 };
+const UNIT_OPTIONS = [
+  { value: "sec", label: "Seconds" },
+  { value: "min", label: "Minutes" },
+  { value: "hr",  label: "Hours"   },
+];
+const NUM_OPTIONS = Array.from({ length: 20 }, (_, i) => {
+  const n = i + 1;
+  return { value: String(n), label: String(n) };
+});
+
+/**
+ * Convert milliseconds → the {number, unit} pair that best matches while
+ * staying within the allowed 1..20 range. Prefers larger units when the
+ * value divides evenly.
+ */
+function msToParts(ms) {
+  if (!ms || ms < 1000) return { num: 10, unit: "min" };
+  const totalSec = Math.round(ms / 1000);
+  const totalMin = Math.round(ms / 60000);
+  const totalHr  = Math.round(ms / 3600000);
+  if (totalHr >= 1 && totalHr <= 20 && totalHr * 3600000 === ms) return { num: totalHr, unit: "hr" };
+  if (totalMin >= 1 && totalMin <= 20 && totalMin * 60000 === ms) return { num: totalMin, unit: "min" };
+  if (totalSec >= 1 && totalSec <= 20) return { num: totalSec, unit: "sec" };
+  // Fallback — clamp to sane values so the modal never opens empty.
+  if (totalHr >= 1) return { num: Math.min(20, totalHr), unit: "hr" };
+  if (totalMin >= 1) return { num: Math.min(20, totalMin), unit: "min" };
+  return { num: Math.min(20, Math.max(1, totalSec)), unit: "sec" };
+}
+function partsToMs(num, unit) {
+  return Math.max(1, parseInt(num, 10)) * (UNIT_TO_MS[unit] || 60000);
+}
+
+/**
+ * Human-readable label for the current poll interval (e.g. "10 min",
+ * "45 sec", "2 hr"). Used in the header chip on the templates page.
+ */
+function formatPollInterval(ms) {
+  if (!ms || ms < 1000) return "—";
+  const hr = ms / 3600000;
+  if (hr >= 1 && Number.isInteger(hr)) return `${hr} ${hr === 1 ? "hour" : "hours"}`;
+  const mn = ms / 60000;
+  if (mn >= 1 && Number.isInteger(mn)) return `${mn} ${mn === 1 ? "min" : "min"}`;
+  const sc = ms / 1000;
+  return `${Math.round(sc)} sec`;
+}
 
 // Demo names used in the preview modal so placeholders like {{closed_by}}
 // render as actual human names instead of raw template tokens.
@@ -169,6 +219,11 @@ export default function NotificationTemplatesPage() {
   const [previewing, setPreviewing] = useState(null);
   const [busyId, setBusyId] = useState(null);
 
+  // Refresh-rate setting (singleton on the backend). Any authenticated user
+  // can read; only Super Admin can edit.
+  const [settings, setSettings] = useState(null);
+  const [settingsEditOpen, setSettingsEditOpen] = useState(false);
+
   // Filters — same shape as EmailTemplates.
   const [q, setQ] = useState("");
   const [moduleFilter, setModuleFilter] = useState([]);   // empty = All
@@ -177,8 +232,12 @@ export default function NotificationTemplatesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await api.get("/notification-templates");
-      setItems(r.data || []);
+      const [tplRes, setRes] = await Promise.all([
+        api.get("/notification-templates"),
+        api.get("/notifications/settings").catch(() => ({ data: null })),
+      ]);
+      setItems(tplRes.data || []);
+      if (setRes?.data) setSettings(setRes.data);
     } catch (e) {
       notify.error(formatApiError(e?.response?.data?.detail) || "Failed to load templates");
     } finally {
@@ -244,8 +303,37 @@ export default function NotificationTemplatesPage() {
             <Notifications sx={{ fontSize: 20 }} />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-[15px] font-semibold text-gray-900">In-app Notifications</div>
-            <div className="text-[11px] text-gray-500">
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="text-[15px] font-semibold text-gray-900">In-app Notifications</div>
+              {/* Refresh rate display + edit trigger */}
+              <div
+                className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-white border border-[#ec9324]/30 text-[11px]"
+                data-testid="notif-refresh-rate-display"
+              >
+                <Timer sx={{ fontSize: 12 }} className="text-[#ec9324]" />
+                <span className="text-gray-500">Refresh every</span>
+                <span className="font-semibold text-gray-900">
+                  {formatPollInterval(settings?.poll_interval_ms)}
+                </span>
+                {isSuperAdmin && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => setSettingsEditOpen(true)}
+                        aria-label="Edit refresh rate"
+                        data-testid="notif-refresh-rate-edit-btn"
+                        className="ml-1 inline-flex items-center justify-center h-5 w-5 rounded-full text-[#ec9324] hover:bg-[#fff7ec] focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40"
+                      >
+                        <Edit sx={{ fontSize: 12 }} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Edit refresh rate</TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
+            </div>
+            <div className="text-[11px] text-gray-500 mt-0.5">
               {filtered.length} of {items.length} template{items.length === 1 ? "" : "s"}
             </div>
           </div>
@@ -468,6 +556,13 @@ export default function NotificationTemplatesPage() {
       <PreviewNotificationModal
         template={previewing}
         onClose={() => setPreviewing(null)}
+      />
+
+      <RefreshRateModal
+        open={settingsEditOpen}
+        settings={settings}
+        onClose={() => setSettingsEditOpen(false)}
+        onSaved={(fresh) => { setSettings(fresh); setSettingsEditOpen(false); }}
       />
       </TooltipProvider>
     </Layout>
@@ -770,6 +865,114 @@ function EditTemplateModal({ template, canEditContent, onClose, onSaved }) {
           >
             {saving ? <Loader2 sx={{ fontSize: 14 }} className="mr-1.5 animate-spin" /> : null}
             Save changes
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
+/**
+ * RefreshRateModal — small popup with two dropdowns (1..20 + unit) that
+ * lets a Super Admin adjust how often the notification bell auto-refreshes
+ * its unread count. Save persists to the backend singleton; Cancel discards.
+ */
+function RefreshRateModal({ open, settings, onClose, onSaved }) {
+  const [num, setNum] = useState("10");
+  const [unit, setUnit] = useState("min");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      const parts = msToParts(settings?.poll_interval_ms);
+      setNum(String(parts.num));
+      setUnit(parts.unit);
+    }
+  }, [open, settings?.poll_interval_ms]);
+
+  const save = async () => {
+    const ms = partsToMs(num, unit);
+    setSaving(true);
+    try {
+      const r = await api.put("/notifications/settings", { poll_interval_ms: ms });
+      notify.success(`Refresh rate set to ${formatPollInterval(r.data?.poll_interval_ms)}`);
+      onSaved(r.data);
+    } catch (e) {
+      notify.error(formatApiError(e?.response?.data?.detail) || "Failed to save refresh rate");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md p-0 gap-0 overflow-hidden" data-testid="notif-refresh-rate-modal">
+        <DialogHeader className="px-6 pt-5 pb-3 border-b border-gray-100 bg-gradient-to-r from-[#fff7ec] to-white">
+          <DialogTitle className="text-base font-semibold text-gray-900 flex items-center gap-2">
+            <Timer sx={{ fontSize: 16 }} className="text-[#ec9324]" />
+            Edit Refresh Rate
+          </DialogTitle>
+          <div className="text-[11px] text-gray-500 mt-1">
+            How often the notification bell auto-refreshes its unread count.
+          </div>
+        </DialogHeader>
+
+        <div className="px-6 py-5 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="rr-num">Value</Label>
+              <div className="mt-1.5">
+                <SingleSelect
+                  testId="notif-refresh-rate-num"
+                  options={NUM_OPTIONS}
+                  value={num}
+                  onChange={(v) => v && setNum(v)}
+                  allowClear={false}
+                  placeholder="Select value"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="rr-unit">Unit</Label>
+              <div className="mt-1.5">
+                <SingleSelect
+                  testId="notif-refresh-rate-unit"
+                  options={UNIT_OPTIONS}
+                  value={unit}
+                  onChange={(v) => v && setUnit(v)}
+                  allowClear={false}
+                  placeholder="Select unit"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="text-[12px] text-gray-600 bg-[#fff7ec]/60 border border-[#ec9324]/20 rounded-md px-3 py-2">
+            The bell will refresh every{" "}
+            <span className="font-semibold text-gray-900">
+              {num} {UNIT_OPTIONS.find((u) => u.value === unit)?.label.toLowerCase()}
+            </span>.
+          </div>
+        </div>
+
+        <div className="px-6 py-3 border-t border-gray-100 flex justify-end gap-2 bg-gray-50/50">
+          <Button
+            variant="outline"
+            onClick={onClose}
+            disabled={saving}
+            data-testid="notif-refresh-rate-cancel"
+          >
+            <Close sx={{ fontSize: 14 }} className="mr-1.5" /> Cancel
+          </Button>
+          <Button
+            onClick={save}
+            disabled={saving}
+            className="bg-[#ec9324] hover:bg-[#d4811f] text-white"
+            data-testid="notif-refresh-rate-save"
+          >
+            {saving ? <Loader2 sx={{ fontSize: 14 }} className="mr-1.5 animate-spin" /> : null}
+            Save
           </Button>
         </div>
       </DialogContent>

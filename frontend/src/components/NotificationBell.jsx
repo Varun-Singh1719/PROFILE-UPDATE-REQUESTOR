@@ -16,10 +16,12 @@ import {
 
 /**
  * Auto-refresh cadence for the bell (unread count + open list).
- * Requirement from the product spec: notifications are rendered / refreshed
- * every 10 minutes. Kept as an exported constant so tests can tweak it.
+ * Default is 10 minutes but the actual interval is fetched from
+ * `/api/notifications/settings` on mount and re-used until the page
+ * reloads. See `NotificationTemplatesPage → RefreshRateModal` for how
+ * Super Admin edits this value.
  */
-export const NOTIFICATION_POLL_MS = 10 * 60 * 1000; // 10 minutes
+export const NOTIFICATION_POLL_MS = 10 * 60 * 1000; // 10 minutes — fallback
 
 /**
  * Kind → { icon component, colour } used for the small circular icon on the
@@ -69,6 +71,7 @@ export default function NotificationBell() {
   const [items, setItems] = useState([]);
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [pollMs, setPollMs] = useState(NOTIFICATION_POLL_MS);
   const pollRef = useRef(null);
 
   const fetchUnreadCount = useCallback(async () => {
@@ -97,20 +100,38 @@ export default function NotificationBell() {
     [tab],
   );
 
-  // Initial poll + set up auto-refresh at 10-min cadence
+  // Initial poll + set up auto-refresh at the configured cadence
   useEffect(() => {
+    // Fetch the configured poll interval once on mount. Failures fall back
+    // to the exported default (10 min).
+    (async () => {
+      try {
+        const r = await api.get("/notifications/settings");
+        const ms = r?.data?.poll_interval_ms;
+        if (typeof ms === "number" && ms >= 1000) setPollMs(ms);
+      } catch {
+        /* keep default */
+      }
+    })();
     fetchUnreadCount();
-    pollRef.current = setInterval(fetchUnreadCount, NOTIFICATION_POLL_MS);
     // Also refresh whenever the tab becomes visible again (long-idle users)
     const onVisible = () => {
       if (document.visibilityState === "visible") fetchUnreadCount();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [fetchUnreadCount]);
+
+  // (Re-)schedule the poll timer whenever the interval changes
+  useEffect(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(fetchUnreadCount, pollMs);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [pollMs, fetchUnreadCount]);
 
   // When popover opens OR tab changes → refetch the list for that tab
   useEffect(() => {

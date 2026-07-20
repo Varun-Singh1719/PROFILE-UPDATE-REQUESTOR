@@ -137,3 +137,66 @@ async def update_notification_template(
         severity="info",
     )
     return out
+
+
+# ---------------------------------------------------------------------------
+# Notification-settings singleton (bell refresh cadence)
+# ---------------------------------------------------------------------------
+#
+# Stored as a singleton doc in `notification_settings`:
+#   { id: "singleton", poll_interval_ms: int, updated_at, updated_by }
+#
+# The frontend NotificationBell reads this on mount and re-schedules its
+# unread-count poll accordingly. Any authenticated user can read; only Super
+# Admin can write.
+
+_SETTINGS_SINGLETON = "singleton"
+_DEFAULT_POLL_MS = 10 * 60 * 1000       # 10 minutes
+_MIN_POLL_MS     = 1 * 1000             # 1 second
+_MAX_POLL_MS     = 24 * 60 * 60 * 1000  # 24 hours
+
+
+class NotificationSettingsUpdate(BaseModel):
+    poll_interval_ms: int = Field(..., ge=_MIN_POLL_MS, le=_MAX_POLL_MS)
+
+
+async def _get_notification_settings_doc() -> dict:
+    doc = await db.notification_settings.find_one({"id": _SETTINGS_SINGLETON}, {"_id": 0})
+    if not doc:
+        doc = {
+            "id": _SETTINGS_SINGLETON,
+            "poll_interval_ms": _DEFAULT_POLL_MS,
+            "updated_at": None,
+            "updated_by": None,
+        }
+    return doc
+
+
+@api_router.get("/notifications/settings")
+async def get_notification_settings(user=Depends(get_current_user)):
+    """Return the current bell-poll settings. Any authenticated user."""
+    return await _get_notification_settings_doc()
+
+
+@api_router.put("/notifications/settings")
+async def update_notification_settings(
+    body: NotificationSettingsUpdate,
+    user=Depends(require_role("Super Admin")),
+):
+    """Update the bell-poll cadence. Super Admin only."""
+    upd = {
+        "id": _SETTINGS_SINGLETON,
+        "poll_interval_ms": int(body.poll_interval_ms),
+        "updated_at": now_iso(),
+        "updated_by": user["id"],
+    }
+    await db.notification_settings.update_one(
+        {"id": _SETTINGS_SINGLETON}, {"$set": upd}, upsert=True,
+    )
+    await log_audit(
+        actor=user, action="notification_settings.update",
+        resource="notification_settings", resource_id=_SETTINGS_SINGLETON,
+        detail=f"Bell refresh interval set to {upd['poll_interval_ms']} ms",
+        severity="info",
+    )
+    return await _get_notification_settings_doc()
