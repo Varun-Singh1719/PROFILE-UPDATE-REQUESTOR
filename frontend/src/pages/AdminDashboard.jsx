@@ -27,6 +27,7 @@ import Plus from "@mui/icons-material/Add";
 import LayoutGrid from "@mui/icons-material/GridViewOutlined";
 import ClipboardList from "@mui/icons-material/AssignmentOutlined";
 import Star from "@mui/icons-material/StarBorder";
+import StarFilled from "@mui/icons-material/Star";
 import RefreshCw from "@mui/icons-material/Refresh";
 import Lock from "@mui/icons-material/LockOutlined";
 import { toast } from "../lib/notify";
@@ -110,7 +111,7 @@ export default function AdminDashboard() {
         return (
           <div
             key={t.key}
-            className={`inline-flex items-center rounded-md overflow-hidden ${
+            className={`relative inline-flex items-center rounded-md ${
               active ? "bg-[#ec9324] shadow-sm" : "hover:bg-gray-50"
             }`}
           >
@@ -145,7 +146,11 @@ export default function AdminDashboard() {
                       : "hover:bg-orange-50 cursor-pointer")
               }`}
             >
-              <Star sx={{ fontSize: 13 }} className={`transition-all ${ isDefault ? (active ? "text-white fill-current" : "text-[#ec9324] fill-current") : (active ? "text-white/70" : "text-gray-400 group-hover:text-[#ec9324]") }`}/>
+              {isDefault ? (
+                <StarFilled sx={{ fontSize: 14 }} className={`transition-all ${active ? "text-white" : "text-[#ec9324]"}`}/>
+              ) : (
+                <Star sx={{ fontSize: 14 }} className={`transition-all ${active ? "text-white/70 group-hover:text-white" : "text-gray-400 group-hover:text-[#ec9324]"}`}/>
+              )}
               {/* Tooltip */}
               <span
                 className="pointer-events-none absolute top-full mt-1 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded bg-gray-800 text-white text-[10px] font-semibold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20 shadow-md"
