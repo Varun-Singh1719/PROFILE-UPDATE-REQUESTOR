@@ -19,7 +19,7 @@ import io
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://request-popup-form.preview.emergentagent.com/api"
+BASE_URL = "https://alert-control-panel-1.preview.emergentagent.com/api"
 ADMIN_EMAIL = "admin@ticketing.com"
 ADMIN_PASSWORD = "Admin@123"
 

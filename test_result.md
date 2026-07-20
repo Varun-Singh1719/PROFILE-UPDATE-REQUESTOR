@@ -526,12 +526,40 @@ metadata:
 
 test_plan:
   current_focus:
-    - "MultiSelectFilter — portal-based popup (fix dropdown clipped inside filter bar)"
+    - "Manage → Notifications: Redesigned UI + inline On/Off radio toggle"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
+    - agent: "main"
+      message: |
+        Manage → Notifications (Jul 20 2026) — UI redesign + inline toggle:
+
+        Rewrote frontend/src/pages/NotificationTemplatesPage.jsx to fix the
+        "lame" UI and provide per-card On/Off radio buttons.
+
+        - Modern hero card (gradient bg, orange primary #ec9324) with live
+          Total / Active / Inactive stat badges.
+        - Debounced-style search over name/title/body/trigger/kind.
+        - Redesigned cards: left color-accent stripe, icon tile + soft tint,
+          type badge (Profix=blue, Assignment=purple, Approval=green,
+          Declined=red), Active/Inactive pill, preview area with CTA line.
+        - **NEW**: Inline On/Off RadioGroup toggle on every card. Optimistic
+          PATCH /notification-templates/{id} status update with rollback +
+          toast feedback ("Notification turned On/Off").
+        - Uses shadcn RadioGroup + RadioGroupItem (kept existing colours).
+        - Edit modal preserved (same PATCH endpoint), now styled with the
+          orange gradient header. Modal's Active/Inactive selector reused
+          the same On/Off toggle for consistency.
+        - Env: created backend/.env (user-supplied Atlas cluster
+          cluster0.vmgql1i, db=app_db) + frontend/.env.
+
+        Manually screenshot-verified: login → /admin/notification-templates,
+        clicked Off on Request Closed → status flipped to Inactive, banner
+        stats updated (3 Active / 1 Inactive), toast shown, clicked On →
+        restored. No backend changes; PATCH surface unchanged.
+
     - agent: "main"
       message: |
         UI polish per user request (Jul 17 2026):
@@ -1690,7 +1718,7 @@ frontend:
             - "View Booking" button navigates to /workspace-manager/bookings but without ?bookingId= parameter in URL (navigation works but query param missing). This is a minor issue that doesn't affect the core bug fix verification.
             
             **CONSOLE ERRORS:**
-            - 401 errors detected for PDF loading (https://request-popup-form.preview.emergentagent.com/api/floor-plans/pdf/...) - this is a backend PDF authentication issue, not related to the bug fixes
+            - 401 errors detected for PDF loading (https://alert-control-panel-1.preview.emergentagent.com/api/floor-plans/pdf/...) - this is a backend PDF authentication issue, not related to the bug fixes
             - No critical JavaScript errors detected
             
             Test date used: 2026-07-03 (date with existing workstation bookings)
