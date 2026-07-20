@@ -373,9 +373,11 @@ export default function Sidebar() {
 // Header (brand + collapse toggle + search button)
 // --------------------------------------------------------------------------
 function SidebarHeader({ collapsed, user, onToggle, mobile, onSearch }) {
+  const toggleLabel = mobile ? "Close" : (collapsed ? "Expand sidebar" : "Collapse sidebar");
+  const ToggleIcon = mobile ? X : (collapsed ? PanelLeftOpen : PanelLeftClose);
   return (
     <div className={`border-b border-gray-100 ${collapsed ? "px-2 py-3" : "px-3 py-3"}`}>
-      <div className={`relative flex items-center ${collapsed ? "justify-center" : "justify-center"}`}>
+      <div className="relative flex items-center justify-center">
         {!collapsed && (
           <img
             src="https://customer-assets.emergentagent.com/job_support-core-4/artifacts/w6k7hdz0_Infollion%20Logo.svg"
@@ -383,17 +385,19 @@ function SidebarHeader({ collapsed, user, onToggle, mobile, onSearch }) {
             className="h-10 w-auto"
           />
         )}
-        <Tip label={mobile ? "Close" : (collapsed ? "Expand sidebar" : "Collapse sidebar")} show={true}>
-          <button
-            onClick={onToggle}
-            data-testid="sidebar-toggle"
-            title={mobile ? "Close" : (collapsed ? "Expand sidebar" : "Collapse sidebar")}
-            className={`p-1.5 rounded hover:bg-gray-100 text-gray-500 ${collapsed ? "" : "absolute right-0 top-1/2 -translate-y-1/2"}`}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {mobile ? <X sx={{ fontSize: 16 }}/> : (collapsed ? <PanelLeftOpen sx={{ fontSize: 16 }}/> : <PanelLeftClose sx={{ fontSize: 16 }}/>)}
-          </button>
-        </Tip>
+        <div className={collapsed ? "" : "absolute right-0 top-1/2 -translate-y-1/2"}>
+          <Tip label={toggleLabel} show={true}>
+            <button
+              onClick={onToggle}
+              data-testid="sidebar-toggle"
+              title={toggleLabel}
+              className="p-1.5 rounded hover:bg-gray-100 text-gray-500 inline-flex items-center justify-center"
+              aria-label={toggleLabel}
+            >
+              <ToggleIcon sx={{ fontSize: 18 }}/>
+            </button>
+          </Tip>
+        </div>
       </div>
       <Tip label="Search menu (⌘K)" show={collapsed}>
         <button

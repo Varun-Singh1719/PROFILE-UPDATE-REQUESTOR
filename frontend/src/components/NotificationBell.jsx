@@ -310,10 +310,13 @@ export default function NotificationBell() {
           data-testid="notif-bell-trigger"
           aria-label={`Notifications${unread ? ` (${unread} unread)` : ""}`}
           title={unread ? `Notifications (${unread} unread)` : "Notifications"}
-          className="relative inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-100 text-gray-600"
+          className="group relative inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-100 text-gray-600"
         >
           <NotificationsIcon sx={{ fontSize: 22 }} />
           {badge}
+          <span className="pointer-events-none absolute top-full mt-1.5 right-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+            {unread ? `Notifications (${unread} unread)` : "Notifications"}
+          </span>
         </button>
       </PopoverTrigger>
       <PopoverContent
