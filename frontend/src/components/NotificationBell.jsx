@@ -13,6 +13,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "./ui/popover";
+import { numericId } from "../lib/ticketId";
 
 /**
  * Auto-refresh cadence for the bell (unread count + open list).
@@ -93,7 +94,9 @@ function formatNotification(n) {
   if (kind === "request_closed") {
     const idMatch  = body.match(/request\s+([A-Za-z0-9-]+)/i) || (n.title || "").match(/Request\s+([A-Za-z0-9-]+)/i);
     const byMatch  = body.match(/closed\s+by\s+([^.]+?)\.?\s*$/i);
-    const ticketId = idMatch ? idMatch[1] : null;
+    // Only render the numeric portion — matches the "All Requests" table.
+    const ticketIdRaw = idMatch ? idMatch[1] : null;
+    const ticketId    = ticketIdRaw ? numericId(ticketIdRaw) : null;
     const closedBy = byMatch ? byMatch[1].trim() : null;
     return {
       title: `Request ${ticketId || "—"} : Closed`,

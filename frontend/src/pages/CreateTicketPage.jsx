@@ -8,6 +8,7 @@ import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import SingleSelect from "../components/SingleSelect";
 import notify from "../lib/notify";
+import { numericId } from "../lib/ticketId";
 import Upload from "@mui/icons-material/FileUploadOutlined";
 import Loader2 from "@mui/icons-material/Autorenew";
 import X from "@mui/icons-material/Close";
@@ -80,7 +81,7 @@ export default function CreateTicketPage() {
         attachment_name: first.filename || null,
         attachments,
       });
-      notify.success(`Request ${r.data.ticket_id} created`);
+      notify.success(`Request ${numericId(r.data.ticket_id)} created`);
       // v3 role model — everyone lands on the unified admin shell.
       navigate("/admin/open-tickets");
     } catch (e) {

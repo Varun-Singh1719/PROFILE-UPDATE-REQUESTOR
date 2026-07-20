@@ -11,6 +11,7 @@ import {
 import notify from "../lib/notify";
 import { useAuth } from "../context/AuthContext";
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
+import { numericId } from "../lib/ticketId";
 import ArrowLeft from "@mui/icons-material/ArrowBack";
 import Paperclip from "@mui/icons-material/AttachFile";
 import Calendar from "@mui/icons-material/CalendarTodayOutlined";
@@ -69,7 +70,7 @@ export default function TicketDetailPage() {
 
   return (
     <Layout
-      title={`Request ${ticket.ticket_id ? String(ticket.ticket_id).match(/\d+/)?.[0] || ticket.ticket_id : ""}`}
+      title={`Request ${numericId(ticket.ticket_id)}`}
       actions={
         <div className="flex gap-2">
           {canUpdateStatus && permChangeStatus.isVisible && (
@@ -112,7 +113,7 @@ export default function TicketDetailPage() {
 
       <div className="bg-white rounded-xl shadow-soft border border-gray-100 p-6">
         <div className="flex gap-2 mb-2" data-testid="ticket-id">
-          <span className="text-xs font-mono text-[#ec9324] font-semibold">{ticket.ticket_id}</span>
+          <span className="text-xs font-mono text-[#ec9324] font-semibold">{numericId(ticket.ticket_id)}</span>
         </div>
         <div className="flex gap-2"><StatusBadge status={ticket.status}/><PriorityBadge priority={ticket.priority}/></div>
 

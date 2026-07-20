@@ -7,6 +7,7 @@ import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import SingleSelect from "./SingleSelect";
 import notify from "../lib/notify";
+import { numericId } from "../lib/ticketId";
 import Upload from "@mui/icons-material/FileUploadOutlined";
 import Loader2 from "@mui/icons-material/Autorenew";
 import X from "@mui/icons-material/Close";
@@ -105,7 +106,7 @@ export default function CreateTicketModal({ open, onOpenChange, onCreated }) {
         attachment_name: first.filename || null,
         attachments,
       });
-      notify.success(`Request ${r.data.ticket_id} created`);
+      notify.success(`Request ${numericId(r.data.ticket_id)} created`);
       onOpenChange?.(false);
       onCreated?.(r.data);
     } catch (err) {

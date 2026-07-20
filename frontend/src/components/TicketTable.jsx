@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { StatusBadge, PriorityBadge } from "./Badges";
 import { Checkbox } from "./ui/checkbox";
 import { Button } from "./ui/button";
+import { numericId } from "../lib/ticketId";
 import MoreVertical from "@mui/icons-material/MoreVert";
 import Eye from "@mui/icons-material/Visibility";
 import {
@@ -11,16 +12,6 @@ import {
 } from "./ui/dropdown-menu";
 
 function fmt(iso) { if (!iso) return "-"; try { return new Date(iso).toLocaleDateString(); } catch { return iso; } }
-
-/**
- * Extract the numeric portion of a ticket ID.
- * "TKT-1102" → "1102"  |  "1102" → "1102"
- */
-function numericId(tid) {
-  if (!tid) return "";
-  const m = String(tid).match(/\d+/);
-  return m ? m[0] : tid;
-}
 
 /**
  * TicketTable (Jul 2026 refresh)

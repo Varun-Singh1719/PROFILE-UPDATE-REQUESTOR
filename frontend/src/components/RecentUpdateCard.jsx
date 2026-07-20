@@ -1,6 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { StatusBadge, PriorityBadge } from "./Badges";
+import { numericId } from "../lib/ticketId";
 
 function fmtDate(iso) {
   if (!iso) return "-";
@@ -17,12 +18,6 @@ function fmtDate(iso) {
   } catch {
     return iso;
   }
-}
-
-function numericId(ticketId) {
-  if (!ticketId) return "";
-  const m = String(ticketId).match(/\d+/);
-  return m ? m[0] : ticketId;
 }
 
 function truncate(text, n = 120) {
