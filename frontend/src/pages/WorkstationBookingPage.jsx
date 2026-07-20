@@ -43,6 +43,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Armchair from "@mui/icons-material/Chair";
+import EventNote from "@mui/icons-material/EventNoteOutlined";
+import MyRequestsTab from "./workstation/MyRequestsTab";
 import CalendarIcon from "@mui/icons-material/CalendarTodayOutlined";
 import Loader2 from "@mui/icons-material/Autorenew";
 import Users from "@mui/icons-material/PeopleOutlined";
@@ -137,6 +139,9 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const canEdit = user?.role === "Super Admin";
+  // Right-panel tab: `form` (default) or `my-bookings`. Only rendered when
+  // the page is in "request" mode (i.e. Request Workstation page).
+  const [panelTab, setPanelTab] = useState("form");
 
   // --------- Plan + availability ---------
   const [livePlans, setLivePlans] = useState([]);          // [{id, name, pdfUrl, seat_count}]
@@ -790,7 +795,41 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                 </div>
               )}
 
-              {noSeats ? (
+              {/* Panel tabs — only shown in Request Workstation mode. Lets the
+                  requester flip between the submission form and a view of the
+                  requests they've already raised. */}
+              {isRequestMode && (
+                <div
+                  className="flex border-b border-gray-200 bg-white sticky top-0 z-10"
+                  data-testid="ws-panel-tabs"
+                >
+                  {[
+                    { key: "form",         label: "Booking Form", Icon: Armchair },
+                    { key: "my-bookings",  label: "My Bookings",  Icon: EventNote },
+                  ].map((t) => {
+                    const active = panelTab === t.key;
+                    return (
+                      <button
+                        key={t.key}
+                        type="button"
+                        onClick={() => setPanelTab(t.key)}
+                        data-testid={`ws-panel-tab-${t.key}`}
+                        className={`flex-1 py-2.5 text-[12px] font-semibold flex items-center justify-center gap-1.5 transition-colors border-b-2 ${
+                          active
+                            ? "text-[#ec9324] border-[#ec9324] bg-[#fff7ed]/40"
+                            : "text-gray-500 hover:text-gray-800 border-transparent"
+                        }`}
+                      >
+                        <t.Icon sx={{ fontSize: 14 }} /> {t.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {isRequestMode && panelTab === "my-bookings" ? (
+                <MyRequestsTab />
+              ) : noSeats ? (
                 <NoSeatsEmptyState planId={selectedPlanId} navigate={navigate} />
               ) : (
                 <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
