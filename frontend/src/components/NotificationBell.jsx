@@ -59,6 +59,104 @@ function relativeTime(iso) {
 }
 
 /**
+ * Nicely format an ISO date-string (or a raw YYYY-MM-DD) as e.g.
+ * "20 Jul 2026". Returns the original string when parsing fails so we never
+ * hide the value from the user.
+ */
+function formatDate(s) {
+  if (!s) return "";
+  const t = Date.parse(s);
+  if (Number.isNaN(t)) return String(s);
+  return new Date(t).toLocaleDateString(undefined, {
+    day: "2-digit", month: "short", year: "numeric",
+  });
+}
+
+/**
+ * Parse a notification into the structured "Key : Value" format the user
+ * asked for. Regex-based extraction from the existing prose bodies (kept
+ * backward-compatible with legacy rows). Falls back to `{title, body}` when
+ * no parser matches so a new kind never looks blank.
+ *
+ * Output: { title, rows: [{ label, value }], done }
+ *   `done` = true when we managed to structure the row; used only for
+ *   debugging / analytics if ever needed.
+ */
+function formatNotification(n) {
+  const kind = n.kind;
+  const body = n.body || "";
+  const dateStr = formatDate(n.created_at);
+
+  // request_closed
+  //   title: "Request TCK-00512 closed"
+  //   body : "Your request TCK-00512 was closed by <name>."
+  if (kind === "request_closed") {
+    const idMatch  = body.match(/request\s+([A-Za-z0-9-]+)/i) || (n.title || "").match(/Request\s+([A-Za-z0-9-]+)/i);
+    const byMatch  = body.match(/closed\s+by\s+([^.]+?)\.?\s*$/i);
+    const ticketId = idMatch ? idMatch[1] : null;
+    const closedBy = byMatch ? byMatch[1].trim() : null;
+    return {
+      title: `Request ${ticketId || "—"} : Closed`,
+      rows: [
+        { label: "Ticket ID", value: ticketId || "—" },
+        { label: "Status",    value: "Closed" },
+        { label: "Closed By", value: closedBy || "—" },
+        { label: "Date",      value: dateStr },
+      ],
+      done: !!(ticketId || closedBy),
+    };
+  }
+
+  // workstation_assigned
+  //   title: "You've been assigned a workstation"
+  //   body : "You have been assigned <seat> on <date> by <name>."
+  if (kind === "workstation_assigned") {
+    const m = body.match(/assigned\s+([A-Za-z0-9-]+)\s+on\s+([\d-]+)\s+by\s+([^.]+?)\.?\s*$/i);
+    const seat   = m ? m[1] : null;
+    const on     = m ? m[2] : null;
+    const byName = m ? m[3].trim() : null;
+    return {
+      title: `${seat || "Workstation"} : Assigned`,
+      rows: [
+        { label: "Seat",        value: seat  || "—" },
+        { label: "Date",        value: formatDate(on) || dateStr },
+        { label: "Assigned By", value: byName || "—" },
+      ],
+      done: !!m,
+    };
+  }
+
+  // workstation_request_approved / declined
+  //   title: "Workstation request approved" | "Workstation request declined"
+  //   body : "Your workstation request for <seat> on <date> was approved|declined by <name>."
+  if (kind === "workstation_request_approved" || kind === "workstation_request_declined") {
+    const verb = kind === "workstation_request_approved" ? "Approved" : "Declined";
+    const decidedLabel = kind === "workstation_request_approved" ? "Approved By" : "Declined By";
+    const m = body.match(/for\s+([A-Za-z0-9-]+)\s+on\s+([\d-]+)\s+was\s+(?:approved|declined)\s+by\s+([^.]+?)\.?\s*$/i);
+    const seat   = m ? m[1] : null;
+    const on     = m ? m[2] : null;
+    const byName = m ? m[3].trim() : null;
+    return {
+      title: `${seat || "Request"} : ${verb}`,
+      rows: [
+        { label: "Seat",        value: seat  || "—" },
+        { label: "Date",        value: formatDate(on) || dateStr },
+        { label: decidedLabel,  value: byName || "—" },
+      ],
+      done: !!m,
+    };
+  }
+
+  // Fallback for unknown kinds — keep title/body prose so we never render
+  // a blank row when the schema evolves ahead of the bell.
+  return {
+    title: n.title || "Notification",
+    rows: body ? [{ label: null, value: body }] : [],
+    done: false,
+  };
+}
+
+/**
  * <NotificationBell/> — bell icon + badge that renders in the top-bar next
  * to the user avatar. Opens a 3-tab (Unread / Read / All) popover listing
  * the current user's notifications. Auto-refreshes every 10 minutes and
@@ -278,6 +376,7 @@ export default function NotificationBell() {
             };
             const { Icon } = meta;
             const clickable = !!n.action_url;
+            const view = formatNotification(n);
             return (
               <div
                 key={n.id}
@@ -302,15 +401,29 @@ export default function NotificationBell() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start gap-2">
                     <div className="text-[13px] font-semibold text-gray-900 truncate">
-                      {n.title || "(untitled)"}
+                      {view.title}
                     </div>
                     {!n.read && (
                       <span className="mt-1 w-2 h-2 rounded-full bg-[#ec9324] shrink-0" />
                     )}
                   </div>
-                  {n.body && (
-                    <div className="text-[12px] text-gray-600 leading-snug mt-0.5 line-clamp-2">
-                      {n.body}
+                  {view.rows.length > 0 && (
+                    <div className="mt-0.5 space-y-0.5">
+                      {view.rows.map((r, i) =>
+                        r.label ? (
+                          <div key={i} className="text-[12px] text-gray-700 leading-snug">
+                            <span className="text-gray-500">{r.label}&nbsp;:</span>&nbsp;
+                            <span className="font-medium">{r.value}</span>
+                          </div>
+                        ) : (
+                          <div
+                            key={i}
+                            className="text-[12px] text-gray-600 leading-snug line-clamp-2"
+                          >
+                            {r.value}
+                          </div>
+                        ),
+                      )}
                     </div>
                   )}
                   <div className="text-[10px] text-gray-400 mt-1">
