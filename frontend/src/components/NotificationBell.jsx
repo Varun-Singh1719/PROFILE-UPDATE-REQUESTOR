@@ -76,7 +76,10 @@ export default function NotificationBell() {
 
   const fetchUnreadCount = useCallback(async () => {
     try {
-      const r = await api.get("/notifications/inapp/unread-count");
+      // silent:true → do NOT trigger the global BusyOverlay. This is a
+      // background poll scoped to the bell — the underlying page must stay
+      // untouched (no flicker, no loading spinner over the content).
+      const r = await api.get("/notifications/inapp/unread-count", { silent: true });
       setUnread(r.data?.count || 0);
     } catch {
       // Fail silently — the bell shouldn't crash the top-bar
@@ -87,8 +90,11 @@ export default function NotificationBell() {
     async (which = tab) => {
       setLoading(true);
       try {
+        // silent:true → same reason as above. Tab clicks (Read/Unread/All)
+        // must NEVER visually affect the underlying page.
         const r = await api.get("/notifications/inapp", {
           params: { status: which, limit: 50 },
+          silent: true,
         });
         setItems(r.data || []);
       } catch {
@@ -106,7 +112,8 @@ export default function NotificationBell() {
     // to the exported default (10 min).
     (async () => {
       try {
-        const r = await api.get("/notifications/settings");
+        // silent:true → don't flash the page overlay just to read a config.
+        const r = await api.get("/notifications/settings", { silent: true });
         const ms = r?.data?.poll_interval_ms;
         if (typeof ms === "number" && ms >= 1000) setPollMs(ms);
       } catch {
@@ -145,7 +152,9 @@ export default function NotificationBell() {
       setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
       setUnread((c) => Math.max(0, c - 1));
       try {
-        await api.post(`/notifications/inapp/${n.id}/read`);
+        // silent:true → do NOT trigger the full-page MutationBlocker.
+        // Marking-as-read is an implicit side-effect scoped to the bell.
+        await api.post(`/notifications/inapp/${n.id}/read`, null, { silent: true });
       } catch {
         // Roll back on failure
         setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: false } : x)));
@@ -160,7 +169,8 @@ export default function NotificationBell() {
     setUnread(0);
     setItems((prev) => prev.map((x) => ({ ...x, read: true })));
     try {
-      await api.post("/notifications/inapp/read-all");
+      // silent:true → same reason as markAsRead.
+      await api.post("/notifications/inapp/read-all", null, { silent: true });
       // Reload the current tab so the Unread list empties out
       fetchList(tab);
     } catch {
