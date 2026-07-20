@@ -11,6 +11,13 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../com
 import DeferredSearchInput from "../components/DeferredSearchInput";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import SingleSelect from "../components/SingleSelect";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
 import notify from "../lib/notify";
 import Edit from "@mui/icons-material/EditOutlined";
 import Loader2 from "@mui/icons-material/Autorenew";
@@ -913,9 +920,6 @@ function RefreshRateModal({ open, settings, onClose, onSaved }) {
             <Timer sx={{ fontSize: 16 }} className="text-[#ec9324]" />
             Edit Refresh Rate
           </DialogTitle>
-          <div className="text-[11px] text-gray-500 mt-1">
-            How often the notification bell auto-refreshes its unread count.
-          </div>
         </DialogHeader>
 
         <div className="px-6 py-5 space-y-4">
@@ -923,27 +927,51 @@ function RefreshRateModal({ open, settings, onClose, onSaved }) {
             <div>
               <Label htmlFor="rr-num">Value</Label>
               <div className="mt-1.5">
-                <SingleSelect
-                  testId="notif-refresh-rate-num"
-                  options={NUM_OPTIONS}
-                  value={num}
-                  onChange={(v) => v && setNum(v)}
-                  allowClear={false}
-                  placeholder="Select value"
-                />
+                <Select value={num} onValueChange={(v) => v && setNum(v)}>
+                  <SelectTrigger
+                    id="rr-num"
+                    data-testid="notif-refresh-rate-num"
+                    className="h-9 border-gray-300 hover:border-gray-400 focus:border-[#ec9324] focus:ring-2 focus:ring-[#ec9324]/40"
+                  >
+                    <SelectValue placeholder="Select value" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {NUM_OPTIONS.map((o) => (
+                      <SelectItem
+                        key={o.value}
+                        value={o.value}
+                        data-testid={`notif-refresh-rate-num-option-${o.value}`}
+                      >
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div>
               <Label htmlFor="rr-unit">Unit</Label>
               <div className="mt-1.5">
-                <SingleSelect
-                  testId="notif-refresh-rate-unit"
-                  options={UNIT_OPTIONS}
-                  value={unit}
-                  onChange={(v) => v && setUnit(v)}
-                  allowClear={false}
-                  placeholder="Select unit"
-                />
+                <Select value={unit} onValueChange={(v) => v && setUnit(v)}>
+                  <SelectTrigger
+                    id="rr-unit"
+                    data-testid="notif-refresh-rate-unit"
+                    className="h-9 border-gray-300 hover:border-gray-400 focus:border-[#ec9324] focus:ring-2 focus:ring-[#ec9324]/40"
+                  >
+                    <SelectValue placeholder="Select unit" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {UNIT_OPTIONS.map((o) => (
+                      <SelectItem
+                        key={o.value}
+                        value={o.value}
+                        data-testid={`notif-refresh-rate-unit-option-${o.value}`}
+                      >
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
@@ -963,7 +991,7 @@ function RefreshRateModal({ open, settings, onClose, onSaved }) {
             disabled={saving}
             data-testid="notif-refresh-rate-cancel"
           >
-            <Close sx={{ fontSize: 14 }} className="mr-1.5" /> Cancel
+            Cancel
           </Button>
           <Button
             onClick={save}

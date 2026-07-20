@@ -526,12 +526,37 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Manage → Notifications: Redesigned UI + inline On/Off radio toggle"
+    - "Manage → Notifications: Refresh Rate editor — dropdown clipping fix + subtitle/X removal"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
+    - agent: "main"
+      message: |
+        Refresh-Rate editor bug fix (Jul 20 2026):
+
+        Reported: Value dropdown was being clipped inside the modal — only 4
+        items visible. User also asked to remove the modal subtitle and the
+        X icon from the Cancel button.
+
+        Fixes in `frontend/src/pages/NotificationTemplatesPage.jsx`:
+        - Switched both dropdowns from the internally-positioned `SingleSelect`
+          to Radix `<Select>` (portalled — floats over the modal so it never
+          clips). Options 1-20 for Value; Seconds/Minutes/Hours for Unit.
+        - Removed the "How often the notification bell auto-refreshes its
+          unread count." subtitle from the modal header.
+        - Removed the leading `<Close/>` icon from the Cancel button; now
+          just the word "Cancel".
+        - Backend endpoints unchanged: GET/PUT /api/notifications/settings.
+
+        Screenshot-verified: dropdown now shows 4,5,6,7,8,9,10 (✓) with
+        up/down scroll indicators to reach 1-20; modal header is compact;
+        Cancel button has no icon.
+
+        Backend: PLEASE re-verify GET/PUT /api/notifications/settings still
+        works (Super Admin only for PUT; range 1s..24h; default=600000 ms).
+
     - agent: "main"
       message: |
         Manage → Notifications (Jul 20 2026) — UI redesign + inline toggle:
