@@ -1,5 +1,13 @@
 # Infollion Utilities — PRD
 
+
+## Latest UI polish (Jul 2026) — Sidebar
+- Removed "Infollion" wordmark and "Super Admin" role subtitle from sidebar header. Only the Infollion logo is now shown, centered, at a larger size (h-10) for a cleaner look.
+- Unified label typography across all sidebar entries (top-level links + group headers + children) at `text-sm`.
+- Added `whitespace-nowrap` + `truncate` and reduced icon gap/padding so multi-word items like **Workspace Manager** always render on a single line.
+- Toggle button anchored on the right of the header (absolute-positioned) so the logo stays centred.
+- Env: recreated `/app/backend/.env` (Mongo Atlas `cluster0.vmgql1i.mongodb.net`, `DB_NAME=app_db`) and `/app/frontend/.env` (`REACT_APP_BACKEND_URL`) which were empty on this fresh container. Regenerated `JWT_SECRET` + `FERNET_KEY`. Login verified for `admin@ticketing.com / Admin@123`.
+
 ## Overview
 Internal admin platform for Infollion. Combines:
 - **ProfiX** — Ticketing / requests workflow.

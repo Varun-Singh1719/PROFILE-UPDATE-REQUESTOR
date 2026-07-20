@@ -155,12 +155,12 @@ function NavGroup({ item, collapsed, currentPath, can, isSuperAdmin, isPageViewV
         onClick={() => setOpen(v => !v)}
         data-testid={`sidebar-group-${groupKey}`}
         aria-expanded={open}
-        className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+        className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
           isChildActive ? "bg-[#ec9324]/10 text-[#ec9324] font-semibold" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium"
         }`}
       >
-        <span className="flex items-center gap-3"><GroupIcon size={18}/>{item.label}</span>
-        {open ? <ChevronDown sx={{ fontSize: 14 }}/> : <ChevronRight sx={{ fontSize: 14 }}/>}
+        <span className="flex items-center gap-2.5 min-w-0"><GroupIcon sx={{ fontSize: 18 }} className="flex-shrink-0"/><span className="truncate whitespace-nowrap">{item.label}</span></span>
+        {open ? <ChevronDown sx={{ fontSize: 14 }} className="flex-shrink-0"/> : <ChevronRight sx={{ fontSize: 14 }} className="flex-shrink-0"/>}
       </button>
       {open && (
         <div className="mt-1 ml-3 pl-3 border-l border-gray-200 space-y-1">
@@ -171,12 +171,12 @@ function NavGroup({ item, collapsed, currentPath, can, isSuperAdmin, isPageViewV
               onClick={onNavigate}
               data-testid={`sidebar-link-${label.toLowerCase().replace(/\s+/g, "-")}`}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                `flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
                   isActive ? "bg-[#ec9324]/10 text-[#ec9324] font-semibold border-r-4 border-[#ec9324]" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium"
                 }`
               }
             >
-              <Icon size={15}/>{label}
+              <Icon sx={{ fontSize: 15 }} className="flex-shrink-0"/><span className="truncate whitespace-nowrap">{label}</span>
             </NavLink>
           ))}
         </div>
@@ -374,22 +374,20 @@ export default function Sidebar() {
 // --------------------------------------------------------------------------
 function SidebarHeader({ collapsed, user, onToggle, mobile, onSearch }) {
   return (
-    <div className={`border-b border-gray-100 ${collapsed ? "px-2 py-3" : "px-4 py-4"}`}>
-      <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between"} gap-2`}>
+    <div className={`border-b border-gray-100 ${collapsed ? "px-2 py-3" : "px-3 py-3"}`}>
+      <div className={`relative flex items-center ${collapsed ? "justify-center" : "justify-center"}`}>
         {!collapsed && (
-          <div className="flex items-center gap-2 min-w-0">
-            <img src="https://customer-assets.emergentagent.com/job_support-core-4/artifacts/w6k7hdz0_Infollion%20Logo.svg" alt="Infollion" className="h-7 w-auto flex-shrink-0"/>
-            <div className="min-w-0">
-              <div className="font-bold text-gray-900 text-base leading-tight truncate">Infollion</div>
-              <div className="text-[10px] text-gray-500 truncate">{user?.role}</div>
-            </div>
-          </div>
+          <img
+            src="https://customer-assets.emergentagent.com/job_support-core-4/artifacts/w6k7hdz0_Infollion%20Logo.svg"
+            alt="Infollion"
+            className="h-10 w-auto"
+          />
         )}
         <Tip label={mobile ? "Close" : (collapsed ? "Expand sidebar" : "Collapse sidebar")} show={collapsed}>
           <button
             onClick={onToggle}
             data-testid="sidebar-toggle"
-            className="p-1.5 rounded hover:bg-gray-100 text-gray-500"
+            className={`p-1.5 rounded hover:bg-gray-100 text-gray-500 ${collapsed ? "" : "absolute right-0 top-1/2 -translate-y-1/2"}`}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {mobile ? <X sx={{ fontSize: 16 }}/> : (collapsed ? <PanelLeftOpen sx={{ fontSize: 16 }}/> : <PanelLeftClose sx={{ fontSize: 16 }}/>)}
@@ -444,9 +442,9 @@ function SidebarNav({ collapsed, currentPath, can, isSuperAdmin, isPageViewVisib
             <NavLink
               key={to} to={to} end={end} onClick={onNavigate} data-testid={testid}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${isActive ? "bg-[#ec9324]/10 text-[#ec9324] font-semibold border-r-4 border-[#ec9324]" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium"}`
+                `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${isActive ? "bg-[#ec9324]/10 text-[#ec9324] font-semibold border-r-4 border-[#ec9324]" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium"}`
               }
-            ><Icon size={17}/>{label}</NavLink>
+            ><Icon sx={{ fontSize: 18 }} className="flex-shrink-0"/><span className="truncate whitespace-nowrap">{label}</span></NavLink>
           );
         }
         return (
