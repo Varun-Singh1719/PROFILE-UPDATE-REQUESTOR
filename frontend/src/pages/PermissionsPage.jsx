@@ -184,29 +184,29 @@ function PageDetail({ page, state, onView, onEdit, onFunction, onEnableAll, onHi
         })}
       </div>
 
-      {/* Functions */}
-      <div className="mt-5">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="text-[11px] uppercase tracking-widest text-gray-500 font-bold">Functions / Action buttons on this page</div>
-          <div className="ml-auto text-[10px] text-gray-500">{enabledCount}/{fnCount} enabled</div>
-        </div>
-        {fnCount === 0 ? (
-          <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-xs text-gray-400">
-            No configurable functions on this page.
-          </div>
-        ) : (
+      {/* Functions & Filters */}
+      {(() => {
+        const allFns = page.functions || [];
+        const filters = allFns.filter((f) => f.category === "filter");
+        const actions = allFns.filter((f) => f.category !== "filter");
+        const enabledActions = actions.filter((f) => state.functions?.[f.key]?.enabled).length;
+        const enabledFilters = filters.filter((f) => state.functions?.[f.key]?.enabled).length;
+
+        const renderTable = (items, testidPrefix) => (
           <div className="rounded-lg border border-gray-200 overflow-hidden">
-            <table className="w-full text-sm" data-testid="page-functions-table">
+            <table className="w-full text-sm" data-testid={`page-${testidPrefix}-table`}>
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-700 w-[40%]">Function</th>
+                  <th className="text-left px-3 py-2 font-semibold text-gray-700 w-[40%]">
+                    {testidPrefix === "filters" ? "Filter" : "Function"}
+                  </th>
                   <th className="text-left px-3 py-2 font-semibold text-gray-700">Enable</th>
                   <th className="text-left px-3 py-2 font-semibold text-gray-700">Visibility</th>
                   <th className="text-left px-3 py-2 font-semibold text-gray-700">Scope</th>
                 </tr>
               </thead>
               <tbody>
-                {(page.functions || []).map((f, i) => {
+                {items.map((f, i) => {
                   const v = state.functions?.[f.key] || emptyRW();
                   return (
                     <tr key={f.key} className={i % 2 ? "bg-white" : "bg-gray-50/40"} data-testid={`fn-row-${f.key}`}>
@@ -242,8 +242,36 @@ function PageDetail({ page, state, onView, onEdit, onFunction, onEnableAll, onHi
               </tbody>
             </table>
           </div>
-        )}
-      </div>
+        );
+
+        return (
+          <>
+            {/* Actions section */}
+            <div className="mt-5">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="text-[11px] uppercase tracking-widest text-gray-500 font-bold">Functions / Action buttons on this page</div>
+                <div className="ml-auto text-[10px] text-gray-500">{enabledActions}/{actions.length} enabled</div>
+              </div>
+              {actions.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-xs text-gray-400">
+                  No configurable actions on this page.
+                </div>
+              ) : renderTable(actions, "actions")}
+            </div>
+
+            {/* Filters section */}
+            {filters.length > 0 && (
+              <div className="mt-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="text-[11px] uppercase tracking-widest text-gray-500 font-bold">Filters / Search on this page</div>
+                  <div className="ml-auto text-[10px] text-gray-500">{enabledFilters}/{filters.length} enabled</div>
+                </div>
+                {renderTable(filters, "filters")}
+              </div>
+            )}
+          </>
+        );
+      })()}
     </div>
   );
 }
