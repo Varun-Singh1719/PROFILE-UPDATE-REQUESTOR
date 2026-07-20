@@ -309,6 +309,7 @@ export default function NotificationBell() {
           type="button"
           data-testid="notif-bell-trigger"
           aria-label={`Notifications${unread ? ` (${unread} unread)` : ""}`}
+          title={unread ? `Notifications (${unread} unread)` : "Notifications"}
           className="relative inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-100 text-gray-600"
         >
           <NotificationsIcon sx={{ fontSize: 22 }} />

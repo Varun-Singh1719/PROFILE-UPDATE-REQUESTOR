@@ -383,10 +383,11 @@ function SidebarHeader({ collapsed, user, onToggle, mobile, onSearch }) {
             className="h-10 w-auto"
           />
         )}
-        <Tip label={mobile ? "Close" : (collapsed ? "Expand sidebar" : "Collapse sidebar")} show={collapsed}>
+        <Tip label={mobile ? "Close" : (collapsed ? "Expand sidebar" : "Collapse sidebar")} show={true}>
           <button
             onClick={onToggle}
             data-testid="sidebar-toggle"
+            title={mobile ? "Close" : (collapsed ? "Expand sidebar" : "Collapse sidebar")}
             className={`p-1.5 rounded hover:bg-gray-100 text-gray-500 ${collapsed ? "" : "absolute right-0 top-1/2 -translate-y-1/2"}`}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
