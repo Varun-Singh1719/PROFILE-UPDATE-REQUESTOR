@@ -59,6 +59,106 @@ const BELL_META = {
   request_closed:               { Icon: EventAvailable, color: "#0284c7", bg: "#f0f9ff" },
 };
 
+// Demo names used in the preview modal so placeholders like {{closed_by}}
+// render as actual human names instead of raw template tokens.
+const DEMO_NAMES = [
+  "John Doe", "Jane Smith", "Michael Chen", "Priya Sharma",
+  "Aisha Khan", "Ravi Patel", "Sara O'Neill", "David Kim",
+];
+function pickRandom(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+function randomTicketId() {
+  // 4-digit id, avoids leading zero
+  return String(1000 + Math.floor(Math.random() * 8999));
+}
+function randomSeatLabel() {
+  const wing = String.fromCharCode(65 + Math.floor(Math.random() * 4)); // A-D
+  return `${wing}-${100 + Math.floor(Math.random() * 400)}`;
+}
+function formatToday() {
+  return new Date().toLocaleDateString(undefined, {
+    day: "2-digit", month: "short", year: "numeric",
+  });
+}
+
+/**
+ * Builds a preview payload for a given template kind. Values are
+ * randomised on every call so admins can hit Preview repeatedly and see
+ * that placeholders will be replaced when the notification is sent.
+ * Each object exposes {title, rows[{label,value}], actionLabel, subtitle}.
+ */
+function buildPreviewPayload(kind) {
+  const today = formatToday();
+  switch (kind) {
+    case "request_closed": {
+      const id = randomTicketId();
+      const name = pickRandom(DEMO_NAMES);
+      return {
+        title: `Request ${id} : Closed`,
+        rows: [
+          { label: "Ticket ID", value: id },
+          { label: "Status",    value: "Closed" },
+          { label: "Closed By", value: name },
+          { label: "Date",      value: today },
+        ],
+        actionLabel: "View request",
+      };
+    }
+    case "workstation_assigned": {
+      const id = randomTicketId();
+      const seat = randomSeatLabel();
+      const name = pickRandom(DEMO_NAMES);
+      return {
+        title: `Booking ${id} : Workstation Assigned`,
+        rows: [
+          { label: "Booking ID",  value: id },
+          { label: "Seat",        value: seat },
+          { label: "Date",        value: today },
+          { label: "Assigned By", value: name },
+        ],
+        actionLabel: "View booking",
+      };
+    }
+    case "workstation_request_approved": {
+      const id = randomTicketId();
+      const seat = randomSeatLabel();
+      const name = pickRandom(DEMO_NAMES);
+      return {
+        title: `Request ${id} : Approved`,
+        rows: [
+          { label: "Booking ID",  value: id },
+          { label: "Seat",        value: seat },
+          { label: "Date",        value: today },
+          { label: "Approved By", value: name },
+        ],
+        actionLabel: "View booking",
+      };
+    }
+    case "workstation_request_declined": {
+      const id = randomTicketId();
+      const seat = randomSeatLabel();
+      const name = pickRandom(DEMO_NAMES);
+      return {
+        title: `Request ${id} : Declined`,
+        rows: [
+          { label: "Booking ID",  value: id },
+          { label: "Seat",        value: seat },
+          { label: "Date",        value: today },
+          { label: "Declined By", value: name },
+        ],
+        actionLabel: "View request",
+      };
+    }
+    default:
+      return {
+        title: "Notification",
+        rows: [{ label: "Date", value: today }],
+        actionLabel: null,
+      };
+  }
+}
+
 export default function NotificationTemplatesPage() {
   const { user } = useAuth();
   const isSuperAdmin = user?.role === "Super Admin";
@@ -148,6 +248,13 @@ export default function NotificationTemplatesPage() {
             <div className="text-[11px] text-gray-500">
               {filtered.length} of {items.length} template{items.length === 1 ? "" : "s"}
             </div>
+          </div>
+          {/* Stat chips — colours mirror the Profix status palette
+              (Active = Open = green, Inactive = Closed = red). */}
+          <div className="flex items-center gap-2 shrink-0" data-testid="notif-templates-stats">
+            <StatChip color="#ec9324" label="Total"    value={items.length} testId="notif-stat-total"/>
+            <StatChip color="#16a34a" label="Active"   value={items.filter((t) => (t.status || "Active") === "Active").length} testId="notif-stat-active"/>
+            <StatChip color="#dc2626" label="Inactive" value={items.filter((t) => (t.status || "Active") !== "Active").length} testId="notif-stat-inactive"/>
           </div>
         </div>
 
@@ -335,7 +442,7 @@ export default function NotificationTemplatesPage() {
                         data-testid={`notif-template-switch-${t.kind}`}
                       />
                       <span
-                        className={`text-[11px] font-medium ${isActive ? "text-emerald-700" : "text-gray-500"}`}
+                        className={`text-[11px] font-semibold ${isActive ? "text-[#16a34a]" : "text-[#dc2626]"}`}
                       >
                         {isActive ? "Active" : "Inactive"}
                       </span>
@@ -368,26 +475,57 @@ export default function NotificationTemplatesPage() {
 }
 
 function StatusPill({ on }) {
+  // Same design language as Profix > All Requests StatusBadge:
+  // outlined pill, transparent bg, colored border + text.
+  //   Active   → Green  (Open  in Profix)
+  //   Inactive → Red    (Closed in Profix)
+  const c = on
+    ? { text: "#16a34a", border: "#16a34a" }
+    : { text: "#dc2626", border: "#dc2626" };
   return (
     <span
-      className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-        on
-          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-          : "bg-gray-100 text-gray-500 border-gray-200"
-      }`}
+      className="inline-flex items-center justify-center h-6 px-2.5 text-[11px] font-semibold rounded-full border-2 bg-white select-none whitespace-nowrap"
+      style={{ color: c.text, borderColor: c.border }}
+      data-testid={`notif-template-status-pill-${on ? "active" : "inactive"}`}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${on ? "bg-emerald-500" : "bg-gray-400"}`} />
       {on ? "Active" : "Inactive"}
     </span>
   );
 }
 
 /**
+ * StatChip — small pill used in the hero row to display Total / Active /
+ * Inactive counts. Colour dot on the left + uppercase label + bold value.
+ */
+function StatChip({ color, label, value, testId }) {
+  return (
+    <div
+      className="inline-flex items-center gap-2 h-8 px-3 rounded-full bg-white border border-gray-200 shadow-sm"
+      data-testid={testId}
+    >
+      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+      <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">
+        {label}
+      </span>
+      <span className="text-[13px] font-bold text-gray-900 leading-none">{value}</span>
+    </div>
+  );
+}
+
+/**
  * Preview modal — renders the notification exactly like it appears in the
- * bell dropdown (top-bar). Non-editable; just a visual mock.
+ * bell dropdown (top-bar). Placeholders are replaced with realistic sample
+ * data (current date, random names, random IDs) so the admin sees what the
+ * end user will actually see. Non-editable; just a visual mock.
  */
 function PreviewNotificationModal({ template, onClose }) {
-  if (!template) return null;
+  // Freeze the randomised payload for the lifetime of this modal open — so
+  // toggling e.g. hover states doesn't re-shuffle the demo values.
+  const payload = useMemo(
+    () => (template ? buildPreviewPayload(template.kind) : null),
+    [template?.id],
+  );
+  if (!template || !payload) return null;
   const meta = BELL_META[template.kind] || { Icon: Article, color: "#6b7280", bg: "#f3f4f6" };
   const { Icon } = meta;
   return (
@@ -398,9 +536,6 @@ function PreviewNotificationModal({ template, onClose }) {
             <Visibility sx={{ fontSize: 16 }} className="text-[#ec9324]" />
             Notification Preview
           </DialogTitle>
-          <div className="text-[11px] text-gray-500 mt-0.5">
-            How this appears in the bell dropdown
-          </div>
         </DialogHeader>
 
         <div className="p-5 bg-gray-50">
@@ -421,8 +556,11 @@ function PreviewNotificationModal({ template, onClose }) {
                 All
               </div>
             </div>
-            {/* The row */}
-            <div className="flex items-start gap-3 px-4 py-3 bg-[#fff7ed]/40">
+            {/* The row — mimics NotificationBell exactly */}
+            <div
+              className="flex items-start gap-3 px-4 py-3 bg-[#fff7ed]/40"
+              data-testid="notif-template-preview-row"
+            >
               <span
                 className="mt-0.5 inline-flex items-center justify-center w-8 h-8 rounded-full shrink-0"
                 style={{ backgroundColor: meta.bg, color: meta.color }}
@@ -431,34 +569,32 @@ function PreviewNotificationModal({ template, onClose }) {
               </span>
               <div className="flex-1 min-w-0">
                 <div className="flex items-start gap-2">
-                  <div className="text-[13px] font-semibold text-gray-900">
-                    {template.title || "(untitled)"}
+                  <div
+                    className="text-[13px] font-semibold text-gray-900"
+                    data-testid="notif-template-preview-title"
+                  >
+                    {payload.title}
                   </div>
                   <span className="mt-1 w-2 h-2 rounded-full bg-[#ec9324] shrink-0" />
                 </div>
-                {template.body && (
-                  <div className="text-[12px] text-gray-600 leading-snug mt-0.5">
-                    {template.body}
+                <div
+                  className="mt-1 space-y-0.5"
+                  data-testid="notif-template-preview-body"
+                >
+                  {payload.rows.map((r) => (
+                    <div key={r.label} className="text-[12px] text-gray-700 leading-snug">
+                      <span className="text-gray-500">{r.label}&nbsp;:</span>&nbsp;
+                      <span className="font-medium">{r.value}</span>
+                    </div>
+                  ))}
+                </div>
+                {payload.actionLabel && (
+                  <div className="mt-1.5 text-[11px] text-[#ec9324] font-medium">
+                    {payload.actionLabel} →
                   </div>
                 )}
                 <div className="text-[10px] text-gray-400 mt-1">just now</div>
               </div>
-            </div>
-          </div>
-
-          <div className="mt-4 text-[11px] text-gray-500 space-y-1">
-            <div>
-              <span className="uppercase tracking-wider text-[9.5px] font-semibold text-gray-400">Recipient</span>
-              <span className="ml-1.5 text-gray-700">
-                {RECIPIENT_BY_KIND[template.kind] || "Recipient"}
-              </span>
-            </div>
-            <div>
-              <span className="uppercase tracking-wider text-[9.5px] font-semibold text-gray-400">Trigger</span>
-              <span className="ml-1.5 text-gray-700">{template.trigger || "—"}</span>
-            </div>
-            <div className="text-[10.5px] text-gray-400 italic pt-1">
-              Note: placeholders like <code className="px-1 bg-white border border-gray-200 rounded">{`{{seat_label}}`}</code> are replaced with real values when the notification is sent.
             </div>
           </div>
         </div>
@@ -599,7 +735,7 @@ function EditTemplateModal({ template, canEditContent, onClose, onSaved }) {
                 data-testid="notif-template-status-switch"
               />
               <span
-                className={`text-[12px] font-medium ${form.status === "Active" ? "text-emerald-700" : "text-gray-500"}`}
+                className={`text-[12px] font-semibold ${form.status === "Active" ? "text-[#16a34a]" : "text-[#dc2626]"}`}
               >
                 {form.status === "Active" ? "Active" : "Inactive"}
               </span>
