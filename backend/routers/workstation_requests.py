@@ -336,6 +336,10 @@ async def list_workstation_requests(
     date: Optional[str] = Query(None),
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
+    # Filter on `requested_on` (submission timestamp) — used by the
+    # "My Bookings" tab's "Requested On" date filter.
+    requested_from: Optional[str] = Query(None),
+    requested_to: Optional[str] = Query(None),
 ):
     q: Dict[str, Any] = {}
     if status:
@@ -363,6 +367,20 @@ async def list_workstation_requests(
             rng["$lte"] = date_to
         if rng:
             q["date"] = rng
+    # Optional `requested_on` range (submission timestamp). `requested_on` is
+    # stored as an ISO-8601 string ("2026-07-20T10:15:00+00:00") so range
+    # comparisons on the raw string are safe as long as both endpoints get
+    # inclusive full-day bounds.
+    if requested_from or requested_to:
+        rrng: Dict[str, str] = {}
+        if requested_from:
+            _parse_date(requested_from, "requested_from")
+            rrng["$gte"] = f"{requested_from}T00:00:00"
+        if requested_to:
+            _parse_date(requested_to, "requested_to")
+            rrng["$lte"] = f"{requested_to}T23:59:59.999999+00:00"
+        if rrng:
+            q["requested_on"] = rrng
     docs = await db.workstation_requests.find(q, {"_id": 0}).sort([
         ("status", 1), ("requested_on", -1), ("seat_label", 1),
     ]).to_list(2000)
@@ -738,12 +756,20 @@ async def decline_workstation_request(
 @api_router.delete("/workstation-requests/{request_id}")
 async def cancel_workstation_request(
     request_id: str,
-    user=Depends(require_role("Super Admin")),
+    user=Depends(get_current_user),
 ):
-    """Cancel a pending request (requester can withdraw it)."""
+    """Cancel a pending request. Available to the requester themselves OR any
+    Super Admin. Once the request has moved past Pending Approval (Approved /
+    Declined / Cancelled) the button disappears in the UI and this endpoint
+    rejects the call — matching the "auto-removed once approved/declined"
+    behaviour of the My Bookings tab."""
     req = await db.workstation_requests.find_one({"id": request_id}, {"_id": 0})
     if not req:
         raise HTTPException(404, "Workstation request not found")
+    is_owner = ((req.get("requested_by") or {}).get("id") == user.get("id"))
+    is_super = user.get("role") == "Super Admin"
+    if not (is_owner or is_super):
+        raise HTTPException(403, "You can only cancel your own request")
     if req.get("status") != STATUS_PENDING:
         raise HTTPException(400, f"Cannot cancel a request with status '{req.get('status')}'")
     now = now_iso()
