@@ -251,11 +251,13 @@ export default function WorkspaceOverallDashboard() {
                   </div>
                 </div>
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-5xl font-black text-gray-900 leading-none tracking-tight">{occ.present}</span>
-                    <span className="text-xl text-gray-400 font-bold leading-none">/ {occ.total_seats}</span>
+                  <div className="flex flex-col items-center">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-5xl font-black text-gray-900 leading-none tracking-tight">{occ.present}</span>
+                      <span className="text-xl text-gray-400 font-bold leading-none">/ {occ.total_seats}</span>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1.5 font-medium">seats in use</div>
                   </div>
-                  <div className="text-xs text-gray-500 mt-1.5 font-medium">seats in use</div>
                   <div className="mt-4 grid grid-cols-2 gap-2">
                     <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2 hover:bg-emerald-100/60 transition-colors">
                       <div className="flex items-center gap-1.5">
@@ -267,7 +269,7 @@ export default function WorkspaceOverallDashboard() {
                     <div className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2 hover:bg-gray-100 transition-colors">
                       <div className="flex items-center gap-1.5">
                         <span className="h-2 w-2 rounded-full bg-gray-400"/>
-                        <span className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Free</span>
+                        <span className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Available</span>
                       </div>
                       <div className="text-xl font-bold text-gray-800 mt-0.5 leading-none">{occ.free}</div>
                     </div>
