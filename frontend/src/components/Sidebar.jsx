@@ -17,6 +17,7 @@ import Shield from "@mui/icons-material/ShieldOutlined";
 import Armchair from "@mui/icons-material/Chair";
 import Send from "@mui/icons-material/Send";
 import OutboxIcon from "@mui/icons-material/Outbox";
+import NotificationsIcon from "@mui/icons-material/NotificationsNone";
 import MailPlus from "@mui/icons-material/ForwardToInboxOutlined";
 import PanelLeftClose from "@mui/icons-material/MenuOpen";
 import PanelLeftOpen from "@mui/icons-material/Menu";
@@ -66,6 +67,7 @@ const NAV_CONFIG = [
       { to: "/admin/teams",           label: "Teams",           icon: Users,    v3: { module: "manage", page: "teams" } },
       { to: "/admin/permissions",     label: "Permissions",     icon: Shield },
       { to: "/admin/email-templates", label: "Email Templates", icon: MailPlus, v3: { module: "manage", page: "email_templates" } },
+      { to: "/admin/notification-templates", label: "Notifications", icon: NotificationsIcon, v3: { module: "manage", page: "email_templates" } },
       { to: "/admin/notifications",   label: "Outbox",          icon: OutboxIcon, v3: { module: "manage", page: "notifications" } },
       { to: "/admin/contacts",        label: "Employee List",   icon: BookUser, v3: { module: "manage", page: "employees" } },
     ],

@@ -656,6 +656,25 @@ async def update_ticket(ticket_id: str, body: TicketUpdate, user=Depends(get_cur
         except Exception as e:  # noqa: BLE001 — never block the API on a notification failure
             import logging as _l
             _l.getLogger(__name__).warning(f"request_closed email failed for ticket={ticket_id}: {e}")
+        # In-app bell notification for the requester (idempotent per-transition)
+        try:
+            from inapp_notifications import notify_user_inapp
+            if t.get("created_by_id"):
+                await notify_user_inapp(
+                    db,
+                    user_id=t.get("created_by_id"),
+                    kind="request_closed",
+                    variables={
+                        "ticket_id": t.get("ticket_id") or ticket_id,
+                        "closed_by": user.get("name") or "",
+                        "name": t.get("created_by_name") or "",
+                    },
+                    related_id=ticket_id,
+                    related_type="ticket",
+                    action_url=f"/admin/tickets/{ticket_id}",
+                )
+        except Exception:  # noqa: BLE001
+            pass
 
     return await db.tickets.find_one({"id": ticket_id}, {"_id": 0})
 
@@ -777,6 +796,25 @@ async def bulk_status(body: BulkStatus, user=Depends(get_current_user)):
             except Exception as e:  # noqa: BLE001
                 import logging as _l
                 _l.getLogger(__name__).warning(f"request_closed email failed for ticket={tid}: {e}")
+            # In-app bell notification (same trigger, same template)
+            try:
+                from inapp_notifications import notify_user_inapp
+                if t.get("created_by_id"):
+                    await notify_user_inapp(
+                        db,
+                        user_id=t.get("created_by_id"),
+                        kind="request_closed",
+                        variables={
+                            "ticket_id": t.get("ticket_id") or tid,
+                            "closed_by": user.get("name") or "",
+                            "name": t.get("created_by_name") or "",
+                        },
+                        related_id=tid,
+                        related_type="ticket",
+                        action_url=f"/admin/tickets/{tid}",
+                    )
+            except Exception:  # noqa: BLE001
+                pass
         success += 1
     return {"updated": success}
 

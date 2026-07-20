@@ -21,6 +21,7 @@ import TeamsPage from "./pages/TeamsPage";
 import PermissionsPage from "./pages/PermissionsPage";
 import NotificationsOutboxPage from "./pages/NotificationsOutboxPage";
 import EmailTemplatesPage from "./pages/EmailTemplatesPage";
+import NotificationTemplatesPage from "./pages/NotificationTemplatesPage";
 import DeskBookingPage from "./pages/DeskBookingPage";
 import FloorLayoutPage from "./pages/FloorLayoutPage";
 import SeatCalibrationPage from "./pages/SeatCalibrationPage";
@@ -110,6 +111,7 @@ function App() {
             <Route path="/admin/permission-sets/:id" element={<PermissionSetRedirect />} />
             <Route path="/admin/notifications" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><NotificationsOutboxPage /></ProtectedRoute>} />
             <Route path="/admin/email-templates" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><EmailTemplatesPage /></ProtectedRoute>} />
+            <Route path="/admin/notification-templates" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><NotificationTemplatesPage /></ProtectedRoute>} />
 
             {/* Workspace Manager */}
             <Route path="/workspace-manager/floor-layout" element={<ProtectedRoute roles={ADMIN_ROLES}><FloorLayoutPage /></ProtectedRoute>} />

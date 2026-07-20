@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel,
 } from "./ui/dropdown-menu";
 import UserAvatar from "./UserAvatar";
+import NotificationBell from "./NotificationBell";
 import ChangePasswordModal from "./ChangePasswordModal";
 import LogoutConfirmModal from "./LogoutConfirmModal";
 import ChevronDown from "@mui/icons-material/KeyboardArrowDown";
@@ -66,6 +67,8 @@ export default function TopBar({ title, actions }) {
             {actions}
           </div>
         )}
+
+        <NotificationBell />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

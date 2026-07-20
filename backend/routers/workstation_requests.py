@@ -653,6 +653,30 @@ async def approve_workstation_request(
     )
 
     fresh = await db.workstation_requests.find_one({"id": request_id}, {"_id": 0})
+    # Notify the requester in-app that their request was approved
+    try:
+        from inapp_notifications import notify_user_inapp
+        emp = (req.get("employee") or {})
+        # Prefer the employee's user id (bookings target employees, not contacts)
+        emp_user_id = emp.get("id")
+        if emp_user_id:
+            await notify_user_inapp(
+                db,
+                user_id=emp_user_id,
+                kind="workstation_request_approved",
+                variables={
+                    "seat_label": req.get("seat_label"),
+                    "date": req.get("date"),
+                    "plan_name": req.get("plan_name"),
+                    "decided_by": actor.get("name"),
+                    "name": emp.get("name"),
+                },
+                related_id=booking["id"],
+                related_type="workstation_booking",
+                action_url="/workspace-manager/bookings",
+            )
+    except Exception:  # noqa: BLE001 — never break the approval flow
+        pass
     return {"ok": True, "request": fresh, "booking": booking}
 
 
@@ -685,6 +709,29 @@ async def decline_workstation_request(
         metadata={"seat_label": req.get("seat_label"), "date": req["date"]},
     )
     fresh = await db.workstation_requests.find_one({"id": request_id}, {"_id": 0})
+    # Notify the requester in-app that their request was declined
+    try:
+        from inapp_notifications import notify_user_inapp
+        emp = (req.get("employee") or {})
+        emp_user_id = emp.get("id")
+        if emp_user_id:
+            await notify_user_inapp(
+                db,
+                user_id=emp_user_id,
+                kind="workstation_request_declined",
+                variables={
+                    "seat_label": req.get("seat_label"),
+                    "date": req.get("date"),
+                    "plan_name": req.get("plan_name"),
+                    "decided_by": actor.get("name"),
+                    "name": emp.get("name"),
+                },
+                related_id=request_id,
+                related_type="workstation_request",
+                action_url="/workspace-manager/workstation-requests",
+            )
+    except Exception:  # noqa: BLE001
+        pass
     return {"ok": True, "request": fresh}
 
 

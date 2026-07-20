@@ -517,6 +517,33 @@ async def create_workstation_booking(
         },
     )
 
+    # Notify each assigned employee in-app that a workstation was allocated.
+    try:
+        from inapp_notifications import notify_user_inapp
+        # Dedupe (employee_id, date, seat) so an employee only gets one alert
+        # per booking row.
+        for bk in inserted:
+            emp_id = ((bk.get("employee") or {}).get("id"))
+            if not emp_id:
+                continue
+            await notify_user_inapp(
+                db,
+                user_id=emp_id,
+                kind="workstation_assigned",
+                variables={
+                    "seat_label": bk.get("seat_label"),
+                    "date": bk.get("date"),
+                    "plan_name": bk.get("plan_name"),
+                    "assigned_by": actor.get("name"),
+                    "name": (bk.get("employee") or {}).get("name"),
+                },
+                related_id=bk["id"],
+                related_type="workstation_booking",
+                action_url="/workspace-manager/bookings",
+            )
+    except Exception:  # noqa: BLE001
+        pass
+
     return {"ok": True, "created": len(inserted), "series_id": series_id, "bookings": inserted}
 
 

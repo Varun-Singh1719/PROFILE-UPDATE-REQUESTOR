@@ -21,6 +21,7 @@ from core import (
 # Register all routes by importing each router module (side-effect on api_router).
 from routers import auth as _auth  # noqa: F401
 from routers import notifications_email as _notif  # noqa: F401
+from routers import notifications_inapp as _notif_inapp  # noqa: F401
 # NOTE: contact_uploads MUST be imported BEFORE contacts because contacts.py
 # registers a dynamic `GET /contacts/{contact_id}` route that would otherwise
 # shadow the static `/contacts/sample-template` and `/contacts/upload-history`
@@ -96,6 +97,13 @@ async def startup():
     await db.workstation_requests.create_index([("employee.id", 1), ("date", 1), ("status", 1)])
     await db.workstation_requests.create_index([("status", 1), ("requested_on", -1)])
     await db.workstation_requests.create_index([("group_id", 1)])
+    # In-app notifications (bell dropdown) + editable templates
+    await db.inapp_notifications.create_index([("user_id", 1), ("created_at", -1)])
+    await db.inapp_notifications.create_index([("user_id", 1), ("read", 1)])
+    await db.notification_templates.create_index("kind", unique=True)
+    # Seed default notification templates (idempotent — skips existing kinds)
+    from inapp_notifications import seed_default_templates as _seed_inapp_tpl
+    await _seed_inapp_tpl(db)
     # NOTE: do NOT call init_storage() here — it makes a blocking outbound
     # HTTPS call (timeout=30s) that returns 400 when the storage feature
     # isn't wired up, which adds 5–10s to every cold-start / hot-reload and
