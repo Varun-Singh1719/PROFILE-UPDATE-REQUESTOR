@@ -249,6 +249,97 @@ def _request_view(doc: dict) -> dict:
     return doc
 
 
+async def auto_decline_conflicting_requests(
+    *,
+    plan_id: str,
+    seat_ids: List[str],
+    employee_ids: List[str],
+    dates: List[str],
+    actor: dict,
+    reason: str = "Auto-declined: another workstation was allotted on this date",
+) -> List[dict]:
+    """Decline every pending workstation request that clashes with a newly
+    created workstation booking.
+
+    A request is considered clashing if, for any of the given `dates`, it is
+    still in Pending Approval AND matches EITHER:
+      • the same seat on the same floor plan (seat is now taken), OR
+      • the same employee (the employee has been placed elsewhere for the day).
+
+    Returns the list of declined request docs (post-update snapshots).
+    """
+    if not dates:
+        return []
+    or_clauses: List[Dict[str, Any]] = []
+    if seat_ids:
+        or_clauses.append({"plan_id": plan_id, "seat_id": {"$in": seat_ids}})
+    if employee_ids:
+        or_clauses.append({"employee.id": {"$in": employee_ids}})
+    if not or_clauses:
+        return []
+    query = {
+        "date": {"$in": dates},
+        "status": {"$in": ACTIVE_PENDING_STATUSES},
+        "$or": or_clauses,
+    }
+    matches = await db.workstation_requests.find(query, {"_id": 0}).to_list(2000)
+    if not matches:
+        return []
+    now = now_iso()
+    declined_ids = [m["id"] for m in matches]
+    await db.workstation_requests.update_many(
+        {"id": {"$in": declined_ids}},
+        {"$set": {
+            "status": STATUS_DECLINED,
+            "decided_by": {**actor, "auto_declined": True},
+            "decided_on": now,
+            "decision_note": reason,
+            "updated_at": now,
+        }},
+    )
+    # Best-effort in-app notifications + audit — never break booking creation.
+    try:
+        from inapp_notifications import notify_user_inapp
+        for m in matches:
+            emp = (m.get("employee") or {})
+            emp_user_id = emp.get("id")
+            if emp_user_id:
+                try:
+                    await notify_user_inapp(
+                        db,
+                        user_id=emp_user_id,
+                        kind="workstation_request_declined",
+                        variables={
+                            "seat_label": m.get("seat_label"),
+                            "date": m.get("date"),
+                            "plan_name": m.get("plan_name"),
+                            "decided_by": actor.get("name"),
+                            "name": emp.get("name"),
+                            "reason": reason,
+                        },
+                        related_id=m["id"],
+                        related_type="workstation_request",
+                        action_url="/workspace-manager/workstation-requests",
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        await log_audit(
+            actor=actor, action="workstation_request.auto_decline",
+            resource="workstation_request",
+            detail=f"Auto-declined {len(declined_ids)} pending workstation request(s) after seat allotment",
+            metadata={"request_ids": declined_ids, "reason": reason,
+                      "dates": dates, "seat_ids": seat_ids,
+                      "employee_ids": employee_ids},
+        )
+    except Exception:  # noqa: BLE001
+        pass
+    fresh = await db.workstation_requests.find({"id": {"$in": declined_ids}}, {"_id": 0}).to_list(2000)
+    return fresh
+
+
 # --------------------------------------------------------------------------- #
 # Endpoints — read                                                            #
 # --------------------------------------------------------------------------- #
@@ -340,6 +431,7 @@ async def list_workstation_requests(
     # "My Bookings" tab's "Requested On" date filter.
     requested_from: Optional[str] = Query(None),
     requested_to: Optional[str] = Query(None),
+    include_hidden: bool = Query(True, description="Include requests soft-deleted by the requester"),
 ):
     q: Dict[str, Any] = {}
     if status:
@@ -354,6 +446,8 @@ async def list_workstation_requests(
         q["team_id"] = team_id
     if requested_by:
         q["requested_by.id"] = requested_by
+    if not include_hidden:
+        q["hidden_by_requester"] = {"$ne": True}
     if date:
         _parse_date(date)
         q["date"] = date
@@ -758,11 +852,19 @@ async def cancel_workstation_request(
     request_id: str,
     user=Depends(get_current_user),
 ):
-    """Cancel a pending request. Available to the requester themselves OR any
-    Super Admin. Once the request has moved past Pending Approval (Approved /
-    Declined / Cancelled) the button disappears in the UI and this endpoint
-    rejects the call — matching the "auto-removed once approved/declined"
-    behaviour of the My Bookings tab."""
+    """Soft-delete a pending request (used by the My Bookings "Delete" button).
+
+    Semantics:
+      • Sets status → "Cancelled"
+      • Marks `hidden_by_requester=True` so it disappears from BOTH the
+        requester's My Bookings tab AND the admin's Workstation Requests
+        table.
+      • The row still lives in the DB and surfaces in the aggregated
+        Bookings module with status "Cancelled".
+
+    Allowed for the requester themselves OR any Super Admin, only while the
+    request is still in Pending Approval.
+    """
     req = await db.workstation_requests.find_one({"id": request_id}, {"_id": 0})
     if not req:
         raise HTTPException(404, "Workstation request not found")
@@ -776,14 +878,148 @@ async def cancel_workstation_request(
     actor = _actor(user)
     await db.workstation_requests.update_one(
         {"id": request_id},
-        {"$set": {"status": STATUS_CANCELLED, "decided_by": actor, "decided_on": now, "updated_at": now}},
+        {"$set": {
+            "status": STATUS_CANCELLED,
+            "decided_by": actor,
+            "decided_on": now,
+            "decision_note": "Cancelled by requester",
+            "hidden_by_requester": True,
+            "updated_at": now,
+        }},
     )
     await log_audit(
         actor=actor, action="workstation_request.cancel",
         resource="workstation_request", resource_id=request_id,
-        detail=f"Cancelled workstation request #{req.get('seq_no')}",
+        detail=f"Cancelled (soft-deleted) workstation request #{req.get('seq_no')}",
     )
     return {"ok": True}
+
+
+# --------------------------------------------------------------------------- #
+# PATCH — edit a pending request (date + seat within same plan)               #
+# --------------------------------------------------------------------------- #
+
+class WorkstationRequestPatch(BaseModel):
+    date: Optional[str] = Field(None, description="YYYY-MM-DD — new booking date")
+    seat_id: Optional[str] = Field(None, description="New seat id within the SAME floor plan")
+
+
+@api_router.patch("/workstation-requests/{request_id}")
+async def update_workstation_request(
+    request_id: str,
+    payload: WorkstationRequestPatch,
+    user=Depends(get_current_user),
+):
+    """Edit a pending workstation request.
+
+    Allowed fields: `date`, `seat_id` (must belong to the same floor plan).
+    Only the original requester or a Super Admin can edit, and only while the
+    request is in Pending Approval. Re-runs the same seat/employee conflict
+    checks as creation.
+    """
+    req = await db.workstation_requests.find_one({"id": request_id}, {"_id": 0})
+    if not req:
+        raise HTTPException(404, "Workstation request not found")
+    is_owner = ((req.get("requested_by") or {}).get("id") == user.get("id"))
+    is_super = user.get("role") == "Super Admin"
+    if not (is_owner or is_super):
+        raise HTTPException(403, "You can only edit your own request")
+    if req.get("status") != STATUS_PENDING:
+        raise HTTPException(400, f"Cannot edit a request with status '{req.get('status')}'")
+
+    new_date = req["date"]
+    new_seat_id = req["seat_id"]
+    new_seat_label = req.get("seat_label")
+
+    if payload.date and payload.date != req["date"]:
+        new_date = _parse_date(payload.date).isoformat()
+
+    if payload.seat_id and payload.seat_id != req["seat_id"]:
+        # Ensure the seat belongs to the same live floor plan
+        ctx = await _get_live_plan(req["plan_id"])
+        version = ctx["version"]
+        seat_index = {s["id"]: s for s in (version.get("seats") or [])}
+        if payload.seat_id not in seat_index:
+            raise HTTPException(400, "Selected workstation is not part of the same floor plan")
+        new_seat_id = payload.seat_id
+        new_seat_label = seat_index[payload.seat_id].get("label") or payload.seat_id
+
+    # No-op guard
+    if new_date == req["date"] and new_seat_id == req["seat_id"]:
+        return {"ok": True, "request": req, "unchanged": True}
+
+    # ---- Re-validate against bookings / other pending requests on new (seat, date)
+    seat_booking_clash = await db.workstation_bookings.find_one(
+        {"plan_id": req["plan_id"], "seat_id": new_seat_id, "date": new_date, "cancelled": False},
+        {"_id": 0, "seat_label": 1, "date": 1, "employee": 1},
+    )
+    if seat_booking_clash:
+        raise HTTPException(409, {
+            "code": "WORKSTATION_OCCUPIED",
+            "message": f"Workstation {seat_booking_clash['seat_label']} is already booked on {seat_booking_clash['date']}",
+            "conflict": seat_booking_clash,
+        })
+    pending_seat_clash = await db.workstation_requests.find_one(
+        {"plan_id": req["plan_id"], "seat_id": new_seat_id, "date": new_date,
+         "id": {"$ne": request_id},
+         "status": {"$in": ACTIVE_PENDING_STATUSES}},
+        {"_id": 0, "seat_label": 1, "date": 1},
+    )
+    if pending_seat_clash:
+        raise HTTPException(409, {
+            "code": "WORKSTATION_PENDING",
+            "message": f"Workstation {pending_seat_clash['seat_label']} already has a pending request on {pending_seat_clash['date']}",
+            "conflict": pending_seat_clash,
+        })
+
+    # If the date is changing, also make sure the employee isn't already
+    # booked or pending on the new date (excluding this same request).
+    if new_date != req["date"]:
+        emp_id = (req.get("employee") or {}).get("id")
+        if emp_id:
+            emp_booking_clash = await db.workstation_bookings.find_one(
+                {"employee.id": emp_id, "date": new_date, "cancelled": False},
+                {"_id": 0, "employee": 1, "date": 1, "seat_label": 1},
+            )
+            if emp_booking_clash:
+                raise HTTPException(409, {
+                    "code": "EMPLOYEE_ALREADY_BOOKED",
+                    "message": f"{(emp_booking_clash.get('employee') or {}).get('name')} already has a booking on {emp_booking_clash['date']}",
+                    "conflict": emp_booking_clash,
+                })
+            emp_pending_clash = await db.workstation_requests.find_one(
+                {"employee.id": emp_id, "date": new_date,
+                 "id": {"$ne": request_id},
+                 "status": {"$in": ACTIVE_PENDING_STATUSES}},
+                {"_id": 0, "employee": 1, "date": 1, "seat_label": 1},
+            )
+            if emp_pending_clash:
+                raise HTTPException(409, {
+                    "code": "EMPLOYEE_PENDING",
+                    "message": f"{(emp_pending_clash.get('employee') or {}).get('name')} already has a pending request on {emp_pending_clash['date']}",
+                    "conflict": emp_pending_clash,
+                })
+
+    now = now_iso()
+    actor = _actor(user)
+    changes: Dict[str, Any] = {"updated_at": now}
+    if new_date != req["date"]:
+        changes["date"] = new_date
+    if new_seat_id != req["seat_id"]:
+        changes["seat_id"] = new_seat_id
+        changes["seat_label"] = new_seat_label
+    await db.workstation_requests.update_one({"id": request_id}, {"$set": changes})
+    await log_audit(
+        actor=actor, action="workstation_request.update",
+        resource="workstation_request", resource_id=request_id,
+        detail=f"Edited workstation request #{req.get('seq_no')}",
+        metadata={"before": {"date": req["date"], "seat_id": req["seat_id"],
+                             "seat_label": req.get("seat_label")},
+                  "after": {"date": new_date, "seat_id": new_seat_id,
+                            "seat_label": new_seat_label}},
+    )
+    fresh = await db.workstation_requests.find_one({"id": request_id}, {"_id": 0})
+    return {"ok": True, "request": fresh}
 
 
 # --------------------------------------------------------------------------- #

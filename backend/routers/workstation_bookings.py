@@ -445,30 +445,11 @@ async def create_workstation_booking(
                 "conflict": emp_conflict,
             })
 
-    # ---- Cross-module: refuse if any seat is locked by a pending workstation request
-    from routers.workstation_requests import ACTIVE_PENDING_STATUSES  # type: ignore
-    pending_seat = await db.workstation_requests.find_one(
-        {"plan_id": payload.plan_id, "seat_id": {"$in": seat_ids},
-         "date": {"$in": iso_dates}, "status": {"$in": ACTIVE_PENDING_STATUSES}},
-        {"_id": 0, "seat_id": 1, "seat_label": 1, "date": 1, "employee": 1, "requested_by": 1},
-    )
-    if pending_seat:
-        raise HTTPException(409, {
-            "code": "WORKSTATION_PENDING",
-            "message": f"Workstation {pending_seat['seat_label']} is locked by a pending request on {pending_seat['date']}",
-            "conflict": pending_seat,
-        })
-    pending_emp = await db.workstation_requests.find_one(
-        {"employee.id": {"$in": all_emp_ids}, "date": {"$in": iso_dates},
-         "status": {"$in": ACTIVE_PENDING_STATUSES}},
-        {"_id": 0, "employee": 1, "date": 1, "seat_label": 1},
-    )
-    if pending_emp:
-        raise HTTPException(409, {
-            "code": "EMPLOYEE_PENDING",
-            "message": f"{(pending_emp.get('employee') or {}).get('name')} has a pending workstation request on {pending_emp['date']}",
-            "conflict": pending_emp,
-        })
+    # ---- Cross-module: pending workstation requests that clash with this
+    # allotment are NOT blocking anymore — they will be auto-declined right
+    # after the booking rows are inserted, so an admin's manual allotment
+    # always takes precedence over a still-pending request.
+    from routers.workstation_requests import ACTIVE_PENDING_STATUSES  # type: ignore  # noqa: F401
 
     # ---- Insert all bookings (date × seat combinations)
     now = now_iso()
@@ -505,6 +486,21 @@ async def create_workstation_booking(
         await db.workstation_bookings.insert_many(inserted)
         for d in inserted:
             d.pop("_id", None)
+
+    # ---- Auto-decline any pending workstation_requests that conflict with
+    # this fresh allotment (same seat OR same employee on any booked date).
+    auto_declined: List[dict] = []
+    try:
+        from routers.workstation_requests import auto_decline_conflicting_requests  # type: ignore
+        auto_declined = await auto_decline_conflicting_requests(
+            plan_id=payload.plan_id,
+            seat_ids=seat_ids,
+            employee_ids=all_emp_ids,
+            dates=iso_dates,
+            actor=actor,
+        )
+    except Exception:  # noqa: BLE001 — never fail the booking on this
+        auto_declined = []
 
     await log_audit(
         actor=actor, action="workstation_booking.create",
@@ -544,7 +540,7 @@ async def create_workstation_booking(
     except Exception:  # noqa: BLE001
         pass
 
-    return {"ok": True, "created": len(inserted), "series_id": series_id, "bookings": inserted}
+    return {"ok": True, "created": len(inserted), "series_id": series_id, "bookings": inserted, "auto_declined_requests": auto_declined}
 
 
 @api_router.patch("/workstation-bookings/{booking_id}")

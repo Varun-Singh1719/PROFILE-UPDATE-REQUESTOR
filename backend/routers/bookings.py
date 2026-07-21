@@ -176,6 +176,61 @@ async def _enrich_workstation_with_team(docs: List[dict]) -> List[dict]:
     return [_workstation_booking_view(d, team_map) for d in docs]
 
 
+def _workstation_request_view(doc: dict, team_map: Optional[Dict[str, dict]] = None) -> dict:
+    """Project a Cancelled workstation_request (soft-deleted by requester)
+    into the unified Bookings table shape. These appear ONLY as Cancelled
+    entries in the Booking module.
+    """
+    team_map = team_map or {}
+    emp = doc.get("employee") or {}
+    team_name = doc.get("team_name")
+    if not team_name and doc.get("team_id") and doc["team_id"] in team_map:
+        team_name = team_map[doc["team_id"]].get("name")
+    return {
+        "id": doc.get("id"),
+        "seq_no": doc.get("seq_no"),
+        "type": "Workstation",
+        "title": f"Workstation {doc.get('seat_label')}",
+        "room_id": doc.get("seat_id"),
+        "room_name": doc.get("seat_label"),
+        "room_capacity": 1,
+        "plan_id": doc.get("plan_id"),
+        "plan_name": doc.get("plan_name"),
+        "start_at": doc.get("date"),
+        "end_at": doc.get("date"),
+        "date": doc.get("date"),
+        "seat_id": doc.get("seat_id"),
+        "seat_label": doc.get("seat_label"),
+        "organizer": emp,
+        "organizer_team_name": team_name,
+        "team_id": doc.get("team_id"),
+        "team_color": doc.get("team_color"),
+        "attendees": [],
+        "recurring": None,
+        "series_id": None,
+        # Force Cancelled status — this projection is only used for
+        # requester-soft-deleted requests.
+        "status": "Cancelled",
+        "cancelled": True,
+        "created_by": doc.get("requested_by") or emp,
+        "created_at": doc.get("created_at") or doc.get("requested_on"),
+        "updated_at": doc.get("updated_at"),
+        # Marker so the UI/detail view can distinguish these from real bookings.
+        "source": "workstation_request",
+    }
+
+
+async def _enrich_workstation_requests_with_team(docs: List[dict]) -> List[dict]:
+    if not docs:
+        return docs
+    team_ids = list({d["team_id"] for d in docs if d.get("team_id")})
+    team_map: Dict[str, dict] = {}
+    if team_ids:
+        team_docs = await db.teams.find({"id": {"$in": team_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
+        team_map = {t["id"]: t for t in team_docs}
+    return [_workstation_request_view(d, team_map) for d in docs]
+
+
 def _parse_date(s: Optional[str], field: str) -> Optional[date]:
     if not s:
         return None
@@ -409,6 +464,46 @@ async def list_bookings(
         ws_docs = await db.workstation_bookings.find(q_ws, {"_id": 0}).sort([("date", -1)]).limit(5000).to_list(5000)
         ws_enriched = await _enrich_workstation_with_team(ws_docs)
         rows.extend(ws_enriched)
+
+        # Also surface Cancelled (soft-deleted) workstation requests here so
+        # a user's deleted request still shows in the centralized Booking
+        # module — with status "Cancelled" — even though it never became a
+        # real workstation_bookings row.
+        cancelled_wanted = (not statuses) or ("cancelled" in statuses)
+        if cancelled_wanted:
+            q_req: Dict[str, Any] = {
+                "status": "Cancelled",
+                "hidden_by_requester": True,
+            }
+            if df or dt:
+                rng: Dict[str, str] = {}
+                if df:
+                    rng["$gte"] = df.isoformat()
+                if dt:
+                    rng["$lte"] = dt.isoformat()
+                q_req["date"] = rng
+            if employee_ids:
+                q_req["employee.id"] = {"$in": employee_ids}
+            if created_by_ids:
+                q_req["requested_by.id"] = {"$in": created_by_ids}
+            if team_ids:
+                q_req["team_id"] = {"$in": team_ids}
+            if search:
+                import re
+                s = search.strip().lstrip("#").strip()
+                if s:
+                    esc = re.escape(s)
+                    or_clauses = [
+                        {"seat_label": {"$regex": esc, "$options": "i"}},
+                        {"plan_name": {"$regex": esc, "$options": "i"}},
+                        {"employee.name": {"$regex": esc, "$options": "i"}},
+                    ]
+                    if s.isdigit():
+                        or_clauses.append({"seq_no": int(s)})
+                    q_req["$or"] = or_clauses
+            req_docs = await db.workstation_requests.find(q_req, {"_id": 0}).sort([("date", -1)]).limit(5000).to_list(5000)
+            req_enriched = await _enrich_workstation_requests_with_team(req_docs)
+            rows.extend(req_enriched)
 
     # In-memory sort
     direction_int = -1 if (direction or "").lower() == "desc" else 1

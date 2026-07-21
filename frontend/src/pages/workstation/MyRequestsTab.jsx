@@ -13,9 +13,15 @@ import HourglassEmpty from "@mui/icons-material/HourglassEmpty";
 import RemoveCircle from "@mui/icons-material/RemoveCircleOutlineOutlined";
 import Person from "@mui/icons-material/PersonOutlined";
 import LocationOn from "@mui/icons-material/PlaceOutlined";
+import EditOutlined from "@mui/icons-material/EditOutlined";
+import DeleteOutline from "@mui/icons-material/DeleteOutlineOutlined";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "../../components/ui/dialog";
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "../../components/ui/tooltip";
+import { Button } from "../../components/ui/button";
 
 /**
  * getCurrentMonthRange — returns {from, to} as ISO date strings covering
@@ -55,12 +61,14 @@ export default function MyRequestsTab() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [openReq, setOpenReq] = useState(null);
+  const [editReq, setEditReq] = useState(null);
+  const [deleteReq, setDeleteReq] = useState(null);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
     setLoading(true);
     try {
-      const params = { requested_by: user.id };
+      const params = { requested_by: user.id, include_hidden: false };
       const dq = dateFilterToParams(range) || {};
       // dateFilterToParams returns { date_field, date_from, date_to }. We
       // don't forward date_field — the requests endpoint filters purely on
@@ -144,7 +152,13 @@ export default function MyRequestsTab() {
                   </div>
                   <div className="space-y-2">
                     {arr.map((r) => (
-                      <RequestRow key={r.id} req={r} onClick={() => setOpenReq(r)} />
+                      <RequestRow
+                        key={r.id}
+                        req={r}
+                        onClick={() => setOpenReq(r)}
+                        onEdit={() => setEditReq(r)}
+                        onDelete={() => setDeleteReq(r)}
+                      />
                     ))}
                   </div>
                 </div>
@@ -158,59 +172,128 @@ export default function MyRequestsTab() {
         req={openReq}
         onOpenChange={(o) => !o && setOpenReq(null)}
       />
+      <EditRequestDialog
+        req={editReq}
+        onClose={() => setEditReq(null)}
+        onSaved={() => { setEditReq(null); load(); }}
+      />
+      <DeleteRequestDialog
+        req={deleteReq}
+        onClose={() => setDeleteReq(null)}
+        onDeleted={() => { setDeleteReq(null); load(); }}
+      />
     </div>
   );
 }
 
-function RequestRow({ req, onClick }) {
+function RequestRow({ req, onClick, onEdit, onDelete }) {
   const meta = STATUS_META[req.status] || STATUS_META["Pending Approval"];
   const { Icon } = meta;
+  const isPending = req.status === "Pending Approval";
+
+  // The row is clickable to open the detail dialog. We render the outer as a
+  // <div role="button"> (not <button>) so we can safely nest Edit/Delete
+  // <button> children — avoids invalid button-inside-button HTML.
+  const handleKey = (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onClick?.();
+    }
+  };
+  const stop = (e) => e.stopPropagation();
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      data-testid={`my-booking-row-${req.id}`}
-      className="w-full text-left rounded-lg border border-gray-200 bg-white hover:border-[#ec9324]/50 hover:shadow-sm transition-all px-3 py-2.5 flex items-start gap-2.5"
-    >
-      <span
-        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-        style={{ backgroundColor: meta.bg, color: meta.color, border: `1px solid ${meta.border}` }}
+    <TooltipProvider delayDuration={150}>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onClick}
+        onKeyDown={handleKey}
+        data-testid={`my-booking-row-${req.id}`}
+        className="w-full text-left rounded-lg border border-gray-200 bg-white hover:border-[#ec9324]/50 hover:shadow-sm transition-all px-3 py-2.5 flex items-start gap-2.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40"
       >
-        <Icon sx={{ fontSize: 15 }} />
-      </span>
-      <div className="flex-1 min-w-0 flex items-start gap-2">
-        <div className="flex-1 min-w-0">
-          <div
-            className="text-[13px] font-semibold text-gray-900 truncate"
-            title="Workstation"
-          >
-            <Chair sx={{ fontSize: 12 }} className="inline mr-0.5 text-[#ec9324]" />
-            {req.seat_label || "—"}
+        <span
+          className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+          style={{ backgroundColor: meta.bg, color: meta.color, border: `1px solid ${meta.border}` }}
+        >
+          <Icon sx={{ fontSize: 15 }} />
+        </span>
+        <div className="flex-1 min-w-0 flex items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="text-[13px] font-semibold text-gray-900 truncate">
+                  <Chair sx={{ fontSize: 12 }} className="inline mr-0.5 text-[#ec9324]" />
+                  {req.seat_label || "—"}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>Workstation</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="text-[11px] text-gray-500 mt-0.5 inline-flex items-center gap-0.5">
+                  <CalendarToday sx={{ fontSize: 10 }} /> {req.date || "—"}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>Requested For</TooltipContent>
+            </Tooltip>
           </div>
-          <div
-            className="text-[11px] text-gray-500 mt-0.5 inline-flex items-center gap-0.5"
-            title="Requested For"
-          >
-            <CalendarToday sx={{ fontSize: 10 }} /> {req.date || "—"}
+          <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold border whitespace-nowrap"
+                  style={{ color: meta.color, backgroundColor: meta.bg, borderColor: meta.border }}
+                >
+                  {req.status}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Status</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="text-[11px] text-gray-500 truncate max-w-[160px] text-right">
+                  {req.plan_name || "—"}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Floor</TooltipContent>
+            </Tooltip>
+            {isPending && (
+              <div className="flex items-center gap-0.5 mt-0.5" onClick={stop}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={(e) => { stop(e); onEdit?.(); }}
+                      data-testid={`my-booking-edit-${req.id}`}
+                      className="w-6 h-6 inline-flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 hover:text-[#ec9324]"
+                      aria-label="Edit request"
+                    >
+                      <EditOutlined sx={{ fontSize: 14 }} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Edit</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={(e) => { stop(e); onDelete?.(); }}
+                      data-testid={`my-booking-delete-${req.id}`}
+                      className="w-6 h-6 inline-flex items-center justify-center rounded hover:bg-red-50 text-gray-500 hover:text-red-600"
+                      aria-label="Delete request"
+                    >
+                      <DeleteOutline sx={{ fontSize: 14 }} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Delete</TooltipContent>
+                </Tooltip>
+              </div>
+            )}
           </div>
-        </div>
-        <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
-          <span
-            className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold border whitespace-nowrap"
-            style={{ color: meta.color, backgroundColor: meta.bg, borderColor: meta.border }}
-            title="Status"
-          >
-            {req.status}
-          </span>
-          <span
-            className="text-[11px] text-gray-500 truncate max-w-[160px] text-right"
-            title="Floor"
-          >
-            {req.plan_name || "—"}
-          </span>
         </div>
       </div>
-    </button>
+    </TooltipProvider>
   );
 }
 
@@ -295,5 +378,223 @@ function Field({ label, icon: Icon, children }) {
         <div className="text-[13px] text-gray-900 mt-0.5">{children}</div>
       </div>
     </div>
+  );
+}
+
+
+/**
+ * EditRequestDialog — allows the requester (or a Super Admin) to change the
+ * booking date and/or seat on a Pending Approval workstation request. The
+ * new seat must belong to the same floor plan. Availability for the target
+ * date is fetched live so unavailable seats are marked in the dropdown.
+ */
+function EditRequestDialog({ req, onClose, onSaved }) {
+  const [date, setDate] = useState("");
+  const [seatId, setSeatId] = useState("");
+  const [seats, setSeats] = useState([]);
+  const [bookedSeatIds, setBookedSeatIds] = useState([]);
+  const [pendingSeatIds, setPendingSeatIds] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!req) return;
+    setDate(req.date || "");
+    setSeatId(req.seat_id || "");
+    setSeats([]);
+    setBookedSeatIds([]);
+    setPendingSeatIds([]);
+  }, [req?.id]);
+
+  // Load seats + availability for the current plan on the selected date.
+  useEffect(() => {
+    if (!req || !date) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const r = await api.get("/workstation-requests/availability", {
+          params: { plan_id: req.plan_id, date },
+        });
+        if (cancelled) return;
+        setSeats(r.data?.seats || []);
+        setBookedSeatIds(r.data?.booked_seat_ids || []);
+        // Exclude this request itself from the "pending" lock so the user can
+        // keep the same seat when only changing the date.
+        setPendingSeatIds(
+          (r.data?.pending_seat_ids || []).filter(
+            (sid) => sid !== req.seat_id || date !== req.date,
+          ),
+        );
+      } catch (e) {
+        if (!cancelled) {
+          notify.error(formatApiError(e?.response?.data?.detail) || "Failed to load seats");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [req?.id, req?.plan_id, req?.seat_id, req?.date, date]);
+
+  const seatOptions = useMemo(() => {
+    return (seats || []).map((s) => {
+      const unavailable =
+        bookedSeatIds.includes(s.id) ||
+        pendingSeatIds.filter((sid) => sid !== req?.seat_id).includes(s.id);
+      const isCurrent = s.id === req?.seat_id;
+      return {
+        id: s.id,
+        label: s.label || s.id,
+        unavailable: unavailable && !isCurrent,
+      };
+    }).sort((a, b) => (a.label || "").localeCompare(b.label || ""));
+  }, [seats, bookedSeatIds, pendingSeatIds, req?.seat_id]);
+
+  const dirty = req && (date !== req.date || seatId !== req.seat_id);
+
+  const save = async () => {
+    if (!req) return;
+    if (!dirty) { onClose?.(); return; }
+    setSaving(true);
+    try {
+      await api.patch(`/workstation-requests/${req.id}`, {
+        date, seat_id: seatId,
+      });
+      notify.success("Request updated");
+      onSaved?.();
+    } catch (e) {
+      notify.error(formatApiError(e?.response?.data?.detail) || "Failed to update request");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={!!req} onOpenChange={(o) => !o && onClose?.()}>
+      <DialogContent className="max-w-md p-0 gap-0 overflow-hidden" data-testid="my-booking-edit-dialog">
+        <DialogHeader className="px-5 pt-4 pb-3 border-b border-gray-100">
+          <DialogTitle className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+            <EditOutlined sx={{ fontSize: 16 }} className="text-[#ec9324]" />
+            Edit workstation request
+          </DialogTitle>
+        </DialogHeader>
+        <div className="px-5 py-4 space-y-4">
+          <div className="text-[11px] text-gray-500">
+            Floor plan · <span className="font-medium text-gray-700">{req?.plan_name || "—"}</span>
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold block mb-1">Date</label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              data-testid="my-booking-edit-date"
+              className="w-full text-sm rounded-md border border-gray-300 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold block mb-1">
+              Workstation {loading && <span className="text-gray-400 normal-case">· loading…</span>}
+            </label>
+            <select
+              value={seatId}
+              onChange={(e) => setSeatId(e.target.value)}
+              disabled={loading || seatOptions.length === 0}
+              data-testid="my-booking-edit-seat"
+              className="w-full text-sm rounded-md border border-gray-300 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40 disabled:bg-gray-50"
+            >
+              {seatOptions.length === 0 && <option value={seatId}>{req?.seat_label || "—"}</option>}
+              {seatOptions.map((s) => (
+                <option key={s.id} value={s.id} disabled={s.unavailable}>
+                  {s.label}{s.unavailable ? " (occupied)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <DialogFooter className="px-5 py-3 border-t border-gray-100 bg-gray-50/50">
+          <Button
+            variant="outline"
+            onClick={onClose}
+            disabled={saving}
+            data-testid="my-booking-edit-cancel"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={save}
+            disabled={saving || !dirty}
+            className="bg-[#ec9324] hover:bg-[#d47f10] text-white"
+            data-testid="my-booking-edit-save"
+          >
+            {saving ? "Saving…" : "Save changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
+/**
+ * DeleteRequestDialog — confirms a soft-delete of a Pending Approval request.
+ * On confirm, the request is set to Cancelled and hidden from both the
+ * requester's My Bookings tab and the admin's Workstation Requests table.
+ * It continues to appear in the aggregated Bookings module.
+ */
+function DeleteRequestDialog({ req, onClose, onDeleted }) {
+  const [busy, setBusy] = useState(false);
+  const del = async () => {
+    if (!req) return;
+    setBusy(true);
+    try {
+      await api.delete(`/workstation-requests/${req.id}`);
+      notify.success("Request deleted");
+      onDeleted?.();
+    } catch (e) {
+      notify.error(formatApiError(e?.response?.data?.detail) || "Failed to delete request");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog open={!!req} onOpenChange={(o) => !o && onClose?.()}>
+      <DialogContent className="max-w-sm p-0 gap-0 overflow-hidden" data-testid="my-booking-delete-dialog">
+        <DialogHeader className="px-5 pt-4 pb-3 border-b border-gray-100">
+          <DialogTitle className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+            <DeleteOutline sx={{ fontSize: 16 }} className="text-red-600" />
+            Delete workstation request?
+          </DialogTitle>
+        </DialogHeader>
+        <div className="px-5 py-4 text-[13px] text-gray-700 space-y-2">
+          <div>
+            This will remove <span className="font-semibold">{req?.seat_label}</span> on{" "}
+            <span className="font-semibold">{req?.date}</span> from your My Bookings.
+          </div>
+          <div className="text-[11px] text-gray-500">
+            The request will be marked as Cancelled. It will still be visible in the Bookings module for record keeping.
+          </div>
+        </div>
+        <DialogFooter className="px-5 py-3 border-t border-gray-100 bg-gray-50/50">
+          <Button
+            variant="outline"
+            onClick={onClose}
+            disabled={busy}
+            data-testid="my-booking-delete-cancel"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={del}
+            disabled={busy}
+            className="bg-red-600 hover:bg-red-700 text-white"
+            data-testid="my-booking-delete-confirm"
+          >
+            {busy ? "Deleting…" : "Delete"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
