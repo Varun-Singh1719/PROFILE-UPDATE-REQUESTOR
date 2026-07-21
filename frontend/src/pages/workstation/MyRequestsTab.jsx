@@ -180,11 +180,17 @@ function RequestRow({ req, onClick }) {
       </span>
       <div className="flex-1 min-w-0 flex items-start gap-2">
         <div className="flex-1 min-w-0">
-          <div className="text-[13px] font-semibold text-gray-900 truncate">
+          <div
+            className="text-[13px] font-semibold text-gray-900 truncate"
+            title="Workstation"
+          >
             <Chair sx={{ fontSize: 12 }} className="inline mr-0.5 text-[#ec9324]" />
             {req.seat_label || "—"}
           </div>
-          <div className="text-[11px] text-gray-500 mt-0.5 inline-flex items-center gap-0.5">
+          <div
+            className="text-[11px] text-gray-500 mt-0.5 inline-flex items-center gap-0.5"
+            title="Requested For"
+          >
             <CalendarToday sx={{ fontSize: 10 }} /> {req.date || "—"}
           </div>
         </div>
@@ -192,10 +198,14 @@ function RequestRow({ req, onClick }) {
           <span
             className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold border whitespace-nowrap"
             style={{ color: meta.color, backgroundColor: meta.bg, borderColor: meta.border }}
+            title="Status"
           >
             {req.status}
           </span>
-          <span className="text-[11px] text-gray-500 truncate max-w-[160px] text-right">
+          <span
+            className="text-[11px] text-gray-500 truncate max-w-[160px] text-right"
+            title="Floor"
+          >
             {req.plan_name || "—"}
           </span>
         </div>
