@@ -19,7 +19,7 @@ import io
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://sidebar-spacing-fix.preview.emergentagent.com/api"
+BASE_URL = "https://workstation-requests.preview.emergentagent.com/api"
 ADMIN_EMAIL = "admin@ticketing.com"
 ADMIN_PASSWORD = "Admin@123"
 

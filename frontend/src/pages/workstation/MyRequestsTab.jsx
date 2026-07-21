@@ -178,25 +178,26 @@ function RequestRow({ req, onClick }) {
       >
         <Icon sx={{ fontSize: 15 }} />
       </span>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+      <div className="flex-1 min-w-0 flex items-start gap-2">
+        <div className="flex-1 min-w-0">
           <div className="text-[13px] font-semibold text-gray-900 truncate">
             <Chair sx={{ fontSize: 12 }} className="inline mr-0.5 text-[#ec9324]" />
             {req.seat_label || "—"}
           </div>
+          <div className="text-[11px] text-gray-500 mt-0.5 inline-flex items-center gap-0.5">
+            <CalendarToday sx={{ fontSize: 10 }} /> {req.date || "—"}
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
           <span
-            className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold border shrink-0"
+            className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold border whitespace-nowrap"
             style={{ color: meta.color, backgroundColor: meta.bg, borderColor: meta.border }}
           >
             {req.status}
           </span>
-        </div>
-        <div className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-2 flex-wrap">
-          <span className="inline-flex items-center gap-0.5">
-            <CalendarToday sx={{ fontSize: 10 }} /> {req.date || "—"}
+          <span className="text-[11px] text-gray-500 truncate max-w-[160px] text-right">
+            {req.plan_name || "—"}
           </span>
-          <span className="text-gray-300">·</span>
-          <span className="truncate max-w-[160px]">{req.plan_name || "—"}</span>
         </div>
       </div>
     </button>
