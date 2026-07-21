@@ -176,64 +176,6 @@ async def _enrich_workstation_with_team(docs: List[dict]) -> List[dict]:
     return [_workstation_booking_view(d, team_map) for d in docs]
 
 
-def _workstation_request_view(doc: dict, team_map: Optional[Dict[str, dict]] = None) -> dict:
-    """Project a workstation_request (Pending/Approved-without-booking/
-    Declined/Cancelled) into the unified Bookings table shape. Rows whose
-    request has already been converted into a real workstation_booking
-    (`approved_booking_id` set) are NOT projected here — the linked booking
-    covers them instead.
-    """
-    team_map = team_map or {}
-    emp = doc.get("employee") or {}
-    team_name = doc.get("team_name")
-    if not team_name and doc.get("team_id") and doc["team_id"] in team_map:
-        team_name = team_map[doc["team_id"]].get("name")
-    # Status mirrors the request status verbatim so the Booking table shows
-    # "Pending Approval" / "Approved" / "Declined" / "Cancelled" clearly.
-    status = doc.get("status") or "Pending Approval"
-    return {
-        "id": doc.get("id"),
-        "seq_no": doc.get("seq_no"),
-        "type": "Workstation",
-        "title": f"Workstation {doc.get('seat_label')}",
-        "room_id": doc.get("seat_id"),
-        "room_name": doc.get("seat_label"),
-        "room_capacity": 1,
-        "plan_id": doc.get("plan_id"),
-        "plan_name": doc.get("plan_name"),
-        "start_at": doc.get("date"),
-        "end_at": doc.get("date"),
-        "date": doc.get("date"),
-        "seat_id": doc.get("seat_id"),
-        "seat_label": doc.get("seat_label"),
-        "organizer": emp,
-        "organizer_team_name": team_name,
-        "team_id": doc.get("team_id"),
-        "team_color": doc.get("team_color"),
-        "attendees": [],
-        "recurring": None,
-        "series_id": None,
-        "status": status,
-        "cancelled": status == "Cancelled",
-        "created_by": doc.get("requested_by") or emp,
-        "created_at": doc.get("created_at") or doc.get("requested_on"),
-        "updated_at": doc.get("updated_at"),
-        # Marker so the UI/detail view can distinguish these from real bookings.
-        "source": "workstation_request",
-    }
-
-
-async def _enrich_workstation_requests_with_team(docs: List[dict]) -> List[dict]:
-    if not docs:
-        return docs
-    team_ids = list({d["team_id"] for d in docs if d.get("team_id")})
-    team_map: Dict[str, dict] = {}
-    if team_ids:
-        team_docs = await db.teams.find({"id": {"$in": team_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
-        team_map = {t["id"]: t for t in team_docs}
-    return [_workstation_request_view(d, team_map) for d in docs]
-
-
 def _parse_date(s: Optional[str], field: str) -> Optional[date]:
     if not s:
         return None
@@ -467,66 +409,6 @@ async def list_bookings(
         ws_docs = await db.workstation_bookings.find(q_ws, {"_id": 0}).sort([("date", -1)]).limit(5000).to_list(5000)
         ws_enriched = await _enrich_workstation_with_team(ws_docs)
         rows.extend(ws_enriched)
-
-        # Also surface workstation_requests in the centralized Booking
-        # module — every booking (whether directly assigned or user-raised)
-        # lives here. To avoid duplicates, requests whose `approved_booking_id`
-        # is already set are excluded (the linked workstation_booking above
-        # already represents them).
-        req_filters: List[Dict[str, Any]] = [
-            {"$or": [
-                {"approved_booking_id": {"$exists": False}},
-                {"approved_booking_id": None},
-            ]},
-        ]
-        include_reqs = True
-        if statuses:
-            wanted: List[str] = []
-            for s in statuses:
-                sl = (s or "").strip().lower()
-                if sl in ("pending approval", "pending"):
-                    wanted.append("Pending Approval")
-                elif sl == "approved":
-                    wanted.append("Approved")
-                elif sl == "declined":
-                    wanted.append("Declined")
-                elif sl == "cancelled":
-                    wanted.append("Cancelled")
-            if wanted:
-                req_filters.append({"status": {"$in": wanted}})
-            else:
-                include_reqs = False
-        if include_reqs:
-            if df or dt:
-                rng: Dict[str, str] = {}
-                if df:
-                    rng["$gte"] = df.isoformat()
-                if dt:
-                    rng["$lte"] = dt.isoformat()
-                req_filters.append({"date": rng})
-            if employee_ids:
-                req_filters.append({"employee.id": {"$in": employee_ids}})
-            if created_by_ids:
-                req_filters.append({"requested_by.id": {"$in": created_by_ids}})
-            if team_ids:
-                req_filters.append({"team_id": {"$in": team_ids}})
-            if search:
-                import re
-                s = search.strip().lstrip("#").strip()
-                if s:
-                    esc = re.escape(s)
-                    or_clauses = [
-                        {"seat_label": {"$regex": esc, "$options": "i"}},
-                        {"plan_name": {"$regex": esc, "$options": "i"}},
-                        {"employee.name": {"$regex": esc, "$options": "i"}},
-                    ]
-                    if s.isdigit():
-                        or_clauses.append({"seq_no": int(s)})
-                    req_filters.append({"$or": or_clauses})
-            q_req = {"$and": req_filters} if len(req_filters) > 1 else req_filters[0]
-            req_docs = await db.workstation_requests.find(q_req, {"_id": 0}).sort([("date", -1)]).limit(5000).to_list(5000)
-            req_enriched = await _enrich_workstation_requests_with_team(req_docs)
-            rows.extend(req_enriched)
 
     # In-memory sort
     direction_int = -1 if (direction or "").lower() == "desc" else 1
