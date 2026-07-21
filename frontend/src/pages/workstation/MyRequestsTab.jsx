@@ -186,14 +186,16 @@ export default function MyRequestsTab() {
 }
 
 /** Small dark chip that appears on hover — same visual as the topbar
- *  Notification Bell tooltip. Positioned above the element with a fixed
- *  offset so it never floats off into row whitespace.
+ *  Notification Bell tooltip. `side` controls whether it renders above or
+ *  below the trigger; use "below" inside overflow-clipped containers like
+ *  Dialogs so the chip isn't cropped.
  */
-function HoverChip({ label, align = "left" }) {
+function HoverChip({ label, align = "left", side = "above" }) {
   const alignCls = align === "right" ? "right-0" : "left-0";
+  const sideCls = side === "below" ? "top-full mt-1" : "bottom-full mb-1";
   return (
     <span
-      className={`pointer-events-none absolute bottom-full mb-1 ${alignCls} px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg`}
+      className={`pointer-events-none absolute ${sideCls} ${alignCls} px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg`}
     >
       {label}
     </span>
@@ -230,34 +232,36 @@ function RequestRow({ req, onClick, onEdit, onDelete }) {
       </span>
       <div className="flex-1 min-w-0 flex items-start gap-2">
         <div className="flex-1 min-w-0">
-          <div className="group relative inline-block max-w-full">
+          <div className="group relative w-fit max-w-full">
             <div className="text-[13px] font-semibold text-gray-900 truncate">
               <Chair sx={{ fontSize: 12 }} className="inline mr-0.5 text-[#ec9324]" />
               {req.seat_label || "—"}
             </div>
             <HoverChip label="Workstation" align="left" />
           </div>
-          <div className="group relative inline-flex items-center gap-0.5 text-[11px] text-gray-500 mt-0.5">
-            <CalendarToday sx={{ fontSize: 10 }} /> {req.date || "—"}
+          <div className="group relative w-fit mt-0.5">
+            <div className="inline-flex items-center gap-0.5 text-[11px] text-gray-500">
+              <CalendarToday sx={{ fontSize: 10 }} /> {req.date || "—"}
+            </div>
             <HoverChip label="Requested For" align="left" />
           </div>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
-          <span className="group relative inline-block">
+          <div className="group relative">
             <span
-              className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold border whitespace-nowrap"
+              className="inline-block text-[9px] px-1.5 py-0.5 rounded-full font-semibold border whitespace-nowrap"
               style={{ color: meta.color, backgroundColor: meta.bg, borderColor: meta.border }}
             >
               {req.status}
             </span>
             <HoverChip label="Status" align="right" />
-          </span>
-          <span className="group relative inline-block max-w-[160px]">
+          </div>
+          <div className="group relative max-w-[160px]">
             <span className="block text-[11px] text-gray-500 truncate text-right">
               {req.plan_name || "—"}
             </span>
             <HoverChip label="Floor" align="right" />
-          </span>
+          </div>
           {isPending && (
             <div className="flex items-center gap-0.5 mt-0.5" onClick={stop}>
               <button
@@ -316,7 +320,7 @@ function RequestDetailDialog({ req, onOpenChange, onEdit, onDelete }) {
                   className="group relative w-7 h-7 inline-flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 hover:text-[#ec9324]"
                 >
                   <EditOutlined sx={{ fontSize: 16 }} />
-                  <HoverChip label="Edit" align="right" />
+                  <HoverChip label="Edit" align="right" side="below" />
                 </button>
                 <button
                   type="button"
@@ -326,7 +330,7 @@ function RequestDetailDialog({ req, onOpenChange, onEdit, onDelete }) {
                   className="group relative w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-gray-500 hover:text-red-600"
                 >
                   <DeleteOutline sx={{ fontSize: 16 }} />
-                  <HoverChip label="Delete" align="right" />
+                  <HoverChip label="Delete" align="right" side="below" />
                 </button>
               </span>
             )}
