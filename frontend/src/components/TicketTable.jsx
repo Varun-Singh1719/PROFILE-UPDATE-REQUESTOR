@@ -2,6 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { StatusBadge, PriorityBadge } from "./Badges";
 import { Checkbox } from "./ui/checkbox";
+import { BulkSelectCheckbox } from "./ui/bulk-select-checkbox";
 import { Button } from "./ui/button";
 import { numericId } from "../lib/ticketId";
 import MoreVertical from "@mui/icons-material/MoreVert";
@@ -101,7 +102,7 @@ export default function TicketTable({
             <tr>
               {selectable && showCheckbox && (
                 <th className="px-4 py-3 w-10">
-                  <Checkbox
+                  <BulkSelectCheckbox
                     data-testid="select-all-checkbox"
                     checked={allSelected}
                     onCheckedChange={(v) => onToggleAll?.(!!v)}
@@ -129,7 +130,7 @@ export default function TicketTable({
               <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50/80 transition-colors" data-testid={`ticket-row-${t.ticket_id}`}>
                 {selectable && showCheckbox && (
                   <td className="px-4 py-3">
-                    <Checkbox
+                    <BulkSelectCheckbox
                       data-testid={`row-checkbox-${t.ticket_id}`}
                       checked={selected.includes(t.id)}
                       onCheckedChange={() => onToggle?.(t.id)}

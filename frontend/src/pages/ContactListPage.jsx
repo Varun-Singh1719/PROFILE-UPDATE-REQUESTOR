@@ -7,6 +7,7 @@ import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { Switch } from "../components/ui/switch";
 import { Checkbox } from "../components/ui/checkbox";
+import { BulkSelectCheckbox } from "../components/ui/bulk-select-checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import SingleSelect from "../components/SingleSelect";
 import DeferredSearchInput from "../components/DeferredSearchInput";
@@ -1138,7 +1139,7 @@ export default function ContactListPage() {
             <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200 sticky top-0 z-10">
               <tr>
                 <th className="px-3 py-3 text-left w-10">
-                  <Checkbox checked={allSelected} onCheckedChange={(v) => toggleAll(!!v)} data-testid="select-all-employees" aria-label="Select all"/>
+                  <BulkSelectCheckbox checked={allSelected} onCheckedChange={(v) => toggleAll(!!v)} data-testid="select-all-employees" aria-label="Select all"/>
                 </th>
                 <th className="px-4 py-3 text-left cursor-pointer hover:text-[#ec9324]" onClick={() => toggleSort("name")} data-testid="sort-name">
                   Name {sortBy === "name" && (sortDir === "asc" ? "▲" : "▼")}
@@ -1165,7 +1166,7 @@ export default function ContactListPage() {
               {contacts.map((c) => (
                 <tr key={c.id} className={`border-b border-gray-100 hover:bg-gray-50/80 ${selected.includes(c.id) ? "bg-[#ec9324]/5" : ""}`} data-testid={`contact-row-${c.email}`}>
                   <td className="px-3 py-3">
-                    <Checkbox
+                    <BulkSelectCheckbox
                       checked={selected.includes(c.id)}
                       onCheckedChange={(v) => toggleOne(c.id, !!v)}
                       data-testid={`select-${c.email}`}

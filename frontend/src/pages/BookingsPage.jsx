@@ -35,6 +35,7 @@ import DeferredSearchInput from "../components/DeferredSearchInput";
 import api from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Checkbox } from "../components/ui/checkbox";
+import { BulkSelectCheckbox } from "../components/ui/bulk-select-checkbox";
 import { toast } from "../lib/notify";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { confirm as confirmDialog } from '../lib/dialog';
@@ -533,7 +534,7 @@ export default function BookingsPage() {
               <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200 sticky top-0 z-10">
                 <tr>
                   <th className="px-4 py-3 text-left w-10">
-                    <Checkbox checked={allOnPageSelected} onCheckedChange={toggleAllOnPage} data-testid="bookings-select-all"/>
+                    <BulkSelectCheckbox checked={allOnPageSelected} onCheckedChange={toggleAllOnPage} data-testid="bookings-select-all"/>
                   </th>
                   <ThSort label="Booking ID" field="seq_no" currentSort={sort} currentDir={direction} onSort={onSort}/>
                   <th className="px-4 py-3 text-left">Type</th>
@@ -638,7 +639,7 @@ function BookingRow({ booking: b, selected, onToggle, onView, onEdit, onCancel }
   return (
     <tr className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${isCancelled ? "opacity-70" : ""}`} data-testid={`bookings-row-${b.id}`}>
       <td className="px-4 py-3">
-        <Checkbox checked={selected} onCheckedChange={onToggle} data-testid={`bookings-row-checkbox-${b.id}`}/>
+        <BulkSelectCheckbox checked={selected} onCheckedChange={onToggle} data-testid={`bookings-row-checkbox-${b.id}`}/>
       </td>
       <td className="px-4 py-3 font-mono">
         <button onClick={onView} className="text-[#ec9324] hover:underline font-semibold" data-testid={`bookings-row-id-${b.id}`}>

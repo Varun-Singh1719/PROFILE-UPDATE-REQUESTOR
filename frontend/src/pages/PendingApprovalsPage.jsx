@@ -37,6 +37,7 @@ import { toast } from "../lib/notify";
 import Layout from "../components/Layout";
 import api, { formatApiError } from "../lib/api";
 import { Button } from "../components/ui/button";
+import { BulkSelectCheckbox } from "../components/ui/bulk-select-checkbox";
 import { Checkbox } from "../components/ui/checkbox";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
@@ -553,7 +554,7 @@ export default function PendingApprovalsPage() {
                             <div className="flex items-center gap-2 min-w-0">
                               {canApprove && (
                                 <div onClick={(e) => e.stopPropagation()}>
-                                  <Checkbox
+                                  <BulkSelectCheckbox
                                     checked={effectiveSelectedIds.has(req.id)}
                                     onCheckedChange={() => toggleSelect(req.id)}
                                     data-testid={`pa-select-${req.id}`}
