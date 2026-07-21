@@ -168,6 +168,8 @@ export default function MyRequestsTab() {
       <RequestDetailDialog
         req={openReq}
         onOpenChange={(o) => !o && setOpenReq(null)}
+        onEdit={(r) => { setOpenReq(null); setEditReq(r); }}
+        onDelete={(r) => { setOpenReq(null); setDeleteReq(r); }}
       />
       <EditRequestDialog
         req={editReq}
@@ -183,22 +185,15 @@ export default function MyRequestsTab() {
   );
 }
 
-/** Small dark chip that appears on hover — mirrors the exact pattern used
- *  on the topbar Notification Bell (CSS-only, `group` + `group-hover`).
- *  `position` controls where the chip anchors relative to its parent.
+/** Small dark chip that appears on hover — same visual as the topbar
+ *  Notification Bell tooltip. Positioned above the element with a fixed
+ *  offset so it never floats off into row whitespace.
  */
-function HoverChip({ label, position = "top" }) {
-  const posCls = {
-    top:    "bottom-full mb-1.5 left-1/2 -translate-x-1/2",
-    bottom: "top-full mt-1.5 left-1/2 -translate-x-1/2",
-    right:  "left-full ml-1.5 top-1/2 -translate-y-1/2",
-    left:   "right-full mr-1.5 top-1/2 -translate-y-1/2",
-    "top-right":    "bottom-full mb-1.5 right-0",
-    "bottom-right": "top-full mt-1.5 right-0",
-  }[position] || "bottom-full mb-1.5 left-1/2 -translate-x-1/2";
+function HoverChip({ label, align = "left" }) {
+  const alignCls = align === "right" ? "right-0" : "left-0";
   return (
     <span
-      className={`pointer-events-none absolute ${posCls} px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg`}
+      className={`pointer-events-none absolute bottom-full mb-1 ${alignCls} px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg`}
     >
       {label}
     </span>
@@ -240,11 +235,11 @@ function RequestRow({ req, onClick, onEdit, onDelete }) {
               <Chair sx={{ fontSize: 12 }} className="inline mr-0.5 text-[#ec9324]" />
               {req.seat_label || "—"}
             </div>
-            <HoverChip label="Workstation" position="top" />
+            <HoverChip label="Workstation" align="left" />
           </div>
           <div className="group relative inline-flex items-center gap-0.5 text-[11px] text-gray-500 mt-0.5">
             <CalendarToday sx={{ fontSize: 10 }} /> {req.date || "—"}
-            <HoverChip label="Requested For" position="bottom" />
+            <HoverChip label="Requested For" align="left" />
           </div>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
@@ -255,13 +250,13 @@ function RequestRow({ req, onClick, onEdit, onDelete }) {
             >
               {req.status}
             </span>
-            <HoverChip label="Status" position="top-right" />
+            <HoverChip label="Status" align="right" />
           </span>
           <span className="group relative inline-block max-w-[160px]">
             <span className="block text-[11px] text-gray-500 truncate text-right">
               {req.plan_name || "—"}
             </span>
-            <HoverChip label="Floor" position="bottom-right" />
+            <HoverChip label="Floor" align="right" />
           </span>
           {isPending && (
             <div className="flex items-center gap-0.5 mt-0.5" onClick={stop}>
@@ -273,7 +268,7 @@ function RequestRow({ req, onClick, onEdit, onDelete }) {
                 className="group relative w-6 h-6 inline-flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 hover:text-[#ec9324]"
               >
                 <EditOutlined sx={{ fontSize: 14 }} />
-                <HoverChip label="Edit" position="top" />
+                <HoverChip label="Edit" align="right" />
               </button>
               <button
                 type="button"
@@ -283,7 +278,7 @@ function RequestRow({ req, onClick, onEdit, onDelete }) {
                 className="group relative w-6 h-6 inline-flex items-center justify-center rounded hover:bg-red-50 text-gray-500 hover:text-red-600"
               >
                 <DeleteOutline sx={{ fontSize: 14 }} />
-                <HoverChip label="Delete" position="top-right" />
+                <HoverChip label="Delete" align="right" />
               </button>
             </div>
           )}
@@ -293,11 +288,12 @@ function RequestRow({ req, onClick, onEdit, onDelete }) {
   );
 }
 
-function RequestDetailDialog({ req, onOpenChange }) {
+function RequestDetailDialog({ req, onOpenChange, onEdit, onDelete }) {
   if (!req) return null;
   const meta = STATUS_META[req.status] || STATUS_META["Pending Approval"];
   const emp = req.employee || {};
   const requestedBy = req.requested_by || {};
+  const isPending = req.status === "Pending Approval";
   return (
     <Dialog open={!!req} onOpenChange={onOpenChange}>
       <DialogContent
@@ -305,9 +301,35 @@ function RequestDetailDialog({ req, onOpenChange }) {
         data-testid="my-booking-detail-dialog"
       >
         <DialogHeader className="px-5 pt-4 pb-3 border-b border-gray-100">
-          <DialogTitle className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-            <Chair sx={{ fontSize: 16 }} className="text-[#ec9324]" />
-            Workstation request · {req.seat_label || "—"}
+          <DialogTitle className="text-sm font-semibold text-gray-900 flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2">
+              <Chair sx={{ fontSize: 16 }} className="text-[#ec9324]" />
+              Workstation request · {req.seat_label || "—"}
+            </span>
+            {isPending && (
+              <span className="flex items-center gap-1 mr-6">
+                <button
+                  type="button"
+                  onClick={() => onEdit?.(req)}
+                  data-testid="my-booking-detail-edit"
+                  aria-label="Edit request"
+                  className="group relative w-7 h-7 inline-flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 hover:text-[#ec9324]"
+                >
+                  <EditOutlined sx={{ fontSize: 16 }} />
+                  <HoverChip label="Edit" align="right" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDelete?.(req)}
+                  data-testid="my-booking-detail-delete"
+                  aria-label="Delete request"
+                  className="group relative w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-gray-500 hover:text-red-600"
+                >
+                  <DeleteOutline sx={{ fontSize: 16 }} />
+                  <HoverChip label="Delete" align="right" />
+                </button>
+              </span>
+            )}
           </DialogTitle>
         </DialogHeader>
         <div className="px-5 py-4 space-y-4">
@@ -563,14 +585,8 @@ function DeleteRequestDialog({ req, onClose, onDeleted }) {
             Delete workstation request?
           </DialogTitle>
         </DialogHeader>
-        <div className="px-5 py-4 text-[13px] text-gray-700 space-y-2">
-          <div>
-            This will remove <span className="font-semibold">{req?.seat_label}</span> on{" "}
-            <span className="font-semibold">{req?.date}</span> from your My Bookings.
-          </div>
-          <div className="text-[11px] text-gray-500">
-            The request will be marked as Cancelled. It will still be visible in the Bookings module for record keeping.
-          </div>
+        <div className="px-5 py-4 text-[13px] text-gray-700">
+          Do you wana proiceed with Deleting your request
         </div>
         <DialogFooter className="px-5 py-3 border-t border-gray-100 bg-gray-50/50">
           <Button
