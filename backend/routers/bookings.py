@@ -177,15 +177,20 @@ async def _enrich_workstation_with_team(docs: List[dict]) -> List[dict]:
 
 
 def _workstation_request_view(doc: dict, team_map: Optional[Dict[str, dict]] = None) -> dict:
-    """Project a Cancelled workstation_request (soft-deleted by requester)
-    into the unified Bookings table shape. These appear ONLY as Cancelled
-    entries in the Booking module.
+    """Project a workstation_request (Pending/Approved-without-booking/
+    Declined/Cancelled) into the unified Bookings table shape. Rows whose
+    request has already been converted into a real workstation_booking
+    (`approved_booking_id` set) are NOT projected here — the linked booking
+    covers them instead.
     """
     team_map = team_map or {}
     emp = doc.get("employee") or {}
     team_name = doc.get("team_name")
     if not team_name and doc.get("team_id") and doc["team_id"] in team_map:
         team_name = team_map[doc["team_id"]].get("name")
+    # Status mirrors the request status verbatim so the Booking table shows
+    # "Pending Approval" / "Approved" / "Declined" / "Cancelled" clearly.
+    status = doc.get("status") or "Pending Approval"
     return {
         "id": doc.get("id"),
         "seq_no": doc.get("seq_no"),
@@ -208,10 +213,8 @@ def _workstation_request_view(doc: dict, team_map: Optional[Dict[str, dict]] = N
         "attendees": [],
         "recurring": None,
         "series_id": None,
-        # Force Cancelled status — this projection is only used for
-        # requester-soft-deleted requests.
-        "status": "Cancelled",
-        "cancelled": True,
+        "status": status,
+        "cancelled": status == "Cancelled",
         "created_by": doc.get("requested_by") or emp,
         "created_at": doc.get("created_at") or doc.get("requested_on"),
         "updated_at": doc.get("updated_at"),
@@ -465,29 +468,48 @@ async def list_bookings(
         ws_enriched = await _enrich_workstation_with_team(ws_docs)
         rows.extend(ws_enriched)
 
-        # Also surface Cancelled (soft-deleted) workstation requests here so
-        # a user's deleted request still shows in the centralized Booking
-        # module — with status "Cancelled" — even though it never became a
-        # real workstation_bookings row.
-        cancelled_wanted = (not statuses) or ("cancelled" in statuses)
-        if cancelled_wanted:
-            q_req: Dict[str, Any] = {
-                "status": "Cancelled",
-                "hidden_by_requester": True,
-            }
+        # Also surface workstation_requests in the centralized Booking
+        # module — every booking (whether directly assigned or user-raised)
+        # lives here. To avoid duplicates, requests whose `approved_booking_id`
+        # is already set are excluded (the linked workstation_booking above
+        # already represents them).
+        req_filters: List[Dict[str, Any]] = [
+            {"$or": [
+                {"approved_booking_id": {"$exists": False}},
+                {"approved_booking_id": None},
+            ]},
+        ]
+        include_reqs = True
+        if statuses:
+            wanted: List[str] = []
+            for s in statuses:
+                sl = (s or "").strip().lower()
+                if sl in ("pending approval", "pending"):
+                    wanted.append("Pending Approval")
+                elif sl == "approved":
+                    wanted.append("Approved")
+                elif sl == "declined":
+                    wanted.append("Declined")
+                elif sl == "cancelled":
+                    wanted.append("Cancelled")
+            if wanted:
+                req_filters.append({"status": {"$in": wanted}})
+            else:
+                include_reqs = False
+        if include_reqs:
             if df or dt:
                 rng: Dict[str, str] = {}
                 if df:
                     rng["$gte"] = df.isoformat()
                 if dt:
                     rng["$lte"] = dt.isoformat()
-                q_req["date"] = rng
+                req_filters.append({"date": rng})
             if employee_ids:
-                q_req["employee.id"] = {"$in": employee_ids}
+                req_filters.append({"employee.id": {"$in": employee_ids}})
             if created_by_ids:
-                q_req["requested_by.id"] = {"$in": created_by_ids}
+                req_filters.append({"requested_by.id": {"$in": created_by_ids}})
             if team_ids:
-                q_req["team_id"] = {"$in": team_ids}
+                req_filters.append({"team_id": {"$in": team_ids}})
             if search:
                 import re
                 s = search.strip().lstrip("#").strip()
@@ -500,7 +522,8 @@ async def list_bookings(
                     ]
                     if s.isdigit():
                         or_clauses.append({"seq_no": int(s)})
-                    q_req["$or"] = or_clauses
+                    req_filters.append({"$or": or_clauses})
+            q_req = {"$and": req_filters} if len(req_filters) > 1 else req_filters[0]
             req_docs = await db.workstation_requests.find(q_req, {"_id": 0}).sort([("date", -1)]).limit(5000).to_list(5000)
             req_enriched = await _enrich_workstation_requests_with_team(req_docs)
             rows.extend(req_enriched)

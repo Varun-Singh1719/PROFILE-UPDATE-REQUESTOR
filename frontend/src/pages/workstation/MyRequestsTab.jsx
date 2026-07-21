@@ -234,9 +234,17 @@ function RequestRow({ req, onClick, onEdit, onDelete }) {
       <div className="flex-1 min-w-0 flex items-start gap-2">
         <div className="flex-1 min-w-0">
           <div className="group relative w-fit max-w-full">
-            <div className="text-[13px] font-semibold text-gray-900 truncate">
-              <Chair sx={{ fontSize: 12 }} className="inline mr-0.5 text-[#ec9324]" />
-              {req.seat_label || "—"}
+            <div className="text-[13px] font-semibold text-gray-900 truncate flex items-center gap-1.5">
+              <Chair sx={{ fontSize: 12 }} className="text-[#ec9324]" />
+              <span>{req.seat_label || "—"}</span>
+              {req.seq_no != null && (
+                <span
+                  className="font-mono text-[10px] font-medium text-gray-500 bg-gray-100 rounded px-1.5 py-0.5"
+                  data-testid={`my-booking-seq-${req.id}`}
+                >
+                  {req.seq_no}
+                </span>
+              )}
             </div>
             <HoverChip label="Workstation" align="left" />
           </div>
@@ -307,9 +315,17 @@ function RequestDetailDialog({ req, onOpenChange, onEdit, onDelete }) {
       >
         <DialogHeader className="px-5 pt-4 pb-3 border-b border-gray-100">
           <DialogTitle className="text-sm font-semibold text-gray-900 flex items-center justify-between gap-2">
-            <span className="flex items-center gap-2">
-              <Chair sx={{ fontSize: 16 }} className="text-[#ec9324]" />
-              Workstation request · {req.seat_label || "—"}
+            <span className="flex items-center gap-2 min-w-0">
+              <Chair sx={{ fontSize: 16 }} className="text-[#ec9324] shrink-0" />
+              <span className="truncate">Workstation request · {req.seat_label || "—"}</span>
+              {req.seq_no != null && (
+                <span
+                  className="font-mono text-[11px] font-medium text-gray-500 bg-gray-100 rounded px-1.5 py-0.5"
+                  data-testid="my-booking-detail-seq"
+                >
+                  {req.seq_no}
+                </span>
+              )}
             </span>
             {isPending && (
               <span className="flex items-center gap-1 mr-6">

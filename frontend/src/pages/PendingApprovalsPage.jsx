@@ -561,8 +561,16 @@ export default function PendingApprovalsPage() {
                                   />
                                 </div>
                               )}
-                              <div className="font-semibold text-sm text-gray-900 truncate">
-                                Workstation {req.seat_label}
+                              <div className="font-semibold text-sm text-gray-900 truncate flex items-center gap-1.5">
+                                <span>Workstation {req.seat_label}</span>
+                                {req.seq_no != null && (
+                                  <span
+                                    className="font-mono text-[10px] font-medium text-gray-500 bg-gray-100 rounded px-1.5 py-0.5"
+                                    data-testid={`pa-seq-${req.id}`}
+                                  >
+                                    {req.seq_no}
+                                  </span>
+                                )}
                               </div>
                             </div>
                             <span className="text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 whitespace-nowrap">
