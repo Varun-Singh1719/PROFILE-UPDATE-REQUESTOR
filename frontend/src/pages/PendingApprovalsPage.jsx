@@ -573,7 +573,11 @@ export default function PendingApprovalsPage() {
                                 )}
                               </div>
                             </div>
-                            <span className="text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 whitespace-nowrap">
+                            <span
+                              data-testid="pa-status-badge"
+                              className="inline-flex items-center justify-center w-28 h-7 text-xs font-semibold rounded-full border-2 select-none whitespace-nowrap shrink-0"
+                              style={{ color: "#ec9324", borderColor: "#ec9324", backgroundColor: "#ffffff" }}
+                            >
                               Pending
                             </span>
                           </div>
