@@ -18,9 +18,6 @@ import DeleteOutline from "@mui/icons-material/DeleteOutlineOutlined";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "../../components/ui/dialog";
-import {
-  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
-} from "../../components/ui/tooltip";
 import { Button } from "../../components/ui/button";
 
 /**
@@ -186,14 +183,33 @@ export default function MyRequestsTab() {
   );
 }
 
+/** Small dark chip that appears on hover — mirrors the exact pattern used
+ *  on the topbar Notification Bell (CSS-only, `group` + `group-hover`).
+ *  `position` controls where the chip anchors relative to its parent.
+ */
+function HoverChip({ label, position = "top" }) {
+  const posCls = {
+    top:    "bottom-full mb-1.5 left-1/2 -translate-x-1/2",
+    bottom: "top-full mt-1.5 left-1/2 -translate-x-1/2",
+    right:  "left-full ml-1.5 top-1/2 -translate-y-1/2",
+    left:   "right-full mr-1.5 top-1/2 -translate-y-1/2",
+    "top-right":    "bottom-full mb-1.5 right-0",
+    "bottom-right": "top-full mt-1.5 right-0",
+  }[position] || "bottom-full mb-1.5 left-1/2 -translate-x-1/2";
+  return (
+    <span
+      className={`pointer-events-none absolute ${posCls} px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg`}
+    >
+      {label}
+    </span>
+  );
+}
+
 function RequestRow({ req, onClick, onEdit, onDelete }) {
   const meta = STATUS_META[req.status] || STATUS_META["Pending Approval"];
   const { Icon } = meta;
   const isPending = req.status === "Pending Approval";
 
-  // The row is clickable to open the detail dialog. We render the outer as a
-  // <div role="button"> (not <button>) so we can safely nest Edit/Delete
-  // <button> children — avoids invalid button-inside-button HTML.
   const handleKey = (e) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
@@ -203,97 +219,77 @@ function RequestRow({ req, onClick, onEdit, onDelete }) {
   const stop = (e) => e.stopPropagation();
 
   return (
-    <TooltipProvider delayDuration={150}>
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={onClick}
-        onKeyDown={handleKey}
-        data-testid={`my-booking-row-${req.id}`}
-        className="w-full text-left rounded-lg border border-gray-200 bg-white hover:border-[#ec9324]/50 hover:shadow-sm transition-all px-3 py-2.5 flex items-start gap-2.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40"
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={handleKey}
+      data-testid={`my-booking-row-${req.id}`}
+      className="w-full text-left rounded-lg border border-gray-200 bg-white hover:border-[#ec9324]/50 hover:shadow-sm transition-all px-3 py-2.5 flex items-start gap-2.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40"
+    >
+      <span
+        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+        style={{ backgroundColor: meta.bg, color: meta.color, border: `1px solid ${meta.border}` }}
       >
-        <span
-          className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-          style={{ backgroundColor: meta.bg, color: meta.color, border: `1px solid ${meta.border}` }}
-        >
-          <Icon sx={{ fontSize: 15 }} />
-        </span>
-        <div className="flex-1 min-w-0 flex items-start gap-2">
-          <div className="flex-1 min-w-0">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="text-[13px] font-semibold text-gray-900 truncate">
-                  <Chair sx={{ fontSize: 12 }} className="inline mr-0.5 text-[#ec9324]" />
-                  {req.seat_label || "—"}
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>Workstation</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="text-[11px] text-gray-500 mt-0.5 inline-flex items-center gap-0.5">
-                  <CalendarToday sx={{ fontSize: 10 }} /> {req.date || "—"}
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>Requested For</TooltipContent>
-            </Tooltip>
+        <Icon sx={{ fontSize: 15 }} />
+      </span>
+      <div className="flex-1 min-w-0 flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="group relative inline-block max-w-full">
+            <div className="text-[13px] font-semibold text-gray-900 truncate">
+              <Chair sx={{ fontSize: 12 }} className="inline mr-0.5 text-[#ec9324]" />
+              {req.seat_label || "—"}
+            </div>
+            <HoverChip label="Workstation" position="top" />
           </div>
-          <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold border whitespace-nowrap"
-                  style={{ color: meta.color, backgroundColor: meta.bg, borderColor: meta.border }}
-                >
-                  {req.status}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Status</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="text-[11px] text-gray-500 truncate max-w-[160px] text-right">
-                  {req.plan_name || "—"}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Floor</TooltipContent>
-            </Tooltip>
-            {isPending && (
-              <div className="flex items-center gap-0.5 mt-0.5" onClick={stop}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={(e) => { stop(e); onEdit?.(); }}
-                      data-testid={`my-booking-edit-${req.id}`}
-                      className="w-6 h-6 inline-flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 hover:text-[#ec9324]"
-                      aria-label="Edit request"
-                    >
-                      <EditOutlined sx={{ fontSize: 14 }} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>Edit</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={(e) => { stop(e); onDelete?.(); }}
-                      data-testid={`my-booking-delete-${req.id}`}
-                      className="w-6 h-6 inline-flex items-center justify-center rounded hover:bg-red-50 text-gray-500 hover:text-red-600"
-                      aria-label="Delete request"
-                    >
-                      <DeleteOutline sx={{ fontSize: 14 }} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>Delete</TooltipContent>
-                </Tooltip>
-              </div>
-            )}
+          <div className="group relative inline-flex items-center gap-0.5 text-[11px] text-gray-500 mt-0.5">
+            <CalendarToday sx={{ fontSize: 10 }} /> {req.date || "—"}
+            <HoverChip label="Requested For" position="bottom" />
           </div>
         </div>
+        <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
+          <span className="group relative inline-block">
+            <span
+              className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold border whitespace-nowrap"
+              style={{ color: meta.color, backgroundColor: meta.bg, borderColor: meta.border }}
+            >
+              {req.status}
+            </span>
+            <HoverChip label="Status" position="top-right" />
+          </span>
+          <span className="group relative inline-block max-w-[160px]">
+            <span className="block text-[11px] text-gray-500 truncate text-right">
+              {req.plan_name || "—"}
+            </span>
+            <HoverChip label="Floor" position="bottom-right" />
+          </span>
+          {isPending && (
+            <div className="flex items-center gap-0.5 mt-0.5" onClick={stop}>
+              <button
+                type="button"
+                onClick={(e) => { stop(e); onEdit?.(); }}
+                data-testid={`my-booking-edit-${req.id}`}
+                aria-label="Edit request"
+                className="group relative w-6 h-6 inline-flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 hover:text-[#ec9324]"
+              >
+                <EditOutlined sx={{ fontSize: 14 }} />
+                <HoverChip label="Edit" position="top" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => { stop(e); onDelete?.(); }}
+                data-testid={`my-booking-delete-${req.id}`}
+                aria-label="Delete request"
+                className="group relative w-6 h-6 inline-flex items-center justify-center rounded hover:bg-red-50 text-gray-500 hover:text-red-600"
+              >
+                <DeleteOutline sx={{ fontSize: 14 }} />
+                <HoverChip label="Delete" position="top-right" />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-    </TooltipProvider>
+    </div>
   );
 }
 
