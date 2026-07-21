@@ -145,7 +145,58 @@ async def list_contacts(
     return items
 
 
-@api_router.get("/contacts/export.csv")
+@api_router.get("/contacts/assignable")
+async def list_assignable_contacts(user=Depends(get_current_user)):
+    """Return Active users who are eligible to appear in the Assign-To dropdown.
+
+    Eligibility is derived from the caller's v3 permission model. A user is
+    "assignable" iff their effective permission set has
+    ``profix.ticket_detail.functions.receive_assignment.enabled == True``.
+
+    Super Admin users are always included. Users with no permission sets are
+    excluded (safe default — must be explicitly opted in via a set).
+    """
+    contacts = await db.contacts.find(
+        {"status": "Active"},
+        {"_id": 0, "password_hash": 0, "password_encrypted": 0},
+    ).to_list(2000)
+
+    # Prefetch every referenced permission set once so eligibility resolution
+    # is O(N) in-memory instead of O(N) DB calls.
+    all_set_ids: set = set()
+    for c in contacts:
+        for sid in (c.get("permission_set_ids") or []):
+            all_set_ids.add(sid)
+    sets_by_id: Dict[str, dict] = {}
+    if all_set_ids:
+        docs = await db.permission_sets.find(
+            {"id": {"$in": list(all_set_ids)}}, {"_id": 0}
+        ).to_list(2000)
+        sets_by_id = {d["id"]: d for d in docs}
+
+    def _set_grants_receive_assignment(pset: dict) -> bool:
+        """Check a single permission set for the receive_assignment flag."""
+        modules = pset.get("modules") or {}
+        pages = ((modules.get("profix") or {}).get("pages") or {})
+        fn = ((pages.get("ticket_detail") or {}).get("functions") or {}).get("receive_assignment")
+        return bool(fn and fn.get("enabled"))
+
+    eligible: List[dict] = []
+    for c in contacts:
+        if c.get("role") == "Super Admin":
+            eligible.append(c)
+            continue
+        sids = c.get("permission_set_ids") or []
+        if any(_set_grants_receive_assignment(sets_by_id.get(s, {})) for s in sids):
+            eligible.append(c)
+
+    eligible = await _enrich_contacts_with_team(eligible)
+    # Return in the same shape as GET /contacts (a plain list) so the frontend
+    # can drop-in swap the endpoint without any shape rework.
+    return eligible
+
+
+
 async def export_contacts_csv(
     user=Depends(require_role("Super Admin")),
     q: Optional[str] = None,

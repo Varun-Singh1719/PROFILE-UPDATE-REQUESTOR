@@ -336,6 +336,7 @@ PERMISSION_MODULES_V3 = [
                     {"key": "upload_attach", "label": "Upload Attachment","scoped": False},
                     {"key": "download_attach","label":"Download Attachment","scoped": False},
                     {"key": "change_status", "label": "Change Status",  "scoped": True},
+                    {"key": "receive_assignment", "label": "Show in Assign-To Dropdown", "scoped": False},
                 ],
             },
         ],
