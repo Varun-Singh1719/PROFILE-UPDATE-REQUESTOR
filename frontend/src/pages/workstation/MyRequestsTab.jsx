@@ -109,7 +109,8 @@ export default function MyRequestsTab() {
         <div className="flex-1 min-w-0">
           <DateFilter
             testId="my-bookings-date"
-            fieldOptions={[{ value: "date", label: "Booking Date" }]}
+            fields={["date"]}
+            label="Requested For"
             value={range}
             onChange={setRange}
             className="w-full"
@@ -279,7 +280,7 @@ function RequestRow({ req, onClick, onEdit, onDelete }) {
                 onClick={(e) => { stop(e); onDelete?.(); }}
                 data-testid={`my-booking-delete-${req.id}`}
                 aria-label="Delete request"
-                className="group relative w-6 h-6 inline-flex items-center justify-center rounded hover:bg-red-50 text-gray-500 hover:text-red-600"
+                className="group relative w-6 h-6 inline-flex items-center justify-center rounded hover:bg-[#fff7ed] text-gray-500 hover:text-[#ec9324]"
               >
                 <DeleteOutline sx={{ fontSize: 14 }} />
                 <HoverChip label="Delete" align="right" />
@@ -327,7 +328,7 @@ function RequestDetailDialog({ req, onOpenChange, onEdit, onDelete }) {
                   onClick={() => onDelete?.(req)}
                   data-testid="my-booking-detail-delete"
                   aria-label="Delete request"
-                  className="group relative w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-gray-500 hover:text-red-600"
+                  className="group relative w-7 h-7 inline-flex items-center justify-center rounded hover:bg-[#fff7ed] text-gray-500 hover:text-[#ec9324]"
                 >
                   <DeleteOutline sx={{ fontSize: 16 }} />
                   <HoverChip label="Delete" align="right" side="below" />
@@ -585,12 +586,12 @@ function DeleteRequestDialog({ req, onClose, onDeleted }) {
       <DialogContent className="max-w-sm p-0 gap-0 overflow-hidden" data-testid="my-booking-delete-dialog">
         <DialogHeader className="px-5 pt-4 pb-3 border-b border-gray-100">
           <DialogTitle className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-            <DeleteOutline sx={{ fontSize: 16 }} className="text-red-600" />
+            <DeleteOutline sx={{ fontSize: 16 }} className="text-[#ec9324]" />
             Delete workstation request?
           </DialogTitle>
         </DialogHeader>
         <div className="px-5 py-4 text-[13px] text-gray-700">
-          Do you wana proiceed with Deleting your request
+          Do you wanna proceed with Deleting your request
         </div>
         <DialogFooter className="px-5 py-3 border-t border-gray-100 bg-gray-50/50">
           <Button
@@ -604,7 +605,7 @@ function DeleteRequestDialog({ req, onClose, onDeleted }) {
           <Button
             onClick={del}
             disabled={busy}
-            className="bg-red-600 hover:bg-red-700 text-white"
+            className="bg-[#ec9324] hover:bg-[#d47f10] text-white"
             data-testid="my-booking-delete-confirm"
           >
             {busy ? "Deleting…" : "Delete"}
