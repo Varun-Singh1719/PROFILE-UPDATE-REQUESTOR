@@ -10,20 +10,28 @@ import Check from "@mui/icons-material/Check";
  * cropped by parent overflow, blue native highlight on macOS, etc.) doesn't
  * match the application's design system.
  *
+ * Two visual variants:
+ *   • variant="button" (default)  — Trigger looks like a button showing the
+ *     selected label; popup optionally has a search input at the top when
+ *     `searchable` is true.
+ *   • variant="typeable"          — Trigger IS the search input. As the user
+ *     types, the popup opens automatically and filters the option list
+ *     inline. The popup itself has NO separate search box. Selecting an
+ *     option puts its label into the input.
+ *
+ * Options may specify:
+ *   value, label, sublabel?, right?, searchExtra?, disabled?
+ *   - `right`         → text rendered right-aligned inside the option row
+ *                       (e.g. "14 Seats"). When set, the option layout
+ *                       becomes: [label — flex 1, truncate] [right — shrink 0].
+ *   - `searchExtra`   → additional text matched by the search filter but
+ *                       NOT displayed anywhere (e.g. user's email that we
+ *                       want to be searchable while showing only name).
+ *
  * Why a Portal?
  *   The popup is rendered into document.body so it is never clipped by
  *   parent `overflow: hidden`, modals, or other layout containers. Position
  *   is recomputed on scroll/resize while open.
- *
- * Props:
- *   value           — currently selected option value (any)
- *   onChange(value) — called when user picks an option
- *   options         — Array of { value, label, sublabel?, disabled?, group? }
- *                     OR an Array of {label, items: options[]} for groups.
- *   placeholder     — string shown when no value is selected
- *   disabled        — disables the trigger
- *   searchable      — when true, shows a search box in the popup
- *   testIdPrefix    — for stable data-testid hooks
  */
 export default function SelectOrange({
   value,
@@ -32,13 +40,16 @@ export default function SelectOrange({
   placeholder = 'Select…',
   disabled = false,
   searchable = false,
+  variant = 'button', // 'button' | 'typeable'
   testIdPrefix = 'select',
   className = '',
 }) {
+  const isTypeable = variant === 'typeable';
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [popupRect, setPopupRect] = useState(null);
   const triggerRef = useRef(null);
+  const inputRef = useRef(null);
   const popupRef = useRef(null);
   const searchRef = useRef(null);
 
@@ -61,33 +72,49 @@ export default function SelectOrange({
     [flatOptions, value],
   );
 
+  // For typeable variant: input shows the current query while typing, and
+  // reverts to the selected label when the popup is closed and the user
+  // hasn't typed anything different.
+  const [inputText, setInputText] = useState(selected ? selected.label : '');
+  useEffect(() => {
+    if (!open) setInputText(selected ? selected.label : '');
+  }, [selected, open]);
+
+  // The effective search string used to filter options.
+  const activeQuery = isTypeable ? inputText : query;
+
   const filtered = useMemo(() => {
-    if (!query.trim()) return flatOptions;
-    const q = query.trim().toLowerCase();
+    if (!activeQuery || !activeQuery.trim()) return flatOptions;
+    // In typeable mode, once a value is picked and the input still equals
+    // the selected label, we should show ALL options (not just the one
+    // matching the current selection). That way clicking the field lets
+    // the user browse again.
+    if (isTypeable && selected && activeQuery === selected.label) {
+      return flatOptions;
+    }
+    const q = activeQuery.trim().toLowerCase();
     return flatOptions.filter((o) => {
       if (o.__group) return false;
       return (
         String(o.label || '').toLowerCase().includes(q) ||
-        String(o.sublabel || '').toLowerCase().includes(q)
+        String(o.sublabel || '').toLowerCase().includes(q) ||
+        String(o.right || '').toLowerCase().includes(q) ||
+        String(o.searchExtra || '').toLowerCase().includes(q)
       );
     });
-  }, [flatOptions, query]);
+  }, [flatOptions, activeQuery, isTypeable, selected]);
 
   const recalc = useCallback(() => {
-    if (!triggerRef.current) return;
-    const r = triggerRef.current.getBoundingClientRect();
+    const anchor = isTypeable ? inputRef.current : triggerRef.current;
+    if (!anchor) return;
+    const r = anchor.getBoundingClientRect();
     setPopupRect({
       top: r.bottom + window.scrollY + 4,
       left: r.left + window.scrollX,
       width: r.width,
     });
-  }, []);
+  }, [isTypeable]);
 
-  // Helper: close popup AND clear search query in one go. Used from outside-
-  // click, escape, and option-pick handlers so we avoid a "set-state in
-  // effect" pattern that's flagged by react-hooks/set-state-in-effect.
-  // Defined here BEFORE the effects below so the closure resolves correctly
-  // (Temporal Dead Zone — a `const` cannot be referenced before its line).
   const closePopup = useCallback(() => {
     setOpen(false);
     setQuery('');
@@ -109,6 +136,7 @@ export default function SelectOrange({
     const onDown = (e) => {
       if (popupRef.current?.contains(e.target)) return;
       if (triggerRef.current?.contains(e.target)) return;
+      if (inputRef.current?.contains(e.target)) return;
       closePopup();
     };
     const onKey = (e) => { if (e.key === 'Escape') closePopup(); };
@@ -120,33 +148,85 @@ export default function SelectOrange({
     };
   }, [open, closePopup]);
 
-  // Focus the search box when popup opens
+  // Button variant: focus the search box when popup opens (if searchable).
   useEffect(() => {
-    if (open && searchable) requestAnimationFrame(() => searchRef.current?.focus());
-  }, [open, searchable]);
+    if (open && searchable && !isTypeable) requestAnimationFrame(() => searchRef.current?.focus());
+  }, [open, searchable, isTypeable]);
+
+  // ── Typeable trigger ────────────────────────────────────────────────
+  const typeableTrigger = (
+    <div
+      ref={triggerRef}
+      className={[
+        'w-full px-3 py-2 border rounded text-sm bg-white',
+        'flex items-center justify-between gap-2',
+        'border-gray-300 focus-within:border-[#ec9324] focus-within:ring-1 focus-within:ring-[#ec9324]/30',
+        open ? 'border-[#ec9324] ring-1 ring-[#ec9324]/30' : '',
+        disabled ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'hover:border-[#ec9324]',
+        className,
+      ].join(' ')}
+      onMouseDown={(e) => {
+        // Prevent the outside-click handler from firing on the mousedown
+        // that happens as we click into our own input area.
+        if (e.target !== inputRef.current) e.preventDefault();
+        if (!disabled) {
+          setOpen(true);
+          inputRef.current?.focus();
+        }
+      }}
+    >
+      <input
+        ref={inputRef}
+        type="text"
+        disabled={disabled}
+        value={inputText}
+        placeholder={placeholder}
+        data-testid={`${testIdPrefix}-input`}
+        onChange={(e) => {
+          setInputText(e.target.value);
+          if (!open) setOpen(true);
+        }}
+        onFocus={() => { if (!disabled) setOpen(true); }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') { closePopup(); inputRef.current?.blur(); }
+          if (e.key === 'ArrowDown' && !open) setOpen(true);
+        }}
+        className="flex-1 min-w-0 bg-transparent outline-none placeholder:text-gray-400 text-gray-900"
+      />
+      <ChevronDown
+        sx={{ fontSize: 14 }}
+        className={`text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
+      />
+    </div>
+  );
+
+  // ── Button trigger (existing behaviour) ─────────────────────────────
+  const buttonTrigger = (
+    <button
+      ref={triggerRef}
+      type="button"
+      disabled={disabled}
+      onClick={() => !disabled && setOpen((o) => !o)}
+      data-testid={`${testIdPrefix}-trigger`}
+      className={[
+        'w-full px-3 py-2 border rounded text-sm bg-white text-left',
+        'flex items-center justify-between gap-2',
+        'border-gray-300 focus:outline-none focus:border-[#ec9324]',
+        open ? 'border-[#ec9324] ring-1 ring-[#ec9324]/30' : '',
+        disabled ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'hover:border-[#ec9324]',
+        className,
+      ].join(' ')}
+    >
+      <span className={selected ? 'text-gray-900 truncate' : 'text-gray-400 truncate'}>
+        {selected ? selected.label : placeholder}
+      </span>
+      <ChevronDown sx={{ fontSize: 14 }} className={`text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}/>
+    </button>
+  );
 
   return (
     <>
-      <button
-        ref={triggerRef}
-        type="button"
-        disabled={disabled}
-        onClick={() => !disabled && setOpen((o) => !o)}
-        data-testid={`${testIdPrefix}-trigger`}
-        className={[
-          'w-full px-3 py-2 border rounded text-sm bg-white text-left',
-          'flex items-center justify-between gap-2',
-          'border-gray-300 focus:outline-none focus:border-[#ec9324]',
-          open ? 'border-[#ec9324] ring-1 ring-[#ec9324]/30' : '',
-          disabled ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'hover:border-[#ec9324]',
-          className,
-        ].join(' ')}
-      >
-        <span className={selected ? 'text-gray-900 truncate' : 'text-gray-400 truncate'}>
-          {selected ? selected.label : placeholder}
-        </span>
-        <ChevronDown sx={{ fontSize: 14 }} className={`text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}/>
-      </button>
+      {isTypeable ? typeableTrigger : buttonTrigger}
 
       {open && popupRect && createPortal(
         <div
@@ -161,7 +241,7 @@ export default function SelectOrange({
           }}
           className="bg-white border border-gray-200 rounded-md shadow-xl overflow-hidden"
         >
-          {searchable && (
+          {searchable && !isTypeable && (
             <div className="p-2 border-b border-gray-100">
               <input
                 ref={searchRef}
@@ -186,15 +266,26 @@ export default function SelectOrange({
                 );
               }
               const isSel = o.value === value;
+              const hasRight = o.right !== undefined && o.right !== null && o.right !== '';
               return (
                 <button
                   key={String(o.value)}
                   type="button"
                   disabled={o.disabled}
-                  onClick={() => { onChange(o.value); closePopup(); }}
+                  // Use onMouseDown so the click fires BEFORE the input's
+                  // blur handler (which would close the popup) in the
+                  // typeable variant.
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    if (o.disabled) return;
+                    onChange(o.value);
+                    setInputText(o.label);
+                    closePopup();
+                  }}
                   data-testid={`${testIdPrefix}-item-${o.value}`}
                   className={[
-                    'w-full text-left px-3 py-1.5 text-sm flex items-center justify-between gap-2 transition-colors',
+                    'w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 transition-colors',
+                    hasRight ? 'justify-between' : 'justify-between',
                     o.disabled ? 'text-gray-300 cursor-not-allowed' :
                       isSel
                         ? 'bg-[#ec9324] text-white'
@@ -209,7 +300,16 @@ export default function SelectOrange({
                       </span>
                     )}
                   </span>
-                  {isSel && <Check sx={{ fontSize: 14 }} className="shrink-0"/>}
+                  {hasRight ? (
+                    <span
+                      className={`shrink-0 text-[12px] font-semibold tabular-nums ${isSel ? 'text-white' : 'text-gray-600'}`}
+                      data-testid={`${testIdPrefix}-item-${o.value}-right`}
+                    >
+                      {o.right}
+                    </span>
+                  ) : (
+                    isSel && <Check sx={{ fontSize: 14 }} className="shrink-0"/>
+                  )}
                 </button>
               );
             })}

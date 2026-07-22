@@ -2113,3 +2113,32 @@ Backwards-compatible — every existing `confirm/prompt/alert` call site works u
 - `frontend/src/components/Layout.jsx`, `frontend/src/components/ImpersonationBanner.jsx` (new)
 - `frontend/src/pages/ImpersonateCallback.jsx` (new), `frontend/src/pages/PermissionsPage.jsx`
 - `frontend/src/components/permissions/LoginAsDialog.jsx` (new)
+
+
+## [2026-07-22] Meeting Room Booking — Floor map labels, dropdown UX, attendee picker & TopBar fix
+
+### Frontend
+- **Environment set up**: `backend/.env` (MongoDB Atlas connection + JWT/FERNET keys) and `frontend/.env` (REACT_APP_BACKEND_URL). Services restarted; login verified via API + UI (`admin@ticketing.com / Admin@123`).
+- `components/ui/SelectOrange.jsx`:
+    - New `variant="typeable"` mode where the trigger IS a text input; typing filters options inline and the popup no longer has a separate search box.
+    - New per-option `right` field (right-aligned label like `14 Seats`) that renders in place of the sublabel/checkmark.
+    - New per-option `searchExtra` field — matched by the filter but never displayed (used to allow searching by email while showing only name).
+- `pages/MeetingRoomBookingPage.jsx`:
+    - **Floor-map labels** (`RoomBoxLabel`): centered inside every room box, two lines (`<Name>` on top + `Seats : <N>` below). Font size auto-scales from the current zoom via `onTransformed` (target 9–13 px on screen — never grows into a giant billboard when zoomed in) and shrinks to fit width/height. Long names are truncated with an ellipsis ("Alpha" → "Al…" / "Alp…" as space allows) and the full name reappears automatically as the user zooms in.
+    - **Hover tooltip** — dark-pill design matching `NotificationBell` (`bg-gray-900 text-white text-[11px] rounded shadow-lg`), always shows the full room name + seat count, inverse-scaled so it stays a constant on-screen size regardless of zoom.
+    - **Room dropdown**: now uses `variant="typeable"` — no separate search box. Rows show `Room Name` (left, `flex-1`) + `<Capacity> Seats` (right, `tabular-nums`). Plan/tower sublabel is intentionally removed but still matched by the filter via `searchExtra`.
+    - **AttendeePicker → Add Employee**: row shows only the user's name; email is hidden from display but the filter still matches on it (search by email still works).
+    - **AttendeePicker → Add Team**: team name (left, truncated) and member count (right) on one straight line for visual symmetry with the room dropdown.
+    - **Fixed TopBar**: replaced `contentClassName="h-screen flex flex-col"` with `"h-[calc(100vh-56px)]"` so the body no longer scrolls past the sticky top bar. Verified with Playwright — `window.scrollY` stays 0 even after `scrollTo(0, 800)` and the TopBar bbox stays at `y: 0`.
+
+### Verified end-to-end (Playwright)
+- Login → `/workspace-manager/meeting-room-booking` renders the map with centered "<Name>" + "Seats : N" labels; small rooms show truncated names ("Bool…"), hover shows a dark tooltip "Boolean · Seats: 2".
+- Book Meeting Room → dropdown trigger is typeable; popup shows `Alpha 14 Seats`, `Beta 4 Seats`, … with no separate search box.
+- Add Attendees → Add Employee tab shows only names; typing "admin@" filters to "Admin User" (email searchable).
+- Add Attendees → Add Team tab shows `TechKnights 10 members`, `InfraXcellence 15 members`, … on single lines.
+- TopBar remains fixed at the top on the MRB page (no page-body scroll).
+
+### Files touched
+- `backend/.env` (new), `frontend/.env` (new), `memory/test_credentials.md` (new)
+- `frontend/src/components/ui/SelectOrange.jsx`
+- `frontend/src/pages/MeetingRoomBookingPage.jsx`

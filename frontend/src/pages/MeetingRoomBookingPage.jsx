@@ -367,7 +367,7 @@ export default function MeetingRoomBookingPage() {
     <Layout
       title="Meeting Room Booking"
       fullBleed
-      contentClassName="h-screen flex flex-col"
+      contentClassName="h-[calc(100vh-56px)] flex flex-col"
       actions={
         viewMode === "calendar" ? null : (
           permBook.isVisible ? (
@@ -628,19 +628,25 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
       </Field>
 
       <Field label="Meeting Room" required>
-        {/* Custom dropdown — always opens DOWNWARD, never overlaps Date/Time
-            row below. Searchable so users with many rooms can find one fast. */}
+        {/* Typeable searchable dropdown — the trigger itself is the search
+            input (no separate search bar inside the popup). Each option
+            shows the room name (left) and its capacity (right-aligned).
+            The floor / tower sublabel is intentionally omitted here per
+            product spec (2 fields only for visual symmetry). */}
         <SelectOrange
           value={selectedRoomId}
           onChange={(v) => setSelectedRoomId(v)}
           disabled={dropdownDisabled}
           placeholder={dropdownPlaceholder}
-          searchable={rooms.length > 6}
+          variant="typeable"
           testIdPrefix="mrb-form-room"
           options={rooms.map((r) => ({
             value: r.room_id,
             label: r.name,
-            sublabel: r.plan_name,
+            right: `${r.capacity} Seats`,
+            // Still allow the plan/tower name to match while searching,
+            // even though it is not shown in the option row.
+            searchExtra: r.plan_name,
           }))}
         />
         {selectedRoom && (
@@ -1046,11 +1052,13 @@ function AttendeePicker({ selected, onChange, onClose }) {
                   data-testid={`mrb-picker-user-${id}`}
                   className={`w-full text-left flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-gray-50 ${sel ? 'bg-emerald-50' : ''}`}
                 >
-                  <div className="min-w-0">
+                  {/* Only the name is shown in the row — email is intentionally
+                      hidden per product spec but IS matched by the search
+                      filter above (`filteredUsers` checks u.email). */}
+                  <div className="min-w-0 flex-1">
                     <div className="text-sm font-semibold text-gray-800 truncate">{name}</div>
-                    {u.email && <div className="text-[10px] text-gray-500 truncate">{u.email}</div>}
                   </div>
-                  {sel && <span className="text-emerald-600 text-[10px] font-bold">Added</span>}
+                  {sel && <span className="text-emerald-600 text-[10px] font-bold shrink-0">Added</span>}
                 </button>
               );
             })
@@ -1066,11 +1074,16 @@ function AttendeePicker({ selected, onChange, onClose }) {
                   data-testid={`mrb-picker-team-${t.id}`}
                   className={`w-full text-left flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-gray-50 ${sel ? 'bg-emerald-50' : ''}`}
                 >
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold text-gray-800 truncate">{t.name}</div>
-                    <div className="text-[10px] text-gray-500 truncate">{(t.members || []).length} member{(t.members || []).length === 1 ? '' : 's'}</div>
+                  {/* Team name (left) + members count (right) on a single
+                      straight line for visual symmetry with the meeting-room
+                      dropdown rows. */}
+                  <div className="text-sm font-semibold text-gray-800 truncate flex-1 min-w-0">{t.name}</div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[11px] font-semibold text-gray-600 tabular-nums">
+                      {(t.members || []).length} member{(t.members || []).length === 1 ? '' : 's'}
+                    </span>
+                    {sel && <span className="text-emerald-600 text-[10px] font-bold">Added</span>}
                   </div>
-                  {sel && <span className="text-emerald-600 text-[10px] font-bold">Added</span>}
                 </button>
               );
             })
@@ -1112,6 +1125,10 @@ function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickRoom, oc
   const containerRef = useRef(null);
   const viewportRef = useRef(null);
   const [pageWidth] = useState(1200);
+  // Current zoom scale of the TransformComponent. Used by RoomBoxLabel to
+  // (a) keep the text visually a similar size regardless of zoom and
+  // (b) show more characters (or the full name) once space permits.
+  const [scale, setScale] = useState(1);
 
   // Center the view on the selected room when it changes
   useEffect(() => {
@@ -1122,14 +1139,14 @@ function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickRoom, oc
     const content = containerRef.current?.getBoundingClientRect();
     if (!vp || !content) return;
     const state = transformRef.current.instance?.transformState || transformRef.current.state;
-    const scale = state?.scale || 1;
+    const curScale = state?.scale || 1;
     // Room center in content pixels (content is pageWidth wide, height ~= content.height/scale)
-    const contentW = content.width / scale;
-    const contentH = content.height / scale;
+    const contentW = content.width / curScale;
+    const contentH = content.height / curScale;
     const cx = (room.x + room.w / 2) / 100 * contentW;
     const cy = (room.y + room.h / 2) / 100 * contentH;
     // We want this point at the viewport center, scaled
-    const targetScale = Math.max(scale, 1.4);
+    const targetScale = Math.max(curScale, 1.4);
     const newX = vp.width / 2 - cx * targetScale;
     const newY = vp.height / 2 - cy * targetScale;
     if (transformRef.current.setTransform) {
@@ -1159,6 +1176,7 @@ function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickRoom, oc
         smooth={true}
         limitToBounds={false}
         ref={transformRef}
+        onTransformed={(_ref, state) => setScale(state?.scale || 1)}
       >
         {() => (
           <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
@@ -1189,20 +1207,18 @@ function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickRoom, oc
                   let bg = 'rgba(16,185,129,0.10)'; // available
                   let borderColor = '#10b981';
                   let cursor = 'pointer';
-                  let title = r.name;
                   if (selected) {
                     bg = 'rgba(236,147,36,0.55)'; borderColor = '#ec9324';
                   } else if (blocked) {
                     bg = 'rgba(156,163,175,0.45)'; borderColor = '#6b7280'; cursor = 'not-allowed';
-                    title = `${r.name} — already booked at the selected time`;
                   }
+                  const labelBg = selected ? '#ec9324' : blocked ? '#6b7280' : 'rgba(16,185,129,0.95)';
                   return (
                     <div
                       key={r.room_id}
                       data-testid={`mrb-map-room-${r.room_id}`}
                       data-blocked={blocked ? "true" : "false"}
                       data-occupied-now={occupiedNow ? "true" : "false"}
-                      title={title}
                       onClick={() => { if (!blocked) onPickRoom(r.room_id); }}
                       className="absolute group"
                       style={{
@@ -1224,20 +1240,13 @@ function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickRoom, oc
                         e.currentTarget.style.background = 'rgba(16,185,129,0.10)';
                       }}
                     >
-                      <div
-                        className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[10px] font-semibold pointer-events-none select-none flex items-center gap-1"
-                        style={{
-                          background: selected ? '#ec9324' : blocked ? '#6b7280' : 'rgba(16,185,129,0.95)',
-                          color: 'white', maxWidth: '90%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {occupiedNow && (
-                          <span data-testid={`mrb-map-now-${r.room_id}`} className="inline-flex items-center gap-0.5 px-1 py-[1px] rounded-full bg-red-500 text-white text-[9px] leading-none">
-                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"/> NOW
-                          </span>
-                        )}
-                        <span className="truncate">{r.name} ({r.capacity})</span>
-                      </div>
+                      <RoomBoxLabel
+                        room={r}
+                        scale={scale}
+                        labelBg={labelBg}
+                        occupiedNow={occupiedNow}
+                        blocked={blocked}
+                      />
 
                       {/* Quick-Book 30 min button — only on available rooms */}
                       {!blocked && (
@@ -1246,8 +1255,14 @@ function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickRoom, oc
                           data-testid={`mrb-map-quickbook-${r.room_id}`}
                           title="Quick-book the next free 30-minute slot"
                           onClick={(e) => { e.stopPropagation(); onQuickBook?.(r); }}
-                          className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-white/95 border border-emerald-500 text-emerald-700 hover:bg-emerald-500 hover:text-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                          style={{ pointerEvents: 'auto' }}
+                          className="absolute bottom-1 right-1 rounded font-bold bg-white/95 border border-emerald-500 text-emerald-700 hover:bg-emerald-500 hover:text-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                          style={{
+                            pointerEvents: 'auto',
+                            padding: `${1 / scale}px ${4 / scale}px`,
+                            fontSize: `${9 / scale}px`,
+                            borderRadius: `${4 / scale}px`,
+                            borderWidth: `${1 / scale}px`,
+                          }}
                         >+30 min</button>
                       )}
                     </div>
@@ -1272,6 +1287,171 @@ function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickRoom, oc
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * RoomBoxLabel — the centered "Alpha / Seats : 14" label inside every
+ * meeting-room box on the floor map.
+ *
+ * Design goals (from product spec):
+ *   • Both lines (name + seats) are centered horizontally & vertically.
+ *   • Text auto-sizes so it never overflows the box AND — even when the
+ *     user zooms in a lot — never grows into a giant billboard. This is
+ *     achieved by dividing the CSS font-size by the current zoom scale so
+ *     the on-screen size stays in a tight target band (≈ 9–13 px).
+ *   • If the box is too narrow to render the full name at the target font
+ *     size, the name is truncated with an ellipsis (e.g. "Alpha" → "Al…",
+ *     "Alp…"). Because the on-screen width grows with zoom, the visible
+ *     characters increase automatically as the user zooms in, and the
+ *     full name reappears once space permits.
+ *   • Hover tooltip uses the same dark-pill design as the Notification
+ *     Bell in the TopBar: rounded, dark grey, small white text. It always
+ *     shows the FULL name and seat count, regardless of truncation.
+ */
+function RoomBoxLabel({ room, scale, labelBg, occupiedNow, blocked }) {
+  const wrapperRef = useRef(null);
+  const [boxSize, setBoxSize] = useState({ w: 0, h: 0 });
+
+  // The wrapper is `w-full h-full` inside the room's absolutely-positioned
+  // div, so its offsetWidth/offsetHeight give us the box dimensions IN MAP
+  // pixels (i.e. before the CSS transform scale is applied). This is
+  // constant across zoom changes, which is exactly what we want to plan
+  // the text layout.
+  useEffect(() => {
+    if (!wrapperRef.current) return;
+    const el = wrapperRef.current;
+    const update = () => setBoxSize({ w: el.offsetWidth, h: el.offsetHeight });
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const name = room.name || '';
+  const seatsText = `Seats : ${room.capacity}`;
+
+  // ── Font-size selection ────────────────────────────────────────────
+  // Target on-screen font size in px, clamped tight so zoom-in doesn't
+  // create huge labels.
+  const TARGET_MAX = 13;
+  const TARGET_MIN = 8;
+  // Rough character width factor for a sans-serif at font-size f.
+  const CHAR_W = 0.58;
+  // Screen-pixel dimensions of the box at the current zoom scale.
+  const screenW = boxSize.w * scale;
+  const screenH = boxSize.h * scale;
+
+  // Height budget: 2 lines with a bit of leading + a couple of pixels of
+  // padding. Solve for f from `2 * f * 1.2 + 4 <= screenH`.
+  const fFromHeight = Math.max(TARGET_MIN, Math.min(TARGET_MAX, (screenH - 6) / (2 * 1.2)));
+
+  // Width budget: seats line is usually the longer of the two, so make
+  // sure it fits. Solve `seatsText.length * f * CHAR_W <= screenW - 8`.
+  const fFromWidth =
+    seatsText.length > 0
+      ? Math.max(TARGET_MIN, Math.min(TARGET_MAX, (screenW - 8) / (seatsText.length * CHAR_W)))
+      : TARGET_MAX;
+
+  const fScreen = Math.max(TARGET_MIN, Math.min(TARGET_MAX, Math.min(fFromHeight, fFromWidth)));
+
+  // Convert to map-pixel font-size (inside the transformed container,
+  // dividing by scale keeps the on-screen size ≈ fScreen).
+  const fMap = fScreen / Math.max(0.01, scale);
+  const fMapSmall = (fScreen * 0.85) / Math.max(0.01, scale);
+
+  // ── Name truncation ────────────────────────────────────────────────
+  // How many characters of the name can we show at fScreen while
+  // respecting the box's on-screen width? Leave 8 screen-px of padding.
+  const maxNameCharsRaw = Math.floor((screenW - 8) / Math.max(1, fScreen * CHAR_W));
+  const maxNameChars = Number.isFinite(maxNameCharsRaw) ? Math.max(1, maxNameCharsRaw) : name.length;
+  const isTruncated = name.length > maxNameChars;
+  const displayName = isTruncated
+    ? `${name.slice(0, Math.max(1, maxNameChars - 1))}…`
+    : name;
+
+  // Hide the label entirely if the box is basically a dot — otherwise a
+  // sliver of pill would show up and look messy.
+  const tooSmall = screenW < 18 || screenH < 18;
+
+  return (
+    <div
+      ref={wrapperRef}
+      className="w-full h-full pointer-events-none select-none flex items-center justify-center relative"
+      data-testid={`mrb-map-label-${room.room_id}`}
+    >
+      {!tooSmall && (
+        <div
+          className="flex flex-col items-center justify-center text-center"
+          style={{
+            gap: `${1 / Math.max(0.01, scale)}px`,
+            maxWidth: '100%',
+            maxHeight: '100%',
+          }}
+        >
+          {/* Name pill */}
+          <div
+            className="font-semibold text-white shadow-sm"
+            style={{
+              background: labelBg,
+              fontSize: `${fMap}px`,
+              lineHeight: 1.15,
+              padding: `${1 / scale}px ${5 / scale}px`,
+              borderRadius: `${4 / scale}px`,
+              maxWidth: '100%',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+            }}
+          >
+            {occupiedNow && (
+              <span
+                data-testid={`mrb-map-now-${room.room_id}`}
+                className="inline-flex items-center bg-red-500 text-white font-bold"
+                style={{
+                  fontSize: `${fMapSmall * 0.85}px`,
+                  padding: `${0.5 / scale}px ${3 / scale}px`,
+                  borderRadius: `${999 / scale}px`,
+                  marginRight: `${3 / scale}px`,
+                  verticalAlign: 'middle',
+                }}
+              >NOW</span>
+            )}
+            {displayName}
+          </div>
+          {/* Seats line */}
+          <div
+            className="font-medium text-white"
+            style={{
+              background: 'rgba(17, 24, 39, 0.75)',
+              fontSize: `${fMapSmall}px`,
+              lineHeight: 1.15,
+              padding: `${0.5 / scale}px ${5 / scale}px`,
+              borderRadius: `${4 / scale}px`,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Seats : {room.capacity}
+          </div>
+        </div>
+      )}
+
+      {/* Hover tooltip — same visual language as the NotificationBell
+          tooltip. Uses inverse scaling so it stays a constant on-screen
+          size regardless of the current zoom level. */}
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-1/2 -bottom-1 opacity-0 group-hover:opacity-100 transition-opacity z-50"
+        style={{
+          transform: `translate(-50%, 100%) scale(${1 / Math.max(0.01, scale)})`,
+          transformOrigin: 'top center',
+        }}
+      >
+        <span className="inline-block px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap shadow-lg">
+          {room.name} · Seats: {room.capacity}
+          {blocked ? ' · Booked at selected time' : ''}
+        </span>
+      </span>
     </div>
   );
 }
