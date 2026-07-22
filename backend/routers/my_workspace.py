@@ -703,3 +703,123 @@ async def my_workspace_overall_dashboard(
         "all_teams": all_teams,
         "recent_activity": recent_activity,
     }
+
+
+
+@api_router.get("/my-workspace/meeting-rooms-all")
+async def my_workspace_meeting_rooms_all(
+    date: Optional[str] = Query(None, description="YYYY-MM-DD (default: today)"),
+    user=Depends(get_current_user),
+):
+    """List **every** meeting room across all live floor plans with each
+    room's usage for the given day.
+
+    Used by the "View all meeting rooms" modal on the Workspace Manager
+    dashboard. Unlike `overall-dashboard.meeting_rooms_today` (which is
+    capped at the top-6 booked rooms) this endpoint returns booked +
+    unbooked rooms so the modal can list them all in one shot.
+    """
+    the_date = date or _today_iso()
+    try:
+        the_date_obj = _dt.date.fromisoformat(the_date)
+    except ValueError:
+        raise HTTPException(400, "Invalid date")
+
+    day_start = _dt.datetime.combine(the_date_obj, _dt.time.min).isoformat()
+    day_end   = _dt.datetime.combine(the_date_obj, _dt.time.max).isoformat()
+
+    # 1) Aggregate today's bookings by room
+    rooms_agg: Dict[str, dict] = {}
+    total_bookings = 0
+    async for rb in db.room_bookings.find(
+        {"cancelled": False, "start_at": {"$lte": day_end}, "end_at": {"$gte": day_start}},
+        {"_id": 0, "room_id": 1, "room_name": 1, "plan_id": 1, "plan_name": 1,
+         "start_at": 1, "end_at": 1},
+    ):
+        total_bookings += 1
+        key = rb.get("room_id") or rb.get("room_name")
+        if not key:
+            continue
+        try:
+            s = max(_dt.datetime.fromisoformat(rb["start_at"].replace("Z", "+00:00")),
+                    _dt.datetime.combine(the_date_obj, _dt.time.min))
+            e = min(_dt.datetime.fromisoformat(rb["end_at"].replace("Z", "+00:00")),
+                    _dt.datetime.combine(the_date_obj, _dt.time.max))
+            minutes = max(0, int((e - s).total_seconds() // 60))
+        except Exception:
+            minutes = 0
+        entry = rooms_agg.setdefault(key, {
+            "room_id": rb.get("room_id"),
+            "room_name": rb.get("room_name"),
+            "plan_name": rb.get("plan_name"),
+            "minutes_used": 0,
+            "bookings": 0,
+        })
+        entry["minutes_used"] += minutes
+        entry["bookings"] += 1
+
+    # 2) Enumerate every room on every live floor plan (source of truth)
+    live_rooms: List[dict] = []
+    async for fp in db.floor_plans.find(
+        {"live_version_id": {"$ne": None}},
+        {"_id": 0, "id": 1, "name": 1, "live_version_id": 1},
+    ):
+        v = await db.floor_plan_versions.find_one(
+            {"id": fp["live_version_id"]},
+            {"_id": 0, "rooms": 1, "name": 1},
+        )
+        if not v:
+            continue
+        plan_name = v.get("name") or fp.get("name")
+        for r in (v.get("rooms") or []):
+            live_rooms.append({
+                "room_id": r.get("id"),
+                "room_name": r.get("name"),
+                "plan_name": plan_name,
+                "capacity": r.get("capacity"),
+            })
+
+    # 3) Merge live-plan rooms with today's usage (unbooked rooms surface too)
+    merged: List[dict] = []
+    for lr in live_rooms:
+        key = lr["room_id"] or lr["room_name"]
+        agg = rooms_agg.pop(key, None)
+        merged.append({
+            "room_id":     lr["room_id"],
+            "room_name":   lr["room_name"],
+            "plan_name":   lr["plan_name"],
+            "capacity":    lr.get("capacity"),
+            "minutes_used": (agg or {}).get("minutes_used", 0),
+            "bookings":     (agg or {}).get("bookings", 0),
+        })
+    for orphan in rooms_agg.values():  # bookings pointing to non-live rooms
+        merged.append({
+            "room_id":     orphan.get("room_id"),
+            "room_name":   orphan.get("room_name"),
+            "plan_name":   orphan.get("plan_name"),
+            "capacity":    None,
+            "minutes_used": orphan.get("minutes_used", 0),
+            "bookings":     orphan.get("bookings", 0),
+        })
+    # Booked first (most-used desc), then unbooked alphabetically
+    merged.sort(key=lambda r: (
+        0 if r["minutes_used"] > 0 else 1,
+        -r["minutes_used"],
+        (r.get("room_name") or "").lower(),
+    ))
+
+    # 4) Format usage
+    day_capacity_min = 8 * 60
+    for r in merged:
+        m = r.pop("minutes_used", 0)
+        h, mm = divmod(m, 60)
+        r["used"] = (f"{h}h {mm:02d}m" if h else f"{mm}m")
+        r["pct"] = min(100, int(round((m / day_capacity_min) * 100)))
+
+    return {
+        "date": the_date,
+        "rooms": merged,
+        "total_rooms": len(merged),
+        "total_bookings": total_bookings,
+        "booked_count": sum(1 for r in merged if r["bookings"] > 0),
+    }

@@ -73,6 +73,22 @@ export default function WorkspaceOverallDashboard() {
   const [floorData, setFloorData] = useState(null);
   const [floorLoading, setFloorLoading] = useState(false);
 
+  // Popup: "View all meeting rooms" — lists every room across live floor
+  // plans (booked & unbooked) with today's usage.
+  const [allRoomsOpen, setAllRoomsOpen] = useState(false);
+  const [allRooms, setAllRooms] = useState(null); // { rooms, total_rooms, booked_count } or null
+  const [allRoomsLoading, setAllRoomsLoading] = useState(false);
+  useEffect(() => {
+    if (!allRoomsOpen) return;
+    let cancelled = false;
+    setAllRoomsLoading(true);
+    api.get(`/my-workspace/meeting-rooms-all`, { params: { date: today } })
+       .then((r) => { if (!cancelled) setAllRooms(r.data || null); })
+       .catch(() => { if (!cancelled) setAllRooms({ rooms: [], total_rooms: 0, booked_count: 0 }); })
+       .finally(() => { if (!cancelled) setAllRoomsLoading(false); });
+    return () => { cancelled = true; };
+  }, [allRoomsOpen, today]);
+
   const load = () => {
     setLoading(true);
     api.get(`/my-workspace/overall-dashboard`, { params: { date: today } })
@@ -294,9 +310,11 @@ export default function WorkspaceOverallDashboard() {
                     No meeting rooms in use today.
                   </div>
                 )}
-                {rooms.map((r) => (
+                {/* Show only the top-3 rooms in the card. The "View all"
+                    button below opens a modal listing every meeting room. */}
+                {rooms.slice(0, 3).map((r) => (
                   <div key={r.room_id || r.room_name} className="flex items-center gap-3 p-2 rounded-lg border border-gray-100 hover:bg-gray-50">
-                    <span className="h-9 w-9 rounded-md bg-[#ec9324]/10 text-[#ec9324] inline-flex items-center justify-center">
+                    <span className="h-9 w-9 rounded-md bg-[#ec9324]/10 text-[#ec9324] inline-flex items-center justify-center flex-shrink-0">
                       <DoorOpen sx={{ fontSize: 16 }}/>
                     </span>
                     <div className="flex-1 min-w-0">
@@ -306,20 +324,19 @@ export default function WorkspaceOverallDashboard() {
                       </div>
                       <ProgressBar value={r.pct} max={100} height={4} />
                     </div>
-                    <div className="text-right">
+                    <div className="text-right flex-shrink-0">
                       <div className="text-sm font-bold text-gray-900">{r.used}</div>
                       <div className="text-[10px] text-gray-500">{r.pct}% used</div>
                     </div>
                   </div>
                 ))}
-                {rooms.length > 0 && (
-                  <button
-                    onClick={() => navigate("/workspace-manager/meeting-rooms")}
-                    className="text-[11px] font-semibold text-[#ec9324] hover:underline mt-1"
-                  >
-                    View all meeting rooms →
-                  </button>
-                )}
+                <button
+                  onClick={() => setAllRoomsOpen(true)}
+                  className="text-[11px] font-semibold text-[#ec9324] hover:underline mt-1"
+                  data-testid="wm-view-all-meeting-rooms"
+                >
+                  View all meeting rooms →
+                </button>
               </div>
             </div>
           </div>
@@ -539,6 +556,143 @@ export default function WorkspaceOverallDashboard() {
         dateLabel={longDate(today)}
         mySeat={mySeat}
       />
+
+      {/* "View all meeting rooms" modal */}
+      <AllMeetingRoomsModal
+        open={allRoomsOpen}
+        onClose={() => setAllRoomsOpen(false)}
+        loading={allRoomsLoading}
+        data={allRooms}
+        dateLabel={longDate(today)}
+      />
+    </div>
+  );
+}
+
+// ============================================================ All-meeting-rooms modal
+function AllMeetingRoomsModal({ open, onClose, loading, data, dateLabel }) {
+  const [query, setQuery] = useState("");
+  useEffect(() => { if (!open) setQuery(""); }, [open]);
+
+  // Lock body scroll while open
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
+  if (!open) return null;
+
+  const rooms = (data?.rooms || []).filter((r) => {
+    if (!query.trim()) return true;
+    const q = query.trim().toLowerCase();
+    return (
+      String(r.room_name || "").toLowerCase().includes(q) ||
+      String(r.plan_name || "").toLowerCase().includes(q)
+    );
+  });
+  const total = data?.total_rooms || 0;
+  const booked = data?.booked_count || 0;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-4"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      data-testid="wm-all-rooms-modal"
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2">
+              <span className="h-8 w-8 rounded-md bg-[#ec9324]/10 text-[#ec9324] inline-flex items-center justify-center">
+                <DoorOpen sx={{ fontSize: 18 }} />
+              </span>
+              <h3 className="font-bold text-gray-900 text-base">All meeting rooms</h3>
+            </div>
+            <div className="text-[11px] text-gray-500 mt-1 ml-10">
+              {dateLabel} · {booked}/{total} booked today
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-700 text-xl leading-none"
+            aria-label="Close"
+            data-testid="wm-all-rooms-close"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="px-5 pt-3 pb-2 border-b border-gray-100 flex-shrink-0">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search room or floor plan…"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-[#ec9324] focus:ring-1 focus:ring-[#ec9324]/30"
+            data-testid="wm-all-rooms-search"
+          />
+        </div>
+
+        {/* Room list */}
+        <div className="flex-1 overflow-y-auto px-5 py-3" style={{ scrollbarWidth: "thin" }}>
+          {loading && (
+            <div className="text-center text-xs text-gray-400 py-10">Loading meeting rooms…</div>
+          )}
+          {!loading && rooms.length === 0 && (
+            <div className="text-center text-xs text-gray-400 py-10">
+              {query ? "No rooms match your search." : "No meeting rooms available."}
+            </div>
+          )}
+          <div className="grid grid-cols-1 gap-2">
+            {rooms.map((r) => (
+              <div
+                key={r.room_id || r.room_name}
+                data-testid={`wm-all-rooms-row-${r.room_id || r.room_name}`}
+                className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors"
+              >
+                <span className="h-10 w-10 rounded-md bg-[#ec9324]/10 text-[#ec9324] inline-flex items-center justify-center flex-shrink-0">
+                  <DoorOpen sx={{ fontSize: 18 }} />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="text-sm font-semibold text-gray-900 truncate">{r.room_name || "Room"}</div>
+                    {r.capacity != null && (
+                      <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 rounded px-1.5 py-[1px]">
+                        {r.capacity} seats
+                      </span>
+                    )}
+                    {r.bookings === 0 && (
+                      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Unbooked</span>
+                    )}
+                  </div>
+                  {r.plan_name && (
+                    <div className="text-[10px] text-gray-500 truncate">{r.plan_name}</div>
+                  )}
+                  <div className="mt-1.5">
+                    <ProgressBar value={r.pct} max={100} height={4} />
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0 min-w-[64px]">
+                  <div className="text-sm font-bold text-gray-900">{r.used}</div>
+                  <div className="text-[10px] text-gray-500">
+                    {r.pct}% used
+                    {r.bookings > 0 && (
+                      <> · {r.bookings} meeting{r.bookings === 1 ? "" : "s"}</>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
