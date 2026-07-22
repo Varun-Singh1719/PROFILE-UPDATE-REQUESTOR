@@ -529,9 +529,16 @@ export default function MeetingRoomBookingPage() {
 
         {/* RIGHT 60% — Floor Map */}
         <div className="flex-1 relative bg-gray-100">
-          {/* Top-right floating action: opens the Google-Calendar-style schedule view. */}
+          {/* Top-right floating action: opens the Google-Calendar-style schedule view.
+              Also closes any currently-open booking form so the calendar loads clean
+              — the form should only open when the user picks a slot in the calendar. */}
           <Button
-            onClick={() => setViewMode("calendar")}
+            onClick={() => {
+              setFormOpen(false);
+              setEditing(null);
+              setConflict(null);
+              setViewMode("calendar");
+            }}
             data-testid="mrb-check-availability-btn"
             className="absolute top-3 right-4 z-20 bg-[#ec9324] hover:bg-[#d4811f] text-white shadow"
           >

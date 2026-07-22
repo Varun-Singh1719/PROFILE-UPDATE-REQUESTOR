@@ -343,6 +343,91 @@ function DayGrid({ rooms, bookings, date, onPickSlot, onPickEvent, hoverSlot, se
     return set;
   }, [byRoom]);
 
+  // ── Past-time detection ────────────────────────────────────────────
+  // Slots strictly before "now" (on today) are visually disabled and cannot
+  // be selected. Days entirely in the past are all disabled; days in the
+  // future have no past slots at all.
+  const now = new Date();
+  const showNow = sameDay(now, date);
+  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+  const isPastDay = date < startOfToday;
+  const isFutureDay = !isPastDay && !showNow;
+  const nowSlotFloor = showNow ? Math.floor((now.getHours() * 60 + now.getMinutes() - START_HOUR * 60) / SLOT_MINUTES) : 0;
+  const isPastSlot = useCallback((slot) => {
+    if (isPastDay) return true;
+    if (isFutureDay) return false;
+    return slot < nowSlotFloor;
+  }, [isPastDay, isFutureDay, nowSlotFloor]);
+
+  // ── Drag-to-select state ────────────────────────────────────────────
+  // A single click starts and ends the drag on the same cell → default
+  // 30-min duration. Dragging across cells extends the selection.
+  //   dragState = { roomId, startSlot, endSlot } while the mouse is held.
+  const [dragState, setDragState] = useState(null);
+
+  // Slot-range covered by the current drag (inclusive of endSlot).
+  const dragRange = useMemo(() => {
+    if (!dragState) return null;
+    const a = Math.min(dragState.startSlot, dragState.endSlot);
+    const b = Math.max(dragState.startSlot, dragState.endSlot);
+    return { roomId: dragState.roomId, from: a, to: b };
+  }, [dragState]);
+
+  // Any occupied cell inside the current drag range? Used to render the
+  // preview overlay in red so the user immediately sees "this range is
+  // invalid" before releasing the mouse.
+  const dragHasConflict = useMemo(() => {
+    if (!dragRange) return false;
+    for (let i = dragRange.from; i <= dragRange.to; i++) {
+      if (occupiedCells.has(`${dragRange.roomId}|${i}`)) return true;
+      if (isPastSlot(i)) return true;
+    }
+    return false;
+  }, [dragRange, occupiedCells, isPastSlot]);
+
+  // Commit or discard the drag on mouseup (or when the pointer leaves the
+  // window). Attached to `window` so releasing anywhere ends the drag.
+  useEffect(() => {
+    if (!dragState) return;
+    const commit = () => {
+      const ds = dragState;
+      setDragState(null);
+      if (!ds) return;
+      const a = Math.min(ds.startSlot, ds.endSlot);
+      const b = Math.max(ds.startSlot, ds.endSlot);
+      // Validate: no occupied cell inside range, no past cell inside range.
+      for (let i = a; i <= b; i++) {
+        if (occupiedCells.has(`${ds.roomId}|${i}`)) {
+          toast.error("Selected time overlaps with an existing meeting. Please pick a free time frame.");
+          return;
+        }
+        if (isPastSlot(i)) {
+          toast.error("You can't book a meeting in the past. Please pick a future time slot.");
+          return;
+        }
+      }
+      // Compute start / end datetimes. End is exclusive (b + 1) so a single
+      // click (a === b) defaults to a 30-min duration.
+      const startDt = new Date(date);
+      startDt.setHours(0, 0, 0, 0);
+      startDt.setMinutes(START_HOUR * 60 + a * SLOT_MINUTES);
+      const endDt = new Date(date);
+      endDt.setHours(0, 0, 0, 0);
+      endDt.setMinutes(START_HOUR * 60 + (b + 1) * SLOT_MINUTES);
+      onPickSlot({
+        roomId: ds.roomId,
+        date: toIsoDate(startDt),
+        start: `${pad(startDt.getHours())}:${pad(startDt.getMinutes())}`,
+        end: `${pad(endDt.getHours())}:${pad(endDt.getMinutes())}`,
+      });
+    };
+    window.addEventListener("mouseup", commit);
+    // Cancel drag if the user drags out of the window (blur) so we don't
+    // stay in a "phantom drag" state.
+    window.addEventListener("blur", () => setDragState(null));
+    return () => window.removeEventListener("mouseup", commit);
+  }, [dragState, occupiedCells, isPastSlot, date, onPickSlot]);
+
   // Scroll container ref — on first mount we jump to DEFAULT_SCROLL_HOUR so the user
   // sees business hours without needing to scroll, but the full 24h grid is reachable.
   // Declared BEFORE the empty-state early return so hook order stays stable.
@@ -350,8 +435,6 @@ function DayGrid({ rooms, bookings, date, onPickSlot, onPickEvent, hoverSlot, se
   const didInitialScroll = useRef(false);
 
   // Now indicator (orange line) when viewing today
-  const now = new Date();
-  const showNow = sameDay(now, date);
   const nowOffset = showNow ? Math.max(0, Math.min(TOTAL_SLOTS, (now.getHours() * 60 + now.getMinutes() - START_HOUR * 60) / SLOT_MINUTES)) : null;
 
   useEffect(() => {
@@ -424,33 +507,54 @@ function DayGrid({ rooms, bookings, date, onPickSlot, onPickEvent, hoverSlot, se
               {rooms.map((r) => {
                 const key = `${r.room_id}|${slotIdx}`;
                 const occupied = occupiedCells.has(key);
-                const hovered = hoverSlot && hoverSlot.roomId === r.room_id && hoverSlot.slot === slotIdx;
+                const past = isPastSlot(slotIdx);
+                const disabled = occupied || past;
+                const hovered = !dragState && hoverSlot && hoverSlot.roomId === r.room_id && hoverSlot.slot === slotIdx;
+                const inDrag = dragRange && dragRange.roomId === r.room_id && slotIdx >= dragRange.from && slotIdx <= dragRange.to;
+                let cellClass;
+                if (past) {
+                  // Past — visually dimmed, cannot be selected. Same "greyed" look
+                  // Google Calendar uses for elapsed time.
+                  cellClass = "bg-gray-50 cursor-not-allowed";
+                } else if (occupied) {
+                  cellClass = "bg-gray-100 cursor-default";
+                } else if (inDrag) {
+                  cellClass = dragHasConflict
+                    ? "bg-red-100 cursor-not-allowed"
+                    : "bg-orange-200 cursor-grabbing";
+                } else if (hovered) {
+                  cellClass = "bg-orange-100 cursor-pointer";
+                } else {
+                  cellClass = "bg-white hover:bg-orange-50 cursor-pointer";
+                }
                 return (
-                  <button
-                    type="button"
+                  <div
                     key={key}
-                    onMouseEnter={() => !occupied && setHoverSlot({ roomId: r.room_id, slot: slotIdx })}
-                    onMouseLeave={() => setHoverSlot(null)}
-                    onClick={() => {
-                      if (occupied) return;
-                      const startDt = new Date(date);
-                      startDt.setHours(hour, minute, 0, 0);
-                      const endDt = new Date(startDt.getTime() + 30 * 60 * 1000);
-                      onPickSlot({
-                        roomId: r.room_id,
-                        date: toIsoDate(startDt),
-                        start: `${pad(startDt.getHours())}:${pad(startDt.getMinutes())}`,
-                        end: `${pad(endDt.getHours())}:${pad(endDt.getMinutes())}`,
-                      });
+                    role="button"
+                    tabIndex={disabled ? -1 : 0}
+                    onMouseEnter={() => {
+                      if (dragState && dragState.roomId === r.room_id) {
+                        setDragState((prev) => (prev ? { ...prev, endSlot: slotIdx } : prev));
+                        return;
+                      }
+                      if (!disabled) setHoverSlot({ roomId: r.room_id, slot: slotIdx });
                     }}
-                    disabled={occupied}
+                    onMouseLeave={() => { if (!dragState) setHoverSlot(null); }}
+                    onMouseDown={(e) => {
+                      if (disabled) return;
+                      // Only left mouse button starts a drag.
+                      if (e.button !== 0) return;
+                      e.preventDefault();
+                      setDragState({ roomId: r.room_id, startSlot: slotIdx, endSlot: slotIdx });
+                    }}
+                    aria-disabled={disabled}
                     data-testid={`mrb-cal-slot-${r.room_id}-${pad(hour)}${pad(minute)}`}
+                    data-past={past ? "true" : "false"}
+                    data-occupied={occupied ? "true" : "false"}
                     className={[
-                      "relative w-full border-l border-gray-200 text-left transition-colors",
+                      "relative w-full border-l border-gray-200 text-left transition-colors select-none",
                       onTheHour ? "border-t border-gray-200" : "border-t border-gray-100",
-                      occupied
-                        ? "bg-gray-100 cursor-default"
-                        : (hovered ? "bg-orange-100" : "bg-white hover:bg-orange-50 cursor-pointer"),
+                      cellClass,
                     ].join(" ")}
                     style={{ height: SLOT_PX }}
                   />
@@ -469,6 +573,8 @@ function DayGrid({ rooms, bookings, date, onPickSlot, onPickEvent, hoverSlot, se
           showNow={showNow}
           nowOffset={nowOffset}
           onPickEvent={onPickEvent}
+          dragRange={dragRange}
+          dragHasConflict={dragHasConflict}
         />
       </div>
     </div>
@@ -478,7 +584,7 @@ function DayGrid({ rooms, bookings, date, onPickSlot, onPickEvent, hoverSlot, se
 // ============================================================ Event overlay (absolute-positioned)
 // Renders booking cards and the "now" line INSIDE the inline-grid wrapper so they
 // translate together with the grid during both vertical and horizontal scrolling.
-function EventOverlay({ rooms, bookings, date, showNow, nowOffset, onPickEvent }) {
+function EventOverlay({ rooms, bookings, date, showNow, nowOffset, onPickEvent, dragRange, dragHasConflict }) {
   const overlayRef = useRef(null);
 
   // Read each room column's left/width relative to the inline-grid wrapper. Because
@@ -577,6 +683,47 @@ function EventOverlay({ rooms, bookings, date, showNow, nowOffset, onPickEvent }
           <div className="flex-1 h-px bg-[#ec9324]"></div>
         </div>
       )}
+
+      {/* Drag preview — a floating pill showing the currently-selected duration
+          while the user is dragging across cells. Follows the drag range's
+          column & vertical extent. Turns red when the range collides with
+          an existing meeting or a past slot so the user knows it's invalid. */}
+      {dragRange && colMetrics && (() => {
+        const col = colMetrics.find(c => c.id === dragRange.roomId);
+        if (!col) return null;
+        const slotCount = dragRange.to - dragRange.from + 1;
+        const totalMinutes = slotCount * SLOT_MINUTES;
+        const hours = Math.floor(totalMinutes / 60);
+        const mins = totalMinutes % 60;
+        const durationLabel = hours && mins ? `${hours}h ${mins}m` : hours ? `${hours}h` : `${mins}m`;
+        const startMinutes = START_HOUR * 60 + dragRange.from * SLOT_MINUTES;
+        const endMinutes = startMinutes + totalMinutes;
+        const fmt = (mn) => `${pad(Math.floor(mn / 60))}:${pad(mn % 60)}`;
+        return (
+          <div
+            className={[
+              "absolute rounded-md border-2 pointer-events-none flex flex-col items-center justify-center text-center overflow-hidden shadow-sm",
+              dragHasConflict
+                ? "bg-red-100/70 border-red-500 text-red-800"
+                : "bg-orange-200/70 border-[#ec9324] text-[#7c3f00]",
+            ].join(" ")}
+            style={{
+              top: HEADER_PX + dragRange.from * SLOT_PX,
+              left: col.left + 4,
+              width: col.width - 8,
+              height: Math.max(22, slotCount * SLOT_PX - 2),
+            }}
+            data-testid="mrb-cal-drag-preview"
+          >
+            <div className="text-[11px] font-bold leading-tight">
+              {fmt(startMinutes)} – {fmt(endMinutes)}
+            </div>
+            <div className="text-[10px] font-semibold leading-tight">
+              {dragHasConflict ? "Conflicts with an existing meeting" : durationLabel}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

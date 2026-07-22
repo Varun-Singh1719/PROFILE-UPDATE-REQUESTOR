@@ -2142,3 +2142,40 @@ Backwards-compatible — every existing `confirm/prompt/alert` call site works u
 - `backend/.env` (new), `frontend/.env` (new), `memory/test_credentials.md` (new)
 - `frontend/src/components/ui/SelectOrange.jsx`
 - `frontend/src/pages/MeetingRoomBookingPage.jsx`
+
+## [2026-07-22] Meeting Room Booking — Check-Availability drag scheduling + demo bookings
+
+### Frontend
+- `pages/MeetingRoomBookingPage.jsx`
+    - "Check Availability" button now **also** closes any open booking form (`setFormOpen(false); setEditing(null); setConflict(null)`) before switching to the calendar view, so the form no longer appears "by default" on top of the calendar.
+- `components/MRBCalendarView.jsx` — Google-Calendar-style click / drag scheduling on top of the existing day grid:
+    - **Single click** on any free future slot → opens the booking form pre-filled with `roomId`, `date`, `start` (that slot) and `end` = `start + 30 min` (default duration).
+    - **Click-and-drag** across cells in the same room column → pre-fills `end` based on the drag range. Duration displayed live inside a floating pill (e.g. `16:00 – 18:00 · 2h`).
+    - **Overlap protection**: if the drag range crosses any occupied slot, the preview pill flips red ("Conflicts with an existing meeting"), the mouse-release does **not** open the form, and a toast "Selected time overlaps with an existing meeting. Please pick a free time frame." is shown.
+    - **Past-time protection**:
+        - Days that are already over (before today, local): all slots visually dimmed (bg-gray-50, cursor-not-allowed) and non-selectable.
+        - Today: slots strictly before "now" are dimmed the same way; drag preview turns red if any cell in the range is in the past; toast "You can't book a meeting in the past. Please pick a future time slot."
+    - Occupied cells keep the existing "cannot select" behaviour but now visually distinct from past cells (gray-100 vs gray-50).
+    - The drag itself is committed on `mouseup` **anywhere** on the window (also cancelled on `window.blur`), so releasing outside the grid doesn't leave a phantom selection.
+- `handleCalendarPickSlot` in the parent page already accepts `{ roomId, date, start, end }` — no change needed; it consumes the drag's start/end directly.
+
+### Data / backend
+- `scripts/seed_mrb_variety.py` (new) — idempotent seed script that inserts **10 room bookings** into `db.room_bookings` covering a variety of statuses so the calendar exercises the full state machine:
+    - **Past / Completed** — `Q3 Roadmap Review` (Alpha, 2 days ago), `Design Retro` (Gamma, yesterday), `All-Hands Standup` (Beta, today 09:30).
+    - **Ongoing right now** — `Client Onboarding Call` (Alpha, now − 30 min → now + 90 min) — surfaces the `NOW` badge on the map and in the calendar.
+    - **Upcoming today** — `Interview — Senior FE` (Theta 11:00), `1:1 with Manager` (Zeta 14:30).
+    - **Upcoming tomorrow / +2d / +3d** — `Sprint Planning`, `Data Quality Sync`, `Research Debrief`.
+    - **Cancelled** — `Vendor Demo` (Odyssey, tomorrow, `cancelled=True`).
+- Every seeded doc is tagged `_seed: "mrb_variety"` so re-runs delete the previous batch first; safe to run repeatedly.
+
+### Verified end-to-end (Playwright, no auto-test-agent invoked per user policy)
+- After opening the booking form and then clicking "Check Availability", the form modal is **not** visible (`mrb-calendar-form-modal` count = 0) and the calendar loads clean.
+- Dragging 16:00 → 17:30 on Alpha opens the form pre-filled with `Alpha / 22-Jul-2026 / 04:00 PM – 06:00 PM`.
+- Dragging Zeta 15:30 → 14:00 (crosses the seeded `1:1 with Manager` 14:30–15:00): mid-drag preview turns red with "Conflicts with an existing meeting", mouseup does **not** open the form, and the toast "Selected time overlaps with an existing meeting…" appears.
+- All 10 seeded meetings render on today's calendar (past ones dimmed, ongoing one has the NOW badge, upcoming ones in orange).
+
+### Files touched
+- `frontend/src/pages/MeetingRoomBookingPage.jsx`
+- `frontend/src/components/MRBCalendarView.jsx`
+- `scripts/seed_mrb_variety.py` (new)
+
