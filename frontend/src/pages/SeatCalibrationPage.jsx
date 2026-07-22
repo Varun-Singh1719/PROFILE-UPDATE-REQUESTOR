@@ -1020,6 +1020,7 @@ export default function SeatCalibrationPage() {
       }
       setShowPublishDialog(false);
       await loadPlan(true);  // silent reload — keep canvas viewport intact
+      notify.success("Changes published and floor plan is now Live");
     } catch (e) {
       notify.error(e, { what: 'Publish plan' });
     } finally { setPublishing(false); }
@@ -1197,6 +1198,7 @@ export default function SeatCalibrationPage() {
               totalMapped={totalMapped}
               hasDupes={validation.dupes.size > 0}
               onPublishRequested={() => setShowPublishDialog(true)}
+              onAutoPublish={() => handlePublish("Published on Live toggle")}
               onSetStatus={async (next) => {
                 try {
                   await api.patch(`/floor-plans/${planId}/status`, { status: next });
@@ -1770,7 +1772,7 @@ function BulkBtn({ label, icon: Icon, onClick, disabled, danger, testId }) {
   );
 }
 
-function LiveToggle({ plan, draftDirty, totalMapped, hasDupes, onPublishRequested, onSetStatus }) {
+function LiveToggle({ plan, draftDirty, totalMapped, hasDupes, onPublishRequested, onSetStatus, onAutoPublish }) {
   const hasLive = !!plan?.live_version_id;
   const isLive = hasLive && plan?.status !== "inactive";
 
@@ -1779,11 +1781,30 @@ function LiveToggle({ plan, draftDirty, totalMapped, hasDupes, onPublishRequeste
       onSetStatus("inactive");
       return;
     }
-    // Turning ON — publish if no live yet, local edits unsaved, or a saved backend draft is pending
-    if (!hasLive || draftDirty || plan?.has_draft) {
-      if (totalMapped === 0) { notify.warning('Place at least one seat before going Live.'); return; }
-      if (hasDupes) { notify.warning('Resolve duplicate seat IDs before publishing.'); return; }
-      onPublishRequested();
+    // Turning ON. If there are ANY pending changes (dirty local edits OR a
+    // saved backend draft), we must publish before going live — otherwise
+    // the "Live" flag would just flip while the changes stay stuck in draft
+    // (which is what caused meeting rooms not to appear on the booking
+    // page after users toggled off/on).
+    const hasPendingChanges = draftDirty || !!plan?.has_draft || !hasLive;
+    if (hasPendingChanges) {
+      if (totalMapped === 0) {
+        notify.warning('Place at least one seat before going Live.');
+        return;
+      }
+      if (hasDupes) {
+        notify.warning('Resolve duplicate seat IDs before publishing.');
+        return;
+      }
+      // If we already have a live version and only need to promote the
+      // saved draft (no local dirty edits), publish silently — the user
+      // clearly meant "make my changes live". Otherwise open the dialog
+      // so unsaved local edits can be reviewed before publish.
+      if (hasLive && !draftDirty && plan?.has_draft && typeof onAutoPublish === "function") {
+        onAutoPublish();
+      } else {
+        onPublishRequested();
+      }
     } else {
       onSetStatus("live");
     }
