@@ -19,7 +19,7 @@ import Repeat from "@mui/icons-material/RepeatOutlined";
 import Pencil from "@mui/icons-material/EditOutlined";
 import CalendarIcon from "@mui/icons-material/CalendarTodayOutlined";
 import Layout from "../components/Layout";
-import api from "../lib/api";
+import api, { formatApiError } from "../lib/api";
 import { resolvePdfUrl } from "../lib/pdfUrl";
 import { Button } from "../components/ui/button";
 import { toast } from "../lib/notify";
@@ -141,10 +141,24 @@ export default function MeetingRoomBookingPage() {
     }
   }, []);
 
+  // My own pending/declined meeting-room requests — shown alongside bookings
+  // in the "Upcoming Bookings" list with a status pill so users can see the
+  // state of every request they've submitted.
+  const [myPendingRequests, setMyPendingRequests] = useState([]);
+  const loadPendingRequests = useCallback(async () => {
+    try {
+      const [pRes, dRes] = await Promise.all([
+        api.get("/meeting-room-requests", { params: { status: "Pending Approval" } }).catch(() => ({ data: [] })),
+        api.get("/meeting-room-requests", { params: { status: "Declined" } }).catch(() => ({ data: [] })),
+      ]);
+      setMyPendingRequests([...(pRes.data || []), ...(dRes.data || [])]);
+    } catch { /* non-fatal */ }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try { await Promise.all([loadRooms(), loadBookingsForDate(filterDate, rangeMode)]); }
+      try { await Promise.all([loadRooms(), loadBookingsForDate(filterDate, rangeMode), loadPendingRequests()]); }
       finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
@@ -152,6 +166,8 @@ export default function MeetingRoomBookingPage() {
   }, [loadRooms]);
 
   useEffect(() => { loadBookingsForDate(filterDate, rangeMode); }, [filterDate, rangeMode, loadBookingsForDate]);
+  // Refresh pending requests whenever filter date changes
+  useEffect(() => { loadPendingRequests(); }, [filterDate, loadPendingRequests]);
 
   // Compute room status sets for the floor map:
   //  • occupiedNowRoomIds — rooms currently mid-meeting (any active booking spans `now`)
@@ -327,10 +343,20 @@ export default function MeetingRoomBookingPage() {
       await Promise.all([
         loadBookingsForDate(filterDate, rangeMode),
         api.get(`/room-bookings?date=${formDate}&include_past=true`).then(r => setSlotBookings(r.data || [])).catch(() => {}),
+        loadPendingRequests(),
       ]);
       setFormOpen(false);
       const n = res.data?.created || 1;
-      toast.success("Meeting Room Booked Successfully", { description: n > 1 ? `${n} recurring occurrences created.` : undefined });
+      const autoApproved = (res.data?.auto_approved || []).length;
+      // Approval flow: if any occurrence was auto-approved, show "booked";
+      // otherwise it went into Pending Approval and awaits admin action.
+      if (autoApproved > 0 && autoApproved === n) {
+        toast.success("Meeting Room Booked Successfully", { description: n > 1 ? `${n} recurring occurrences created.` : undefined });
+      } else if (autoApproved > 0) {
+        toast.success(`${autoApproved} of ${n} occurrences booked — the rest are pending approval.`);
+      } else {
+        toast.success("Meeting request submitted for approval", { description: n > 1 ? `${n} recurring occurrences awaiting approval.` : "You'll be notified when an admin reviews it." });
+      }
     } catch (e) {
       const detail = e?.response?.data?.detail;
       if (detail && typeof detail === "object" && detail.code === "BOOKING_CONFLICT") {
@@ -516,11 +542,21 @@ export default function MeetingRoomBookingPage() {
                 </div>
                 <UpcomingBookingsList
                   bookings={myBookings}
+                  pendingRequests={myPendingRequests}
                   filterDate={filterDate}
                   rangeMode={rangeMode}
                   loading={loading}
                   onCancel={handleCancel}
                   onReschedule={handleReschedule}
+                  onCancelRequest={async (id) => {
+                    try {
+                      await api.delete(`/meeting-room-requests/${id}`);
+                      toast.success("Request cancelled");
+                      await loadPendingRequests();
+                    } catch (e) {
+                      toast.error(formatApiError(e?.response?.data?.detail) || "Could not cancel request");
+                    }
+                  }}
                 />
               </section>
             )}
@@ -842,7 +878,7 @@ function Field({ label, required, children, className = "", noStack = false }) {
 // - rangeMode="next7" → 7 day groups starting from today.
 // - Per-day pagination: first PAGE_SIZE shown, "+N more" expands the rest.
 const PAGE_SIZE = 4;
-function UpcomingBookingsList({ bookings, filterDate, rangeMode, loading, onCancel, onReschedule }) {
+function UpcomingBookingsList({ bookings, pendingRequests = [], filterDate, rangeMode, loading, onCancel, onReschedule, onCancelRequest }) {
   const today = todayIso();
   const addDaysIso = (offset) => {
     const d = new Date(); d.setDate(d.getDate() + offset);
@@ -851,9 +887,30 @@ function UpcomingBookingsList({ bookings, filterDate, rangeMode, loading, onCanc
   };
   const isFilterToday = filterDate === today;
 
+  // Merge approved bookings + pending / declined meeting-room requests into a
+  // single list. Each entry gains a `_kind` ("booking" | "request") and a
+  // `_status` used to render the pill. Bookings are tagged "Approved" (they
+  // only make it into the list once the request was approved). Requests
+  // carry their own status ("Pending Approval" / "Declined").
+  const merged = useMemo(() => {
+    const list = [];
+    for (const b of bookings) {
+      list.push({ ...b, _kind: "booking", _status: b.cancelled ? "Cancelled" : "Approved" });
+    }
+    for (const r of pendingRequests) {
+      list.push({
+        ...r,
+        organizer: r.requested_by,     // normalise so the same JSX renders both
+        _kind: "request",
+        _status: r.status || "Pending Approval",
+      });
+    }
+    return list;
+  }, [bookings, pendingRequests]);
+
   const groups = useMemo(() => {
     const map = {};
-    for (const b of bookings) {
+    for (const b of merged) {
       const d = new Date(b.start_at);
       const p = (n) => String(n).padStart(2, "0");
       const key = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
@@ -861,7 +918,7 @@ function UpcomingBookingsList({ bookings, filterDate, rangeMode, loading, onCanc
     }
     Object.values(map).forEach(arr => arr.sort((a, b) => (a.start_at || "").localeCompare(b.start_at || "")));
     return map;
-  }, [bookings]);
+  }, [merged]);
 
   const formatDayLabel = (key, idx) => {
     if (key === today) return "Today";
@@ -901,14 +958,37 @@ function UpcomingBookingsList({ bookings, filterDate, rangeMode, loading, onCanc
         </div>
       ) : (
         <div className="space-y-3" data-testid="mrb-upcoming-list">
-          {dayGroups.map(g => <DayGroup key={g.key} group={g} onCancel={onCancel} onReschedule={onReschedule}/>)}
+          {dayGroups.map(g => <DayGroup key={g.key} group={g} onCancel={onCancel} onReschedule={onReschedule} onCancelRequest={onCancelRequest}/>)}
         </div>
       )}
     </div>
   );
 }
 
-function DayGroup({ group, onCancel, onReschedule }) {
+// ==================================================================== Status pill
+// Same design language as Workstation Booking: capsule with 2-px colored border
+// on a white background. Colours map to the workstation-request approval states.
+function StatusPill({ status, dataTestId }) {
+  const map = {
+    "Approved":         { fg: "#059669", bg: "#ffffff", bd: "#10b981", label: "Approved"  },
+    "Pending Approval": { fg: "#ec9324", bg: "#ffffff", bd: "#ec9324", label: "Pending"   },
+    "Declined":         { fg: "#dc2626", bg: "#ffffff", bd: "#ef4444", label: "Declined"  },
+    "Cancelled":        { fg: "#6b7280", bg: "#ffffff", bd: "#9ca3af", label: "Cancelled" },
+  };
+  const s = map[status] || map["Approved"];
+  return (
+    <span
+      data-testid={dataTestId}
+      data-status={status}
+      className="inline-flex items-center justify-center h-5 px-2 text-[10px] font-semibold rounded-full border-2 select-none whitespace-nowrap shrink-0"
+      style={{ color: s.fg, borderColor: s.bd, backgroundColor: s.bg }}
+    >
+      {s.label}
+    </span>
+  );
+}
+
+function DayGroup({ group, onCancel, onReschedule, onCancelRequest }) {
   const [expanded, setExpanded] = useState(false);
   const list = expanded ? group.items : group.items.slice(0, PAGE_SIZE);
   const hidden = group.items.length - list.length;
@@ -917,15 +997,33 @@ function DayGroup({ group, onCancel, onReschedule }) {
       <div className="text-[10px] font-bold tracking-wide text-gray-400 uppercase mb-1" data-testid={`mrb-day-${group.key}`}>{group.label}</div>
       {group.items.length === 0 ? (
         <div className="text-[11px] text-gray-400 italic px-2 py-1">No bookings</div>
-      ) : list.map(b => (
+      ) : list.map(b => {
+        const isRequest = b._kind === "request";
+        const status = b._status || "Approved";
+        // Reschedule is only meaningful for approved bookings (or you'd
+        // reschedule a pending request, which we don't support yet).
+        const canReschedule = !isRequest && status === "Approved";
+        // Cancel button: bookings → cancel booking; pending requests → cancel request; declined → hide (no action)
+        const canCancel = (isRequest && status === "Pending Approval") || (!isRequest && status === "Approved");
+        return (
         <div
           key={b.id}
           data-testid={`mrb-upcoming-${b.id}`}
-          className="bg-white rounded-md border border-gray-200 px-2.5 py-1.5 mb-1 hover:border-[#ec9324]/40 transition-colors"
+          data-kind={b._kind}
+          data-status={status}
+          className={`bg-white rounded-md border px-2.5 py-1.5 mb-1 transition-colors ${
+            status === "Declined" ? "border-red-200 opacity-80" :
+            status === "Pending Approval" ? "border-amber-200 bg-amber-50/40" :
+            status === "Cancelled" ? "border-gray-200 opacity-70" :
+            "border-gray-200 hover:border-[#ec9324]/40"
+          }`}
         >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <div className="font-semibold text-[12px] text-gray-900 truncate" title={b.title}>{b.title}</div>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <div className="font-semibold text-[12px] text-gray-900 truncate flex-1" title={b.title}>{b.title}</div>
+                <StatusPill status={status} dataTestId={`mrb-status-${b.id}`} />
+              </div>
               <div className="text-[10px] text-gray-600">
                 {fmtTime(b.start_at)} – {fmtTime(b.end_at)}
                 <span className="text-gray-300 mx-1">·</span>{b.room_name}
@@ -936,34 +1034,39 @@ function DayGroup({ group, onCancel, onReschedule }) {
               ) : null}
             </div>
             <div className="flex items-center gap-0.5 flex-shrink-0">
-              <div className="relative group/edit">
-                <button
-                  onClick={() => onReschedule?.(b)}
-                  aria-label="Reschedule"
-                  className="p-1 text-gray-600 hover:text-[#ec9324] hover:bg-orange-50 rounded"
-                  data-testid={`mrb-reschedule-${b.id}`}
-                ><Pencil sx={{ fontSize: 12 }}/></button>
-                <span
-                  role="tooltip"
-                  className="pointer-events-none absolute right-1/2 translate-x-1/2 -top-7 z-20 px-2 py-0.5 rounded bg-gray-900 text-white text-[10px] font-medium whitespace-nowrap shadow opacity-0 group-hover/edit:opacity-100 transition-opacity"
-                >Reschedule</span>
-              </div>
-              <div className="relative group/cancel">
-                <button
-                  onClick={() => onCancel(b.id)}
-                  aria-label="Cancel"
-                  className="p-1 text-red-600 hover:bg-red-50 rounded"
-                  data-testid={`mrb-cancel-${b.id}`}
-                ><Trash2 sx={{ fontSize: 12 }}/></button>
-                <span
-                  role="tooltip"
-                  className="pointer-events-none absolute right-1/2 translate-x-1/2 -top-7 z-20 px-2 py-0.5 rounded bg-gray-900 text-white text-[10px] font-medium whitespace-nowrap shadow opacity-0 group-hover/cancel:opacity-100 transition-opacity"
-                >Cancel</span>
-              </div>
+              {canReschedule && (
+                <div className="relative group/edit">
+                  <button
+                    onClick={() => onReschedule?.(b)}
+                    aria-label="Reschedule"
+                    className="p-1 text-gray-600 hover:text-[#ec9324] hover:bg-orange-50 rounded"
+                    data-testid={`mrb-reschedule-${b.id}`}
+                  ><Pencil sx={{ fontSize: 12 }}/></button>
+                  <span
+                    role="tooltip"
+                    className="pointer-events-none absolute right-1/2 translate-x-1/2 -top-7 z-20 px-2 py-0.5 rounded bg-gray-900 text-white text-[10px] font-medium whitespace-nowrap shadow opacity-0 group-hover/edit:opacity-100 transition-opacity"
+                  >Reschedule</span>
+                </div>
+              )}
+              {canCancel && (
+                <div className="relative group/cancel">
+                  <button
+                    onClick={() => isRequest ? onCancelRequest?.(b.id) : onCancel(b.id)}
+                    aria-label="Cancel"
+                    className="p-1 text-red-600 hover:bg-red-50 rounded"
+                    data-testid={`mrb-cancel-${b.id}`}
+                  ><Trash2 sx={{ fontSize: 12 }}/></button>
+                  <span
+                    role="tooltip"
+                    className="pointer-events-none absolute right-1/2 translate-x-1/2 -top-7 z-20 px-2 py-0.5 rounded bg-gray-900 text-white text-[10px] font-medium whitespace-nowrap shadow opacity-0 group-hover/cancel:opacity-100 transition-opacity"
+                  >{isRequest ? "Withdraw request" : "Cancel"}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
-      ))}
+        );
+      })}
       {hidden > 0 && (
         <button
           onClick={() => setExpanded(true)}

@@ -352,30 +352,57 @@ async def should_auto_approve_workstation(
     OR semantics — any configured criterion that matches triggers approval.
     Date/Time rules must be independently enabled to participate.
     """
+    return await _match_matrix_row(
+        submitter, "workstation",
+        booking_date=booking_date,
+        booking_time=booking_time,
+    )
+
+
+async def should_auto_approve_meeting_room(
+    submitter: dict,
+    booking_date: Optional[str] = None,
+    booking_time: Optional[str] = None,
+) -> bool:
+    """Return True if the meeting-room request should be auto-approved.
+
+    Uses the `meeting_room` cell of the approval-settings matrix. Same OR
+    semantics as workstation: team-member / manager / date / time — any
+    matching enabled cell triggers auto-approval.
+    """
+    return await _match_matrix_row(
+        submitter, "meeting_room",
+        booking_date=booking_date,
+        booking_time=booking_time,
+    )
+
+
+async def _match_matrix_row(
+    submitter: dict,
+    resource: str,
+    booking_date: Optional[str],
+    booking_time: Optional[str],
+) -> bool:
+    """Shared logic for workstation + meeting-room auto-approval."""
     settings = await get_settings()
     if not settings.get("enabled"):
         return False
-    ws = (settings.get("matrix") or {}).get("workstation") or {}
+    row = (settings.get("matrix") or {}).get(resource) or {}
 
-    # Team-member / Manager
     submitter_is_manager = await is_manager(submitter)
-    if submitter_is_manager and ws.get("manager"):
+    if submitter_is_manager and row.get("manager"):
         return True
-    if (not submitter_is_manager) and ws.get("team_member"):
-        return True
-
-    # Date rule
-    if matches_date_rule(ws.get("date") or {}, booking_date):
+    if (not submitter_is_manager) and row.get("team_member"):
         return True
 
-    # Time rule — for workstation, fall back to submission time-of-day
-    # (workstations are full-day so there's no booked time). Use the caller-
-    # provided `booking_time` if any (HH:MM), otherwise "now".
+    if matches_date_rule(row.get("date") or {}, booking_date):
+        return True
+
     time_of_day = booking_time
     if not time_of_day:
         now = _dt.datetime.now()
         time_of_day = f"{now.hour:02d}:{now.minute:02d}"
-    if matches_time_rule(ws.get("time") or {}, time_of_day):
+    if matches_time_rule(row.get("time") or {}, time_of_day):
         return True
 
     return False

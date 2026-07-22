@@ -2207,3 +2207,57 @@ Backwards-compatible — every existing `confirm/prompt/alert` call site works u
 - `backend/routers/my_workspace.py`
 - `frontend/src/components/WorkspaceOverallDashboard.jsx`
 
+
+## [2026-07-22] Meeting-room bookings: full approval workflow (mirrors workstation flow)
+
+### Backend
+- New router `backend/routers/meeting_room_requests.py` — mirrors `workstation_requests.py`:
+    - `POST   /api/meeting-room-requests` — submit a request (respects auto-approval matrix).
+    - `GET    /api/meeting-room-requests` — list with filters (status, plan_id, room_id, requested_by).
+    - `POST   /api/meeting-room-requests/{id}/approve` — creates the actual `room_bookings` row, sets `status="Approved"`.
+    - `POST   /api/meeting-room-requests/{id}/decline` — sets `status="Declined"`.
+    - `DELETE /api/meeting-room-requests/{id}` — owner (or Super Admin) cancels a Pending request → `status="Cancelled"`.
+    - Sends in-app notifications on Approve / Decline via existing `notify_user_inapp`.
+    - Sequence numbers start at 40001 to distinguish from workstation (30000s) and bookings (20000s).
+- New MongoDB collection `meeting_room_requests` with indexes on `id (unique)`, `seq_no`, `(plan_id,room_id,status)`, `(status,requested_on)`, `(requested_by.id,status)`, `series_id`.
+- New helper `should_auto_approve_meeting_room()` in `approval_settings.py` — same OR-semantics as workstation, using the pre-existing `meeting_room` cell of the settings matrix (team_member / manager / date / time).
+- `POST /api/room-bookings` **rewired to route through the request flow** — the existing frontend continues to work: submissions are turned into meeting-room requests, and if the submitter matches an enabled `meeting_room` auto-approval cell the request is immediately approved and the corresponding booking row is created in one step. Response shape is a superset of the old one (`{ ok, created, series_id, first, requests, auto_approved }`).
+- `server.py` registers the new router and creates the new collection's indexes on startup.
+
+### Frontend
+- `pages/PendingApprovalsPage.jsx`:
+    - New **Type filter** dropdown in the header actions (`All requests` / `Workstation` / `Meeting Room`), default `All`. Data source switches accordingly — when set to `All`, both workstation-requests and meeting-room-requests are fetched in parallel and merged in the queue (newest first).
+    - Request cards now carry a `Meeting` (orange) or `Desk` (blue) badge next to the title, and render type-specific fields:
+        - Meeting: `Room · Title` · date & time range · `Capacity: N seats · Attendees: N`.
+        - Workstation: `Workstation <label>` · `For: <employee>` · `For date: <date>` (unchanged).
+    - Approve / Decline handlers dispatch to the right endpoint based on `_type`. Bulk-select checkbox is hidden for meeting-room rows since bulk approve/decline isn't wired for MRs yet.
+    - Clicking a meeting-room card no longer touches the workstation floor map (card carries all the info the approver needs).
+- `pages/MeetingRoomBookingPage.jsx`:
+    - After submitting the booking form the toast now differentiates:
+        - `Meeting Room Booked Successfully` when the request was auto-approved.
+        - `Meeting request submitted for approval` when it landed in Pending Approval.
+        - `X of N occurrences booked — the rest are pending approval.` for mixed outcomes on recurring series.
+    - `Upcoming Bookings` list now merges approved bookings with the user's own pending / declined meeting-room requests. A new `StatusPill` component renders each row's state — same capsule shape as the workstation status pill:
+        - **Approved** — green border/text.
+        - **Pending** — orange border/text.
+        - **Declined** — red border/text.
+        - **Cancelled** — grey border/text.
+    - Row background subtly tints for non-approved states (amber for Pending, red-ish for Declined).
+    - Cancel button repurposes for requests → calls `DELETE /api/meeting-room-requests/{id}` and shows "Withdraw request" tooltip.
+    - Reschedule button is hidden for non-approved rows.
+
+### Verified end-to-end (Playwright + curl, no auto-test-agent invoked)
+- `POST /api/room-bookings` with a fresh admin → returns `status: "Pending Approval"`, `seq_no: 40001`, `auto_approved: []`.
+- `POST /api/meeting-room-requests/{id}/approve` → creates a `room_bookings` doc and marks the request `Approved`.
+- Pending Approvals page with default `All` filter shows **5 pending** (3 workstation + 2 meeting-room) with mixed `MEETING` / `DESK` badges.
+- Switching filter to `Meeting Room` narrows the list to **2 pending** (Gamma · Design Review, Beta · Q4 Kickoff).
+- Meeting Room Booking's Upcoming Bookings list shows all 5 approved bookings each with a green `Approved` pill.
+
+### Files touched
+- `backend/routers/meeting_room_requests.py` (new, ~500 lines)
+- `backend/routers/approval_settings.py` (added `should_auto_approve_meeting_room`)
+- `backend/routers/room_bookings.py` (rerouted `POST /room-bookings` through the request flow)
+- `backend/server.py` (register router + indexes)
+- `frontend/src/pages/PendingApprovalsPage.jsx` (Type filter, type-aware cards, dual-endpoint handlers)
+- `frontend/src/pages/MeetingRoomBookingPage.jsx` (StatusPill, merged bookings+requests, updated toasts)
+

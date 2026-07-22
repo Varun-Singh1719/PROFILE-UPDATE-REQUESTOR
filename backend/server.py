@@ -38,6 +38,7 @@ from routers import files as _files  # noqa: F401
 from routers import dashboard as _dashboard  # noqa: F401
 from routers import floor_plans as _floor_plans  # noqa: F401
 from routers import room_bookings as _room_bookings  # noqa: F401
+from routers import meeting_room_requests as _meeting_room_requests  # noqa: F401
 from routers import workstation_bookings as _workstation_bookings  # noqa: F401
 from routers import workstation_requests as _workstation_requests  # noqa: F401
 from routers import approval_settings as _approval_settings  # noqa: F401
@@ -97,6 +98,14 @@ async def startup():
     await db.workstation_requests.create_index([("employee.id", 1), ("date", 1), ("status", 1)])
     await db.workstation_requests.create_index([("status", 1), ("requested_on", -1)])
     await db.workstation_requests.create_index([("group_id", 1)])
+
+    # meeting_room_requests — approval flow for meeting-room bookings
+    await db.meeting_room_requests.create_index("id", unique=True)
+    await db.meeting_room_requests.create_index("seq_no", unique=True, sparse=True)
+    await db.meeting_room_requests.create_index([("plan_id", 1), ("room_id", 1), ("status", 1)])
+    await db.meeting_room_requests.create_index([("status", 1), ("requested_on", -1)])
+    await db.meeting_room_requests.create_index([("requested_by.id", 1), ("status", 1)])
+    await db.meeting_room_requests.create_index([("series_id", 1)])
     # In-app notifications (bell dropdown) + editable templates
     await db.inapp_notifications.create_index([("user_id", 1), ("created_at", -1)])
     await db.inapp_notifications.create_index([("user_id", 1), ("read", 1)])

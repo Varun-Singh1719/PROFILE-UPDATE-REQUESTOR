@@ -286,80 +286,25 @@ async def list_available_rooms(user=Depends(get_current_user)):
 
 @api_router.post("/room-bookings")
 async def create_room_booking(payload: BookingCreate, user=Depends(get_current_user)):
-    ctx = await _resolve_room(payload.plan_id, payload.room_id)
-    room = ctx["room"]
-    plan = ctx["plan"]
-    start = _parse_iso(payload.start_at, "start_at")
-    end = _parse_iso(payload.end_at, "end_at")
-    if end <= start:
-        raise HTTPException(400, "end_at must be after start_at")
+    """Create a meeting-room booking.
 
-    # Build occurrence list
-    occurrences = [(start, end)]
-    if payload.recurring:
-        occurrences = _expand_recurring(start, end, payload.recurring)
+    NOTE (Jul 2026 approval-flow rollout): direct booking is no longer done
+    here — every submission now goes through the meeting-room-requests
+    endpoint, which respects the Auto-Approval matrix. If the submitter's
+    profile matches an enabled `meeting_room` cell the request is
+    immediately approved and the resulting `room_bookings` row is returned
+    in the same call — so the UI's existing "Meeting booked" path keeps
+    working. Otherwise the request stays in Pending Approval until an
+    admin acts on it from the Pending Approvals page.
 
-    # Pre-check: collect all conflicts across occurrences
-    conflicts = []
-    for occ_s, occ_e in occurrences:
-        conflict = await _first_conflict(payload.room_id, occ_s, occ_e)
-        if conflict:
-            conflicts.append({
-                "occurrence_start": occ_s.isoformat(),
-                "occurrence_end": occ_e.isoformat(),
-                "with": {
-                    "id": conflict.get("id"),
-                    "title": conflict.get("title"),
-                    "organizer": conflict.get("organizer"),
-                    "start_at": conflict.get("start_at"),
-                    "end_at": conflict.get("end_at"),
-                },
-            })
-    if conflicts:
-        raise HTTPException(409, {
-            "code": "BOOKING_CONFLICT",
-            "message": "This room is already booked for one or more requested times",
-            "conflicts": conflicts,
-            "room_name": room.get("name"),
-        })
-
-    # Insert
-    series_id = str(uuid.uuid4()) if payload.recurring else None
-    now = now_iso()
-    actor = _actor(user)
-    docs = []
-    for occ_s, occ_e in occurrences:
-        bid = str(uuid.uuid4())
-        seq_no = await _next_seq()
-        docs.append({
-            "id": bid,
-            "seq_no": seq_no,
-            "plan_id": payload.plan_id,
-            "plan_name": plan.get("name"),
-            "room_id": payload.room_id,
-            "room_name": room.get("name"),
-            "room_capacity": int(room.get("capacity") or 1),
-            "title": payload.title.strip(),
-            "start_at": occ_s.isoformat(),
-            "end_at": occ_e.isoformat(),
-            "organizer": actor,
-            "attendees": [a.model_dump() for a in payload.attendees],
-            "recurring": payload.recurring.model_dump() if payload.recurring else None,
-            "series_id": series_id,
-            "created_at": now,
-            "updated_at": now,
-            "cancelled": False,
-        })
-    if docs:
-        await db.room_bookings.insert_many(docs)
-    for d in docs:
-        d.pop("_id", None)
-
-    # TODO(email): notify organizer + each attendee with the booking details
-    # using existing notifications router. Templates: meeting.booked,
-    # meeting.cancelled (kept TBD per spec).
-
-    return {"ok": True, "created": len(docs), "series_id": series_id, "first": docs[0] if docs else None}
+    The response shape is a superset of the old one:
+        { ok, created, series_id, first, requests, auto_approved }
+    """
+    from routers.meeting_room_requests import (
+        create_meeting_room_request, MeetingRoomRequestCreate,
+    )
+    inner_payload = MeetingRoomRequestCreate(**payload.model_dump())
+    return await create_meeting_room_request(inner_payload, user=user)
 
 
 @api_router.get("/room-bookings")

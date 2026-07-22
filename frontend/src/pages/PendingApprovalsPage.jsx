@@ -88,6 +88,10 @@ export default function PendingApprovalsPage() {
   const [loading, setLoading] = useState(false);
   const [decidingId, setDecidingId] = useState(null);
 
+  // Type filter (workstation / meeting_room / all) — default "all" so the
+  // approver sees the full queue.
+  const [typeFilter, setTypeFilter] = useState("all"); // 'all' | 'workstation' | 'meeting_room'
+
   // ----- availability (so the floor map can render bookings + pendings) -----
   // We hydrate this per (plan, date) on demand. The right-side card list is
   // global (all pending requests across dates) so users can scan the full
@@ -154,14 +158,37 @@ export default function PendingApprovalsPage() {
   const loadRequests = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get("/workstation-requests", { params: { status: "Pending Approval" } });
-      setRequests(res.data || []);
+      // Load workstation and/or meeting-room pending requests based on the
+      // current type filter. Each row is tagged with `_type` so the card
+      // renderer + approve/decline handlers know which endpoint to hit.
+      const wantWorkstation = typeFilter === "all" || typeFilter === "workstation";
+      const wantMeeting     = typeFilter === "all" || typeFilter === "meeting_room";
+      const promises = [];
+      if (wantWorkstation) {
+        promises.push(
+          api.get("/workstation-requests", { params: { status: "Pending Approval" } })
+             .then((r) => (r.data || []).map((x) => ({ ...x, _type: "workstation" })))
+             .catch(() => []),
+        );
+      }
+      if (wantMeeting) {
+        promises.push(
+          api.get("/meeting-room-requests", { params: { status: "Pending Approval" } })
+             .then((r) => (r.data || []).map((x) => ({ ...x, _type: "meeting_room" })))
+             .catch(() => []),
+        );
+      }
+      const results = await Promise.all(promises);
+      const combined = results.flat();
+      // Newest first (workstation uses `requested_on`, so does meeting-room).
+      combined.sort((a, b) => String(b.requested_on || "").localeCompare(String(a.requested_on || "")));
+      setRequests(combined);
     } catch (e) {
       toast.error(formatApiError(e?.response?.data?.detail) || "Failed to load pending requests");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [typeFilter]);
 
   useEffect(() => { loadPlans(); }, [loadPlans]);
   useEffect(() => { loadRequests(); }, [loadRequests]);
@@ -186,14 +213,14 @@ export default function PendingApprovalsPage() {
     return () => { cancelled = true; };
   }, [selectedPlanId, focusDate]);
 
-  // When focus request set, sync plan + date and trigger pan
+  // When focus request set, sync plan + date and trigger pan.
+  // For meeting-room requests we DON'T touch the workstation map; the card
+  // already shows all the info the approver needs.
   const handleCardClick = (req) => {
     setFocusRequest(req);
+    if (req._type === "meeting_room") return;
     setSelectedPlanId(req.plan_id);
     setFocusDate(req.date);
-    // setCenterSeatId is fired again with the same value after availability
-    // loads (see the next effect), to ensure the pan happens after the seat
-    // overlay is mounted.
     setCenterSeatId(req.seat_id);
   };
 
@@ -266,15 +293,23 @@ export default function PendingApprovalsPage() {
 
   // -------- Approve / Decline actions --------
   const approve = async (req) => {
-    if (!canApprove) { toast.error("Only Super Admin can approve workstation requests"); return; }
+    if (!canApprove) { toast.error("Only Super Admin can approve requests"); return; }
     setDecidingId(req.id);
     try {
-      await api.post(`/workstation-requests/${req.id}/approve`);
-      toast.success(`Approved request for workstation ${req.seat_label} (${fmtDate(req.date)})`);
+      const isMR = req._type === "meeting_room";
+      const url = isMR
+        ? `/meeting-room-requests/${req.id}/approve`
+        : `/workstation-requests/${req.id}/approve`;
+      await api.post(url);
+      if (isMR) {
+        toast.success(`Approved meeting request for ${req.room_name || "the room"}`);
+      } else {
+        toast.success(`Approved request for workstation ${req.seat_label} (${fmtDate(req.date)})`);
+      }
       setRequests((prev) => prev.filter((r) => r.id !== req.id));
       if (focusRequest?.id === req.id) setFocusRequest(null);
-      if (availability) {
-        // refresh map data so the seat now shows as Occupied
+      if (availability && !isMR) {
+        // refresh workstation map data so the seat now shows as Occupied
         const res = await api.get(`/workstation-requests/availability`, {
           params: { plan_id: selectedPlanId, date: focusDate },
         });
@@ -290,14 +325,22 @@ export default function PendingApprovalsPage() {
   };
 
   const decline = async (req) => {
-    if (!canApprove) { toast.error("Only Super Admin can decline workstation requests"); return; }
+    if (!canApprove) { toast.error("Only Super Admin can decline requests"); return; }
     setDecidingId(req.id);
     try {
-      await api.post(`/workstation-requests/${req.id}/decline`);
-      toast.success(`Declined request for workstation ${req.seat_label} (${fmtDate(req.date)})`);
+      const isMR = req._type === "meeting_room";
+      const url = isMR
+        ? `/meeting-room-requests/${req.id}/decline`
+        : `/workstation-requests/${req.id}/decline`;
+      await api.post(url);
+      if (isMR) {
+        toast.success(`Declined meeting request for ${req.room_name || "the room"}`);
+      } else {
+        toast.success(`Declined request for workstation ${req.seat_label} (${fmtDate(req.date)})`);
+      }
       setRequests((prev) => prev.filter((r) => r.id !== req.id));
       if (focusRequest?.id === req.id) setFocusRequest(null);
-      if (availability) {
+      if (availability && !isMR) {
         const res = await api.get(`/workstation-requests/availability`, {
           params: { plan_id: selectedPlanId, date: focusDate },
         });
@@ -344,6 +387,22 @@ export default function PendingApprovalsPage() {
       contentClassName="bg-gray-50"
       actions={
         <>
+          {/* Type filter — Workstation / Meeting Room / All */}
+          <div className="w-44">
+            <SingleSelect
+              options={[
+                { value: "all",          label: "All requests" },
+                { value: "workstation",  label: "Workstation" },
+                { value: "meeting_room", label: "Meeting Room" },
+              ]}
+              value={typeFilter}
+              onChange={(v) => setTypeFilter(v || "all")}
+              placeholder="Type"
+              testId="pa-type-filter"
+              allowClear={false}
+              size="md"
+            />
+          </div>
           {plans.length > 1 && (
             <div className="w-56">
               <SingleSelect
@@ -539,6 +598,17 @@ export default function PendingApprovalsPage() {
                     {grp.items.map((req) => {
                       const focused = focusRequest?.id === req.id;
                       const busy = decidingId === req.id;
+                      const isMR = req._type === "meeting_room";
+                      // Format a friendly time-range for meeting-room requests
+                      const fmtTimeRange = () => {
+                        try {
+                          const s = new Date(req.start_at);
+                          const e = new Date(req.end_at);
+                          const dateLabel = s.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+                          const t = (d) => d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true });
+                          return `${dateLabel} · ${t(s)} – ${t(e)}`;
+                        } catch { return "—"; }
+                      };
                       return (
                         <div
                           key={req.id}
@@ -549,10 +619,13 @@ export default function PendingApprovalsPage() {
                               : "border-gray-200 hover:border-gray-300 bg-white hover:bg-gray-50"
                           }`}
                           data-testid={`pa-card-${req.id}`}
+                          data-request-type={req._type}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2 min-w-0">
-                              {canApprove && (
+                              {/* Bulk-select only supported for workstation requests today.
+                                  Meeting-room rows hide the checkbox to avoid confusion. */}
+                              {canApprove && !isMR && (
                                 <div onClick={(e) => e.stopPropagation()}>
                                   <BulkSelectCheckbox
                                     checked={effectiveSelectedIds.has(req.id)}
@@ -563,7 +636,17 @@ export default function PendingApprovalsPage() {
                                 </div>
                               )}
                               <div className="font-semibold text-sm text-gray-900 truncate flex items-center gap-1.5">
-                                <span>Workstation {req.seat_label}</span>
+                                {isMR ? (
+                                  <>
+                                    <span className="text-[10px] font-bold uppercase tracking-wide text-white bg-[#ec9324] rounded px-1.5 py-0.5">Meeting</span>
+                                    <span className="truncate" title={req.title}>{req.room_name || "Room"} · {req.title}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="text-[10px] font-bold uppercase tracking-wide text-white bg-blue-500 rounded px-1.5 py-0.5">Desk</span>
+                                    <span>Workstation {req.seat_label}</span>
+                                  </>
+                                )}
                                 {req.seq_no != null && (
                                   <span
                                     className="font-mono text-[10px] font-medium text-gray-500 bg-gray-100 rounded px-1.5 py-0.5"
@@ -584,14 +667,29 @@ export default function PendingApprovalsPage() {
                           </div>
 
                           <div className="mt-2 space-y-1 text-[12px] text-gray-700">
-                            <div className="flex items-center gap-1.5">
-                              <User sx={{ fontSize: 12 }} className="text-gray-400"/>
-                              <span className="truncate">For: <strong>{(req.employee || {}).name || "—"}</strong></span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <Calendar sx={{ fontSize: 12 }} className="text-gray-400"/>
-                              <span>For date: <strong>{fmtDate(req.date)}</strong></span>
-                            </div>
+                            {isMR ? (
+                              <>
+                                <div className="flex items-center gap-1.5">
+                                  <Calendar sx={{ fontSize: 12 }} className="text-gray-400"/>
+                                  <span><strong>{fmtTimeRange()}</strong></span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <User sx={{ fontSize: 12 }} className="text-gray-400"/>
+                                  <span className="truncate">Capacity: <strong>{req.room_capacity} seats</strong> · Attendees: <strong>{(req.attendees || []).length}</strong></span>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="flex items-center gap-1.5">
+                                  <User sx={{ fontSize: 12 }} className="text-gray-400"/>
+                                  <span className="truncate">For: <strong>{(req.employee || {}).name || "—"}</strong></span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <Calendar sx={{ fontSize: 12 }} className="text-gray-400"/>
+                                  <span>For date: <strong>{fmtDate(req.date)}</strong></span>
+                                </div>
+                              </>
+                            )}
                             <div className="flex items-center gap-1.5">
                               <User sx={{ fontSize: 12 }} className="text-gray-400"/>
                               <span className="truncate">Requested by: {(req.requested_by || {}).name || "—"}</span>
