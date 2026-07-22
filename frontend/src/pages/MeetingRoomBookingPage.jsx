@@ -28,6 +28,7 @@ import { useEffectivePage } from "../context/EffectivePermissionsContext";
 import MRBCalendarView from "../components/MRBCalendarView";
 import TimePickerOrange from "../components/ui/TimePickerOrange";
 import SelectOrange from "../components/ui/SelectOrange";
+import SingleDatePicker from "../components/SingleDatePicker";
 import { confirm as confirmDialog } from '../lib/dialog';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
@@ -655,14 +656,15 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
         )}
       </Field>
 
-      <div className="grid grid-cols-3 gap-2 mt-3" data-testid="mrb-form-datetime-row">
-        <Field label="Date">
-          <input type="date" value={bDate} onChange={(e) => setBDate(e.target.value)}
-            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-[#ec9324] mrb-orange-accent"
-            style={{ accentColor: '#ec9324' }}
-            data-testid="mrb-form-date"/>
+      <div className="grid grid-cols-3 gap-2 mt-3 items-start" data-testid="mrb-form-datetime-row">
+        <Field label="Date" noStack>
+          <SingleDatePicker
+            value={bDate}
+            onChange={setBDate}
+            testId="mrb-form-date"
+          />
         </Field>
-        <Field label="Start Time">
+        <Field label="Start Time" noStack>
           {/* Custom orange-highlighted time picker (native <input type="time">
               always uses the browser's blue selection color which cannot be
               themed via CSS). */}
@@ -673,7 +675,7 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
             testIdPrefix="mrb-form-start"
           />
         </Field>
-        <Field label="End Time">
+        <Field label="End Time" noStack>
           <TimePickerOrange
             value={endTime}
             onChange={setEndTime}
@@ -718,7 +720,7 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
         </label>
         {recurring && (
           <div className="mt-2 space-y-2" data-testid="mrb-form-recurring-panel">
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2 items-start">
               <div>
                 <div className="text-[10px] font-semibold text-gray-600 mb-1">Frequency</div>
                 <SelectOrange
@@ -735,7 +737,13 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
               </div>
               <div>
                 <div className="text-[10px] font-semibold text-gray-600 mb-1">End Date</div>
-                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:border-[#ec9324]" data-testid="mrb-form-end-date"/>
+                <SingleDatePicker
+                  value={endDate}
+                  onChange={setEndDate}
+                  min={bDate}
+                  testId="mrb-form-end-date"
+                  size="md"
+                />
               </div>
             </div>
             {freq === "weekly" && (
@@ -804,9 +812,9 @@ function BookingForm({ rooms, selectedRoomId, setSelectedRoomId, onSubmit, onCan
   );
 }
 
-function Field({ label, required, children }) {
+function Field({ label, required, children, className = "", noStack = false }) {
   return (
-    <div className="mt-3 first:mt-0">
+    <div className={`${noStack ? "" : "mt-3 first:mt-0"} ${className}`}>
       <label className="block text-[11px] font-semibold text-gray-700 mb-1">
         {label}{required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
