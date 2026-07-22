@@ -621,7 +621,7 @@ export default function PendingApprovalsPage() {
                           data-testid={`pa-card-${req.id}`}
                           data-request-type={req._type}
                         >
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-start justify-between gap-2">
                             <div className="flex items-center gap-2 min-w-0">
                               {/* Bulk-select only supported for workstation requests today.
                                   Meeting-room rows hide the checkbox to avoid confusion. */}
@@ -637,15 +637,9 @@ export default function PendingApprovalsPage() {
                               )}
                               <div className="font-semibold text-sm text-gray-900 truncate flex items-center gap-1.5">
                                 {isMR ? (
-                                  <>
-                                    <span className="text-[10px] font-bold uppercase tracking-wide text-white bg-[#ec9324] rounded px-1.5 py-0.5">Meeting</span>
-                                    <span className="truncate" title={req.title}>{req.room_name || "Room"} · {req.title}</span>
-                                  </>
+                                  <span className="truncate" title={req.title}>{req.room_name || "Room"} · {req.title}</span>
                                 ) : (
-                                  <>
-                                    <span className="text-[10px] font-bold uppercase tracking-wide text-white bg-blue-500 rounded px-1.5 py-0.5">Desk</span>
-                                    <span>Workstation {req.seat_label}</span>
-                                  </>
+                                  <span>Workstation {req.seat_label}</span>
                                 )}
                                 {req.seq_no != null && (
                                   <span
@@ -657,13 +651,28 @@ export default function PendingApprovalsPage() {
                                 )}
                               </div>
                             </div>
-                            <span
-                              data-testid="pa-status-badge"
-                              className="inline-flex items-center justify-center w-28 h-7 text-xs font-semibold rounded-full border-2 select-none whitespace-nowrap shrink-0"
-                              style={{ color: "#ec9324", borderColor: "#ec9324", backgroundColor: "#ffffff" }}
-                            >
-                              Pending
-                            </span>
+                            {/* Right column — Status pill on top, Type pill below.
+                                Both are fixed-width capsules for visual symmetry:
+                                  • Status: outlined pill (PendingApprovals-style).
+                                  • Type: solid pill (PriorityBadge-style)
+                                    — Desk   → orange (same as `Medium` priority)
+                                    — Meeting → green  (same as `Low`    priority). */}
+                            <div className="flex flex-col items-end gap-1 shrink-0">
+                              <span
+                                data-testid="pa-status-badge"
+                                className="inline-flex items-center justify-center w-24 h-6 text-[11px] font-semibold rounded-full border-2 select-none whitespace-nowrap"
+                                style={{ color: "#ec9324", borderColor: "#ec9324", backgroundColor: "#ffffff" }}
+                              >
+                                Pending
+                              </span>
+                              <span
+                                data-testid={`pa-type-pill-${req._type}`}
+                                className="inline-flex items-center justify-center w-24 h-6 text-[11px] font-semibold text-white rounded-full select-none whitespace-nowrap"
+                                style={{ backgroundColor: isMR ? "#16a34a" : "#ec9324" }}
+                              >
+                                {isMR ? "Meeting" : "Desk"}
+                              </span>
+                            </div>
                           </div>
 
                           <div className="mt-2 space-y-1 text-[12px] text-gray-700">
