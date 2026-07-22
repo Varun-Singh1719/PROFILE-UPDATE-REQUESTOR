@@ -192,16 +192,18 @@ export default function FloorPlansListPage() {
               />
             ))}
           </div>
-          <div className="mt-4 bg-white rounded-xl border border-gray-100 shadow-soft overflow-hidden">
-            <Pagination
-              page={page}
-              pageSize={pageSize}
-              total={plans.length}
-              onPageChange={setPage}
-              onPageSizeChange={setPageSize}
-              label="Floor Plans"
-              testIdPrefix="floor-plans-pg"
-            />
+          <div className="mt-auto pt-4">
+            <div className="bg-white rounded-xl border border-gray-100 shadow-soft overflow-hidden">
+              <Pagination
+                page={page}
+                pageSize={pageSize}
+                total={plans.length}
+                onPageChange={setPage}
+                onPageSizeChange={setPageSize}
+                label="Floor Plans"
+                testIdPrefix="floor-plans-pg"
+              />
+            </div>
           </div>
           </>
         )}
