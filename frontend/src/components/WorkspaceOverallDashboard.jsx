@@ -228,12 +228,12 @@ export default function WorkspaceOverallDashboard() {
 
           {/* Row 2 — Occupancy right now + Meeting rooms today */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-              <div className="px-5 pt-4 pb-3 flex items-center gap-2 border-b border-gray-100">
+            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden flex flex-col">
+              <div className="px-5 pt-4 pb-3 flex items-center gap-2 border-b border-gray-100 flex-shrink-0">
                 <Armchair sx={{ fontSize: 16 }} className="text-[#ec9324]"/>
                 <h3 className="font-semibold text-gray-900">Occupancy right now</h3>
               </div>
-              <div className="p-5 flex items-center justify-between gap-4">
+              <div className="p-5 flex-1 flex items-center justify-between gap-4">
                 <div className="relative w-36 h-36 flex-shrink-0">
                   <svg width="144" height="144" viewBox="0 0 144 144" className="-rotate-90 drop-shadow-sm">
                     <circle cx="72" cy="72" r="58" stroke="#f3f4f6" strokeWidth="14" fill="none" />
