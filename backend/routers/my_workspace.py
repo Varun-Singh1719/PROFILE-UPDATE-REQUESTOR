@@ -620,61 +620,15 @@ async def my_workspace_overall_dashboard(
         })
         entry["minutes_used"] += minutes
         entry["bookings"] += 1
-    # Total rooms count comes from live floor plan versions (published & authoritative).
-    live_rooms: List[dict] = []
-    async for fp in db.floor_plans.find(
-        {"live_version_id": {"$ne": None}},
-        {"_id": 0, "id": 1, "name": 1, "live_version_id": 1},
-    ):
-        v = await db.floor_plan_versions.find_one(
-            {"id": fp["live_version_id"]},
-            {"_id": 0, "id": 1, "rooms": 1, "name": 1},
-        )
-        if not v:
-            continue
-        plan_name = v.get("name") or fp.get("name")
-        for r in (v.get("rooms") or []):
-            live_rooms.append({
-                "room_id": r.get("id"),
-                "room_name": r.get("name"),
-                "plan_id": fp.get("id"),
-                "plan_name": plan_name,
-                "capacity": r.get("capacity"),
-            })
-    total_rooms_count = len(live_rooms) or len(rooms_agg)
-
-    # Merge live-plan rooms with today's usage so unbooked rooms show up too
-    # (with 0% usage) and the frontend can render a scrollable list of ALL
-    # meeting rooms — booked ones first, unbooked ones after (name-sorted).
-    merged: List[dict] = []
-    for lr in live_rooms:
-        key = lr["room_id"] or lr["room_name"]
-        agg = rooms_agg.pop(key, None)
-        merged.append({
-            "room_id":    lr["room_id"],
-            "room_name":  lr["room_name"],
-            "plan_name":  lr["plan_name"],
-            "minutes_used": (agg or {}).get("minutes_used", 0),
-            "bookings":     (agg or {}).get("bookings", 0),
-        })
-    # Any booking whose room is NOT in a live plan (orphan) — keep it too so
-    # nothing is silently dropped from the "N booked" tally.
-    for orphan in rooms_agg.values():
-        merged.append({
-            "room_id":    orphan.get("room_id"),
-            "room_name":  orphan.get("room_name"),
-            "plan_name":  orphan.get("plan_name"),
-            "minutes_used": orphan.get("minutes_used", 0),
-            "bookings":     orphan.get("bookings", 0),
-        })
-    # Booked rooms first (most-used first), then unbooked alphabetically.
-    merged.sort(key=lambda r: (
-        0 if r["minutes_used"] > 0 else 1,
-        -r["minutes_used"],
-        (r.get("room_name") or "").lower(),
-    ))
-    meeting_rooms_today = merged  # NO [:6] cap — frontend uses a scroller.
-
+    total_rooms = await db.floor_plan_versions.aggregate([
+        {"$project": {"rooms": {"$ifNull": ["$rooms", []]}}},
+        {"$project": {"count": {"$size": "$rooms"}}},
+        {"$group": {"_id": None, "total": {"$sum": "$count"}}},
+    ]).to_list(1)
+    total_rooms_count = (total_rooms[0]["total"] if total_rooms else 0) or len(rooms_agg)
+    meeting_rooms_today = sorted(
+        rooms_agg.values(), key=lambda r: r["minutes_used"], reverse=True,
+    )[:6]
     # Format used time as "Xh Ym" and pct of 8h
     day_capacity_min = 8 * 60
     for r in meeting_rooms_today:
