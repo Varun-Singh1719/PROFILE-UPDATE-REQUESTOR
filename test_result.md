@@ -2179,3 +2179,31 @@ Backwards-compatible — every existing `confirm/prompt/alert` call site works u
 - `frontend/src/components/MRBCalendarView.jsx`
 - `scripts/seed_mrb_variety.py` (new)
 
+
+## [2026-07-22] Workspace Manager Dashboard — Meeting rooms today: scroller replaces "View all" link
+
+### Backend
+- `routers/my_workspace.py` (`meeting_rooms_today` block):
+    - Removed the `[:6]` cap so the endpoint now returns **all** rooms.
+    - Now merges every room from every live floor plan version with today's aggregated bookings — unbooked rooms surface with `used = "0m"`, `pct = 0` so the dashboard can list them too.
+    - Sort order: booked rooms first (most-used first), then unbooked rooms alphabetically. Orphan bookings (room not in any live plan) are still included so the "N booked" tally never drops entries.
+    - Total-rooms count is now derived from live floor plans (the same source used to render the maps) instead of aggregating across all versions.
+
+### Frontend
+- `components/WorkspaceOverallDashboard.jsx` — "Meeting rooms today" card:
+    - Card is now a fixed-height flex column (`max-h-[420px] flex flex-col overflow-hidden`).
+    - Header row (`Meeting rooms today · N/M booked`) is `flex-shrink-0` — stays pinned at the top.
+    - Body is a scrollable div (`overflow-y-auto flex-1 min-h-0`, `scrollbar-width: thin`) tagged `data-testid="wm-meeting-rooms-scroller"`.
+    - Removed the `View all meeting rooms →` bottom link — users now scroll inside the card instead of navigating away.
+    - Empty-state copy tweaked to "No meeting rooms available." (previously "…in use today.") since unbooked rooms are now listed too.
+
+### Verified (Playwright, no auto-testing agent invoked per user policy)
+- Loaded `/admin` as Super Admin (Workspace Manager mode).
+- Scroller card contains 11 room rows (matches `4/11 booked` label).
+- Scrolling the scroller by 200 px reveals rooms that were previously hidden (`Zeta / Apollo / Boolean`) — header remains fixed while the list moves.
+- No `View all meeting rooms →` link present in the card.
+
+### Files touched
+- `backend/routers/my_workspace.py`
+- `frontend/src/components/WorkspaceOverallDashboard.jsx`
+

@@ -278,8 +278,9 @@ export default function WorkspaceOverallDashboard() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-              <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-gray-100">
+            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden flex flex-col max-h-[420px]">
+              {/* Fixed header — always visible while the list below scrolls. */}
+              <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-gray-100 flex-shrink-0">
                 <div className="inline-flex items-center gap-2">
                   <DoorOpen sx={{ fontSize: 16 }} className="text-[#ec9324]"/>
                   <h3 className="font-semibold text-gray-900">Meeting rooms today</h3>
@@ -288,15 +289,22 @@ export default function WorkspaceOverallDashboard() {
                   {overall?.meeting_rooms_bookings_today || 0}/{overall?.meeting_rooms_total || 0} booked
                 </span>
               </div>
-              <div className="p-4 grid grid-cols-1 gap-2">
+              {/* Scrollable list — shows ALL rooms (booked first, then unbooked).
+                  The "View all meeting rooms" link is intentionally removed —
+                  users can scroll here directly instead of navigating away. */}
+              <div
+                className="p-4 grid grid-cols-1 gap-2 overflow-y-auto flex-1 min-h-0"
+                data-testid="wm-meeting-rooms-scroller"
+                style={{ scrollbarWidth: 'thin' }}
+              >
                 {rooms.length === 0 && (
                   <div className="text-center text-xs text-gray-400 py-6">
-                    No meeting rooms in use today.
+                    No meeting rooms available.
                   </div>
                 )}
                 {rooms.map((r) => (
                   <div key={r.room_id || r.room_name} className="flex items-center gap-3 p-2 rounded-lg border border-gray-100 hover:bg-gray-50">
-                    <span className="h-9 w-9 rounded-md bg-[#ec9324]/10 text-[#ec9324] inline-flex items-center justify-center">
+                    <span className="h-9 w-9 rounded-md bg-[#ec9324]/10 text-[#ec9324] inline-flex items-center justify-center flex-shrink-0">
                       <DoorOpen sx={{ fontSize: 16 }}/>
                     </span>
                     <div className="flex-1 min-w-0">
@@ -306,20 +314,12 @@ export default function WorkspaceOverallDashboard() {
                       </div>
                       <ProgressBar value={r.pct} max={100} height={4} />
                     </div>
-                    <div className="text-right">
+                    <div className="text-right flex-shrink-0">
                       <div className="text-sm font-bold text-gray-900">{r.used}</div>
                       <div className="text-[10px] text-gray-500">{r.pct}% used</div>
                     </div>
                   </div>
                 ))}
-                {rooms.length > 0 && (
-                  <button
-                    onClick={() => navigate("/workspace-manager/meeting-rooms")}
-                    className="text-[11px] font-semibold text-[#ec9324] hover:underline mt-1"
-                  >
-                    View all meeting rooms →
-                  </button>
-                )}
               </div>
             </div>
           </div>
