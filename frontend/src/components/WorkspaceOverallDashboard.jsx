@@ -278,7 +278,7 @@ export default function WorkspaceOverallDashboard() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden flex flex-col max-h-[420px]">
+            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden flex flex-col self-start max-h-[360px] w-full">
               {/* Fixed header — always visible while the list below scrolls. */}
               <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-gray-100 flex-shrink-0">
                 <div className="inline-flex items-center gap-2">
