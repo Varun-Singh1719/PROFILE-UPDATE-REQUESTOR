@@ -83,6 +83,10 @@ export default function MeetingRoomBookingPage() {
   // Carries enough info to pre-fill the form (title, attendees) and to know which booking to PATCH.
   const [editing, setEditing] = useState(null); // { id, title, attendees }
 
+  // Meeting detail popup: when set to a row (booking OR request), we show the
+  // MeetingDetailModal overlay with Edit + Delete affordances.
+  const [detailRow, setDetailRow] = useState(null);
+
   // Booking form's date+time (lifted) — used by the floor map to dim conflicting rooms
   const [formDate, setFormDate] = useState(todayIso());
   const [formStart, setFormStart] = useState("10:00");
@@ -159,10 +163,29 @@ export default function MeetingRoomBookingPage() {
   // The row list for the Upcoming Bookings panel, filtered by the status
   // dropdown. We use the request row's `start_at` for date grouping so
   // Pending items still land on the right day.
+  // NOTE: An empty statusFilter means "All" (no status filter applied).
   const visibleRequests = useMemo(() => {
+    if (!statusFilter || statusFilter.length === 0) return myRequests || [];
     const set = new Set(statusFilter);
     return (myRequests || []).filter(r => set.has(r.status));
   }, [myRequests, statusFilter]);
+
+  // Clears BOTH date + status back to their defaults (today + Approved + Pending Approval).
+  const handleClearAllFilters = useCallback(() => {
+    setStatusFilter(DEFAULT_STATUS_FILTER);
+    setRangeMode("today");
+    setFilterDate(todayIso());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // "Dirty" = filters differ from the default state → show Clear All button.
+  const filtersDirty = useMemo(() => {
+    const isDefaultStatus =
+      statusFilter.length === DEFAULT_STATUS_FILTER.length &&
+      DEFAULT_STATUS_FILTER.every(s => statusFilter.includes(s));
+    return !isDefaultStatus || rangeMode !== "today" || filterDate !== todayIso();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, rangeMode, filterDate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -519,115 +542,8 @@ export default function MeetingRoomBookingPage() {
         </>
       ) : (
       <div className="flex-1 flex overflow-hidden">
-        {/* LEFT panel — 32% of viewport (reduced 20% from previous 40%) */}
-        <div className="w-[32%] min-w-[340px] border-r border-gray-200 bg-white flex flex-col overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
-            <CalendarClock className="text-[#ec9324] flex-shrink-0" sx={{ fontSize: 22 }}/>
-            <span className="text-sm font-semibold text-gray-700">Upcoming bookings</span>
-          </div>
-
-          {/* Left panel body: a single flex column that fills the remaining height.
-              When the booking form is open, it REPLACES the upcoming list (starts from the
-              same "Upcoming Bookings" position) so meeting cards never push the form to the
-              bottom. After Submit / Cancel the form closes and the upcoming list returns. */}
-          <div className="flex-1 overflow-hidden flex flex-col">
-            {formOpen ? (
-              /* Form view — occupies the full left-panel body.
-                 Subtle slide+fade-in from the right when it takes over. */
-              <div
-                ref={formAnchorRef}
-                key="mrb-form-view"
-                className="flex-1 min-h-0 overflow-y-auto px-5 pt-4 pb-4 animate-in fade-in slide-in-from-right-3 duration-300 ease-out"
-              >
-                <BookingForm
-                  rooms={rooms}
-                  selectedRoomId={selectedRoomId}
-                  setSelectedRoomId={setSelectedRoomId}
-                  onSubmit={handleCreate}
-                  onCancel={() => { setFormOpen(false); setConflict(null); setEditing(null); }}
-                  conflict={conflict}
-                  clearConflict={() => setConflict(null)}
-                  titleInputFocusRef={titleInputFocusRef}
-                  bDate={formDate} setBDate={setFormDate}
-                  startTime={formStart} setStartTime={setFormStart}
-                  endTime={formEnd} setEndTime={setFormEnd}
-                  slotConflictRoomIds={slotConflictRoomIds}
-                  editing={editing}
-                />
-              </div>
-            ) : (
-              /* Upcoming bookings — fills the entire remaining height of the left panel.
-                 Subtle fade-in (+ slide-in-from-left) when it returns after Submit/Cancel. */
-              <section
-                data-testid="mrb-upcoming-section"
-                key="mrb-upcoming-view"
-                className="flex-1 min-h-0 flex flex-col px-5 pt-4 pb-2 animate-in fade-in slide-in-from-left-2 duration-300 ease-out"
-              >
-                <div className="flex items-center justify-between mb-2 gap-2 flex-shrink-0 flex-wrap">
-                  <h2 className="text-[11px] font-bold tracking-wide text-gray-500 uppercase" data-testid="mrb-upcoming-title">Upcoming Bookings</h2>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {/* Status filter (Pending Approval / Approved / Declined / Cancelled).
-                        Default = Pending + Approved (the actionable set). Uses the same
-                        `MultiSelectFilter` used by Profix › All Requests + Pending
-                        Approvals so the pattern is consistent across the app. */}
-                    <div className="w-44">
-                      <MultiSelectFilter
-                        label="Status"
-                        value={statusFilter}
-                        onChange={(arr) => setStatusFilter(arr.length ? arr : DEFAULT_STATUS_FILTER)}
-                        options={ALL_STATUSES.map(s => ({ value: s, label: s }))}
-                        testIdPrefix="mrb-status-filter"
-                        align="right"
-                      />
-                    </div>
-                    <div className="inline-flex bg-gray-100 rounded p-0.5" data-testid="mrb-range-toggle">
-                      <button
-                        onClick={() => { setRangeMode("today"); setFilterDate(todayIso()); }}
-                        data-testid="mrb-range-today"
-                        className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors ${rangeMode === "today" ? "bg-white text-[#ec9324] shadow-sm" : "text-gray-500 hover:text-gray-800"}`}
-                      >Today</button>
-                      <button
-                        onClick={() => setRangeMode("next7")}
-                        data-testid="mrb-range-7"
-                        className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors ${rangeMode === "next7" ? "bg-white text-[#ec9324] shadow-sm" : "text-gray-500 hover:text-gray-800"}`}
-                      >Next 7 days</button>
-                    </div>
-                    {rangeMode === "today" && (
-                      <input
-                        type="date"
-                        value={filterDate}
-                        onChange={(e) => { setFilterDate(e.target.value); }}
-                        className="text-[11px] px-2 py-1 border border-gray-200 rounded focus:outline-none focus:border-[#ec9324]"
-                        data-testid="mrb-upcoming-date-filter"
-                      />
-                    )}
-                  </div>
-                </div>
-                <UpcomingBookingsList
-                  bookings={statusFilter.includes("Approved") ? myBookings : []}
-                  pendingRequests={visibleRequests.filter(r => r.status !== "Approved")}
-                  filterDate={filterDate}
-                  rangeMode={rangeMode}
-                  loading={loading}
-                  onCancel={handleCancel}
-                  onReschedule={handleReschedule}
-                  onCancelRequest={async (id) => {
-                    try {
-                      await api.delete(`/meeting-room-requests/${id}`);
-                      toast.success("Request cancelled");
-                      await loadMyRequests();
-                    } catch (e) {
-                      toast.error(formatApiError(e?.response?.data?.detail) || "Could not cancel request");
-                    }
-                  }}
-                />
-              </section>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT 60% — Floor Map */}
-        <div className="flex-1 relative bg-gray-100">
+        {/* LEFT — Floor Map (uniform with Workstation Booking's map-on-left layout) */}
+        <div className="flex-1 relative bg-gray-100 border-r border-gray-200">
           {/* Top-right floating action: opens the Google-Calendar-style schedule view.
               Also closes any currently-open booking form so the calendar loads clean
               — the form should only open when the user picks a slot in the calendar. */}
@@ -654,7 +570,153 @@ export default function MeetingRoomBookingPage() {
             onQuickBook={handleQuickBook}
           />
         </div>
+
+        {/* RIGHT panel — Upcoming bookings / Booking form (32% width) */}
+        <div className="w-[32%] min-w-[340px] bg-white flex flex-col overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
+            <CalendarClock className="text-[#ec9324] flex-shrink-0" sx={{ fontSize: 22 }}/>
+            <span className="text-sm font-semibold text-gray-700">Upcoming bookings</span>
+          </div>
+
+          {/* Right panel body: a single flex column that fills the remaining height.
+              When the booking form is open, it REPLACES the upcoming list (starts from the
+              same "Upcoming Bookings" position) so meeting cards never push the form to the
+              bottom. After Submit / Cancel the form closes and the upcoming list returns. */}
+          <div className="flex-1 overflow-hidden flex flex-col">
+            {formOpen ? (
+              /* Form view — occupies the full right-panel body.
+                 Subtle slide+fade-in from the left when it takes over. */
+              <div
+                ref={formAnchorRef}
+                key="mrb-form-view"
+                className="flex-1 min-h-0 overflow-y-auto px-5 pt-4 pb-4 animate-in fade-in slide-in-from-left-3 duration-300 ease-out"
+              >
+                <BookingForm
+                  rooms={rooms}
+                  selectedRoomId={selectedRoomId}
+                  setSelectedRoomId={setSelectedRoomId}
+                  onSubmit={handleCreate}
+                  onCancel={() => { setFormOpen(false); setConflict(null); setEditing(null); }}
+                  conflict={conflict}
+                  clearConflict={() => setConflict(null)}
+                  titleInputFocusRef={titleInputFocusRef}
+                  bDate={formDate} setBDate={setFormDate}
+                  startTime={formStart} setStartTime={setFormStart}
+                  endTime={formEnd} setEndTime={setFormEnd}
+                  slotConflictRoomIds={slotConflictRoomIds}
+                  editing={editing}
+                />
+              </div>
+            ) : (
+              /* Upcoming bookings — fills the entire remaining height of the right panel.
+                 Subtle fade-in (+ slide-in-from-right) when it returns after Submit/Cancel. */
+              <section
+                data-testid="mrb-upcoming-section"
+                key="mrb-upcoming-view"
+                className="flex-1 min-h-0 flex flex-col px-5 pt-4 pb-2 animate-in fade-in slide-in-from-right-2 duration-300 ease-out"
+              >
+                {/* Compact filter bar — everything on ONE line.
+                    Order: [Status filter] · [Date input] · [Next 7 days pill] · [Clear All]
+                    - No duplicate "Upcoming Bookings" heading here (panel header shows it).
+                    - Status X clears to "All" (empty array = all statuses).
+                    - Date input stays visible even when Next 7 days is active — its value
+                      becomes the START of the 7-day window.
+                    - "Clear All" resets both filters back to defaults. */}
+                <div className="flex items-center gap-1.5 mb-2 flex-shrink-0 flex-nowrap">
+                  <div className="w-40 min-w-0">
+                    <MultiSelectFilter
+                      label="Status"
+                      value={statusFilter}
+                      onChange={(arr) => setStatusFilter(arr)}
+                      options={ALL_STATUSES.map(s => ({ value: s, label: s }))}
+                      testIdPrefix="mrb-status-filter"
+                      align="left"
+                      placeholder="All"
+                    />
+                  </div>
+                  <input
+                    type="date"
+                    value={filterDate}
+                    onChange={(e) => { setFilterDate(e.target.value); }}
+                    className="text-[11px] px-2 py-1 border border-gray-200 rounded focus:outline-none focus:border-[#ec9324] shrink-0"
+                    data-testid="mrb-upcoming-date-filter"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setRangeMode(rangeMode === "next7" ? "today" : "next7")}
+                    data-testid="mrb-range-7"
+                    aria-pressed={rangeMode === "next7"}
+                    title="Show 7 days starting from the selected date"
+                    className={`px-2 py-1 text-[10px] font-bold rounded border transition-colors whitespace-nowrap shrink-0 ${
+                      rangeMode === "next7"
+                        ? "bg-[#ec9324] text-white border-[#ec9324] shadow-sm"
+                        : "bg-white text-gray-600 border-gray-200 hover:border-[#ec9324] hover:text-[#ec9324]"
+                    }`}
+                  >Next 7 days</button>
+                  {filtersDirty && (
+                    <button
+                      type="button"
+                      onClick={handleClearAllFilters}
+                      data-testid="mrb-filter-clear-all"
+                      title="Clear all filters"
+                      className="ml-auto px-2 py-1 text-[10px] font-semibold text-gray-500 hover:text-[#ec9324] hover:bg-orange-50 rounded whitespace-nowrap shrink-0"
+                    >Clear All</button>
+                  )}
+                </div>
+                <UpcomingBookingsList
+                  bookings={(statusFilter.length === 0 || statusFilter.includes("Approved")) ? myBookings : []}
+                  pendingRequests={visibleRequests.filter(r => r.status !== "Approved")}
+                  filterDate={filterDate}
+                  rangeMode={rangeMode}
+                  loading={loading}
+                  onCancel={handleCancel}
+                  onReschedule={handleReschedule}
+                  onCancelRequest={async (id) => {
+                    try {
+                      await api.delete(`/meeting-room-requests/${id}`);
+                      toast.success("Request cancelled");
+                      await loadMyRequests();
+                    } catch (e) {
+                      toast.error(formatApiError(e?.response?.data?.detail) || "Could not cancel request");
+                    }
+                  }}
+                  onOpenDetail={(row) => setDetailRow(row)}
+                />
+              </section>
+            )}
+          </div>
+        </div>
       </div>
+      )}
+      {detailRow && (
+        <MeetingDetailModal
+          row={detailRow}
+          onClose={() => setDetailRow(null)}
+          onEdit={(r) => { setDetailRow(null); handleReschedule(r); }}
+          onDelete={async (r) => {
+            const isRequest = r._kind === "request";
+            if (isRequest) {
+              try {
+                await api.delete(`/meeting-room-requests/${r.id}`);
+                toast.success("Request cancelled");
+                await loadMyRequests();
+              } catch (e) {
+                toast.error(formatApiError(e?.response?.data?.detail) || "Could not cancel request");
+              }
+            } else {
+              await handleCancel(r);
+            }
+            setDetailRow(null);
+          }}
+          canEdit={
+            (detailRow._kind === "request" && detailRow._status === "Pending Approval") ||
+            (detailRow._kind === "booking" && detailRow._status === "Approved")
+          }
+          canDelete={
+            (detailRow._kind === "request" && detailRow._status === "Pending Approval") ||
+            (detailRow._kind === "booking" && detailRow._status === "Approved")
+          }
+        />
       )}
     </Layout>
   );
@@ -941,7 +1003,7 @@ function Field({ label, required, children, className = "", noStack = false }) {
 // - rangeMode="next7" → 7 day groups starting from today.
 // - Per-day pagination: first PAGE_SIZE shown, "+N more" expands the rest.
 const PAGE_SIZE = 4;
-function UpcomingBookingsList({ bookings, pendingRequests = [], filterDate, rangeMode, loading, onCancel, onReschedule, onCancelRequest }) {
+function UpcomingBookingsList({ bookings, pendingRequests = [], filterDate, rangeMode, loading, onCancel, onReschedule, onCancelRequest, onOpenDetail }) {
   const today = todayIso();
   const addDaysIso = (offset) => {
     const d = new Date(); d.setDate(d.getDate() + offset);
@@ -992,8 +1054,16 @@ function UpcomingBookingsList({ bookings, pendingRequests = [], filterDate, rang
 
   let dayGroups;
   if (rangeMode === "next7") {
+    // Anchor the 7-day window on the picked date (not today) so the date
+    // input keeps meaning when "Next 7 days" is toggled on.
+    const anchor = new Date(filterDate);
+    const anchorIso = (offset) => {
+      const d = new Date(anchor); d.setDate(d.getDate() + offset);
+      const p = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    };
     dayGroups = Array.from({ length: 7 }, (_, i) => {
-      const key = addDaysIso(i);
+      const key = anchorIso(i);
       return { key, label: formatDayLabel(key, i), items: groups[key] || [] };
     });
   } else if (isFilterToday) {
@@ -1021,7 +1091,7 @@ function UpcomingBookingsList({ bookings, pendingRequests = [], filterDate, rang
         </div>
       ) : (
         <div className="space-y-3" data-testid="mrb-upcoming-list">
-          {dayGroups.map(g => <DayGroup key={g.key} group={g} onCancel={onCancel} onReschedule={onReschedule} onCancelRequest={onCancelRequest}/>)}
+          {dayGroups.map(g => <DayGroup key={g.key} group={g} onCancel={onCancel} onReschedule={onReschedule} onCancelRequest={onCancelRequest} onOpenDetail={onOpenDetail}/>)}
         </div>
       )}
     </div>
@@ -1051,7 +1121,7 @@ function StatusPill({ status, dataTestId }) {
   );
 }
 
-function DayGroup({ group, onCancel, onReschedule, onCancelRequest }) {
+function DayGroup({ group, onCancel, onReschedule, onCancelRequest, onOpenDetail }) {
   const [expanded, setExpanded] = useState(false);
   const list = expanded ? group.items : group.items.slice(0, PAGE_SIZE);
   const hidden = group.items.length - list.length;
@@ -1079,7 +1149,17 @@ function DayGroup({ group, onCancel, onReschedule, onCancelRequest }) {
           data-testid={`mrb-upcoming-${b.id}`}
           data-kind={b._kind}
           data-status={status}
-          className={`bg-white rounded-md border px-2.5 py-1.5 mb-1 transition-colors ${
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            // Ignore clicks that originated from an action button inside the card.
+            if (e.target.closest("button")) return;
+            onOpenDetail?.(b);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenDetail?.(b); }
+          }}
+          className={`bg-white rounded-md border px-2.5 py-1.5 mb-1 transition-colors cursor-pointer ${
             status === "Declined" ? "border-red-200 opacity-80" :
             status === "Pending Approval" ? "border-amber-200 bg-amber-50/40" :
             status === "Cancelled" ? "border-gray-200 opacity-70" :
@@ -1684,3 +1764,192 @@ function Legend({ color, label }) {
     </div>
   );
 }
+
+// ============================================================ Meeting Detail Modal
+// Opened when a user clicks a card in the Upcoming Bookings list. Displays
+// every detail we have for the meeting and surfaces Edit + Delete actions.
+function MeetingDetailModal({ row, onClose, onEdit, onDelete, canEdit, canDelete }) {
+  if (!row) return null;
+  const isRequest = row._kind === "request";
+  const status = row._status || (isRequest ? row.status : "Approved");
+  const organizer = row.organizer || row.requested_by || {};
+  const attendees = row.attendees || [];
+  const userAttendees = attendees.filter(a => a.type === "user");
+  const teamAttendees = attendees.filter(a => a.type === "team");
+  const start = row.start_at ? new Date(row.start_at) : null;
+  const end = row.end_at ? new Date(row.end_at) : null;
+  const bookingSeq = !isRequest ? row.seq_no : null;
+  const requestSeq = isRequest ? row.seq_no : row._request_seq_no;
+  const decidedBy = row.decided_by || null;
+  const decisionNote = row.decision_note;
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      data-testid="mrb-detail-modal"
+    >
+      <div className="w-full max-w-[540px] max-h-[90vh] flex flex-col bg-white rounded-lg shadow-2xl border border-gray-200 animate-in zoom-in-95 duration-150">
+        {/* Header */}
+        <div className="px-5 pt-4 pb-3 border-b border-gray-100 flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <CalendarClock sx={{ fontSize: 18 }} className="text-[#ec9324] shrink-0"/>
+              <h2 className="text-base font-bold text-gray-900 truncate" data-testid="mrb-detail-title">
+                {row.title}
+              </h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <StatusPill status={status} dataTestId="mrb-detail-status"/>
+              {bookingSeq != null && (
+                <span className="text-[11px] text-gray-500">
+                  Booking&nbsp;ID: <span className="font-mono font-semibold text-gray-700">#{bookingSeq}</span>
+                </span>
+              )}
+              {requestSeq != null && (
+                <span className="text-[11px] text-gray-500">
+                  Request&nbsp;#<span className="font-mono font-semibold text-gray-700">{requestSeq}</span>
+                </span>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="p-1.5 rounded text-gray-400 hover:text-gray-800 hover:bg-gray-100"
+            data-testid="mrb-detail-close"
+          ><X sx={{ fontSize: 16 }}/></button>
+        </div>
+
+        {/* Body */}
+        <div className="px-5 py-4 overflow-y-auto flex-1">
+          <dl className="grid grid-cols-1 gap-3 text-[12px] text-gray-800">
+            <DetailRow icon={<Clock sx={{ fontSize: 14 }} className="text-[#ec9324]"/>} label="When">
+              {start ? (
+                <>
+                  <span className="font-semibold">{start.toLocaleDateString(undefined, { weekday: "long", day: "2-digit", month: "short", year: "numeric" })}</span>
+                  <span className="text-gray-400 mx-1">·</span>
+                  {fmtTime(row.start_at)} – {fmtTime(row.end_at)}
+                </>
+              ) : "—"}
+            </DetailRow>
+
+            <DetailRow icon={<MapPin sx={{ fontSize: 14 }} className="text-[#ec9324]"/>} label="Room">
+              <span className="font-semibold">{row.room_name || "—"}</span>
+              {row.room_capacity != null && (
+                <span className="text-gray-500"> · Capacity {row.room_capacity} Seats</span>
+              )}
+              {row.plan_name && (
+                <div className="text-[11px] text-gray-500">{row.plan_name}</div>
+              )}
+            </DetailRow>
+
+            <DetailRow icon={<Users sx={{ fontSize: 14 }} className="text-[#ec9324]"/>} label="Organizer">
+              <div className="font-semibold text-gray-900">{organizer.name || organizer.email || "—"}</div>
+              {organizer.email && <div className="text-[11px] text-gray-500">{organizer.email}</div>}
+              {row.organizer_team_name && (
+                <div className="text-[11px] text-[#ec9324] font-semibold">{row.organizer_team_name}</div>
+              )}
+            </DetailRow>
+
+            <DetailRow icon={<UserPlus sx={{ fontSize: 14 }} className="text-[#ec9324]"/>} label={`Attendees${attendees.length ? ` (${attendees.length})` : ""}`}>
+              {attendees.length === 0 ? (
+                <span className="text-gray-400 italic text-[11px]">No attendees added.</span>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {userAttendees.length > 0 && (
+                    <div>
+                      <div className="text-[10px] font-bold tracking-wide text-gray-500 uppercase mb-1">People ({userAttendees.length})</div>
+                      <div className="flex flex-wrap gap-1.5" data-testid="mrb-detail-user-attendees">
+                        {userAttendees.map(a => (
+                          <span key={`u-${a.id}`} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-blue-50 text-blue-700 border-blue-200">
+                            {a.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {teamAttendees.length > 0 && (
+                    <div>
+                      <div className="text-[10px] font-bold tracking-wide text-gray-500 uppercase mb-1">Teams ({teamAttendees.length})</div>
+                      <div className="flex flex-wrap gap-1.5" data-testid="mrb-detail-team-attendees">
+                        {teamAttendees.map(a => (
+                          <span key={`t-${a.id}`} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-purple-50 text-purple-700 border-purple-200">
+                            <Users sx={{ fontSize: 10 }}/> {a.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </DetailRow>
+
+            {row.recurring && (
+              <DetailRow icon={<Repeat sx={{ fontSize: 14 }} className="text-[#ec9324]"/>} label="Recurring">
+                <span className="capitalize">{row.recurring.frequency}</span>
+                {row.recurring.end_date && <> · until <span className="font-semibold">{row.recurring.end_date}</span></>}
+                {Array.isArray(row.recurring.days) && row.recurring.days.length > 0 && (
+                  <> · Days: {row.recurring.days.join(", ")}</>
+                )}
+              </DetailRow>
+            )}
+
+            {(row.requested_on || row.created_at) && (
+              <DetailRow icon={<CalendarIcon sx={{ fontSize: 14 }} className="text-[#ec9324]"/>} label="Requested">
+                {fmtDateTime(row.requested_on || row.created_at)}
+              </DetailRow>
+            )}
+
+            {decidedBy && (
+              <DetailRow icon={<AlertCircle sx={{ fontSize: 14 }} className="text-[#ec9324]"/>} label={status === "Declined" ? "Declined by" : "Approved by"}>
+                <div className="font-semibold">{decidedBy.name || decidedBy.email || "—"}</div>
+                {row.decided_on && <div className="text-[11px] text-gray-500">{fmtDateTime(row.decided_on)}</div>}
+                {decidedBy.auto_approved && <div className="text-[11px] text-emerald-700 font-semibold">Auto-approved</div>}
+                {decisionNote && <div className="text-[11px] text-gray-600 mt-1 italic">&ldquo;{decisionNote}&rdquo;</div>}
+              </DetailRow>
+            )}
+          </dl>
+        </div>
+
+        {/* Footer actions */}
+        <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-end gap-2 bg-gray-50 rounded-b-lg">
+          <Button variant="outline" onClick={onClose} data-testid="mrb-detail-close-btn">Close</Button>
+          {canDelete && (
+            <Button
+              onClick={() => onDelete?.(row)}
+              className="bg-red-600 hover:bg-red-700 text-white"
+              data-testid="mrb-detail-delete"
+            >
+              <Trash2 sx={{ fontSize: 14 }} className="mr-1.5"/>
+              Delete
+            </Button>
+          )}
+          {canEdit && (
+            <Button
+              onClick={() => onEdit?.(row)}
+              className="bg-[#ec9324] hover:bg-[#d4811f] text-white"
+              data-testid="mrb-detail-edit"
+            >
+              <Pencil sx={{ fontSize: 14 }} className="mr-1.5"/>
+              Edit
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({ icon, label, children }) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="w-6 pt-0.5 flex-shrink-0 flex items-center justify-center">{icon}</div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[10px] font-bold tracking-wide text-gray-500 uppercase mb-0.5">{label}</div>
+        <div className="text-[12px] text-gray-800">{children}</div>
+      </div>
+    </div>
+  );
+}
+

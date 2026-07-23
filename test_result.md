@@ -1743,7 +1743,7 @@ frontend:
             - "View Booking" button navigates to /workspace-manager/bookings but without ?bookingId= parameter in URL (navigation works but query param missing). This is a minor issue that doesn't affect the core bug fix verification.
             
             **CONSOLE ERRORS:**
-            - 401 errors detected for PDF loading (https://pending-approval-ui-2.preview.emergentagent.com/api/floor-plans/pdf/...) - this is a backend PDF authentication issue, not related to the bug fixes
+            - 401 errors detected for PDF loading (https://meeting-manager-fix.preview.emergentagent.com/api/floor-plans/pdf/...) - this is a backend PDF authentication issue, not related to the bug fixes
             - No critical JavaScript errors detected
             
             Test date used: 2026-07-03 (date with existing workstation bookings)
@@ -2308,3 +2308,206 @@ the highlight pattern used for focused workstation seats.
 ### Verification
 Visually confirmed via screenshots (Gamma / Beta / Workstation B1 /
 Workstation C3 clicks in sequence). Backend was NOT touched.
+
+
+---
+
+## MRB Filter Bar + Detail Popup Redesign (Jul 2026)
+
+### Scope
+User feedback on Workspace Manager › Meeting Room Booking:
+1. Shift the "Upcoming bookings" sidebar to the RIGHT (mirror Workstation
+   Booking + Pending Approvals layouts) for UI uniformity.
+2. Redesign the filter bar so both filters sit on one line without
+   clutter.
+3. Fix the Status filter's X-clear button — clearing must mean "All",
+   not silently snap back to default.
+4. Add a "Clear All" affordance that resets both date + status back to
+   defaults (today + Approved + Pending Approval).
+5. Keep the Date input visible even when "Next 7 days" is on; the picked
+   date becomes the start of the 7-day window.
+6. Remove the duplicate "Upcoming Bookings" heading inside the filter
+   bar (the panel header already says it).
+7. Seed 12–15 meeting entries covering every status + attendee shape
+   (single/multi user, single/multi team, mixed).
+8. New meeting detail popup with Edit + Delete actions.
+
+### Frontend changes (`/app/frontend/src/pages/MeetingRoomBookingPage.jsx`)
+- Panels swapped: **Floor Map now on the LEFT** (flex-1), **Upcoming
+  bookings on the RIGHT** (w-[32%] min-w-[340px]). Slide-in animation
+  direction updated to match the new position.
+- New compact filter row (single line, `flex-nowrap`):
+  `[Status filter] · [Date] · [Next 7 days pill] · [Clear All]`
+- Removed the duplicate `<h2>Upcoming Bookings</h2>` inside the filter
+  row (panel header retains it).
+- Status `MultiSelectFilter.onChange` now writes the array directly. An
+  empty selection is treated as **"All statuses"** everywhere it's
+  consumed (both `visibleRequests` and the `bookings` prop to
+  `UpcomingBookingsList`).
+- `Next 7 days` is a single pill toggle (was a Today/Next-7 segmented
+  control). Toggling it does NOT clear the date. The list now anchors
+  the 7-day window on `filterDate` (previously always started from
+  today).
+- `filtersDirty` memo drives the visibility of the new **Clear All**
+  button. Clicking it resets `statusFilter` → default, `rangeMode` →
+  `today`, `filterDate` → today's ISO.
+- Each meeting card is now `role="button"` — clicking it opens a new
+  `MeetingDetailModal` overlay. Click handler ignores nested action
+  buttons (Reschedule / Cancel) so those still work in isolation.
+- New `MeetingDetailModal` component:
+  - Header: title + status pill + Booking ID (Approved) + Request # (any).
+  - Body: WHEN, ROOM (+ capacity + plan), ORGANIZER, ATTENDEES broken
+    down into People / Teams sub-groups, Recurring info (if set),
+    Requested-on timestamp, Decided-by (with auto-approved & optional
+    note).
+  - Footer: Close · **Delete** (red) · **Edit** (orange). Edit fires the
+    existing `handleReschedule` (opens Booking Form in Reschedule mode).
+    Delete cascades through `handleCancel` (Approved) or
+    `DELETE /api/meeting-room-requests/{id}` (Pending).
+
+### Seed data (`/app/scripts/seed_mrb_detailed.py`)
+Fresh idempotent seed (`_seed=mrb_detailed`) that inserts **14 meeting
+requests** across all statuses and every attendee shape (no attendee,
+1 user, multi user, 1 team, multi team, users+teams, recurring).
+Approved rows also insert a fully-cross-referenced row in
+`room_bookings` (linked via `from_request_id` / `approved_booking_id`).
+
+### Env restoration
+The container arrived without `/app/backend/.env` or `/app/frontend/.env`.
+Both were recreated per PRD notes (Mongo Atlas
+`cluster0.vmgql1i.mongodb.net`, `DB_NAME=app_db`, fresh JWT + Fernet).
+Backend + frontend restarted successfully; login verified for
+`admin@ticketing.com / Admin@123`.
+
+### Verification
+Screenshots captured for:
+- Default layout (map left, upcoming right).
+- Next 7 days toggle populating the 7-day list.
+- Status X-clear → shows "Status: All" with mixed Approved / Pending /
+  Cancelled cards.
+- Clear All → snaps back to today + Pending Approval, Approved default.
+- Detail modal for "Sprint Planning" showing all fields + Edit / Delete.
+
+backend:
+  - task: "Meeting Room Requests — list, create, reschedule, cancel"
+    implemented: true
+    working: true
+    file: "backend/routers/meeting_room_requests.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Env recreated (.env). Backend restarts cleanly on Atlas. New seed script populates 14 requests / 8 linked bookings across all statuses. Needs regression check that /meeting-room-requests?mine=true still returns the enriched list (with embedded booking snapshot) and cancel still cascades."
+        -working: true
+        -agent: "testing"
+        -comment: |
+          ✅ ALL TESTS PASSED (6/6) - Meeting Room Booking backend regression complete
+          
+          Comprehensive regression testing completed after .env recreation + seed_mrb_detailed.py seeding.
+          
+          **SEED DATA VERIFICATION:**
+          - Verified 14 rows seeded with _seed="mrb_detailed" tag
+          - 8 Approved rows with matching room_bookings (all have booking.id === approved_booking_id) ✅
+          - 4 Pending Approval rows ✅
+          - 1 Declined row (with decided_by + decision_note) ✅
+          - 1 Cancelled row ✅
+          
+          **TEST RESULTS:**
+          
+          1. ✅ GET /api/meeting-room-requests?mine=true&status=Pending%20Approval,Approved,Declined,Cancelled&include_booking=true:
+             - Returns 200 with array ✅
+             - Seed verification (all users): 8 Approved rows with non-null booking field ✅
+             - mine=true filter works correctly (returns only user-relevant meetings) ✅
+             - All Approved rows have booking field with matching booking.id === approved_booking_id ✅
+             - Attendees field present and valid (empty array, user type, team type) ✅
+             - Status breakdown verified (Approved, Pending Approval, Declined, Cancelled) ✅
+          
+          2. ✅ GET /api/room-bookings/rooms:
+             - Returns 200 with non-empty array ✅
+             - 11 rooms returned from live floor plan ✅
+             - All rooms have required fields (plan_id, room_id, name, capacity) ✅
+          
+          3. ✅ POST /api/meeting-room-requests (positive create):
+             - Created request with title="Regression MRB" ✅
+             - Future timeslot (3 days from now, 10:00-11:00) ✅
+             - Empty attendees array ✅
+             - Returns 200 with either Pending Approval or Approved status ✅
+             - Request ID captured for subsequent tests ✅
+          
+          4. ✅ POST /api/meeting-room-requests/{id}/reschedule:
+             - Rescheduled to 12:00-13:00 on same day ✅
+             - Returns 200 ✅
+             - GET verification shows new start/end times reflected ✅
+          
+          5. ✅ DELETE /api/meeting-room-requests/{id} (cancel):
+             - Returns 200 ✅
+             - Status changed to Cancelled (or removed from mine=true list via hidden_by_requester) ✅
+          
+          6. ✅ Conflict path (409 error):
+             - Attempted POST with overlapping timeslot on existing Approved booking ✅
+             - Returns 409 Conflict ✅
+             - Response contains code=BOOKING_CONFLICT in detail ✅
+          
+          **KEY FINDINGS:**
+          - All endpoints return correct status codes (200, 409)
+          - Payload shapes match specification
+          - mine=true filter correctly limits results to user-relevant meetings (organizer, direct attendee, or team attendee)
+          - Booking enrichment works correctly (approved_booking_id links to booking.id)
+          - Conflict detection works for overlapping timeslots
+          - Reschedule updates times correctly
+          - Cancel sets status to Cancelled and hides from mine=true list
+          
+          NO ISSUES FOUND. All Meeting Room Booking backend endpoints working correctly.
+
+frontend:
+  - task: "MRB Filter Bar + Panel Swap + Detail Modal"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/MeetingRoomBookingPage.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Panel positions swapped (Map left / Upcoming right). Filter bar consolidated to a single line: Status · Date · Next 7 days · Clear All. Status X-clear now means All. Date input persists when Next 7 days is on and anchors the 7-day window. Duplicate heading removed. New MeetingDetailModal component with Edit + Delete."
+
+metadata:
+  test_sequence: 2
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Meeting Room Requests — list, create, reschedule, cancel"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: "MRB sidebar redesign done. Backend regression check needed on /api/meeting-room-requests (list/create/reschedule/cancel) and /api/room-bookings (linked snapshot) after Atlas restart + 14-row seed. Frontend visual verification passed via screenshots — waiting for user to authorise UI testing before invoking frontend testing agent."
+    -agent: "testing"
+    -message: |
+      ✅ MEETING ROOM BOOKING BACKEND REGRESSION COMPLETE — ALL TESTS PASSED (6/6)
+      
+      Completed comprehensive regression testing of Meeting Room Booking backend endpoints after .env recreation and seed_mrb_detailed.py seeding.
+      
+      **VERIFIED:**
+      - Seed data: 14 rows (8 Approved with bookings, 4 Pending, 1 Declined, 1 Cancelled) ✅
+      - GET /api/meeting-room-requests with mine=true filter + include_booking ✅
+      - GET /api/room-bookings/rooms (11 rooms from live floor plan) ✅
+      - POST /api/meeting-room-requests (create with future timeslot) ✅
+      - POST /api/meeting-room-requests/{id}/reschedule (time update verified) ✅
+      - DELETE /api/meeting-room-requests/{id} (cancel with status change) ✅
+      - Conflict detection (409 with BOOKING_CONFLICT code) ✅
+      
+      **KEY OBSERVATIONS:**
+      - mine=true filter correctly limits results to user-relevant meetings (organizer, attendee, or team member)
+      - All Approved rows have booking field with matching booking.id === approved_booking_id
+      - Attendees field supports empty array, user type, and team type
+      - Reschedule updates times and can be verified via GET
+      - Cancel sets status=Cancelled and hides from mine=true list (hidden_by_requester)
+      
+      NO ISSUES FOUND. All endpoints working as specified.

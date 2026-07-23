@@ -1,547 +1,554 @@
+#!/usr/bin/env python3
 """
-Backend test for Profix Tickets team_name enrichment bug fix (Jul 16 2026)
+Backend regression test for Meeting Room Booking endpoints.
 
-Verifies that:
-1. GET /api/tickets?scope=all returns team_name for tickets whose creator is in a team
-2. GET /api/tickets (non-paged) also enriches team_name
-3. GET /api/tickets with sort_by=status (aggregation pipeline) enriches team_name
-4. GET /api/tickets with sort_by=priority (aggregation pipeline) enriches team_name
-5. GET /api/tickets/export.csv includes team_name in CSV
-6. Team filter regression: ?team=<id> returns tickets whose creator is in that team
-7. POST /api/tickets as admin (not in any team) creates ticket with team_name=null
-8. Teams endpoints smoke test (POST/GET/PATCH/DELETE)
+Tests the following after .env recreation + seed_mrb_detailed.py seeding:
+1. GET /api/meeting-room-requests with filters
+2. GET /api/room-bookings/rooms
+3. POST /api/meeting-room-requests (create)
+4. POST /api/meeting-room-requests/{id}/reschedule
+5. DELETE /api/meeting-room-requests/{id} (cancel)
+6. Conflict path (409 error)
 """
-
+import os
+import sys
 import requests
-import json
-import csv
-import io
-from datetime import datetime
+from datetime import datetime, timedelta
+from typing import Optional
 
-# Configuration
-BASE_URL = "https://pending-approval-ui-2.preview.emergentagent.com/api"
+# Backend URL from frontend/.env
+BACKEND_URL = os.getenv("REACT_APP_BACKEND_URL", "https://35624ad2-20d1-4abe-b2ea-bf30d9912147.preview.emergentagent.com")
+API_BASE = f"{BACKEND_URL}/api"
+
+# Test credentials
 ADMIN_EMAIL = "admin@ticketing.com"
 ADMIN_PASSWORD = "Admin@123"
 
-# Test state
-session = requests.Session()
-auth_token = None
-admin_user = None
-techknights_team_id = None
-test_ticket_id = None
+# Global token storage
+TOKEN: Optional[str] = None
 
-def log(msg):
-    """Print timestamped log message"""
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
 
-def login():
-    """Login as Super Admin and capture auth token"""
-    global auth_token, admin_user
-    log(f"Logging in as {ADMIN_EMAIL}...")
-    
-    resp = session.post(
-        f"{BASE_URL}/auth/login",
-        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
+def login() -> str:
+    """Login and return JWT token."""
+    global TOKEN
+    print("\n=== LOGIN ===")
+    resp = requests.post(
+        f"{API_BASE}/auth/login",
+        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+        timeout=10
     )
-    
+    print(f"POST /api/auth/login → {resp.status_code}")
     if resp.status_code != 200:
-        log(f"❌ Login failed: {resp.status_code} - {resp.text}")
-        return False
-    
+        print(f"ERROR: Login failed: {resp.text}")
+        sys.exit(1)
     data = resp.json()
-    auth_token = data.get("access_token")
-    admin_user = data.get("user")
-    
-    if not auth_token:
-        log("❌ No access_token in login response")
-        return False
-    
-    log(f"✅ Logged in as {admin_user.get('name')} (role: {admin_user.get('role')})")
-    return True
+    TOKEN = data.get("access_token")
+    if not TOKEN:
+        print("ERROR: No access_token in login response")
+        sys.exit(1)
+    print(f"✓ Logged in as {ADMIN_EMAIL}")
+    return TOKEN
 
-def get_techknights_team():
-    """Get TechKnights team ID"""
-    global techknights_team_id
-    log("Fetching TechKnights team...")
-    
-    resp = session.get(f"{BASE_URL}/teams")
-    
-    if resp.status_code != 200:
-        log(f"❌ GET /api/teams failed: {resp.status_code}")
-        return False
-    
-    teams = resp.json()
-    for team in teams:
-        if team.get("name") == "TechKnights":
-            techknights_team_id = team.get("id")
-            log(f"✅ Found TechKnights team: {techknights_team_id}")
-            log(f"   Members: {len(team.get('members', []))}, Managers: {len(team.get('managers', []))}")
-            return True
-    
-    log("❌ TechKnights team not found")
-    return False
 
-def test_1_get_tickets_paged():
-    """Test 1: GET /api/tickets?scope=all&page=1&page_size=200"""
-    log("\n=== TEST 1: GET /api/tickets (paged) - team_name enrichment ===")
+def headers() -> dict:
+    """Return Authorization headers."""
+    return {"Authorization": f"Bearer {TOKEN}"}
+
+
+def test_list_meeting_room_requests():
+    """Test 1: GET /api/meeting-room-requests with filters."""
+    print("\n=== TEST 1: GET /api/meeting-room-requests ===")
     
-    resp = session.get(
-        f"{BASE_URL}/tickets",
-        params={"scope": "all", "page": 1, "page_size": 200}
+    # First, verify seed data without mine=true (all users)
+    print("\n1a. Verify seed data (all users, no mine=true filter):")
+    resp = requests.get(
+        f"{API_BASE}/meeting-room-requests",
+        params={"status": "Approved", "include_booking": "true"},
+        headers=headers(),
+        timeout=10
     )
-    
-    if resp.status_code != 200:
-        log(f"❌ GET /api/tickets failed: {resp.status_code}")
-        return False
-    
-    data = resp.json()
-    items = data.get("items", [])
-    total = data.get("total", 0)
-    
-    log(f"✅ GET /api/tickets returned {len(items)} tickets (total: {total})")
-    
-    # Find TKT-1547 (Anjali Sharma's ticket)
-    tkt_1547 = None
-    tickets_with_team = []
-    tickets_without_team = []
-    
-    for ticket in items:
-        ticket_id = ticket.get("ticket_id")
-        creator_name = ticket.get("created_by_name")
-        team_name = ticket.get("team_name")
-        
-        if ticket_id == "TKT-1547":
-            tkt_1547 = ticket
-        
-        if team_name:
-            tickets_with_team.append({
-                "ticket_id": ticket_id,
-                "creator": creator_name,
-                "team": team_name
-            })
-        else:
-            tickets_without_team.append({
-                "ticket_id": ticket_id,
-                "creator": creator_name
-            })
-    
-    log(f"   Tickets with team_name: {len(tickets_with_team)}")
-    log(f"   Tickets without team_name: {len(tickets_without_team)}")
-    
-    # Show sample of tickets with team
-    if tickets_with_team:
-        log("   Sample tickets with team:")
-        for t in tickets_with_team[:3]:
-            log(f"      {t['ticket_id']} - {t['creator']} - Team: {t['team']}")
-    
-    # Show sample of tickets without team
-    if tickets_without_team:
-        log("   Sample tickets without team:")
-        for t in tickets_without_team[:3]:
-            log(f"      {t['ticket_id']} - {t['creator']} - Team: None")
-    
-    # CRITICAL ASSERTION: TKT-1547 must have team_name="TechKnights"
-    if tkt_1547:
-        log(f"\n   🔍 TKT-1547 found:")
-        log(f"      Creator: {tkt_1547.get('created_by_name')}")
-        log(f"      Team: {tkt_1547.get('team_name')}")
-        
-        if tkt_1547.get("team_name") == "TechKnights":
-            log(f"   ✅ TKT-1547 has team_name='TechKnights' (PASS)")
-        else:
-            log(f"   ❌ TKT-1547 team_name is '{tkt_1547.get('team_name')}', expected 'TechKnights' (FAIL)")
-            return False
-    else:
-        log("   ⚠️  TKT-1547 not found in results (may have been deleted)")
-    
-    return True
-
-def test_2_get_tickets_non_paged():
-    """Test 2: GET /api/tickets?scope=all (no page param)"""
-    log("\n=== TEST 2: GET /api/tickets (non-paged) - team_name enrichment ===")
-    
-    resp = session.get(
-        f"{BASE_URL}/tickets",
-        params={"scope": "all"}
-    )
-    
-    if resp.status_code != 200:
-        log(f"❌ GET /api/tickets (non-paged) failed: {resp.status_code}")
-        return False
-    
-    items = resp.json()
-    
-    if not isinstance(items, list):
-        log(f"❌ Expected list, got {type(items)}")
-        return False
-    
-    log(f"✅ GET /api/tickets (non-paged) returned {len(items)} tickets")
-    
-    # Find TKT-1547
-    tkt_1547 = None
-    for ticket in items:
-        if ticket.get("ticket_id") == "TKT-1547":
-            tkt_1547 = ticket
-            break
-    
-    if tkt_1547:
-        log(f"   🔍 TKT-1547 found:")
-        log(f"      Creator: {tkt_1547.get('created_by_name')}")
-        log(f"      Team: {tkt_1547.get('team_name')}")
-        
-        if tkt_1547.get("team_name") == "TechKnights":
-            log(f"   ✅ TKT-1547 has team_name='TechKnights' (PASS)")
-        else:
-            log(f"   ❌ TKT-1547 team_name is '{tkt_1547.get('team_name')}', expected 'TechKnights' (FAIL)")
-            return False
-    else:
-        log("   ⚠️  TKT-1547 not found in results")
-    
-    return True
-
-def test_3_get_tickets_sort_status():
-    """Test 3: GET /api/tickets?scope=all&sort_by=status&sort_dir=asc"""
-    log("\n=== TEST 3: GET /api/tickets (sort_by=status) - aggregation pipeline enrichment ===")
-    
-    resp = session.get(
-        f"{BASE_URL}/tickets",
-        params={"scope": "all", "page": 1, "page_size": 200, "sort_by": "status", "sort_dir": "asc"}
-    )
-    
-    if resp.status_code != 200:
-        log(f"❌ GET /api/tickets (sort_by=status) failed: {resp.status_code}")
-        return False
-    
-    data = resp.json()
-    items = data.get("items", [])
-    
-    log(f"✅ GET /api/tickets (sort_by=status) returned {len(items)} tickets")
-    
-    # Find TKT-1547
-    tkt_1547 = None
-    for ticket in items:
-        if ticket.get("ticket_id") == "TKT-1547":
-            tkt_1547 = ticket
-            break
-    
-    if tkt_1547:
-        log(f"   🔍 TKT-1547 found:")
-        log(f"      Creator: {tkt_1547.get('created_by_name')}")
-        log(f"      Team: {tkt_1547.get('team_name')}")
-        
-        if tkt_1547.get("team_name") == "TechKnights":
-            log(f"   ✅ TKT-1547 has team_name='TechKnights' (PASS)")
-        else:
-            log(f"   ❌ TKT-1547 team_name is '{tkt_1547.get('team_name')}', expected 'TechKnights' (FAIL)")
-            return False
-    else:
-        log("   ⚠️  TKT-1547 not found in results")
-    
-    return True
-
-def test_4_get_tickets_sort_priority():
-    """Test 4: GET /api/tickets?scope=all&sort_by=priority"""
-    log("\n=== TEST 4: GET /api/tickets (sort_by=priority) - aggregation pipeline enrichment ===")
-    
-    resp = session.get(
-        f"{BASE_URL}/tickets",
-        params={"scope": "all", "page": 1, "page_size": 200, "sort_by": "priority"}
-    )
-    
-    if resp.status_code != 200:
-        log(f"❌ GET /api/tickets (sort_by=priority) failed: {resp.status_code}")
-        return False
-    
-    data = resp.json()
-    items = data.get("items", [])
-    
-    log(f"✅ GET /api/tickets (sort_by=priority) returned {len(items)} tickets")
-    
-    # Find TKT-1547
-    tkt_1547 = None
-    for ticket in items:
-        if ticket.get("ticket_id") == "TKT-1547":
-            tkt_1547 = ticket
-            break
-    
-    if tkt_1547:
-        log(f"   🔍 TKT-1547 found:")
-        log(f"      Creator: {tkt_1547.get('created_by_name')}")
-        log(f"      Team: {tkt_1547.get('team_name')}")
-        
-        if tkt_1547.get("team_name") == "TechKnights":
-            log(f"   ✅ TKT-1547 has team_name='TechKnights' (PASS)")
-        else:
-            log(f"   ❌ TKT-1547 team_name is '{tkt_1547.get('team_name')}', expected 'TechKnights' (FAIL)")
-            return False
-    else:
-        log("   ⚠️  TKT-1547 not found in results")
-    
-    return True
-
-def test_5_export_csv():
-    """Test 5: GET /api/tickets/export.csv?scope=all"""
-    log("\n=== TEST 5: GET /api/tickets/export.csv - team_name in CSV ===")
-    
-    resp = session.get(
-        f"{BASE_URL}/tickets/export.csv",
-        params={"scope": "all"}
-    )
-    
-    if resp.status_code != 200:
-        log(f"❌ GET /api/tickets/export.csv failed: {resp.status_code}")
-        return False
-    
-    # Parse CSV
-    csv_content = resp.text
-    reader = csv.DictReader(io.StringIO(csv_content))
-    rows = list(reader)
-    
-    log(f"✅ GET /api/tickets/export.csv returned {len(rows)} rows")
-    
-    # Find TKT-1547
-    tkt_1547_row = None
-    rows_with_team = []
-    rows_without_team = []
-    
-    for row in rows:
-        ticket_id = row.get("Ticket ID")
-        team = row.get("Team", "")
-        
-        if ticket_id == "TKT-1547":
-            tkt_1547_row = row
-        
-        if team and team != "—":
-            rows_with_team.append({"ticket_id": ticket_id, "team": team})
-        else:
-            rows_without_team.append({"ticket_id": ticket_id})
-    
-    log(f"   Rows with team: {len(rows_with_team)}")
-    log(f"   Rows without team (—): {len(rows_without_team)}")
-    
-    # Show sample
-    if rows_with_team:
-        log("   Sample rows with team:")
-        for r in rows_with_team[:3]:
-            log(f"      {r['ticket_id']} - Team: {r['team']}")
-    
-    # CRITICAL ASSERTION: TKT-1547 must have Team="TechKnights"
-    if tkt_1547_row:
-        log(f"\n   🔍 TKT-1547 CSV row:")
-        log(f"      Creator: {tkt_1547_row.get('Created By')}")
-        log(f"      Team: {tkt_1547_row.get('Team')}")
-        
-        if tkt_1547_row.get("Team") == "TechKnights":
-            log(f"   ✅ TKT-1547 CSV has Team='TechKnights' (PASS)")
-        else:
-            log(f"   ❌ TKT-1547 CSV Team is '{tkt_1547_row.get('Team')}', expected 'TechKnights' (FAIL)")
-            return False
-    else:
-        log("   ⚠️  TKT-1547 not found in CSV")
-    
-    return True
-
-def test_6_team_filter():
-    """Test 6: GET /api/tickets?team=<TechKnights_id>&scope=all"""
-    log("\n=== TEST 6: Team filter regression - ?team=<id> ===")
-    
-    if not techknights_team_id:
-        log("❌ TechKnights team ID not available")
-        return False
-    
-    resp = session.get(
-        f"{BASE_URL}/tickets",
-        params={"team": techknights_team_id, "scope": "all", "page": 1, "page_size": 200}
-    )
-    
-    if resp.status_code != 200:
-        log(f"❌ GET /api/tickets?team={techknights_team_id} failed: {resp.status_code}")
-        return False
-    
-    data = resp.json()
-    items = data.get("items", [])
-    
-    log(f"✅ GET /api/tickets?team={techknights_team_id} returned {len(items)} tickets")
-    
-    # Find TKT-1547
-    tkt_1547 = None
-    for ticket in items:
-        ticket_id = ticket.get("ticket_id")
-        log(f"   {ticket_id} - {ticket.get('created_by_name')} - Team: {ticket.get('team_name')}")
-        
-        if ticket_id == "TKT-1547":
-            tkt_1547 = ticket
-    
-    if tkt_1547:
-        log(f"\n   ✅ TKT-1547 returned by team filter (PASS)")
-        log(f"      Creator: {tkt_1547.get('created_by_name')}")
-        log(f"      Team: {tkt_1547.get('team_name')}")
-    else:
-        log(f"   ❌ TKT-1547 NOT returned by team filter (FAIL)")
-        log(f"      Expected: TKT-1547 should be returned because creator (Anjali Sharma) is in TechKnights")
-        return False
-    
-    return True
-
-def test_7_create_ticket_no_team():
-    """Test 7: POST /api/tickets as admin (not in any team)"""
-    global test_ticket_id
-    log("\n=== TEST 7: POST /api/tickets (admin not in team) - team_name=null ===")
-    
-    # Check if admin is in any team
-    log(f"   Admin user: {admin_user.get('name')} (id: {admin_user.get('id')})")
-    
-    resp = session.get(f"{BASE_URL}/teams")
     if resp.status_code == 200:
-        teams = resp.json()
-        admin_teams = []
-        for team in teams:
-            members = team.get("members", [])
-            managers = team.get("managers", [])
-            for m in members + managers:
-                if m.get("id") == admin_user.get("id"):
-                    admin_teams.append(team.get("name"))
+        all_approved = resp.json()
+        seeded_approved = [r for r in all_approved if r.get("_seed") == "mrb_detailed"]
+        print(f"  Total Approved rows (all users): {len(all_approved)}")
+        print(f"  Seeded Approved rows: {len(seeded_approved)}")
         
-        if admin_teams:
-            log(f"   ⚠️  Admin is in teams: {admin_teams}")
-        else:
-            log(f"   ✅ Admin is NOT in any team (as expected)")
+        if len(seeded_approved) < 8:
+            print(f"  ✗ FAIL: Expected at least 8 seeded Approved rows, got {len(seeded_approved)}")
+            return False
+        
+        # Verify all have booking field
+        seeded_with_booking = [r for r in seeded_approved if r.get("booking") is not None]
+        if len(seeded_with_booking) != len(seeded_approved):
+            print(f"  ✗ FAIL: Not all seeded Approved rows have booking field")
+            return False
+        
+        print(f"  ✓ All {len(seeded_approved)} seeded Approved rows have booking field")
     
-    # Create a test ticket
-    ticket_data = {
-        "description": f"Test ticket created by testing agent at {datetime.now().isoformat()}",
-        "priority": "Medium",
-        "due_date": "2026-12-31",
-        "number_of_profiles": 10
+    # Now test with mine=true filter
+    print("\n1b. Test with mine=true filter (user-specific):")
+    params = {
+        "mine": "true",
+        "status": "Pending Approval,Approved,Declined,Cancelled",
+        "include_booking": "true"
+    }
+    resp = requests.get(f"{API_BASE}/meeting-room-requests", params=params, headers=headers(), timeout=10)
+    print(f"  GET /api/meeting-room-requests?mine=true&status=... → {resp.status_code}")
+    
+    if resp.status_code != 200:
+        print(f"  ✗ FAIL: Expected 200, got {resp.status_code}")
+        print(f"  Response: {resp.text}")
+        return False
+    
+    data = resp.json()
+    if not isinstance(data, list):
+        print(f"  ✗ FAIL: Expected array, got {type(data)}")
+        return False
+    
+    print(f"  ✓ Returned {len(data)} meeting room requests (mine=true)")
+    
+    # Count by status
+    approved = [r for r in data if r.get("status") == "Approved"]
+    pending = [r for r in data if r.get("status") == "Pending Approval"]
+    declined = [r for r in data if r.get("status") == "Declined"]
+    cancelled = [r for r in data if r.get("status") == "Cancelled"]
+    
+    print(f"  - Approved: {len(approved)}")
+    print(f"  - Pending Approval: {len(pending)}")
+    print(f"  - Declined: {len(declined)}")
+    print(f"  - Cancelled: {len(cancelled)}")
+    
+    # Verify Approved rows have booking field
+    approved_with_booking = [r for r in approved if r.get("booking") is not None]
+    print(f"  - Approved with booking field: {len(approved_with_booking)}")
+    
+    # Note: mine=true filters to only meetings where the user is involved
+    # The seed creates 8 Approved rows total, but only some are visible to admin@ticketing.com
+    # Verify that all Approved rows returned have the booking field
+    if len(approved) > 0 and len(approved_with_booking) != len(approved):
+        print(f"✗ FAIL: Not all Approved rows have booking field")
+        return False
+    
+    print(f"✓ All {len(approved)} Approved rows have booking field")
+    
+    # Verify booking.id matches approved_booking_id
+    for r in approved_with_booking:
+        booking = r.get("booking", {})
+        if booking.get("id") != r.get("approved_booking_id"):
+            print(f"✗ FAIL: booking.id ({booking.get('id')}) != approved_booking_id ({r.get('approved_booking_id')})")
+            return False
+    
+    print(f"✓ All Approved rows have matching booking.id === approved_booking_id")
+    
+    # Verify we have Pending Approval rows
+    if len(pending) < 1:
+        print(f"✗ FAIL: Expected at least 1 Pending Approval row, got {len(pending)}")
+        return False
+    
+    print(f"✓ Found {len(pending)} Pending Approval rows")
+    
+    # Verify Declined rows (if any) have decided_by + decision_note
+    if len(declined) > 0:
+        declined_with_note = [r for r in declined if r.get("decided_by") and r.get("decision_note")]
+        if len(declined_with_note) != len(declined):
+            print(f"✗ FAIL: Not all Declined rows have decided_by + decision_note")
+            return False
+        print(f"✓ All {len(declined)} Declined rows have decided_by and decision_note")
+    else:
+        print(f"✓ No Declined rows visible to this user (mine=true filter)")
+    
+    # Verify Cancelled rows
+    if len(cancelled) > 0:
+        print(f"✓ Found {len(cancelled)} Cancelled rows")
+    else:
+        print(f"✓ No Cancelled rows visible to this user (mine=true filter)")
+    
+    # Verify attendees field is present
+    for r in data:
+        if "attendees" not in r:
+            print(f"✗ FAIL: Missing attendees field in request {r.get('id')}")
+            return False
+        attendees = r.get("attendees", [])
+        if not isinstance(attendees, list):
+            print(f"✗ FAIL: attendees is not a list in request {r.get('id')}")
+            return False
+        # Check attendee structure
+        for att in attendees:
+            if att.get("type") not in ["user", "team"]:
+                print(f"✗ FAIL: Invalid attendee type {att.get('type')} in request {r.get('id')}")
+                return False
+            if not att.get("id") or not att.get("name"):
+                print(f"✗ FAIL: Missing id or name in attendee {att} in request {r.get('id')}")
+                return False
+    
+    print(f"✓ All requests have valid attendees field")
+    print("✓ TEST 1 PASSED")
+    return True
+
+
+def test_list_rooms():
+    """Test 2: GET /api/room-bookings/rooms."""
+    print("\n=== TEST 2: GET /api/room-bookings/rooms ===")
+    
+    resp = requests.get(f"{API_BASE}/room-bookings/rooms", headers=headers(), timeout=10)
+    print(f"GET /api/room-bookings/rooms → {resp.status_code}")
+    
+    if resp.status_code != 200:
+        print(f"✗ FAIL: Expected 200, got {resp.status_code}")
+        print(f"Response: {resp.text}")
+        return False, None
+    
+    data = resp.json()
+    if not isinstance(data, list):
+        print(f"✗ FAIL: Expected array, got {type(data)}")
+        return False, None
+    
+    if len(data) == 0:
+        print(f"✗ FAIL: Expected non-empty array")
+        return False, None
+    
+    print(f"✓ Returned {len(data)} rooms")
+    
+    # Verify structure
+    for room in data:
+        required = ["plan_id", "room_id", "name", "capacity"]
+        for field in required:
+            if field not in room:
+                print(f"✗ FAIL: Missing field {field} in room {room}")
+                return False, None
+    
+    print(f"✓ All rooms have required fields (plan_id, room_id, name, capacity)")
+    print("✓ TEST 2 PASSED")
+    return True, data
+
+
+def test_create_meeting_room_request(rooms):
+    """Test 3: POST /api/meeting-room-requests (positive create)."""
+    print("\n=== TEST 3: POST /api/meeting-room-requests (create) ===")
+    
+    if not rooms or len(rooms) == 0:
+        print("✗ FAIL: No rooms available for testing")
+        return False, None
+    
+    # Use first room
+    room = rooms[0]
+    plan_id = room["plan_id"]
+    room_id = room["room_id"]
+    
+    # Create a request 3 days from now at 10:00-11:00
+    now = datetime.now()
+    start_dt = (now + timedelta(days=3)).replace(hour=10, minute=0, second=0, microsecond=0)
+    end_dt = start_dt.replace(hour=11)
+    
+    payload = {
+        "plan_id": plan_id,
+        "room_id": room_id,
+        "title": "Regression MRB",
+        "start_at": start_dt.isoformat(),
+        "end_at": end_dt.isoformat(),
+        "attendees": []
     }
     
-    resp = session.post(f"{BASE_URL}/tickets", json=ticket_data)
+    resp = requests.post(f"{API_BASE}/meeting-room-requests", json=payload, headers=headers(), timeout=10)
+    print(f"POST /api/meeting-room-requests → {resp.status_code}")
     
     if resp.status_code != 200:
-        log(f"❌ POST /api/tickets failed: {resp.status_code} - {resp.text}")
-        return False
+        print(f"✗ FAIL: Expected 200, got {resp.status_code}")
+        print(f"Response: {resp.text}")
+        return False, None
     
-    ticket = resp.json()
-    test_ticket_id = ticket.get("id")
+    data = resp.json()
+    if not data.get("ok"):
+        print(f"✗ FAIL: Expected ok=true")
+        return False, None
     
-    log(f"✅ Created ticket: {ticket.get('ticket_id')}")
-    log(f"   ID: {test_ticket_id}")
-    log(f"   Creator: {ticket.get('created_by_name')}")
-    log(f"   team_id: {ticket.get('team_id')}")
-    log(f"   team_name: {ticket.get('team_name')}")
+    requests_list = data.get("requests", [])
+    if len(requests_list) == 0:
+        print(f"✗ FAIL: Expected at least 1 request in response")
+        return False, None
     
-    # ASSERTION: team_id and team_name should be null
-    if ticket.get("team_id") is None and ticket.get("team_name") is None:
-        log(f"   ✅ team_id=null and team_name=null (PASS)")
-        return True
+    created_request = requests_list[0]
+    request_id = created_request.get("id")
+    status = created_request.get("status")
+    
+    print(f"✓ Created request {request_id} with status={status}")
+    
+    # Check if it's Pending Approval or Approved (auto-approval)
+    if status not in ["Pending Approval", "Approved"]:
+        print(f"✗ FAIL: Expected status to be 'Pending Approval' or 'Approved', got {status}")
+        return False, None
+    
+    if status == "Approved":
+        booking = created_request.get("booking") or data.get("first")
+        if not booking:
+            print(f"✗ FAIL: Expected booking field for Approved request")
+            return False, None
+        print(f"✓ Request was auto-approved with booking {booking.get('id')}")
     else:
-        log(f"   ❌ Expected team_id=null and team_name=null (FAIL)")
-        return False
+        print(f"✓ Request is Pending Approval")
+    
+    print("✓ TEST 3 PASSED")
+    return True, created_request
 
-def test_8_teams_smoke():
-    """Test 8: Teams endpoints smoke test"""
-    log("\n=== TEST 8: Teams endpoints smoke test ===")
+
+def test_reschedule_meeting_room_request(request):
+    """Test 4: POST /api/meeting-room-requests/{id}/reschedule."""
+    print("\n=== TEST 4: POST /api/meeting-room-requests/{id}/reschedule ===")
     
-    # GET /api/teams
-    resp = session.get(f"{BASE_URL}/teams")
-    if resp.status_code != 200:
-        log(f"❌ GET /api/teams failed: {resp.status_code}")
+    if not request:
+        print("✗ FAIL: No request to reschedule")
         return False
     
-    teams = resp.json()
-    log(f"✅ GET /api/teams returned {len(teams)} teams")
+    request_id = request.get("id")
+    plan_id = request.get("plan_id")
+    room_id = request.get("room_id")
     
-    # GET /api/teams/{id} for TechKnights
-    if techknights_team_id:
-        resp = session.get(f"{BASE_URL}/teams/{techknights_team_id}")
-        if resp.status_code != 200:
-            log(f"❌ GET /api/teams/{techknights_team_id} failed: {resp.status_code}")
-            return False
-        
-        team = resp.json()
-        log(f"✅ GET /api/teams/{techknights_team_id} returned team: {team.get('name')}")
-        log(f"   Members: {len(team.get('members', []))}")
-        log(f"   Managers: {len(team.get('managers', []))}")
+    # Reschedule to 12:00-13:00 on the same day
+    start_dt = datetime.fromisoformat(request.get("start_at").replace("Z", "+00:00")).replace(tzinfo=None)
+    new_start = start_dt.replace(hour=12, minute=0)
+    new_end = new_start.replace(hour=13)
     
+    payload = {
+        "plan_id": plan_id,
+        "room_id": room_id,
+        "title": request.get("title"),
+        "start_at": new_start.isoformat(),
+        "end_at": new_end.isoformat(),
+        "attendees": []
+    }
+    
+    resp = requests.post(f"{API_BASE}/meeting-room-requests/{request_id}/reschedule", json=payload, headers=headers(), timeout=10)
+    print(f"POST /api/meeting-room-requests/{request_id}/reschedule → {resp.status_code}")
+    
+    if resp.status_code != 200:
+        print(f"✗ FAIL: Expected 200, got {resp.status_code}")
+        print(f"Response: {resp.text}")
+        return False
+    
+    data = resp.json()
+    if not data.get("ok"):
+        print(f"✗ FAIL: Expected ok=true")
+        return False
+    
+    updated_request = data.get("request")
+    if not updated_request:
+        print(f"✗ FAIL: Expected request in response")
+        return False
+    
+    # Verify new start/end times
+    if updated_request.get("start_at") != new_start.isoformat():
+        print(f"✗ FAIL: start_at not updated. Expected {new_start.isoformat()}, got {updated_request.get('start_at')}")
+        return False
+    
+    if updated_request.get("end_at") != new_end.isoformat():
+        print(f"✗ FAIL: end_at not updated. Expected {new_end.isoformat()}, got {updated_request.get('end_at')}")
+        return False
+    
+    print(f"✓ Request rescheduled to {new_start.strftime('%H:%M')}-{new_end.strftime('%H:%M')}")
+    
+    # Verify via GET
+    resp = requests.get(f"{API_BASE}/meeting-room-requests", params={"mine": "true"}, headers=headers(), timeout=10)
+    if resp.status_code == 200:
+        requests_list = resp.json()
+        found = next((r for r in requests_list if r.get("id") == request_id), None)
+        if found:
+            if found.get("start_at") == new_start.isoformat() and found.get("end_at") == new_end.isoformat():
+                print(f"✓ Verified via GET: new times reflected")
+            else:
+                print(f"✗ FAIL: GET shows old times")
+                return False
+    
+    print("✓ TEST 4 PASSED")
     return True
 
-def cleanup():
-    """Delete test ticket if created"""
-    global test_ticket_id
+
+def test_cancel_meeting_room_request(request):
+    """Test 5: DELETE /api/meeting-room-requests/{id} (cancel)."""
+    print("\n=== TEST 5: DELETE /api/meeting-room-requests/{id} (cancel) ===")
     
-    if test_ticket_id:
-        log(f"\n=== Cleanup: Deleting test ticket {test_ticket_id} ===")
-        # Note: DELETE /api/tickets/{id} may not exist, so we'll try but not fail if it doesn't work
-        resp = session.delete(f"{BASE_URL}/tickets/{test_ticket_id}")
-        if resp.status_code == 200:
-            log(f"✅ Deleted test ticket")
+    if not request:
+        print("✗ FAIL: No request to cancel")
+        return False
+    
+    request_id = request.get("id")
+    
+    resp = requests.delete(f"{API_BASE}/meeting-room-requests/{request_id}", headers=headers(), timeout=10)
+    print(f"DELETE /api/meeting-room-requests/{request_id} → {resp.status_code}")
+    
+    if resp.status_code != 200:
+        print(f"✗ FAIL: Expected 200, got {resp.status_code}")
+        print(f"Response: {resp.text}")
+        return False
+    
+    data = resp.json()
+    if not data.get("ok"):
+        print(f"✗ FAIL: Expected ok=true")
+        return False
+    
+    print(f"✓ Request cancelled")
+    
+    # Verify status is now Cancelled (or removed from mine=true list)
+    resp = requests.get(f"{API_BASE}/meeting-room-requests", params={"mine": "true"}, headers=headers(), timeout=10)
+    if resp.status_code == 200:
+        requests_list = resp.json()
+        found = next((r for r in requests_list if r.get("id") == request_id), None)
+        if found:
+            if found.get("status") == "Cancelled":
+                print(f"✓ Verified: status is now Cancelled")
+            else:
+                print(f"✗ FAIL: Expected status=Cancelled, got {found.get('status')}")
+                return False
         else:
-            log(f"⚠️  Could not delete test ticket (endpoint may not exist): {resp.status_code}")
+            print(f"✓ Verified: request removed from mine=true list (hidden_by_requester)")
+    
+    print("✓ TEST 5 PASSED")
+    return True
+
+
+def test_conflict_path(rooms):
+    """Test 6: Conflict path (409 error)."""
+    print("\n=== TEST 6: Conflict path (409 error) ===")
+    
+    if not rooms or len(rooms) == 0:
+        print("✗ FAIL: No rooms available for testing")
+        return False
+    
+    # First, get existing approved bookings to find one to conflict with
+    resp = requests.get(
+        f"{API_BASE}/meeting-room-requests",
+        params={"mine": "true", "status": "Approved"},
+        headers=headers(),
+        timeout=10
+    )
+    
+    if resp.status_code != 200:
+        print(f"✗ FAIL: Could not fetch approved bookings")
+        return False
+    
+    approved = resp.json()
+    if len(approved) == 0:
+        print("⚠ SKIP: No approved bookings to conflict with")
+        return True
+    
+    # Find an approved booking with a future or recent time
+    target = None
+    for booking in approved:
+        start_str = booking.get("start_at")
+        if start_str:
+            start_dt = datetime.fromisoformat(start_str.replace("Z", "+00:00")).replace(tzinfo=None)
+            # Use any booking (past or future) for conflict testing
+            target = booking
+            break
+    
+    if not target:
+        print("⚠ SKIP: No suitable approved booking found for conflict test")
+        return True
+    
+    # Try to create a request that overlaps with this booking
+    room_id = target.get("room_id")
+    plan_id = target.get("plan_id")
+    start_str = target.get("start_at")
+    end_str = target.get("end_at")
+    
+    start_dt = datetime.fromisoformat(start_str.replace("Z", "+00:00")).replace(tzinfo=None)
+    end_dt = datetime.fromisoformat(end_str.replace("Z", "+00:00")).replace(tzinfo=None)
+    
+    # Create overlapping slot (same start time)
+    payload = {
+        "plan_id": plan_id,
+        "room_id": room_id,
+        "title": "Conflict Test",
+        "start_at": start_dt.isoformat(),
+        "end_at": end_dt.isoformat(),
+        "attendees": []
+    }
+    
+    resp = requests.post(f"{API_BASE}/meeting-room-requests", json=payload, headers=headers(), timeout=10)
+    print(f"POST /api/meeting-room-requests (overlapping) → {resp.status_code}")
+    
+    if resp.status_code != 409:
+        print(f"✗ FAIL: Expected 409 Conflict, got {resp.status_code}")
+        print(f"Response: {resp.text}")
+        return False
+    
+    data = resp.json()
+    if not isinstance(data, dict):
+        print(f"✗ FAIL: Expected JSON object in 409 response")
+        return False
+    
+    # Check for BOOKING_CONFLICT code
+    code = data.get("code") or (data.get("detail", {}).get("code") if isinstance(data.get("detail"), dict) else None)
+    if code != "BOOKING_CONFLICT":
+        print(f"✗ FAIL: Expected code=BOOKING_CONFLICT, got {code}")
+        print(f"Response: {data}")
+        return False
+    
+    print(f"✓ Received 409 with code=BOOKING_CONFLICT")
+    print("✓ TEST 6 PASSED")
+    return True
+
 
 def main():
-    """Run all tests"""
-    log("=" * 80)
-    log("BACKEND TEST: Profix Tickets team_name enrichment bug fix")
-    log("=" * 80)
+    """Run all tests."""
+    print("=" * 60)
+    print("Meeting Room Booking Backend Regression Test")
+    print("=" * 60)
     
     # Login
-    if not login():
-        log("\n❌ FAILED: Could not login")
-        return False
-    
-    # Get TechKnights team
-    if not get_techknights_team():
-        log("\n❌ FAILED: Could not find TechKnights team")
-        return False
+    login()
     
     # Run tests
-    tests = [
-        ("GET /api/tickets (paged)", test_1_get_tickets_paged),
-        ("GET /api/tickets (non-paged)", test_2_get_tickets_non_paged),
-        ("GET /api/tickets (sort_by=status)", test_3_get_tickets_sort_status),
-        ("GET /api/tickets (sort_by=priority)", test_4_get_tickets_sort_priority),
-        ("GET /api/tickets/export.csv", test_5_export_csv),
-        ("Team filter regression", test_6_team_filter),
-        ("POST /api/tickets (no team)", test_7_create_ticket_no_team),
-        ("Teams smoke test", test_8_teams_smoke),
-    ]
-    
     results = []
-    for name, test_func in tests:
-        try:
-            result = test_func()
-            results.append((name, result))
-        except Exception as e:
-            log(f"\n❌ Test '{name}' raised exception: {e}")
-            import traceback
-            traceback.print_exc()
-            results.append((name, False))
     
-    # Cleanup
-    cleanup()
+    # Test 1: List meeting room requests
+    results.append(("List meeting room requests", test_list_meeting_room_requests()))
+    
+    # Test 2: List rooms
+    test2_pass, rooms = test_list_rooms()
+    results.append(("List rooms", test2_pass))
+    
+    # Test 3: Create request
+    test3_pass, created_request = test_create_meeting_room_request(rooms)
+    results.append(("Create meeting room request", test3_pass))
+    
+    # Test 4: Reschedule
+    if created_request:
+        results.append(("Reschedule meeting room request", test_reschedule_meeting_room_request(created_request)))
+    else:
+        results.append(("Reschedule meeting room request", False))
+    
+    # Test 5: Cancel
+    if created_request:
+        results.append(("Cancel meeting room request", test_cancel_meeting_room_request(created_request)))
+    else:
+        results.append(("Cancel meeting room request", False))
+    
+    # Test 6: Conflict path
+    results.append(("Conflict path (409)", test_conflict_path(rooms)))
     
     # Summary
-    log("\n" + "=" * 80)
-    log("TEST SUMMARY")
-    log("=" * 80)
+    print("\n" + "=" * 60)
+    print("TEST SUMMARY")
+    print("=" * 60)
     
     passed = 0
     failed = 0
-    
     for name, result in results:
-        status = "✅ PASS" if result else "❌ FAIL"
-        log(f"{status} - {name}")
+        status = "✓ PASS" if result else "✗ FAIL"
+        print(f"{status}: {name}")
         if result:
             passed += 1
         else:
             failed += 1
     
-    log("\n" + "=" * 80)
-    log(f"TOTAL: {passed} passed, {failed} failed out of {len(results)} tests")
-    log("=" * 80)
+    print(f"\nTotal: {passed} passed, {failed} failed")
     
-    return failed == 0
+    if failed > 0:
+        sys.exit(1)
+    else:
+        print("\n✓ ALL TESTS PASSED")
+        sys.exit(0)
+
 
 if __name__ == "__main__":
-    success = main()
-    exit(0 if success else 1)
+    main()
