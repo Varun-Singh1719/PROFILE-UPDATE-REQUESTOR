@@ -1532,18 +1532,22 @@ export function RoomBoxLabel({ room, scale, labelBg, occupiedNow, blocked }) {
             maxHeight: '100%',
           }}
         >
-          {/* Name pill */}
+          {/* Name pill. Padding is proportional to the current font-size so
+              the pill breathes correctly at every zoom level — otherwise
+              at max zoom the sub-pixel padding + tight line-height clipped
+              the tops of tall letters ("T", "h", "l", …). Also drops
+              `overflow: hidden` because the text is already JS-truncated
+              via `displayName`, so there's nothing left to clip. */}
           <div
             className="font-semibold text-white shadow-sm"
             style={{
               background: labelBg,
               fontSize: `${fMap}px`,
-              lineHeight: 1.15,
-              padding: `${1 / scale}px ${5 / scale}px`,
+              lineHeight: 1.3,
+              padding: `${fMap * 0.2}px ${fMap * 0.6}px`,
               borderRadius: `${4 / scale}px`,
               maxWidth: '100%',
               whiteSpace: 'nowrap',
-              overflow: 'hidden',
             }}
           >
             {occupiedNow && (
@@ -1561,14 +1565,15 @@ export function RoomBoxLabel({ room, scale, labelBg, occupiedNow, blocked }) {
             )}
             {displayName}
           </div>
-          {/* Seats line */}
+          {/* Seats pill — same proportional padding + relaxed line-height
+              so it never clips either, regardless of zoom level. */}
           <div
             className="font-medium text-white"
             style={{
               background: 'rgba(17, 24, 39, 0.75)',
               fontSize: `${fMapSmall}px`,
-              lineHeight: 1.15,
-              padding: `${0.5 / scale}px ${5 / scale}px`,
+              lineHeight: 1.3,
+              padding: `${fMapSmall * 0.2}px ${fMapSmall * 0.6}px`,
               borderRadius: `${4 / scale}px`,
               whiteSpace: 'nowrap',
             }}
