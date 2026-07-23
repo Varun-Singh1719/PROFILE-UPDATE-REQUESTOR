@@ -30,6 +30,7 @@ import TimePickerOrange from "../components/ui/TimePickerOrange";
 import SelectOrange from "../components/ui/SelectOrange";
 import SingleDatePicker from "../components/SingleDatePicker";
 import { confirm as confirmDialog } from '../lib/dialog';
+import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
@@ -66,7 +67,9 @@ export default function MeetingRoomBookingPage() {
   // 'default' = existing split-panel view, 'calendar' = Check Availability schedule view.
   const [viewMode, setViewMode] = useState("default");
   const [rooms, setRooms] = useState([]);
-  const [myBookings, setMyBookings] = useState([]);
+  // Removed: `const [myBookings, setMyBookings] = useState([])` — the list
+  // is now derived from `myRequests` via useMemo below so we don't
+  // duplicate state across two sources of truth.
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState("");
@@ -109,51 +112,57 @@ export default function MeetingRoomBookingPage() {
     const res = await api.get("/room-bookings/rooms");
     setRooms(res.data || []);
   }, []);
-  // Bookings for the visible range. Three modes: 'today' (today + tomorrow), 'next7' (7 days),
-  // or a single date when the user picks something in the date filter.
   const addDaysIso = (offset) => {
     const d = new Date(); d.setDate(d.getDate() + offset);
     const p = (n) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
   };
-  const loadBookingsForDate = useCallback(async (dateIso, mode) => {
-    if (mode === "next7") {
-      const dates = Array.from({ length: 7 }, (_, i) => addDaysIso(i));
-      const results = await Promise.all(dates.map(d => api.get(`/room-bookings?date=${d}&include_past=true`).catch(() => ({ data: [] }))));
-      const merged = results.flatMap(r => r.data || []);
-      const seen = new Set();
-      setMyBookings(merged.filter(x => { if (seen.has(x.id)) return false; seen.add(x.id); return true; }));
-      return;
-    }
-    const isToday = dateIso === todayIso();
-    if (isToday) {
-      const tomorrow = addDaysIso(1);
-      const [a, b] = await Promise.all([
-        api.get(`/room-bookings?date=${dateIso}&include_past=true`),
-        api.get(`/room-bookings?date=${tomorrow}&include_past=true`),
-      ]);
-      const merged = [...(a.data || []), ...(b.data || [])];
-      const seen = new Set();
-      setMyBookings(merged.filter(x => { if (seen.has(x.id)) return false; seen.add(x.id); return true; }));
-    } else {
-      const res = await api.get(`/room-bookings?date=${dateIso}&include_past=true`);
-      setMyBookings(res.data || []);
-    }
-  }, []);
 
-  // My own pending/declined meeting-room requests — shown alongside bookings
-  // in the "Upcoming Bookings" list with a status pill so users can see the
-  // state of every request they've submitted.
-  const [myPendingRequests, setMyPendingRequests] = useState([]);
-  const loadPendingRequests = useCallback(async () => {
+  // ─── Unified request list ────────────────────────────────────────────────
+  // Since Jul-2026, meeting_room_requests is the source of truth for the
+  // Book Meeting Room page. Approved rows are enriched with their booking
+  // snapshot server-side, so a single fetch drives the entire list.
+  const ALL_STATUSES = ["Pending Approval", "Approved", "Declined", "Cancelled"];
+  const DEFAULT_STATUS_FILTER = ["Pending Approval", "Approved"];
+  const [statusFilter, setStatusFilter] = useState(DEFAULT_STATUS_FILTER);
+  const [myRequests, setMyRequests] = useState([]);
+  const loadMyRequests = useCallback(async () => {
     try {
-      const [pRes, dRes] = await Promise.all([
-        api.get("/meeting-room-requests", { params: { status: "Pending Approval" } }).catch(() => ({ data: [] })),
-        api.get("/meeting-room-requests", { params: { status: "Declined" } }).catch(() => ({ data: [] })),
-      ]);
-      setMyPendingRequests([...(pRes.data || []), ...(dRes.data || [])]);
-    } catch { /* non-fatal */ }
+      // Always fetch the union of statuses so switching the filter is
+      // instant. `mine=true` scopes to rows the caller is organizer OR
+      // (direct/team) attendee.
+      const params = { mine: true, status: ALL_STATUSES.join(",") };
+      const res = await api.get("/meeting-room-requests", { params });
+      setMyRequests(res.data || []);
+    } catch { setMyRequests([]); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Legacy aliases — downstream code (form callbacks) still calls these.
+  // Both now trigger the single unified refresh.
+  const loadBookingsForDate = loadMyRequests;
+  const loadPendingRequests = loadMyRequests;
+
+  // Derive the legacy `myBookings` shape (Booking rows) from Approved
+  // requests' embedded booking snapshot — so the calendar view + floor
+  // map keep working without a bigger rewrite.
+  const myBookings = useMemo(() => {
+    const out = [];
+    for (const r of myRequests) {
+      if (r.status !== "Approved") continue;
+      const b = r.booking || null;
+      if (!b) continue;
+      out.push({ ...b, _request_id: r.id, _request_seq_no: r.seq_no });
+    }
+    return out;
+  }, [myRequests]);
+
+  // The row list for the Upcoming Bookings panel, filtered by the status
+  // dropdown. We use the request row's `start_at` for date grouping so
+  // Pending items still land on the right day.
+  const visibleRequests = useMemo(() => {
+    const set = new Set(statusFilter);
+    return (myRequests || []).filter(r => set.has(r.status));
+  }, [myRequests, statusFilter]);
 
   useEffect(() => {
     let cancelled = false;
@@ -279,17 +288,30 @@ export default function MeetingRoomBookingPage() {
     });
   }, []);
 
-  // Open the form in "Reschedule" mode pre-filled with this booking's data.
-  // Pre-fills: title, room, date, start, end, attendees. Submitting will PATCH instead of POST.
-  const handleReschedule = useCallback((b) => {
-    const sd = new Date(b.start_at);
-    const ed = new Date(b.end_at);
+  // Open the form in "Reschedule" mode. Accepts a Booking row (with
+  // `_request_id`) OR a Request row directly — we resolve the underlying
+  // meeting_room_requests.id and always submit via
+  // POST /api/meeting-room-requests/{id}/reschedule.
+  const handleReschedule = useCallback((row) => {
+    const sd = new Date(row.start_at);
+    const ed = new Date(row.end_at);
     const p = (n) => String(n).padStart(2, "0");
     setFormDate(`${sd.getFullYear()}-${p(sd.getMonth() + 1)}-${p(sd.getDate())}`);
     setFormStart(`${p(sd.getHours())}:${p(sd.getMinutes())}`);
     setFormEnd(`${p(ed.getHours())}:${p(ed.getMinutes())}`);
-    setSelectedRoomId(b.room_id);
-    setEditing({ id: b.id, title: b.title, attendees: b.attendees || [] });
+    setSelectedRoomId(row.room_id);
+    // `_request_id` is stamped on Booking rows derived from Approved
+    // requests; Request rows have their own `id`. Either way `requestId` is
+    // the meeting_room_requests id we need to reschedule against.
+    const requestId = row._request_id || row.id;
+    setEditing({
+      request_id: requestId,
+      title: row.title,
+      attendees: row.attendees || [],
+      // If the source row is Approved, keep the booking id around so we
+      // know to surface the "was approved" copy in the confirm toast.
+      was_approved: !!row._request_id,
+    });
     setFormOpen(true);
     setConflict(null);
     requestAnimationFrame(() => {
@@ -298,17 +320,35 @@ export default function MeetingRoomBookingPage() {
     });
   }, []);
 
-  const handleCancel = async (id) => {
-    const ok = await confirmDialog({ title: 'Cancel booking', message: 'Cancel this booking?', confirmLabel: 'Cancel booking', confirmVariant: 'destructive' });
+  // Cancel a meeting. Accepts either an Approved booking row (with a
+  // `_request_id`) or a raw meeting_room_requests row. Cancellation always
+  // goes through DELETE /api/meeting-room-requests/{id} which cascades to
+  // the linked booking (marks it cancelled).
+  const handleCancel = async (row) => {
+    // Backwards-compat: some callers still pass just an id string.
+    if (typeof row === "string") {
+      // Locate the request row from the string id (may be booking id or request id).
+      const byBooking = myRequests.find(r => r.approved_booking_id === row);
+      const byRequest = myRequests.find(r => r.id === row);
+      row = byBooking || byRequest || { id: row };
+    }
+    const requestId = row._request_id || row.id;
+    const ok = await confirmDialog({
+      title: 'Cancel meeting',
+      message: (row.status === 'Approved' || row._request_id)
+        ? 'Cancel this meeting? The approved booking will also be marked cancelled.'
+        : 'Cancel this meeting request?',
+      confirmLabel: 'Cancel meeting',
+      confirmVariant: 'destructive',
+    });
     if (!ok) return;
     try {
-      await api.delete(`/room-bookings/${id}`);
+      await api.delete(`/meeting-room-requests/${requestId}`);
       await Promise.all([
-        loadBookingsForDate(filterDate, rangeMode),
-        // refresh slot bookings so the map's dimming reflects the cancellation
+        loadMyRequests(),
         api.get(`/room-bookings?date=${formDate}&include_past=true`).then(r => setSlotBookings(r.data || [])).catch(() => {}),
       ]);
-      toast.success("Booking cancelled");
+      toast.success("Meeting cancelled");
     } catch (e) {
       toast.error(`Cancel failed: ${e?.response?.data?.detail || e.message}`);
     }
@@ -317,11 +357,12 @@ export default function MeetingRoomBookingPage() {
   const handleCreate = async (payload) => {
     setConflict(null);
     try {
-      // Edit / Reschedule path → PATCH the existing booking. Only fields the form lets the user
-      // change for a reschedule are sent: title, room, slot, attendees. The recurring spec is
-      // intentionally ignored here because reschedule operates on a single occurrence.
-      if (editing?.id) {
-        const patchBody = {
+      // Reschedule path — hit the request-level endpoint which handles
+      // both Pending and Approved sources (cancelling the old booking &
+      // re-running auto-approval as needed). Recurring is intentionally
+      // ignored — reschedule always targets a single occurrence.
+      if (editing?.request_id) {
+        const body = {
           title: payload.title,
           plan_id: payload.plan_id,
           room_id: payload.room_id,
@@ -329,21 +370,29 @@ export default function MeetingRoomBookingPage() {
           end_at: payload.end_at,
           attendees: payload.attendees,
         };
-        await api.patch(`/room-bookings/${editing.id}`, patchBody);
+        const res = await api.post(`/meeting-room-requests/${editing.request_id}/reschedule`, body);
         await Promise.all([
-          loadBookingsForDate(filterDate, rangeMode),
+          loadMyRequests(),
           api.get(`/room-bookings?date=${formDate}&include_past=true`).then(r => setSlotBookings(r.data || [])).catch(() => {}),
         ]);
         setFormOpen(false);
+        const wasApproved = editing.was_approved;
         setEditing(null);
-        toast.success("Booking Rescheduled Successfully");
+        // If the reschedule was auto-approved a fresh booking is in the
+        // response; otherwise it's pending review by an admin.
+        if (res.data?.booking) {
+          toast.success("Meeting rescheduled — new booking auto-approved");
+        } else if (wasApproved) {
+          toast.success("Reschedule request submitted for approval", { description: "Previous booking cancelled. You'll be notified when the new time is approved." });
+        } else {
+          toast.success("Meeting rescheduled — pending approval");
+        }
         return;
       }
       const res = await api.post("/room-bookings", payload);
       await Promise.all([
-        loadBookingsForDate(filterDate, rangeMode),
+        loadMyRequests(),
         api.get(`/room-bookings?date=${formDate}&include_past=true`).then(r => setSlotBookings(r.data || [])).catch(() => {}),
-        loadPendingRequests(),
       ]);
       setFormOpen(false);
       const n = res.data?.created || 1;
@@ -514,9 +563,23 @@ export default function MeetingRoomBookingPage() {
                 key="mrb-upcoming-view"
                 className="flex-1 min-h-0 flex flex-col px-5 pt-4 pb-2 animate-in fade-in slide-in-from-left-2 duration-300 ease-out"
               >
-                <div className="flex items-center justify-between mb-2 gap-2 flex-shrink-0">
+                <div className="flex items-center justify-between mb-2 gap-2 flex-shrink-0 flex-wrap">
                   <h2 className="text-[11px] font-bold tracking-wide text-gray-500 uppercase" data-testid="mrb-upcoming-title">Upcoming Bookings</h2>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Status filter (Pending Approval / Approved / Declined / Cancelled).
+                        Default = Pending + Approved (the actionable set). Uses the same
+                        `MultiSelectFilter` used by Profix › All Requests + Pending
+                        Approvals so the pattern is consistent across the app. */}
+                    <div className="w-44">
+                      <MultiSelectFilter
+                        label="Status"
+                        value={statusFilter}
+                        onChange={(arr) => setStatusFilter(arr.length ? arr : DEFAULT_STATUS_FILTER)}
+                        options={ALL_STATUSES.map(s => ({ value: s, label: s }))}
+                        testIdPrefix="mrb-status-filter"
+                        align="right"
+                      />
+                    </div>
                     <div className="inline-flex bg-gray-100 rounded p-0.5" data-testid="mrb-range-toggle">
                       <button
                         onClick={() => { setRangeMode("today"); setFilterDate(todayIso()); }}
@@ -541,8 +604,8 @@ export default function MeetingRoomBookingPage() {
                   </div>
                 </div>
                 <UpcomingBookingsList
-                  bookings={myBookings}
-                  pendingRequests={myPendingRequests}
+                  bookings={statusFilter.includes("Approved") ? myBookings : []}
+                  pendingRequests={visibleRequests.filter(r => r.status !== "Approved")}
                   filterDate={filterDate}
                   rangeMode={rangeMode}
                   loading={loading}
@@ -552,7 +615,7 @@ export default function MeetingRoomBookingPage() {
                     try {
                       await api.delete(`/meeting-room-requests/${id}`);
                       toast.success("Request cancelled");
-                      await loadPendingRequests();
+                      await loadMyRequests();
                     } catch (e) {
                       toast.error(formatApiError(e?.response?.data?.detail) || "Could not cancel request");
                     }
@@ -1000,11 +1063,16 @@ function DayGroup({ group, onCancel, onReschedule, onCancelRequest }) {
       ) : list.map(b => {
         const isRequest = b._kind === "request";
         const status = b._status || "Approved";
-        // Reschedule is only meaningful for approved bookings (or you'd
-        // reschedule a pending request, which we don't support yet).
-        const canReschedule = !isRequest && status === "Approved";
-        // Cancel button: bookings → cancel booking; pending requests → cancel request; declined → hide (no action)
+        // Rescheduling is allowed while a request is Pending Approval OR
+        // an approved booking is still active. In both cases the reschedule
+        // submits a fresh Pending Approval request to the approver queue.
+        const canReschedule = (isRequest && status === "Pending Approval") || (!isRequest && status === "Approved");
+        // Cancel: pending requests → withdraw the request; approved bookings
+        // → cascade cancel (booking + request → Cancelled).
         const canCancel = (isRequest && status === "Pending Approval") || (!isRequest && status === "Approved");
+        // Booking ID line — only meaningful for Approved bookings. Uses the
+        // room_bookings.seq_no when available (from the enriched request row).
+        const bookingSeq = !isRequest ? b.seq_no : null;
         return (
         <div
           key={b.id}
@@ -1028,6 +1096,11 @@ function DayGroup({ group, onCancel, onReschedule, onCancelRequest }) {
                 {fmtTime(b.start_at)} – {fmtTime(b.end_at)}
                 <span className="text-gray-300 mx-1">·</span>{b.room_name}
               </div>
+              {bookingSeq != null && (
+                <div className="text-[10px] text-gray-500" data-testid={`mrb-booking-id-${b.id}`}>
+                  Booking ID: <span className="font-mono font-semibold text-gray-700">{bookingSeq}</span>
+                </div>
+              )}
               <div className="text-[10px] text-gray-500 truncate" data-testid={`mrb-organizer-${b.id}`}>{b.organizer?.name || b.organizer?.email || "—"}</div>
               {b.organizer_team_name ? (
                 <div className="text-[10px] text-[#ec9324] font-semibold truncate" data-testid={`mrb-organizer-team-${b.id}`}>{b.organizer_team_name}</div>
@@ -1051,7 +1124,7 @@ function DayGroup({ group, onCancel, onReschedule, onCancelRequest }) {
               {canCancel && (
                 <div className="relative group/cancel">
                   <button
-                    onClick={() => isRequest ? onCancelRequest?.(b.id) : onCancel(b.id)}
+                    onClick={() => isRequest ? onCancelRequest?.(b.id) : onCancel?.(b)}
                     aria-label="Cancel"
                     className="p-1 text-red-600 hover:bg-red-50 rounded"
                     data-testid={`mrb-cancel-${b.id}`}

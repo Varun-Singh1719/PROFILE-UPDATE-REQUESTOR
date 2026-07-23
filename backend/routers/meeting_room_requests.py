@@ -129,10 +129,15 @@ def _expand_recurring(base_start: datetime, base_end: datetime, rec: Recurring) 
     return _rb_expand(base_start, base_end, rec)
 
 
-async def _first_conflict(room_id: str, start: datetime, end: datetime) -> Optional[dict]:
-    """Check for booking conflicts (existing bookings)."""
+async def _first_conflict(
+    room_id: str,
+    start: datetime,
+    end: datetime,
+    exclude_booking_id: Optional[str] = None,
+) -> Optional[dict]:
+    """Check for booking conflicts (existing approved bookings)."""
     from routers.room_bookings import _first_conflict as _rb_first_conflict
-    return await _rb_first_conflict(room_id, start, end)
+    return await _rb_first_conflict(room_id, start, end, exclude_booking_id=exclude_booking_id)
 
 
 async def _first_pending_conflict(
@@ -168,7 +173,7 @@ async def _create_booking_from_request(req: dict, actor: dict, *, auto: bool) ->
     if conflict:
         raise HTTPException(409, {
             "code": "BOOKING_CONFLICT",
-            "message": "This room is already booked for the requested time",
+            "message": "This room is already booked at the selected time. Please choose another time slot or meeting room.",
             "conflict": {
                 "id": conflict.get("id"),
                 "title": conflict.get("title"),
@@ -303,7 +308,7 @@ async def create_meeting_room_request(
     if conflicts:
         raise HTTPException(409, {
             "code": "BOOKING_CONFLICT",
-            "message": "This room is already booked or has a pending request for one or more requested times",
+            "message": "This room is already booked at the selected time. Please choose another time slot or meeting room.",
             "conflicts": conflicts,
             "room_name": room.get("name"),
         })
@@ -401,16 +406,30 @@ async def create_meeting_room_request(
 
 @api_router.get("/meeting-room-requests")
 async def list_meeting_room_requests(
-    status: Optional[str] = Query(None),
+    status: Optional[str] = Query(None, description="Single status OR comma-separated list"),
     plan_id: Optional[str] = Query(None),
     room_id: Optional[str] = Query(None),
     requested_by: Optional[str] = Query(None, description="filter by requester id"),
+    mine: bool = Query(False, description="Return rows where the caller is the requester OR a direct/team attendee"),
     include_hidden: bool = Query(False),
+    include_booking: bool = Query(True, description="Enrich Approved rows with the linked room_bookings row under `booking`"),
     user=Depends(get_current_user),
 ):
+    """List meeting-room requests.
+
+    New in Jul-2026: this is the primary endpoint the Book Meeting Room page
+    reads from — it returns pending, approved, declined AND cancelled rows
+    together, enriched with the linked `booking` doc when the row is
+    Approved. The front-end uses this to render the user's list with a
+    single fetch (previously it had to hit `/room-bookings` AND
+    `/meeting-room-requests` separately).
+    """
     q: Dict[str, Any] = {}
+    # `status` accepts a single value ("Pending Approval") or a comma-separated
+    # list ("Pending Approval,Approved") so the UI can drive filtering.
     if status:
-        q["status"] = status
+        parts = [s.strip() for s in str(status).split(",") if s.strip()]
+        q["status"] = {"$in": parts} if len(parts) > 1 else parts[0]
     if plan_id:
         q["plan_id"] = plan_id
     if room_id:
@@ -419,10 +438,222 @@ async def list_meeting_room_requests(
         q["requested_by.id"] = requested_by
     if not include_hidden:
         q["hidden_by_requester"] = {"$ne": True}
-    out = []
-    async for r in db.meeting_room_requests.find(q, {"_id": 0}).sort([("requested_on", -1)]):
+    if mine:
+        uid = user.get("id")
+        uemail = (user.get("email") or "").lower()
+        # Teams the user belongs to → so meetings that invite the user's team also surface.
+        team_ids: List[str] = []
+        try:
+            cursor = db.teams.find(
+                {"members": {"$elemMatch": {"$or": [{"id": uid}, {"email": uemail}]}}},
+                {"id": 1, "_id": 0},
+            )
+            tdocs = await cursor.to_list(200)
+            team_ids = [t.get("id") for t in tdocs if t.get("id")]
+        except Exception:
+            team_ids = []
+        or_clauses: List[Dict[str, Any]] = [
+            {"requested_by.id": uid},
+            {"attendees": {"$elemMatch": {"type": "user", "id": uid}}},
+        ]
+        if team_ids:
+            or_clauses.append({"attendees": {"$elemMatch": {"type": "team", "id": {"$in": team_ids}}}})
+        q["$or"] = or_clauses
+
+    out: List[dict] = []
+    async for r in db.meeting_room_requests.find(q, {"_id": 0}).sort([("start_at", 1)]):
         out.append(r)
+
+    # Enrich Approved rows with their booking snapshot so the UI can show
+    # Booking ID / cancelled state without a second round-trip.
+    if include_booking and out:
+        booking_ids = [r.get("approved_booking_id") for r in out if r.get("approved_booking_id")]
+        if booking_ids:
+            b_cursor = db.room_bookings.find({"id": {"$in": booking_ids}}, {"_id": 0})
+            b_docs = await b_cursor.to_list(len(booking_ids))
+            b_map = {b["id"]: b for b in b_docs}
+            for r in out:
+                bid = r.get("approved_booking_id")
+                if bid and bid in b_map:
+                    r["booking"] = b_map[bid]
     return out
+
+
+# --------------------------------------------------------------------------- #
+# POST — reschedule (Pending or Approved)                                     #
+# --------------------------------------------------------------------------- #
+
+class MeetingRoomRequestReschedule(BaseModel):
+    """Body for the reschedule endpoint. Recurring is intentionally NOT
+    accepted — reschedule always targets a single occurrence."""
+    plan_id: str
+    room_id: str
+    title: str = Field(..., min_length=1, max_length=120)
+    start_at: str
+    end_at: str
+    attendees: List[Attendee] = Field(default_factory=list)
+
+
+@api_router.post("/meeting-room-requests/{request_id}/reschedule")
+async def reschedule_meeting_room_request(
+    request_id: str,
+    payload: MeetingRoomRequestReschedule,
+    user=Depends(get_current_user),
+):
+    """Reschedule an existing meeting-room request.
+
+    Allowed source statuses:
+        • Pending Approval — the request row is updated in place.
+        • Approved         — the linked room_bookings row is cancelled,
+                             pushed into `reschedule_history`, and the
+                             request row is reset to Pending Approval with
+                             the new fields.
+
+    Conflict validation excludes:
+        • the request's own row (so a pending reschedule doesn't collide
+          with itself).
+        • the request's currently-approved booking (so an approved reschedule
+          keeping the same time doesn't collide with itself).
+
+    Auto-approval re-runs after the reschedule — if the requester matches
+    an enabled cell in the matrix, a fresh booking is created immediately
+    and the response carries it in `booking`.
+    """
+    req = await db.meeting_room_requests.find_one({"id": request_id}, {"_id": 0})
+    if not req:
+        raise HTTPException(404, "Meeting-room request not found")
+    is_owner = ((req.get("requested_by") or {}).get("id") == user.get("id"))
+    is_super = user.get("role") == "Super Admin"
+    if not (is_owner or is_super):
+        raise HTTPException(403, "You can only reschedule your own request")
+    if req.get("status") not in (STATUS_PENDING, STATUS_APPROVED):
+        raise HTTPException(400, f"Cannot reschedule a request with status '{req.get('status')}'")
+
+    ctx = await _resolve_room(payload.plan_id, payload.room_id)
+    room = ctx["room"]
+    plan = ctx["plan"]
+    start = _parse_iso(payload.start_at, "start_at")
+    end = _parse_iso(payload.end_at, "end_at")
+    if end <= start:
+        raise HTTPException(400, "end_at must be after start_at")
+
+    # Conflict check — exclude the request's own booking AND its own pending row.
+    exclude_bid = req.get("approved_booking_id") if req.get("status") == STATUS_APPROVED else None
+    bconf = await _first_conflict(payload.room_id, start, end, exclude_booking_id=exclude_bid)
+    if bconf:
+        raise HTTPException(409, {
+            "code": "BOOKING_CONFLICT",
+            "message": "This room is already booked at the selected time. Please choose another time slot or meeting room.",
+            "conflict": {
+                "id": bconf.get("id"), "title": bconf.get("title"),
+                "organizer": bconf.get("organizer"),
+                "start_at": bconf.get("start_at"), "end_at": bconf.get("end_at"),
+            },
+            "room_name": room.get("name"),
+        })
+    pconf = await _first_pending_conflict(payload.room_id, start, end, exclude_request_id=request_id)
+    if pconf:
+        raise HTTPException(409, {
+            "code": "BOOKING_CONFLICT",
+            "message": "This room is already booked at the selected time. Please choose another time slot or meeting room.",
+            "conflict": {
+                "id": pconf.get("id"), "title": pconf.get("title"),
+                "organizer": pconf.get("requested_by"),
+                "start_at": pconf.get("start_at"), "end_at": pconf.get("end_at"),
+            },
+            "room_name": room.get("name"),
+        })
+
+    now = now_iso()
+    actor = _actor(user)
+    was_approved = (req.get("status") == STATUS_APPROVED)
+
+    # If this was an approved booking, cancel the existing room_bookings row
+    # and push it onto the request's reschedule_history so the audit trail
+    # survives the transition.
+    reschedule_history_entry: Optional[dict] = None
+    if was_approved and req.get("approved_booking_id"):
+        old_bid = req["approved_booking_id"]
+        await db.room_bookings.update_one(
+            {"id": old_bid},
+            {"$set": {
+                "cancelled": True,
+                "cancelled_at": now,
+                "cancelled_by": actor,
+                "cancellation_reason": "rescheduled",
+                "updated_at": now,
+            }},
+        )
+        reschedule_history_entry = {
+            "booking_id": old_bid,
+            "old_plan_id": req.get("plan_id"),
+            "old_plan_name": req.get("plan_name"),
+            "old_room_id": req.get("room_id"),
+            "old_room_name": req.get("room_name"),
+            "old_start_at": req.get("start_at"),
+            "old_end_at": req.get("end_at"),
+            "old_title": req.get("title"),
+            "rescheduled_at": now,
+            "rescheduled_by": actor,
+        }
+
+    # Build the update. New room may change plan_id/plan_name/room_name/capacity.
+    update_set: Dict[str, Any] = {
+        "plan_id": payload.plan_id,
+        "plan_name": plan.get("name"),
+        "room_id": payload.room_id,
+        "room_name": room.get("name"),
+        "room_capacity": int(room.get("capacity") or 1),
+        "title": payload.title,
+        "start_at": payload.start_at,
+        "end_at": payload.end_at,
+        "attendees": [a.model_dump() for a in payload.attendees],
+        "status": STATUS_PENDING,
+        # Clear approval bookkeeping — we're starting the approval cycle over.
+        "approved_booking_id": None,
+        "decided_by": None,
+        "decided_on": None,
+        "decision_note": None,
+        "updated_at": now,
+    }
+    update_ops: Dict[str, Any] = {"$set": update_set}
+    if reschedule_history_entry:
+        update_ops["$push"] = {"reschedule_history": reschedule_history_entry}
+    await db.meeting_room_requests.update_one({"id": request_id}, update_ops)
+    await log_audit(
+        actor=actor,
+        action="meeting_room_request.reschedule",
+        resource="meeting_room_request",
+        resource_id=request_id,
+        detail=(f"Rescheduled request #{req.get('seq_no')} "
+                f"({'was Approved → cancelled booking, back to Pending' if was_approved else 'still Pending Approval'})"),
+        metadata={
+            "was_approved": was_approved,
+            "old_booking_id": (reschedule_history_entry or {}).get("booking_id"),
+            "new_room_id": payload.room_id,
+            "new_start_at": payload.start_at,
+            "new_end_at": payload.end_at,
+        },
+    )
+
+    # Re-run auto-approval — same policy as a brand-new submission.
+    booking = None
+    try:
+        from routers.approval_settings import should_auto_approve_meeting_room
+        fresh = await db.meeting_room_requests.find_one({"id": request_id}, {"_id": 0})
+        if await should_auto_approve_meeting_room(
+            actor=fresh.get("requested_by") or {},
+            plan_id=fresh.get("plan_id"),
+            plan_name=fresh.get("plan_name"),
+        ):
+            result = await _auto_approve_request(request_id, actor)
+            if result:
+                booking = result.get("booking")
+    except Exception:
+        pass
+
+    fresh = await db.meeting_room_requests.find_one({"id": request_id}, {"_id": 0})
+    return {"ok": True, "request": fresh, "booking": booking}
 
 
 # --------------------------------------------------------------------------- #
@@ -556,6 +787,18 @@ async def cancel_meeting_room_request(
     request_id: str,
     user=Depends(get_current_user),
 ):
+    """Cancel a meeting-room request.
+
+    Allowed source statuses:
+        • Pending Approval  → status flips to `Cancelled`.
+        • Approved          → linked room_bookings row is soft-cancelled
+                              (`cancelled = True`) AND the request row
+                              status flips to `Cancelled`. Historical
+                              records survive in both tables — nothing is
+                              deleted.
+
+    Requesters cancel their own row; Super Admins can cancel anyone's.
+    """
     req = await db.meeting_room_requests.find_one({"id": request_id}, {"_id": 0})
     if not req:
         raise HTTPException(404, "Meeting-room request not found")
@@ -563,10 +806,26 @@ async def cancel_meeting_room_request(
     is_super = user.get("role") == "Super Admin"
     if not (is_owner or is_super):
         raise HTTPException(403, "You can only cancel your own request")
-    if req.get("status") != STATUS_PENDING:
+    if req.get("status") not in (STATUS_PENDING, STATUS_APPROVED):
         raise HTTPException(400, f"Cannot cancel a request with status '{req.get('status')}'")
     now = now_iso()
     actor = _actor(user)
+    was_approved = (req.get("status") == STATUS_APPROVED)
+    booking_id = req.get("approved_booking_id")
+
+    # If the booking exists, mark it cancelled first — never delete it.
+    if was_approved and booking_id:
+        await db.room_bookings.update_one(
+            {"id": booking_id},
+            {"$set": {
+                "cancelled": True,
+                "cancelled_at": now,
+                "cancelled_by": actor,
+                "cancellation_reason": "cancelled_by_requester",
+                "updated_at": now,
+            }},
+        )
+
     await db.meeting_room_requests.update_one(
         {"id": request_id},
         {"$set": {
@@ -574,13 +833,18 @@ async def cancel_meeting_room_request(
             "decided_by": actor,
             "decided_on": now,
             "decision_note": "Cancelled by requester",
-            "hidden_by_requester": True,
+            # Only hide from the requester's list when it was still pending —
+            # for an approved (already-happened) meeting we keep it visible
+            # so the user can still see the "Cancelled" audit row.
+            "hidden_by_requester": not was_approved,
             "updated_at": now,
         }},
     )
     await log_audit(
         actor=actor, action="meeting_room_request.cancel",
         resource="meeting_room_request", resource_id=request_id,
-        detail=f"Cancelled meeting-room request #{req.get('seq_no')}",
+        detail=(f"Cancelled meeting-room request #{req.get('seq_no')} "
+                f"({'was Approved → booking cancelled too' if was_approved else 'was Pending'})"),
+        metadata={"was_approved": was_approved, "booking_id": booking_id},
     )
-    return {"ok": True}
+    return {"ok": True, "was_approved": was_approved, "booking_id": booking_id}

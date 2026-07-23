@@ -189,11 +189,25 @@ async def _resolve_room(plan_id: str, room_id: str) -> Dict[str, Any]:
     return {"plan": plan, "version": version, "room": room}
 
 
-async def _first_conflict(room_id: str, start: datetime, end: datetime, exclude_series: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    """Return the first overlapping active booking (or None)."""
+async def _first_conflict(
+    room_id: str,
+    start: datetime,
+    end: datetime,
+    exclude_series: Optional[str] = None,
+    exclude_booking_id: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Return the first overlapping active booking (or None).
+
+    `exclude_booking_id` is used during reschedule: while the user is editing
+    an approved booking, that booking must not conflict with itself. The
+    caller passes its id and the query filters it out — so the user only
+    sees a conflict when the new slot overlaps with a DIFFERENT booking.
+    """
     q: Dict[str, Any] = {"room_id": room_id, "cancelled": False}
     if exclude_series:
         q["series_id"] = {"$ne": exclude_series}
+    if exclude_booking_id:
+        q["id"] = {"$ne": exclude_booking_id}
     s_iso = start.isoformat()
     e_iso = end.isoformat()
     doc = await db.room_bookings.find_one(
