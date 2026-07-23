@@ -43,6 +43,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from "../components/ui/dialog";
 import WorkstationFloorMap from "../components/WorkstationFloorMap";
+import { FloorMapMeetingRooms } from "./MeetingRoomBookingPage";
 import ApprovalSettingsModal from "../components/ApprovalSettingsModal";
 import SingleSelect from "../components/SingleSelect";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
@@ -106,6 +107,24 @@ export default function PendingApprovalsPage() {
   // Selected card → drives map pan/highlight
   const [focusRequest, setFocusRequest] = useState(null);
   const [centerSeatId, setCenterSeatId] = useState(null);
+
+  // Meeting-room floor plan: full list of rooms (loaded lazily on first
+  // meeting-room card click). When the approver focuses a meeting request we
+  // render `FloorMapMeetingRooms` and highlight the target room — mirroring
+  // the workstation pan/zoom behaviour.
+  const [mrRooms, setMrRooms] = useState([]);
+  const [mrRoomsLoading, setMrRoomsLoading] = useState(false);
+  const [selectedRoomId, setSelectedRoomId] = useState("");
+  const loadMrRoomsOnce = useCallback(async () => {
+    if (mrRooms.length || mrRoomsLoading) return;
+    setMrRoomsLoading(true);
+    try {
+      const res = await api.get("/room-bookings/rooms");
+      setMrRooms(res.data || []);
+    } catch { /* non-fatal */ } finally {
+      setMrRoomsLoading(false);
+    }
+  }, [mrRooms.length, mrRoomsLoading]);
 
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -215,15 +234,36 @@ export default function PendingApprovalsPage() {
   }, [selectedPlanId, focusDate]);
 
   // When focus request set, sync plan + date and trigger pan.
-  // For meeting-room requests we DON'T touch the workstation map; the card
-  // already shows all the info the approver needs.
+  // Workstation → drives the workstation floor map.
+  // Meeting-room → loads meeting-room list (lazy) and highlights the room on
+  // the meeting-room floor map.
   const handleCardClick = (req) => {
     setFocusRequest(req);
-    if (req._type === "meeting_room") return;
+    if (req._type === "meeting_room") {
+      loadMrRoomsOnce();
+      // Clear the current selection — the effect below will re-set it once
+      // both `mrRooms` and the map have had time to mount/measure.
+      setSelectedRoomId("");
+      return;
+    }
     setSelectedPlanId(req.plan_id);
     setFocusDate(req.date);
     setCenterSeatId(req.seat_id);
   };
+
+  // Zoom the meeting-room map to the focused request's room. We wait until
+  // rooms are loaded AND the map has had a beat to mount/measure the PDF
+  // container — otherwise the very first zoom no-ops because content dims
+  // are still 0.
+  useEffect(() => {
+    if (focusRequest?._type !== "meeting_room") return;
+    if (!mrRooms.length) return;
+    const targetRoomId = focusRequest.room_id || "";
+    // Toggle to guarantee an effect re-fire inside FloorMapMeetingRooms.
+    setSelectedRoomId("");
+    const t = setTimeout(() => setSelectedRoomId(targetRoomId), 900);
+    return () => clearTimeout(t);
+  }, [focusRequest, mrRooms]);
 
   // Re-trigger pan once the seats are rendered for the new plan/date
   useEffect(() => {
@@ -419,8 +459,8 @@ export default function PendingApprovalsPage() {
       <div className="flex flex-col h-[calc(100vh-4rem)] min-h-[560px]">
         {/* Header — pending count + Auto-Approval toggle + settings */}
         <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 flex-wrap" data-testid="pa-header">
-          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-            {pendingCount} pending
+          <span className="text-xs text-gray-700 font-medium" data-testid="pa-pending-count">
+            Pending - {pendingCount}
           </span>
 
           {/* Auto Approval toggle */}
@@ -491,6 +531,42 @@ export default function PendingApprovalsPage() {
                   Select a pending request on the right to view it on the floor plan.
                 </div>
               </div>
+            ) : focusRequest._type === "meeting_room" ? (
+              (() => {
+                const room = mrRooms.find((r) => r.room_id === focusRequest.room_id);
+                const focusPlan = room
+                  ? { plan_id: room.plan_id, pdfUrl: room.pdfUrl, plan_name: room.plan_name }
+                  : null;
+                const roomsOnPlan = focusPlan
+                  ? mrRooms.filter((r) => r.plan_id === focusPlan.plan_id)
+                  : [];
+                if (mrRoomsLoading && !focusPlan) {
+                  return (
+                    <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                      <Loader2 className="animate-spin mr-2"/> Loading meeting rooms…
+                    </div>
+                  );
+                }
+                if (!focusPlan) {
+                  return (
+                    <div className="h-full flex items-center justify-center text-gray-500 text-sm">
+                      Meeting room location not available.
+                    </div>
+                  );
+                }
+                return (
+                  <FloorMapMeetingRooms
+                    key={focusPlan.plan_id}
+                    focusPlan={focusPlan}
+                    rooms={roomsOnPlan}
+                    selectedRoomId={selectedRoomId}
+                    onPickRoom={() => { /* read-only on approval page */ }}
+                    occupiedNowRoomIds={new Set()}
+                    blockedRoomIds={new Set()}
+                    onQuickBook={null}
+                  />
+                );
+              })()
             ) : availability?.plan?.pdfUrl ? (
               <WorkstationFloorMap
                 pdfUrl={availability.plan.pdfUrl}
@@ -621,11 +697,11 @@ export default function PendingApprovalsPage() {
                           data-request-type={req._type}
                         >
                           <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
+                            <div className="flex items-start gap-2 min-w-0 flex-1">
                               {/* Bulk-select only supported for workstation requests today.
                                   Meeting-room rows hide the checkbox to avoid confusion. */}
                               {canApprove && !isMR && (
-                                <div onClick={(e) => e.stopPropagation()}>
+                                <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
                                   <BulkSelectCheckbox
                                     checked={effectiveSelectedIds.has(req.id)}
                                     onCheckedChange={() => toggleSelect(req.id)}
@@ -634,11 +710,21 @@ export default function PendingApprovalsPage() {
                                   />
                                 </div>
                               )}
-                              <div className="font-semibold text-sm text-gray-900 truncate">
-                                {isMR ? (
-                                  <span className="truncate" title={req.title}>{req.room_name || "Room"} · {req.title}</span>
-                                ) : (
-                                  <span>Workstation {req.seat_label}</span>
+                              <div className="min-w-0 flex-1">
+                                <div className="font-semibold text-sm text-gray-900 truncate">
+                                  {isMR ? (
+                                    <span className="truncate" title={`${req.room_name || "Room"} : ${req.title}`}>
+                                      {req.room_name || "Room"} : {req.title}
+                                    </span>
+                                  ) : (
+                                    <span title={`Workstation ${req.seat_label}`}>Workstation {req.seat_label}</span>
+                                  )}
+                                </div>
+                                {/* Booking ID — sits immediately under the title so the card stays compact. */}
+                                {req.seq_no != null && (
+                                  <div className="mt-0.5 text-[12px] text-gray-600" data-testid={`pa-seq-${req.id}`} title={`Booking ID: ${req.seq_no}`}>
+                                    ID: <span className="font-mono font-semibold text-gray-800">{req.seq_no}</span>
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -674,42 +760,35 @@ export default function PendingApprovalsPage() {
                             </div>
                           </div>
 
-                          {/* Booking ID (sequence number) — its own row for readability, matches design ref. */}
-                          {req.seq_no != null && (
-                            <div className="mt-1.5 text-[12px] text-gray-600" data-testid={`pa-seq-${req.id}`}>
-                              ID: <span className="font-mono font-semibold text-gray-800">{req.seq_no}</span>
-                            </div>
-                          )}
-
                           <div className="mt-2 space-y-1 text-[12px] text-gray-700">
                             {isMR ? (
                               <>
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1.5" title={`Date & time: ${fmtTimeRange()}`}>
                                   <Calendar sx={{ fontSize: 12 }} className="text-gray-400"/>
                                   <span><strong>{fmtTimeRange()}</strong></span>
                                 </div>
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1.5" title={`Capacity: ${req.room_capacity} seats · Attendees: ${(req.attendees || []).length}`}>
                                   <User sx={{ fontSize: 12 }} className="text-gray-400"/>
                                   <span className="truncate">Capacity: <strong>{req.room_capacity} seats</strong> · Attendees: <strong>{(req.attendees || []).length}</strong></span>
                                 </div>
                               </>
                             ) : (
                               <>
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1.5" title={`For: ${(req.employee || {}).name || "—"}`}>
                                   <User sx={{ fontSize: 12 }} className="text-gray-400"/>
                                   <span className="truncate">For: <strong>{(req.employee || {}).name || "—"}</strong></span>
                                 </div>
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1.5" title={`For date: ${fmtDate(req.date)}`}>
                                   <Calendar sx={{ fontSize: 12 }} className="text-gray-400"/>
                                   <span>For date: <strong>{fmtDate(req.date)}</strong></span>
                                 </div>
                               </>
                             )}
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5" title={`Requested by: ${(req.requested_by || {}).name || "—"}`}>
                               <User sx={{ fontSize: 12 }} className="text-gray-400"/>
                               <span className="truncate">Requested by: {(req.requested_by || {}).name || "—"}</span>
                             </div>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5" title={`Requested on: ${fmtDateTime(req.requested_on)}`}>
                               <Clock sx={{ fontSize: 12 }} className="text-gray-400"/>
                               <span>{fmtDateTime(req.requested_on)}</span>
                             </div>

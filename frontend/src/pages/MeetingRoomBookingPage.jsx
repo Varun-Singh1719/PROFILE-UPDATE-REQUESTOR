@@ -1229,7 +1229,7 @@ function TabBtn({ active, onClick, testId, children }) {
 }
 
 // ============================================================ Floor map (right panel) — rooms-only view
-function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickRoom, occupiedNowRoomIds, blockedRoomIds, onQuickBook }) {
+export function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickRoom, occupiedNowRoomIds, blockedRoomIds, onQuickBook }) {
   const transformRef = useRef(null);
   const initDoneRef = useRef(false);
   const containerRef = useRef(null);
