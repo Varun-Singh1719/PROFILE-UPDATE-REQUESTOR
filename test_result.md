@@ -2261,3 +2261,50 @@ Backwards-compatible — every existing `confirm/prompt/alert` call site works u
 - `frontend/src/pages/PendingApprovalsPage.jsx` (Type filter, type-aware cards, dual-endpoint handlers)
 - `frontend/src/pages/MeetingRoomBookingPage.jsx` (StatusPill, merged bookings+requests, updated toasts)
 
+
+## [2026-07-23] Pending Approvals — unified floor map (WS + MR on same PDF)
+
+### Bug
+When switching between a workstation card and a meeting-room card in the
+Pending Approvals right-side queue, the map on the left was completely
+swapped between two different components (`WorkstationFloorMap` and
+`FloorMapMeetingRooms`). This unmounted/remounted the PDF, causing a
+jarring reload even though the two request types share the SAME floor
+plan PDF.
+
+### Fix
+`WorkstationFloorMap` already supports a `rooms` overlay, so we now
+render **one** map for both request types and simply move the camera:
+
+- `frontend/src/components/WorkstationFloorMap.jsx`
+    - New prop `centerOnRoomId` — pans + zooms (`zoomToElement`, scale 1.8) to
+      `[data-testid="ws-room-${roomId}"]`, mirroring the seat-focus effect.
+    - New prop `highlightRoomId` — when set, the matching room in the
+      overlay renders with an orange border/fill (`#ec9324`) so the
+      approver can see which room the current card refers to.
+    - Meeting-room overlay logic kept intact for the workstation/floor
+      pages (highlight is opt-in).
+- `frontend/src/pages/PendingApprovalsPage.jsx`
+    - Removed the `FloorMapMeetingRooms` fallback branch entirely.
+    - `WorkstationFloorMap` is always rendered as long as
+      `availability.plan.pdfUrl` resolves.
+    - Introduced `centerRoomId` state; `handleCardClick`:
+        - Workstation card → sets `centerSeatId`, clears `centerRoomId`.
+        - Meeting-room card → sets `centerRoomId`, clears `centerSeatId`;
+          uses `start_at`'s date component to load the same-plan
+          availability so both cards can share the map.
+    - Loads the meeting rooms list once on mount (`/api/room-bookings/rooms`)
+      and derives `roomsForCurrentPlan` (`{id,name,x,y,w,h,capacity}` shape)
+      to feed into `WorkstationFloorMap`.
+    - The "re-fire zoom once availability arrives" effect now handles
+      both room and seat targets (whichever the current focus is).
+
+### Impact
+Switching between a workstation and meeting-room card no longer
+reloads the PDF — only the camera glides between the seat / room. The
+selected meeting room lights up orange in the shared overlay, matching
+the highlight pattern used for focused workstation seats.
+
+### Verification
+Visually confirmed via screenshots (Gamma / Beta / Workstation B1 /
+Workstation C3 clicks in sequence). Backend was NOT touched.

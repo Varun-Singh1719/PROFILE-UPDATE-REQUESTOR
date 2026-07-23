@@ -2054,21 +2054,43 @@ function MeetingRoomsLayer({
               e.currentTarget.style.borderColor = '#9ca3af';
             }}
           >
-            {/* Room label — auto-scales with room size (container query units) */}
+            {/* Room label — centered, two-line stack matching the naming
+                convention used elsewhere in the app (Room name + "Seats : N").
+                Uses container-query units so it scales with the room box. */}
             <div
-              className="absolute top-1 left-1 px-1.5 py-0.5 rounded font-semibold pointer-events-none select-none"
+              className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 pointer-events-none select-none"
               style={{
-                background: isSelected ? '#ec9324' : 'rgba(255,255,255,0.85)',
-                color: isSelected ? 'white' : '#111827',
-                maxWidth: '90%',
-                textOverflow: 'ellipsis',
-                overflow: 'hidden',
-                whiteSpace: 'nowrap',
-                fontSize: 'clamp(7px, 18cqh, 16px)',
+                fontSize: 'clamp(6px, 15cqh, 13px)',
                 lineHeight: 1.15,
               }}
             >
-              {room.name}{room.capacity ? ` (${room.capacity})` : ''}
+              <div
+                className="font-semibold rounded"
+                style={{
+                  background: isSelected ? '#ec9324' : 'rgba(255,255,255,0.9)',
+                  color: isSelected ? 'white' : '#111827',
+                  padding: '1px 5px',
+                  maxWidth: '92%',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {room.name}
+              </div>
+              {room.capacity != null && (
+                <div
+                  className="font-medium rounded text-white"
+                  style={{
+                    background: 'rgba(17,24,39,0.75)',
+                    padding: '0.5px 5px',
+                    fontSize: '0.85em',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Seats : {room.capacity}
+                </div>
+              )}
             </div>
 
             {/* Resize handles — only on single selection */}

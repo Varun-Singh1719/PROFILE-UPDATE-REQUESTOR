@@ -1305,7 +1305,7 @@ export function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickR
   return (
     <div ref={viewportRef} className="absolute inset-0 overflow-hidden">
       <TransformWrapper
-        initialScale={1} minScale={0.25} maxScale={4}
+        initialScale={1} minScale={0.5} maxScale={4}
         wheel={{ step: 0.15 }} pinch={{ step: 5 }}
         doubleClick={{ disabled: true }}
         centerOnInit={true}
@@ -1315,13 +1315,19 @@ export function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickR
         onTransformed={(_ref, state) => setScale(state?.scale || 1)}
       >
         {() => (
-          <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
+          <TransformComponent
+            wrapperStyle={{ width: "100%", height: "100%" }}
+            contentStyle={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+          >
             <div ref={containerRef} className="relative inline-block" data-testid="mrb-map-canvas">
               <Document file={resolvePdfUrl(focusPlan.pdfUrl)}
                 onLoadSuccess={() => {
                   if (initDoneRef.current) return;
                   initDoneRef.current = true;
-                  requestAnimationFrame(() => transformRef.current?.centerView?.(1, 0));
+                  // No forced `centerView(1, 0)` — the flex-centered
+                  // `contentStyle` above plus `centerOnInit` keeps the plan
+                  // horizontally + vertically centered inside the viewport
+                  // by default (mirrors the workstation floor map init).
                 }}>
                 <Page
                   pageNumber={1}

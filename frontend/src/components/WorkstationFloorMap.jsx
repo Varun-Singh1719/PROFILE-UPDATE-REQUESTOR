@@ -31,6 +31,8 @@ pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/$
  * disabled            — when true, all click handlers are no-ops
  * centerOnSeatId      — when set, the map pans + zooms in on this seat with a brief
  *                       highlight pulse (used by Pending Approvals card → focus seat).
+ * centerOnRoomId      — when set, pan + zoom to the meeting room with matching id
+ *                       (used by Pending Approvals card → focus meeting room).
  */
 const WorkstationFloorMap = ({
   pdfUrl,
@@ -44,6 +46,8 @@ const WorkstationFloorMap = ({
   loading = false,
   disabled = false,
   centerOnSeatId = null,
+  centerOnRoomId = null,
+  highlightRoomId = null,
   rooms = [],
   roomBookingsByRoom = {},
   // Floor Layout view — only shows Available / Pending Approval / Teams
@@ -113,6 +117,26 @@ const WorkstationFloorMap = ({
     });
     return () => cancelAnimationFrame(id);
   }, [centerOnSeatId, pdfReady]);
+
+  // Pan + zoom to a specific meeting room when `centerOnRoomId` changes.
+  // Used by the Pending Approvals page so we don't have to swap in a
+  // separate meeting-room map component — the workstation map already
+  // renders both seats and rooms on the same PDF; here we just shift the
+  // camera between them.
+  useEffect(() => {
+    if (!centerOnRoomId || !pdfReady) return;
+    const id = requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-testid="ws-room-${centerOnRoomId}"]`);
+      if (el && transformRef.current && transformRef.current.zoomToElement) {
+        try {
+          transformRef.current.zoomToElement(el, 1.8, 450, 'easeOut');
+        } catch {
+          /* ignore — library version safety */
+        }
+      }
+    });
+    return () => cancelAnimationFrame(id);
+  }, [centerOnRoomId, pdfReady]);
 
   // Bounding box of team-filtered seats — computed as %s so we can render a
   // hidden anchor element inside the transform and call zoomToElement on it.
@@ -337,34 +361,76 @@ const WorkstationFloorMap = ({
                     {rooms.map((r) => {
                       const bookings = roomBookingsByRoom[r.id] || [];
                       const hasBookings = bookings.length > 0;
+                      const isHighlighted = highlightRoomId && r.id === highlightRoomId;
+                      // Highlighted (currently-focused via approval card) wins
+                      // over booking/available colours to make the focus obvious.
+                      const borderColor = isHighlighted ? '#ec9324' : (hasBookings ? '#dc2626' : '#10b981');
+                      const bg = isHighlighted
+                        ? 'rgba(236,147,36,0.28)'
+                        : (hasBookings ? 'rgba(220,38,38,0.10)' : 'rgba(16,185,129,0.06)');
+                      const labelBg = isHighlighted
+                        ? 'rgba(236,147,36,0.95)'
+                        : (hasBookings ? 'rgba(220,38,38,0.95)' : 'rgba(16,185,129,0.95)');
                       return (
                         <div
                           key={r.id}
                           data-testid={`ws-room-${r.id}`}
-                          className="absolute"
+                          className="absolute flex items-center justify-center"
                           style={{
                             left: `${r.x}%`,
                             top: `${r.y}%`,
                             width: `${r.w}%`,
                             height: `${r.h}%`,
-                            border: `2px solid ${hasBookings ? '#dc2626' : '#10b981'}`,
-                            background: hasBookings ? 'rgba(220,38,38,0.10)' : 'rgba(16,185,129,0.06)',
+                            border: `2px solid ${borderColor}`,
+                            background: bg,
                             boxSizing: 'border-box',
-                            zIndex: 5,
+                            zIndex: isHighlighted ? 6 : 5,
+                            transition: 'background 200ms, border-color 200ms',
+                            containerType: 'size',
                           }}
                         >
+                          {/* Centered label: Room name on top, "Seats : N"
+                              underneath — same visual language as the
+                              Meeting Room Booking floor map so the naming
+                              convention stays consistent across the app. */}
                           <div
-                            className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[10px] font-semibold pointer-events-none select-none"
+                            className="flex flex-col items-center justify-center gap-0.5 text-center pointer-events-none select-none"
                             style={{
-                              background: hasBookings ? 'rgba(220,38,38,0.95)' : 'rgba(16,185,129,0.95)',
-                              color: 'white',
-                              maxWidth: '90%',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
+                              maxWidth: '92%',
+                              maxHeight: '92%',
                             }}
                           >
-                            {r.name}{r.capacity ? ` (${r.capacity})` : ''}{hasBookings ? ` · ${bookings.length}` : ''}
+                            <div
+                              className="font-semibold text-white shadow-sm"
+                              style={{
+                                background: labelBg,
+                                fontSize: 'clamp(7px, 16cqh, 12px)',
+                                lineHeight: 1.15,
+                                padding: '1px 5px',
+                                borderRadius: '4px',
+                                maxWidth: '100%',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}
+                            >
+                              {r.name}
+                            </div>
+                            {r.capacity != null && (
+                              <div
+                                className="font-medium text-white"
+                                style={{
+                                  background: 'rgba(17,24,39,0.75)',
+                                  fontSize: 'clamp(6px, 14cqh, 10px)',
+                                  lineHeight: 1.15,
+                                  padding: '0.5px 5px',
+                                  borderRadius: '4px',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                Seats : {r.capacity}
+                              </div>
+                            )}
                           </div>
                         </div>
                       );

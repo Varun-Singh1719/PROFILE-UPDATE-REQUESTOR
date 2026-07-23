@@ -26,7 +26,6 @@ import Loader2 from "@mui/icons-material/Autorenew";
 import Calendar from "@mui/icons-material/CalendarTodayOutlined";
 import User from "@mui/icons-material/PersonOutlined";
 import Clock from "@mui/icons-material/AccessTime";
-import MapPin from "@mui/icons-material/PlaceOutlined";
 import RefreshCw from "@mui/icons-material/Refresh";
 import ShieldAlert from "@mui/icons-material/GppMaybeOutlined";
 import CheckSquare from "@mui/icons-material/CheckBoxOutlined";
@@ -43,7 +42,6 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from "../components/ui/dialog";
 import WorkstationFloorMap from "../components/WorkstationFloorMap";
-import { FloorMapMeetingRooms } from "./MeetingRoomBookingPage";
 import ApprovalSettingsModal from "../components/ApprovalSettingsModal";
 import SingleSelect from "../components/SingleSelect";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
@@ -100,21 +98,29 @@ export default function PendingApprovalsPage() {
   // queue, but the map only shows the seats for the request the user is
   // focusing on. When a card is clicked, we sync (plan, date) to that request
   // and pan to the seat.
-  const [focusDate, setFocusDate] = useState(null);   // "YYYY-MM-DD"
+  const [focusDate, setFocusDate] = useState(() => {
+    // Default to today (YYYY-MM-DD) so the floor map loads immediately when
+    // the page opens — matches the Request Workstation UX where the plan is
+    // visible right away, before the user has picked a request.
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  });
   const [availability, setAvailability] = useState(null);
   const [availLoading, setAvailLoading] = useState(false);
 
-  // Selected card → drives map pan/highlight
+  // Selected card → drives map pan/highlight. We keep ONE floor map mounted
+  // for the currently-selected plan; card clicks just shift the camera
+  // between a workstation (`centerSeatId`) and a meeting room (`centerRoomId`).
   const [focusRequest, setFocusRequest] = useState(null);
   const [centerSeatId, setCenterSeatId] = useState(null);
+  const [centerRoomId, setCenterRoomId] = useState(null);
 
-  // Meeting-room floor plan: full list of rooms (loaded lazily on first
-  // meeting-room card click). When the approver focuses a meeting request we
-  // render `FloorMapMeetingRooms` and highlight the target room — mirroring
-  // the workstation pan/zoom behaviour.
+  // Full list of meeting rooms across all live plans (lazy). We filter down
+  // to the currently-selected plan when passing to the map so both
+  // workstations and meeting rooms show on the SAME PDF.
   const [mrRooms, setMrRooms] = useState([]);
   const [mrRoomsLoading, setMrRoomsLoading] = useState(false);
-  const [selectedRoomId, setSelectedRoomId] = useState("");
   const loadMrRoomsOnce = useCallback(async () => {
     if (mrRooms.length || mrRoomsLoading) return;
     setMrRoomsLoading(true);
@@ -125,6 +131,7 @@ export default function PendingApprovalsPage() {
       setMrRoomsLoading(false);
     }
   }, [mrRooms.length, mrRoomsLoading]);
+  useEffect(() => { loadMrRoomsOnce(); }, [loadMrRoomsOnce]);
 
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -233,44 +240,39 @@ export default function PendingApprovalsPage() {
     return () => { cancelled = true; };
   }, [selectedPlanId, focusDate]);
 
-  // When focus request set, sync plan + date and trigger pan.
-  // Workstation → drives the workstation floor map.
-  // Meeting-room → loads meeting-room list (lazy) and highlights the room on
-  // the meeting-room floor map.
+  // Extract the "YYYY-MM-DD" part of an ISO string (used for meeting-room
+  // requests whose slot is stored in `start_at`).
+  const isoDate = (iso) => (iso ? String(iso).slice(0, 10) : null);
+
+  // When focus request set, sync plan + date and trigger the camera pan.
+  // The SAME map (`WorkstationFloorMap`) stays mounted; we just flip which
+  // pin the camera zooms to (workstation seat vs. meeting room).
   const handleCardClick = (req) => {
     setFocusRequest(req);
-    if (req._type === "meeting_room") {
-      loadMrRoomsOnce();
-      // Clear the current selection — the effect below will re-set it once
-      // both `mrRooms` and the map have had time to mount/measure.
-      setSelectedRoomId("");
-      return;
-    }
+    const nextDate = req._type === "meeting_room" ? isoDate(req.start_at) : req.date;
     setSelectedPlanId(req.plan_id);
-    setFocusDate(req.date);
-    setCenterSeatId(req.seat_id);
+    setFocusDate(nextDate);
+    if (req._type === "meeting_room") {
+      setCenterSeatId(null);
+      setCenterRoomId(req.room_id);
+    } else {
+      setCenterRoomId(null);
+      setCenterSeatId(req.seat_id);
+    }
   };
 
-  // Zoom the meeting-room map to the focused request's room. We wait until
-  // rooms are loaded AND the map has had a beat to mount/measure the PDF
-  // container — otherwise the very first zoom no-ops because content dims
-  // are still 0.
-  useEffect(() => {
-    if (focusRequest?._type !== "meeting_room") return;
-    if (!mrRooms.length) return;
-    const targetRoomId = focusRequest.room_id || "";
-    // Toggle to guarantee an effect re-fire inside FloorMapMeetingRooms.
-    setSelectedRoomId("");
-    const t = setTimeout(() => setSelectedRoomId(targetRoomId), 900);
-    return () => clearTimeout(t);
-  }, [focusRequest, mrRooms]);
-
-  // Re-trigger pan once the seats are rendered for the new plan/date
+  // Re-trigger pan once the seats/rooms are rendered for the new plan/date.
+  // Toggling the seat/room id off then on forces the WorkstationFloorMap
+  // zoom effect to re-fire against the freshly-mounted overlays.
   useEffect(() => {
     if (!focusRequest || !availability) return;
-    // Toggle to force the WorkstationFloorMap effect to re-fire.
+    if (focusRequest._type === "meeting_room") {
+      setCenterRoomId(null);
+      const t = setTimeout(() => setCenterRoomId(focusRequest.room_id), 60);
+      return () => clearTimeout(t);
+    }
     setCenterSeatId(null);
-    const t = setTimeout(() => setCenterSeatId(focusRequest.seat_id), 40);
+    const t = setTimeout(() => setCenterSeatId(focusRequest.seat_id), 60);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availability]);
@@ -408,6 +410,20 @@ export default function PendingApprovalsPage() {
     return m;
   }, [availability]);
 
+  // Meeting rooms to overlay on the currently-focused plan. Shape must
+  // match what WorkstationFloorMap expects: `{ id, name, x, y, w, h, capacity }`.
+  const roomsForCurrentPlan = useMemo(() => {
+    if (!selectedPlanId) return [];
+    return mrRooms
+      .filter((r) => r.plan_id === selectedPlanId)
+      .map((r) => ({
+        id: r.room_id,
+        name: r.name || r.room_name || "Room",
+        x: r.x, y: r.y, w: r.w, h: r.h,
+        capacity: r.capacity,
+      }));
+  }, [mrRooms, selectedPlanId]);
+
   // Group pending requests by plan for display headers
   const groupedRequests = useMemo(() => {
     const map = new Map();
@@ -524,49 +540,6 @@ export default function PendingApprovalsPage() {
               <div className="h-full flex items-center justify-center text-gray-500 text-sm">
                 No live floor plans available.
               </div>
-            ) : !focusRequest ? (
-              <div className="h-full flex items-center justify-center text-gray-500 text-sm px-6 text-center">
-                <div>
-                  <MapPin className="mx-auto mb-2 text-gray-400"/>
-                  Select a pending request on the right to view it on the floor plan.
-                </div>
-              </div>
-            ) : focusRequest._type === "meeting_room" ? (
-              (() => {
-                const room = mrRooms.find((r) => r.room_id === focusRequest.room_id);
-                const focusPlan = room
-                  ? { plan_id: room.plan_id, pdfUrl: room.pdfUrl, plan_name: room.plan_name }
-                  : null;
-                const roomsOnPlan = focusPlan
-                  ? mrRooms.filter((r) => r.plan_id === focusPlan.plan_id)
-                  : [];
-                if (mrRoomsLoading && !focusPlan) {
-                  return (
-                    <div className="h-full flex items-center justify-center text-gray-400 text-sm">
-                      <Loader2 className="animate-spin mr-2"/> Loading meeting rooms…
-                    </div>
-                  );
-                }
-                if (!focusPlan) {
-                  return (
-                    <div className="h-full flex items-center justify-center text-gray-500 text-sm">
-                      Meeting room location not available.
-                    </div>
-                  );
-                }
-                return (
-                  <FloorMapMeetingRooms
-                    key={focusPlan.plan_id}
-                    focusPlan={focusPlan}
-                    rooms={roomsOnPlan}
-                    selectedRoomId={selectedRoomId}
-                    onPickRoom={() => { /* read-only on approval page */ }}
-                    occupiedNowRoomIds={new Set()}
-                    blockedRoomIds={new Set()}
-                    onQuickBook={null}
-                  />
-                );
-              })()
             ) : availability?.plan?.pdfUrl ? (
               <WorkstationFloorMap
                 pdfUrl={availability.plan.pdfUrl}
@@ -580,7 +553,14 @@ export default function PendingApprovalsPage() {
                 loading={availLoading}
                 disabled={true}
                 centerOnSeatId={centerSeatId}
+                centerOnRoomId={centerRoomId}
+                highlightRoomId={centerRoomId}
+                rooms={roomsForCurrentPlan}
               />
+            ) : availLoading ? (
+              <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                <Loader2 className="animate-spin mr-2"/> Loading floor plan…
+              </div>
             ) : (
               <div className="h-full flex items-center justify-center text-gray-400 text-sm">
                 {availLoading ? <Loader2 className="animate-spin"/> : "No floor plan to render"}
