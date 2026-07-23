@@ -6,7 +6,7 @@ Quick smoke check for legacy permission endpoints
 import requests
 import sys
 
-BASE_URL = "https://room-booking-fix-2.preview.emergentagent.com/api"
+BASE_URL = "https://pending-approval-ui-2.preview.emergentagent.com/api"
 SUPER_ADMIN_EMAIL = "admin@ticketing.com"
 SUPER_ADMIN_PASSWORD = "Admin@123"
 

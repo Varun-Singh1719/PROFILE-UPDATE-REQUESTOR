@@ -19,7 +19,7 @@ import io
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://room-booking-fix-2.preview.emergentagent.com/api"
+BASE_URL = "https://pending-approval-ui-2.preview.emergentagent.com/api"
 ADMIN_EMAIL = "admin@ticketing.com"
 ADMIN_PASSWORD = "Admin@123"
 

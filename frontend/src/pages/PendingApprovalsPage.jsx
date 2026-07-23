@@ -45,6 +45,7 @@ import {
 import WorkstationFloorMap from "../components/WorkstationFloorMap";
 import ApprovalSettingsModal from "../components/ApprovalSettingsModal";
 import SingleSelect from "../components/SingleSelect";
+import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import { useAuth } from "../context/AuthContext";
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
 
@@ -387,22 +388,6 @@ export default function PendingApprovalsPage() {
       contentClassName="bg-gray-50"
       actions={
         <>
-          {/* Type filter — Workstation / Meeting Room / All */}
-          <div className="w-44">
-            <SingleSelect
-              options={[
-                { value: "all",          label: "All requests" },
-                { value: "workstation",  label: "Workstation" },
-                { value: "meeting_room", label: "Meeting Room" },
-              ]}
-              value={typeFilter}
-              onChange={(v) => setTypeFilter(v || "all")}
-              placeholder="Type"
-              testId="pa-type-filter"
-              allowClear={false}
-              size="md"
-            />
-          </div>
           {plans.length > 1 && (
             <div className="w-56">
               <SingleSelect
@@ -532,9 +517,23 @@ export default function PendingApprovalsPage() {
             className="border-l border-gray-200 bg-white flex flex-col"
             style={{ flexBasis: "30%", minWidth: 320 }}
           >
-            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between gap-2">
               <div className="text-sm font-semibold text-gray-700">Approval Queue</div>
-              <span className="text-[11px] text-gray-500">Newest first</span>
+              <div className="shrink-0">
+                <MultiSelectFilter
+                  label="Type"
+                  value={typeFilter === "all" ? [] : [typeFilter]}
+                  onChange={(arr) => setTypeFilter(arr[0] || "all")}
+                  options={[
+                    { value: "workstation",  label: "Workstation" },
+                    { value: "meeting_room", label: "Meeting Room" },
+                  ]}
+                  testIdPrefix="pa-type-filter"
+                  className="w-40"
+                  align="right"
+                  single
+                />
+              </div>
             </div>
 
             {/* Bulk selection toolbar */}
@@ -558,7 +557,7 @@ export default function PendingApprovalsPage() {
                     size="sm"
                     disabled={effectiveSelectedIds.size === 0 || bulkProcessing || !permApprove.canUse}
                     onClick={() => setBulkAction("approve")}
-                    className="h-7 px-2 bg-green-600 hover:bg-green-700 text-white text-[11px]"
+                    className="h-7 px-2 bg-[#ec9324] hover:bg-[#d4811f] text-white text-[11px]"
                     data-testid="pa-bulk-approve"
                   >
                     <Check sx={{ fontSize: 12 }} className="mr-1"/> Approve
@@ -635,29 +634,21 @@ export default function PendingApprovalsPage() {
                                   />
                                 </div>
                               )}
-                              <div className="font-semibold text-sm text-gray-900 truncate flex items-center gap-1.5">
+                              <div className="font-semibold text-sm text-gray-900 truncate">
                                 {isMR ? (
                                   <span className="truncate" title={req.title}>{req.room_name || "Room"} · {req.title}</span>
                                 ) : (
                                   <span>Workstation {req.seat_label}</span>
                                 )}
-                                {req.seq_no != null && (
-                                  <span
-                                    className="font-mono text-[10px] font-medium text-gray-500 bg-gray-100 rounded px-1.5 py-0.5"
-                                    data-testid={`pa-seq-${req.id}`}
-                                  >
-                                    {req.seq_no}
-                                  </span>
-                                )}
                               </div>
                             </div>
-                            {/* Right column — Status pill on top, Type pill below.
-                                Both are fixed-width capsules for visual symmetry:
-                                  • Status: outlined pill (PendingApprovals-style).
-                                  • Type: solid pill (PriorityBadge-style)
-                                    — Desk   → orange (same as `Medium` priority)
-                                    — Meeting → green  (same as `Low`    priority). */}
-                            <div className="flex flex-col items-end gap-1 shrink-0">
+                            {/* Right column — Status pill on top, Type circle below.
+                                • Status: outlined "Pending" pill (unchanged).
+                                • Type circle: solid orange gradient with initial
+                                  ("W" for Workstation / "M" for Meeting), hover
+                                  reveals a dark tooltip with the full name —
+                                  same pattern as NotificationBell tooltip. */}
+                            <div className="flex flex-col items-end gap-1.5 shrink-0">
                               <span
                                 data-testid="pa-status-badge"
                                 className="inline-flex items-center justify-center w-24 h-6 text-[11px] font-semibold rounded-full border-2 select-none whitespace-nowrap"
@@ -665,15 +656,30 @@ export default function PendingApprovalsPage() {
                               >
                                 Pending
                               </span>
-                              <span
-                                data-testid={`pa-type-pill-${req._type}`}
-                                className="inline-flex items-center justify-center w-24 h-6 text-[11px] font-semibold text-white rounded-full select-none whitespace-nowrap"
-                                style={{ backgroundColor: isMR ? "#16a34a" : "#ec9324" }}
+                              <div
+                                className="group relative"
+                                data-testid={`pa-type-circle-${req._type}`}
+                                aria-label={isMR ? "Meeting Room" : "Workstation"}
                               >
-                                {isMR ? "Meeting" : "Desk"}
-                              </span>
+                                <span
+                                  className="inline-flex items-center justify-center w-8 h-8 rounded-full text-white text-[13px] font-bold select-none shadow-sm ring-2 ring-white"
+                                  style={{ background: "linear-gradient(135deg, #f5a94b 0%, #ec9324 55%, #d4811f 100%)" }}
+                                >
+                                  {isMR ? "M" : "W"}
+                                </span>
+                                <span className="pointer-events-none absolute top-full mt-1.5 right-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+                                  {isMR ? "Meeting Room" : "Workstation"}
+                                </span>
+                              </div>
                             </div>
                           </div>
+
+                          {/* Booking ID (sequence number) — its own row for readability, matches design ref. */}
+                          {req.seq_no != null && (
+                            <div className="mt-1.5 text-[12px] text-gray-600" data-testid={`pa-seq-${req.id}`}>
+                              ID: <span className="font-mono font-semibold text-gray-800">{req.seq_no}</span>
+                            </div>
+                          )}
 
                           <div className="mt-2 space-y-1 text-[12px] text-gray-700">
                             {isMR ? (
@@ -715,7 +721,7 @@ export default function PendingApprovalsPage() {
                               size="sm"
                               disabled={!canApprove || busy || !permApprove.canUse}
                               onClick={() => approve(req)}
-                              className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                              className="flex-1 bg-[#ec9324] hover:bg-[#d4811f] text-white"
                               data-testid={`pa-approve-${req.id}`}
                             >
                               {busy ? <Loader2 className="animate-spin" sx={{ fontSize: 14 }}/> : <><Check sx={{ fontSize: 14 }} className="mr-1"/> Approve</>}
@@ -770,7 +776,7 @@ export default function PendingApprovalsPage() {
               onClick={() => performBulk(bulkAction)}
               disabled={bulkProcessing}
               className={bulkAction === "approve"
-                ? "bg-green-600 hover:bg-green-700 text-white"
+                ? "bg-[#ec9324] hover:bg-[#d4811f] text-white"
                 : "bg-red-600 hover:bg-red-700 text-white"}
               data-testid="pa-bulk-confirm"
             >
