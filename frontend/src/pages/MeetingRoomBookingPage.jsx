@@ -1452,7 +1452,7 @@ export function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickR
  *     Bell in the TopBar: rounded, dark grey, small white text. It always
  *     shows the FULL name and seat count, regardless of truncation.
  */
-function RoomBoxLabel({ room, scale, labelBg, occupiedNow, blocked }) {
+export function RoomBoxLabel({ room, scale, labelBg, occupiedNow, blocked }) {
   const wrapperRef = useRef(null);
   const [boxSize, setBoxSize] = useState({ w: 0, h: 0 });
 

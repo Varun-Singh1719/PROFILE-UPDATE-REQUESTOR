@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import WorkstationSeat from './WorkstationSeat';
+import { RoomBoxLabel } from '../pages/MeetingRoomBookingPage';
 import { resolvePdfUrl } from '../lib/pdfUrl';
 import ZoomIn from "@mui/icons-material/ZoomIn";
 import ZoomOut from "@mui/icons-material/ZoomOut";
@@ -64,6 +65,10 @@ const WorkstationFloorMap = ({
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [pdfReady, setPdfReady] = useState(false);
   const [focusFlashSeatId, setFocusFlashSeatId] = useState(null);
+  // Current zoom scale of the TransformComponent — used by RoomBoxLabel to
+  // keep the room name/seats text a consistent on-screen size regardless
+  // of how far the user has zoomed in.
+  const [scale, setScale] = useState(1);
   const transformRef = useRef(null);
 
   // Debounce search input (300ms)
@@ -200,6 +205,7 @@ const WorkstationFloorMap = ({
         panning={{ velocityDisabled: false }}
         velocityAnimation={{ sensitivity: 1, animationTime: 250, animationType: 'easeOut' }}
         zoomAnimation={{ animationTime: 250, animationType: 'easeOut' }}
+        onTransformed={(_ref, state) => setScale(state?.scale || 1)}
       >
         {({ zoomIn, zoomOut, resetTransform }) => (
           <>
@@ -371,11 +377,15 @@ const WorkstationFloorMap = ({
                       const labelBg = isHighlighted
                         ? 'rgba(236,147,36,0.95)'
                         : (hasBookings ? 'rgba(220,38,38,0.95)' : 'rgba(16,185,129,0.95)');
+                      // Shape the room object for RoomBoxLabel — it expects
+                      // `{ room_id, name, capacity }` (label uses name + seats
+                      // and the tooltip uses `room.name`).
+                      const roomForLabel = { room_id: r.id, name: r.name, capacity: r.capacity };
                       return (
                         <div
                           key={r.id}
                           data-testid={`ws-room-${r.id}`}
-                          className="absolute flex items-center justify-center"
+                          className="absolute group"
                           style={{
                             left: `${r.x}%`,
                             top: `${r.y}%`,
@@ -386,52 +396,16 @@ const WorkstationFloorMap = ({
                             boxSizing: 'border-box',
                             zIndex: isHighlighted ? 6 : 5,
                             transition: 'background 200ms, border-color 200ms',
-                            containerType: 'size',
+                            pointerEvents: 'auto',
                           }}
                         >
-                          {/* Centered label: Room name on top, "Seats : N"
-                              underneath — same visual language as the
-                              Meeting Room Booking floor map so the naming
-                              convention stays consistent across the app. */}
-                          <div
-                            className="flex flex-col items-center justify-center gap-0.5 text-center pointer-events-none select-none"
-                            style={{
-                              maxWidth: '92%',
-                              maxHeight: '92%',
-                            }}
-                          >
-                            <div
-                              className="font-semibold text-white shadow-sm"
-                              style={{
-                                background: labelBg,
-                                fontSize: 'clamp(7px, 16cqh, 12px)',
-                                lineHeight: 1.15,
-                                padding: '1px 5px',
-                                borderRadius: '4px',
-                                maxWidth: '100%',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                              }}
-                            >
-                              {r.name}
-                            </div>
-                            {r.capacity != null && (
-                              <div
-                                className="font-medium text-white"
-                                style={{
-                                  background: 'rgba(17,24,39,0.75)',
-                                  fontSize: 'clamp(6px, 14cqh, 10px)',
-                                  lineHeight: 1.15,
-                                  padding: '0.5px 5px',
-                                  borderRadius: '4px',
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                Seats : {r.capacity}
-                              </div>
-                            )}
-                          </div>
+                          <RoomBoxLabel
+                            room={roomForLabel}
+                            scale={scale}
+                            labelBg={labelBg}
+                            occupiedNow={false}
+                            blocked={hasBookings}
+                          />
                         </div>
                       );
                     })}

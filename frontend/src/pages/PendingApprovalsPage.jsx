@@ -247,11 +247,16 @@ export default function PendingApprovalsPage() {
   // When focus request set, sync plan + date and trigger the camera pan.
   // The SAME map (`WorkstationFloorMap`) stays mounted; we just flip which
   // pin the camera zooms to (workstation seat vs. meeting room).
+  //
+  // Important: only touch `selectedPlanId` / `focusDate` when they actually
+  // change. That keeps the availability effect from firing and re-rendering
+  // the floor map — the user then sees a smooth camera pan instead of a
+  // spinner every time they click a card.
   const handleCardClick = (req) => {
     setFocusRequest(req);
     const nextDate = req._type === "meeting_room" ? isoDate(req.start_at) : req.date;
-    setSelectedPlanId(req.plan_id);
-    setFocusDate(nextDate);
+    if (req.plan_id && req.plan_id !== selectedPlanId) setSelectedPlanId(req.plan_id);
+    if (nextDate && nextDate !== focusDate) setFocusDate(nextDate);
     if (req._type === "meeting_room") {
       setCenterSeatId(null);
       setCenterRoomId(req.room_id);
@@ -550,7 +555,11 @@ export default function PendingApprovalsPage() {
                 onToggleSeat={() => { /* no selection on approval page */ }}
                 onOpenBookingDetail={() => { /* booking details not needed here */ }}
                 onOpenRequestDetail={(seat, req) => { if (req) handleCardClick(req); }}
-                loading={availLoading}
+                // Only surface the full-map loading overlay on the very
+                // first fetch. Subsequent refetches (e.g. clicking another
+                // card that changes the date) keep the existing map on
+                // screen so we get a smooth camera pan instead of a spinner.
+                loading={false}
                 disabled={true}
                 centerOnSeatId={centerSeatId}
                 centerOnRoomId={centerRoomId}
