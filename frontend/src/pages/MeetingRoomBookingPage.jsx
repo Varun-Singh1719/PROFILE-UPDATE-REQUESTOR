@@ -1240,7 +1240,11 @@ export function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickR
   // (b) show more characters (or the full name) once space permits.
   const [scale, setScale] = useState(1);
 
-  // Center the view on the selected room when it changes
+  // Center the view on the selected room when it changes.
+  //   • Zoom to a mild target scale (1.35×) so the room is clearly the focus.
+  //   • Position the room at the viewport centre.
+  //   • Clamp the translation so the floor-plan edges stay flush against
+  //     the viewport — no blank margins peek in on any side.
   useEffect(() => {
     if (!selectedRoomId || !transformRef.current) return;
     const room = rooms.find(r => r.room_id === selectedRoomId);
@@ -1250,17 +1254,39 @@ export function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickR
     if (!vp || !content) return;
     const state = transformRef.current.instance?.transformState || transformRef.current.state;
     const curScale = state?.scale || 1;
-    // Room center in content pixels (content is pageWidth wide, height ~= content.height/scale)
+    // Un-transformed content dimensions. Guard against a 0-sized rect (can
+    // happen if the PDF hasn't painted yet) to avoid pathological zoom.
     const contentW = content.width / curScale;
     const contentH = content.height / curScale;
+    if (!contentW || !contentH || contentW < 100 || contentH < 100) return;
+    // Mild zoom-in — enough for the room to feel highlighted, but small
+    // enough that the map continues to cover the viewport in both
+    // dimensions (assuming the initial fit already had the plan filling
+    // the viewport, which centerOnInit / centerView(1,0) provides).
+    const targetScale = Math.max(curScale, 1.35);
+    const scaledW = contentW * targetScale;
+    const scaledH = contentH * targetScale;
+    // Room center in content-space pixels.
     const cx = (room.x + room.w / 2) / 100 * contentW;
     const cy = (room.y + room.h / 2) / 100 * contentH;
-    // We want this point at the viewport center, scaled
-    const targetScale = Math.max(curScale, 1.4);
-    const newX = vp.width / 2 - cx * targetScale;
-    const newY = vp.height / 2 - cy * targetScale;
+    // Ideal: room center at viewport center.
+    let newX = vp.width / 2 - cx * targetScale;
+    let newY = vp.height / 2 - cy * targetScale;
+    // Clamp so plan edges stay outside (or flush with) the viewport bounds.
+    // If plan is smaller than viewport in a dimension (rare after zoom-in),
+    // fall back to centering the plan in that dimension.
+    if (scaledW >= vp.width) {
+      newX = Math.min(0, Math.max(newX, vp.width - scaledW));
+    } else {
+      newX = (vp.width - scaledW) / 2;
+    }
+    if (scaledH >= vp.height) {
+      newY = Math.min(0, Math.max(newY, vp.height - scaledH));
+    } else {
+      newY = (vp.height - scaledH) / 2;
+    }
     if (transformRef.current.setTransform) {
-      transformRef.current.setTransform(newX, newY, targetScale, 300, "easeOut");
+      transformRef.current.setTransform(newX, newY, targetScale, 350, "easeOut");
     }
   }, [selectedRoomId, rooms]);
 

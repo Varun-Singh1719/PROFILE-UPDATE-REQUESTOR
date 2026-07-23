@@ -710,22 +710,75 @@ export default function PendingApprovalsPage() {
                                   />
                                 </div>
                               )}
-                              <div className="min-w-0 flex-1">
+                              {/* All content (title → ID → detail rows) lives in the
+                                  left column so it flows without the tall right-side
+                                  stack (Pending pill + M/W circle) leaving a gap.
+                                  Each detail row uses the "group" tooltip pattern
+                                  from `NotificationBell` — instant hover, dark pill. */}
+                              <div className="min-w-0 flex-1 space-y-1">
                                 <div className="font-semibold text-sm text-gray-900 truncate">
                                   {isMR ? (
-                                    <span className="truncate" title={`${req.room_name || "Room"} : ${req.title}`}>
-                                      {req.room_name || "Room"} : {req.title}
-                                    </span>
+                                    <span className="truncate">{req.room_name || "Room"} : {req.title}</span>
                                   ) : (
-                                    <span title={`Workstation ${req.seat_label}`}>Workstation {req.seat_label}</span>
+                                    <span>Workstation {req.seat_label}</span>
                                   )}
                                 </div>
-                                {/* Booking ID — sits immediately under the title so the card stays compact. */}
                                 {req.seq_no != null && (
-                                  <div className="mt-0.5 text-[12px] text-gray-600" data-testid={`pa-seq-${req.id}`} title={`Booking ID: ${req.seq_no}`}>
+                                  <div className="text-[12px] text-gray-600" data-testid={`pa-seq-${req.id}`}>
                                     ID: <span className="font-mono font-semibold text-gray-800">{req.seq_no}</span>
                                   </div>
                                 )}
+                                <div className="pt-1 space-y-1 text-[12px] text-gray-700">
+                                  {isMR ? (
+                                    <>
+                                      <div className="group relative flex items-center gap-1.5 w-fit max-w-full">
+                                        <Calendar sx={{ fontSize: 12 }} className="text-gray-400 shrink-0"/>
+                                        <span className="truncate"><strong>{fmtTimeRange()}</strong></span>
+                                        <span className="pointer-events-none absolute left-4 -top-6 px-2 py-0.5 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-75 z-30 shadow-lg">
+                                          Booked For
+                                        </span>
+                                      </div>
+                                      <div className="group relative flex items-center gap-1.5 w-fit max-w-full">
+                                        <User sx={{ fontSize: 12 }} className="text-gray-400 shrink-0"/>
+                                        <span className="truncate">Capacity: <strong>{req.room_capacity} seats</strong> · Attendees: <strong>{(req.attendees || []).length}</strong></span>
+                                        <span className="pointer-events-none absolute left-4 -top-6 px-2 py-0.5 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-75 z-30 shadow-lg">
+                                          Capacity & Attendees
+                                        </span>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div className="group relative flex items-center gap-1.5 w-fit max-w-full">
+                                        <User sx={{ fontSize: 12 }} className="text-gray-400 shrink-0"/>
+                                        <span className="truncate">For: <strong>{(req.employee || {}).name || "—"}</strong></span>
+                                        <span className="pointer-events-none absolute left-4 -top-6 px-2 py-0.5 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-75 z-30 shadow-lg">
+                                          Requested For
+                                        </span>
+                                      </div>
+                                      <div className="group relative flex items-center gap-1.5 w-fit max-w-full">
+                                        <Calendar sx={{ fontSize: 12 }} className="text-gray-400 shrink-0"/>
+                                        <span>For date: <strong>{fmtDate(req.date)}</strong></span>
+                                        <span className="pointer-events-none absolute left-4 -top-6 px-2 py-0.5 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-75 z-30 shadow-lg">
+                                          Booked For
+                                        </span>
+                                      </div>
+                                    </>
+                                  )}
+                                  <div className="group relative flex items-center gap-1.5 w-fit max-w-full">
+                                    <User sx={{ fontSize: 12 }} className="text-gray-400 shrink-0"/>
+                                    <span className="truncate">Requested by: {(req.requested_by || {}).name || "—"}</span>
+                                    <span className="pointer-events-none absolute left-4 -top-6 px-2 py-0.5 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-75 z-30 shadow-lg">
+                                      Requested By
+                                    </span>
+                                  </div>
+                                  <div className="group relative flex items-center gap-1.5 w-fit max-w-full">
+                                    <Clock sx={{ fontSize: 12 }} className="text-gray-400 shrink-0"/>
+                                    <span>{fmtDateTime(req.requested_on)}</span>
+                                    <span className="pointer-events-none absolute left-4 -top-6 px-2 py-0.5 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-75 z-30 shadow-lg">
+                                      Requested On
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
                             </div>
                             {/* Right column — Status pill on top, Type circle below.
@@ -753,44 +806,10 @@ export default function PendingApprovalsPage() {
                                 >
                                   {isMR ? "M" : "W"}
                                 </span>
-                                <span className="pointer-events-none absolute top-full mt-1.5 right-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+                                <span className="pointer-events-none absolute top-full mt-1.5 right-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-75 z-30 shadow-lg">
                                   {isMR ? "Meeting Room" : "Workstation"}
                                 </span>
                               </div>
-                            </div>
-                          </div>
-
-                          <div className="mt-2 space-y-1 text-[12px] text-gray-700">
-                            {isMR ? (
-                              <>
-                                <div className="flex items-center gap-1.5" title={`Date & time: ${fmtTimeRange()}`}>
-                                  <Calendar sx={{ fontSize: 12 }} className="text-gray-400"/>
-                                  <span><strong>{fmtTimeRange()}</strong></span>
-                                </div>
-                                <div className="flex items-center gap-1.5" title={`Capacity: ${req.room_capacity} seats · Attendees: ${(req.attendees || []).length}`}>
-                                  <User sx={{ fontSize: 12 }} className="text-gray-400"/>
-                                  <span className="truncate">Capacity: <strong>{req.room_capacity} seats</strong> · Attendees: <strong>{(req.attendees || []).length}</strong></span>
-                                </div>
-                              </>
-                            ) : (
-                              <>
-                                <div className="flex items-center gap-1.5" title={`For: ${(req.employee || {}).name || "—"}`}>
-                                  <User sx={{ fontSize: 12 }} className="text-gray-400"/>
-                                  <span className="truncate">For: <strong>{(req.employee || {}).name || "—"}</strong></span>
-                                </div>
-                                <div className="flex items-center gap-1.5" title={`For date: ${fmtDate(req.date)}`}>
-                                  <Calendar sx={{ fontSize: 12 }} className="text-gray-400"/>
-                                  <span>For date: <strong>{fmtDate(req.date)}</strong></span>
-                                </div>
-                              </>
-                            )}
-                            <div className="flex items-center gap-1.5" title={`Requested by: ${(req.requested_by || {}).name || "—"}`}>
-                              <User sx={{ fontSize: 12 }} className="text-gray-400"/>
-                              <span className="truncate">Requested by: {(req.requested_by || {}).name || "—"}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5" title={`Requested on: ${fmtDateTime(req.requested_on)}`}>
-                              <Clock sx={{ fontSize: 12 }} className="text-gray-400"/>
-                              <span>{fmtDateTime(req.requested_on)}</span>
                             </div>
                           </div>
 
