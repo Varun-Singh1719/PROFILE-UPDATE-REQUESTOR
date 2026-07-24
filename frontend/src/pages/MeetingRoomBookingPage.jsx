@@ -571,8 +571,11 @@ export default function MeetingRoomBookingPage() {
           />
         </div>
 
-        {/* RIGHT panel — Upcoming bookings / Booking form (32% width) */}
-        <div className="w-[32%] min-w-[340px] bg-white flex flex-col overflow-hidden">
+        {/* RIGHT panel — Upcoming bookings / Booking form.
+            Width bumped to 36% (min 460px) so the compact filter row can
+            comfortably fit [Status] · [Date] · [Next 7 days] · [Clear All]
+            without truncating the native date input. */}
+        <div className="w-[36%] min-w-[460px] max-w-[560px] bg-white flex flex-col overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
             <CalendarClock className="text-[#ec9324] flex-shrink-0" sx={{ fontSize: 22 }}/>
             <span className="text-sm font-semibold text-gray-700">Upcoming bookings</span>
@@ -621,9 +624,10 @@ export default function MeetingRoomBookingPage() {
                     - Status X clears to "All" (empty array = all statuses).
                     - Date input stays visible even when Next 7 days is active — its value
                       becomes the START of the 7-day window.
-                    - "Clear All" resets both filters back to defaults. */}
-                <div className="flex items-center gap-1.5 mb-2 flex-shrink-0 flex-nowrap">
-                  <div className="w-40 min-w-0">
+                    - "Clear All" resets both filters back to defaults.
+                    - Widths are explicit so nothing gets truncated at ≥ 460px panel width. */}
+                <div className="flex items-center gap-2 mb-2 flex-shrink-0 flex-nowrap">
+                  <div className="w-[180px] shrink-0">
                     <MultiSelectFilter
                       label="Status"
                       value={statusFilter}
@@ -632,13 +636,16 @@ export default function MeetingRoomBookingPage() {
                       testIdPrefix="mrb-status-filter"
                       align="left"
                       placeholder="All"
+                      showCountOnly
+                      countUnitLabel="Selected"
+                      maxSelectedLabels={1}
                     />
                   </div>
                   <input
                     type="date"
                     value={filterDate}
                     onChange={(e) => { setFilterDate(e.target.value); }}
-                    className="text-[11px] px-2 py-1 border border-gray-200 rounded focus:outline-none focus:border-[#ec9324] shrink-0"
+                    className="w-[140px] shrink-0 text-[11px] px-2 py-[5px] border border-gray-200 rounded focus:outline-none focus:border-[#ec9324]"
                     data-testid="mrb-upcoming-date-filter"
                   />
                   <button
@@ -647,7 +654,7 @@ export default function MeetingRoomBookingPage() {
                     data-testid="mrb-range-7"
                     aria-pressed={rangeMode === "next7"}
                     title="Show 7 days starting from the selected date"
-                    className={`px-2 py-1 text-[10px] font-bold rounded border transition-colors whitespace-nowrap shrink-0 ${
+                    className={`px-2.5 py-1 text-[10px] font-bold rounded border transition-colors whitespace-nowrap shrink-0 ${
                       rangeMode === "next7"
                         ? "bg-[#ec9324] text-white border-[#ec9324] shadow-sm"
                         : "bg-white text-gray-600 border-gray-200 hover:border-[#ec9324] hover:text-[#ec9324]"

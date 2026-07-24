@@ -2464,7 +2464,7 @@ backend:
 frontend:
   - task: "MRB Filter Bar + Panel Swap + Detail Modal"
     implemented: true
-    working: "NA"
+    working: true
     file: "frontend/src/pages/MeetingRoomBookingPage.jsx"
     stuck_count: 0
     priority: "high"
@@ -2473,14 +2473,111 @@ frontend:
         -working: "NA"
         -agent: "main"
         -comment: "Panel positions swapped (Map left / Upcoming right). Filter bar consolidated to a single line: Status · Date · Next 7 days · Clear All. Status X-clear now means All. Date input persists when Next 7 days is on and anchors the 7-day window. Duplicate heading removed. New MeetingDetailModal component with Edit + Delete."
+        -working: true
+        -agent: "testing"
+        -comment: |
+          ✅ ALL CRITICAL CHECKS PASSED (6/6) - MRB Filter Bar Layout Fix Verified
+          
+          Comprehensive testing completed at viewport 1920x800 as specified in review request.
+          
+          **LAYOUT VERIFICATION:**
+          
+          1. ✅ Right Panel Width (w-[36%] min-w-[460px] max-w-[560px]):
+             - Measured width: 560px ✅
+             - Within spec range (460-560px) ✅
+             - Panel has adequate space for filter row without truncation ✅
+          
+          2. ✅ Single "Upcoming bookings" Header:
+             - Found exactly 1 header (no duplicate in filter bar) ✅
+             - Panel header shows "Upcoming bookings" only once ✅
+          
+          **FILTER ROW VERIFICATION (Single Line Layout):**
+          
+          3. ✅ Status Multi-Select Filter:
+             - Shows "2 Selected" in showCountOnly mode ✅
+             - Does NOT show "Pending Approval, Approved" spelled out ✅
+             - X clear button present and functional ✅
+             - Selector: [data-testid="mrb-status-filter"] ✅
+          
+          4. ✅ Date Input (Native):
+             - Shows FULL date value: "2026-07-24" (not truncated to "6") ✅
+             - Width: 140px (adequate for full date display) ✅
+             - Remains visible when "Next 7 days" is active ✅
+             - Selector: [data-testid="mrb-upcoming-date-filter"] ✅
+          
+          5. ✅ "Next 7 days" Pill Button:
+             - Text: "Next 7 days" ✅
+             - Toggles correctly (active/inactive states) ✅
+             - When active, expands to 7 day sections (verified 7 sections) ✅
+             - Date input anchors the 7-day window (not always today) ✅
+             - Selector: [data-testid="mrb-range-7"] ✅
+          
+          6. ✅ "Clear All" Button:
+             - Hidden by default when filters are at default state ✅
+             - Appears when filters are modified (status cleared OR Next 7 days toggled) ✅
+             - Clicking resets: status → "2 Selected", Next 7 days → inactive, date → today ✅
+             - Button hides again after reset ✅
+             - Selector: [data-testid="mrb-filter-clear-all"] ✅
+          
+          **INTERACTIVE CHECKS:**
+          
+          7. ✅ Status Filter X-Clear Interaction:
+             - Clicking X changes status to "Status: All" (empty selection = all statuses) ✅
+             - Additional cards with Cancelled/Pending Approval statuses appear ✅
+             - Verified card statuses: {Approved, Cancelled, Pending Approval} ✅
+          
+          8. ✅ Next 7 Days Toggle:
+             - Date input remains visible and functional when toggled ON ✅
+             - 7 day sections rendered (TODAY, TOMORROW, SUNDAY JUL 26, MONDAY JUL 27, etc.) ✅
+             - Date value anchors the 7-day window start ✅
+          
+          9. ✅ Clear All Functionality:
+             - Resets all filters to default state ✅
+             - Status: "2 Selected", Next 7 days: inactive, Date: today ✅
+             - Button disappears after reset ✅
+          
+          **MEETING DETAIL MODAL:**
+          
+          10. ✅ Modal Opens on Card Click:
+              - Clicking meeting card opens MeetingDetailModal ✅
+              - Modal shows: Title, Status pill, Booking ID, Request # ✅
+              - WHEN section: Date and time range ✅
+              - ROOM section: Room name, capacity, floor plan ✅
+              - ORGANIZER section: Name and email ✅
+              - ATTENDEES section: People and Teams breakdown ✅
+              - Edit button present ([data-testid="mrb-detail-edit"]) ✅
+              - Delete button present ([data-testid="mrb-detail-delete"]) ✅
+              - Close button present ([data-testid="mrb-detail-close"]) ✅
+              - Selector: [data-testid="mrb-detail-modal"] ✅
+          
+          11. ✅ Modal Close:
+              - Clicking Close button dismisses modal ✅
+              - Overlay disappears completely ✅
+          
+          **VISUAL VERIFICATION:**
+          - Filter row elements are on a SINGLE LINE (no wrapping at 1920x800) ✅
+          - Order: [Status] · [Date] · [Next 7 days] · [Clear All] ✅
+          - Date input shows full m/d/yyyy value (not truncated) ✅
+          - All elements properly spaced and readable ✅
+          
+          **SCREENSHOTS CAPTURED:**
+          - mrb-filter-row-check2.png (default state)
+          - mrb-status-cleared-check3.png (after X clear)
+          - mrb-next7-active-check4.png (7-day view)
+          - mrb-after-clear-all-check5.png (after Clear All)
+          - mrb-detail-modal-check6.png (modal open)
+          
+          **MINOR NOTE:**
+          - Modal detail fields (WHEN, ROOM, ORGANIZER, ATTENDEES) use different testid structure than expected in review request, but all content is present and functional. The modal shows all required information correctly.
+          
+          NO CRITICAL ISSUES FOUND. All layout fixes verified and working as specified.
 
 metadata:
   test_sequence: 2
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "Meeting Room Requests — list, create, reschedule, cancel"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -2511,3 +2608,35 @@ agent_communication:
       - Cancel sets status=Cancelled and hides from mine=true list (hidden_by_requester)
       
       NO ISSUES FOUND. All endpoints working as specified.
+    -agent: "testing"
+    -message: |
+      ✅ MRB FILTER BAR LAYOUT FIX VERIFIED — ALL CHECKS PASSED (11/11)
+      
+      Completed comprehensive UI testing of the Meeting Room Booking filter bar layout fix at viewport 1920x800.
+      
+      **CRITICAL VERIFICATIONS:**
+      
+      1. ✅ Right panel width: 560px (within spec: w-[36%] min-w-[460px] max-w-[560px])
+      2. ✅ Single "Upcoming bookings" header (no duplicate in filter bar)
+      3. ✅ Status filter shows "2 Selected" (showCountOnly mode, NOT "Pending Approval, Approved")
+      4. ✅ Date input shows FULL date "2026-07-24" (NOT truncated to "6")
+      5. ✅ "Next 7 days" pill present and functional
+      6. ✅ "Clear All" button hidden by default, appears when filters dirty
+      7. ✅ Status X-clear → "Status: All" (empty = all statuses), additional Cancelled/Pending cards appear
+      8. ✅ Next 7 days toggle → date input remains visible, 7 day sections rendered
+      9. ✅ Clear All → resets status to "2 Selected", Next 7 days inactive, date to today
+      10. ✅ Meeting card click opens MeetingDetailModal with all required fields
+      11. ✅ Modal Close button dismisses overlay
+      
+      **LAYOUT CONFIRMED:**
+      - Filter row on SINGLE LINE: [Status] · [Date] · [Next 7 days] · [Clear All]
+      - Date input fully readable (not truncated)
+      - All elements properly spaced at 1920x800 viewport
+      
+      **INTERACTIVE FLOWS VERIFIED:**
+      - Status filter X-clear expands to show all statuses (Approved, Pending, Cancelled)
+      - Next 7 days anchors on selected date (not always today)
+      - Clear All resets all filters to default state
+      - Detail modal shows: Title, Status, Booking/Request IDs, When, Room, Organizer, Attendees, Edit, Delete, Close
+      
+      NO CRITICAL ISSUES. All specified fixes working correctly. Ready for user acceptance.
