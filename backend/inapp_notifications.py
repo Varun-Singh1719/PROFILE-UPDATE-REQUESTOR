@@ -64,6 +64,28 @@ DEFAULT_INAPP_NOTIFICATION_TEMPLATES = [
         "action_label": "View request",
     },
     {
+        "kind": "meeting_room_request_approved",
+        "name": "Meeting Room Request Approved",
+        "description": "Fires when a Workspace Manager approves a meeting "
+                       "room request the recipient had submitted.",
+        "trigger": "Workspace Manager approves a meeting room request",
+        "title": "Meeting room request approved",
+        "body": "Your meeting room request \"{{title}}\" for {{room_name}} on "
+                "{{start_at}} was approved by {{decided_by}}.",
+        "action_label": "View booking",
+    },
+    {
+        "kind": "meeting_room_request_declined",
+        "name": "Meeting Room Request Declined",
+        "description": "Fires when a Workspace Manager declines a meeting "
+                       "room request the recipient had submitted.",
+        "trigger": "Workspace Manager declines a meeting room request",
+        "title": "Meeting room request declined",
+        "body": "Your meeting room request \"{{title}}\" for {{room_name}} on "
+                "{{start_at}} was declined by {{decided_by}}.",
+        "action_label": "View request",
+    },
+    {
         "kind": "workstation_assigned",
         "name": "Workstation Assigned",
         "description": "Fires when a Workspace Manager creates a booking that "

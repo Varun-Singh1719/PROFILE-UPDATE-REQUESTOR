@@ -45,7 +45,13 @@ import { useAuth } from "../context/AuthContext";
 // Derive module label from the template `kind`.
 function moduleFor(kind) {
   const k = (kind || "").toLowerCase();
-  if (k.startsWith("workstation_") || k.startsWith("workspace_") || k.startsWith("seat_"))
+  if (
+    k.startsWith("workstation_") ||
+    k.startsWith("workspace_") ||
+    k.startsWith("seat_") ||
+    k.startsWith("meeting_room_") ||
+    k.startsWith("meeting_")
+  )
     return "Workspace Manager";
   return "Profix";
 }
@@ -53,19 +59,23 @@ function moduleFor(kind) {
 // Human-readable recipient description per template kind. Answers the
 // user's question "which user receives this notification?".
 const RECIPIENT_BY_KIND = {
-  request_closed:               "Created By (request creator)",
-  workstation_assigned:         "Assigned employee",
-  workstation_request_approved: "Requesting employee",
-  workstation_request_declined: "Requesting employee",
+  request_closed:                 "Created By (request creator)",
+  workstation_assigned:           "Assigned employee",
+  workstation_request_approved:   "Requesting employee",
+  workstation_request_declined:   "Requesting employee",
+  meeting_room_request_approved:  "Requesting employee",
+  meeting_room_request_declined:  "Requesting employee",
 };
 
 // Icon/colour used in the bell-dropdown preview — matches NotificationBell
 // so the preview renders exactly what the end-user sees.
 const BELL_META = {
-  workstation_request_approved: { Icon: CheckCircle,    color: "#16a34a", bg: "#f0fdf4" },
-  workstation_request_declined: { Icon: Cancel,         color: "#dc2626", bg: "#fef2f2" },
-  workstation_assigned:         { Icon: Chair,          color: "#ec9324", bg: "#fff7ed" },
-  request_closed:               { Icon: EventAvailable, color: "#0284c7", bg: "#f0f9ff" },
+  workstation_request_approved:   { Icon: CheckCircle,    color: "#16a34a", bg: "#f0fdf4" },
+  workstation_request_declined:   { Icon: Cancel,         color: "#dc2626", bg: "#fef2f2" },
+  workstation_assigned:           { Icon: Chair,          color: "#ec9324", bg: "#fff7ed" },
+  meeting_room_request_approved:  { Icon: CheckCircle,    color: "#16a34a", bg: "#f0fdf4" },
+  meeting_room_request_declined:  { Icon: Cancel,         color: "#dc2626", bg: "#fef2f2" },
+  request_closed:                 { Icon: EventAvailable, color: "#0284c7", bg: "#f0f9ff" },
 };
 
 // ------- Refresh-rate (bell poll) helpers -------
@@ -201,6 +211,36 @@ function buildPreviewPayload(kind) {
         rows: [
           { label: "Booking ID",  value: id },
           { label: "Seat",        value: seat },
+          { label: "Date",        value: today },
+          { label: "Declined By", value: name },
+        ],
+        actionLabel: "View request",
+      };
+    }
+    case "meeting_room_request_approved": {
+      const id = randomTicketId();
+      const room = pickRandom(["Alpha", "Beta", "Gamma", "Delta", "Galaxy", "Orion"]);
+      const name = pickRandom(DEMO_NAMES);
+      return {
+        title: `Request ${id} : Approved`,
+        rows: [
+          { label: "Booking ID",  value: id },
+          { label: "Room",        value: room },
+          { label: "Date",        value: today },
+          { label: "Approved By", value: name },
+        ],
+        actionLabel: "View booking",
+      };
+    }
+    case "meeting_room_request_declined": {
+      const id = randomTicketId();
+      const room = pickRandom(["Alpha", "Beta", "Gamma", "Delta", "Galaxy", "Orion"]);
+      const name = pickRandom(DEMO_NAMES);
+      return {
+        title: `Request ${id} : Declined`,
+        rows: [
+          { label: "Booking ID",  value: id },
+          { label: "Room",        value: room },
           { label: "Date",        value: today },
           { label: "Declined By", value: name },
         ],
