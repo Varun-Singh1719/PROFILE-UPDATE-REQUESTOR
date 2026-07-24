@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { Document, Page, pdfjs } from "react-pdf";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import CalendarClock from "@mui/icons-material/EventOutlined";
@@ -214,6 +215,10 @@ export default function MeetingRoomBookingPage() {
   // Compute room status sets for the floor map:
   //  • occupiedNowRoomIds — rooms currently mid-meeting (any active booking spans `now`)
   //  • slotConflictRoomIds — rooms whose schedule conflicts with the form-selected date+start+end
+  //
+  // For each set we ALSO expose a Map<room_id, booking> so the floor-map tooltip
+  // can render richly (title / organizer / team / time-range), matching the
+  // workstation-seat hover UX. If multiple bookings match, the earliest wins.
   const occupiedNowRoomIds = useMemo(() => {
     const now = nowTick;
     const set = new Set();
@@ -224,6 +229,21 @@ export default function MeetingRoomBookingPage() {
       if (s <= now && now < e) set.add(b.room_id);
     }
     return set;
+  }, [myBookings, nowTick]);
+
+  const occupiedNowBookingByRoomId = useMemo(() => {
+    const now = nowTick;
+    const map = new Map();
+    for (const b of myBookings) {
+      if (b.cancelled) continue;
+      const s = new Date(b.start_at).getTime();
+      const e = new Date(b.end_at).getTime();
+      if (s <= now && now < e) {
+        const existing = map.get(b.room_id);
+        if (!existing || new Date(existing.start_at).getTime() > s) map.set(b.room_id, b);
+      }
+    }
+    return map;
   }, [myBookings, nowTick]);
 
   const slotConflictRoomIds = useMemo(() => {
@@ -242,6 +262,27 @@ export default function MeetingRoomBookingPage() {
       if (bs < eMs && be > sMs) set.add(b.room_id);
     }
     return set;
+  }, [formOpen, formDate, formStart, formEnd, slotBookings]);
+
+  const slotConflictBookingByRoomId = useMemo(() => {
+    const map = new Map();
+    if (!formOpen) return map;
+    const slotStart = combineDateTime(formDate, formStart);
+    const slotEnd = combineDateTime(formDate, formEnd);
+    if (!slotStart || !slotEnd) return map;
+    const sMs = new Date(slotStart).getTime();
+    const eMs = new Date(slotEnd).getTime();
+    if (!(eMs > sMs)) return map;
+    for (const b of slotBookings) {
+      if (b.cancelled) continue;
+      const bs = new Date(b.start_at).getTime();
+      const be = new Date(b.end_at).getTime();
+      if (bs < eMs && be > sMs) {
+        const existing = map.get(b.room_id);
+        if (!existing || new Date(existing.start_at).getTime() > bs) map.set(b.room_id, b);
+      }
+    }
+    return map;
   }, [formOpen, formDate, formStart, formEnd, slotBookings]);
 
   // Index bookings by room for today (used by the floor map's Quick-Book feature)
@@ -577,6 +618,8 @@ export default function MeetingRoomBookingPage() {
             onPickRoom={(id) => setSelectedRoomId(id)}
             occupiedNowRoomIds={occupiedNowRoomIds}
             blockedRoomIds={slotConflictRoomIds}
+            occupiedNowBookingByRoomId={occupiedNowBookingByRoomId}
+            blockedBookingByRoomId={slotConflictBookingByRoomId}
             onQuickBook={handleQuickBook}
           />
         </div>
@@ -1422,7 +1465,7 @@ function TabBtn({ active, onClick, testId, children }) {
 }
 
 // ============================================================ Floor map (right panel) — rooms-only view
-export function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickRoom, occupiedNowRoomIds, blockedRoomIds, onQuickBook }) {
+export function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickRoom, occupiedNowRoomIds, blockedRoomIds, occupiedNowBookingByRoomId, blockedBookingByRoomId, onQuickBook }) {
   const transformRef = useRef(null);
   const initDoneRef = useRef(false);
   const containerRef = useRef(null);
@@ -1581,6 +1624,8 @@ export function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickR
                         labelBg={labelBg}
                         occupiedNow={occupiedNow}
                         blocked={blocked}
+                        hoverBooking={blocked ? blockedBookingByRoomId?.get?.(r.room_id)
+                          : (occupiedNow ? occupiedNowBookingByRoomId?.get?.(r.room_id) : null)}
                       />
 
                       {/* Quick-Book 30 min button — only on available rooms */}
@@ -1645,9 +1690,14 @@ export function FloorMapMeetingRooms({ focusPlan, rooms, selectedRoomId, onPickR
  *     Bell in the TopBar: rounded, dark grey, small white text. It always
  *     shows the FULL name and seat count, regardless of truncation.
  */
-export function RoomBoxLabel({ room, scale, labelBg, occupiedNow, blocked }) {
+export function RoomBoxLabel({ room, scale, labelBg, occupiedNow, blocked, hoverBooking = null }) {
   const wrapperRef = useRef(null);
   const [boxSize, setBoxSize] = useState({ w: 0, h: 0 });
+  // Rich tooltip is rendered via a portal so it (a) escapes the transformed
+  // floor-map container (no z-index battles, no scale distortion) and (b)
+  // stays a fixed on-screen size at any zoom level.
+  const [hovered, setHovered] = useState(false);
+  const [tipPos, setTipPos] = useState(null);
 
   // The wrapper is `w-full h-full` inside the room's absolutely-positioned
   // div, so its offsetWidth/offsetHeight give us the box dimensions IN MAP
@@ -1663,6 +1713,59 @@ export function RoomBoxLabel({ room, scale, labelBg, occupiedNow, blocked }) {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // Hover tracking — attach mouseenter/leave to the parent .group room box
+  // (RoomBoxLabel's wrapper is pointer-events:none so it can't detect its
+  // own hover). Portal the tooltip to document.body so it renders at a
+  // constant on-screen size regardless of the zoom scale, matching the
+  // WorkstationSeat hover UX.
+  const updateTipPos = useCallback(() => {
+    const parent = wrapperRef.current?.parentElement;
+    if (!parent) return;
+    const r = parent.getBoundingClientRect();
+    setTipPos({
+      left: r.left + r.width / 2,
+      top: r.bottom + 8,
+    });
+  }, []);
+
+  useEffect(() => {
+    const parent = wrapperRef.current?.parentElement;
+    if (!parent) return;
+    const onEnter = () => { setHovered(true); };
+    const onLeave = () => { setHovered(false); };
+    parent.addEventListener('mouseenter', onEnter);
+    parent.addEventListener('mouseleave', onLeave);
+    return () => {
+      parent.removeEventListener('mouseenter', onEnter);
+      parent.removeEventListener('mouseleave', onLeave);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!hovered) return;
+    updateTipPos();
+    const onScrollOrResize = () => updateTipPos();
+    window.addEventListener('scroll', onScrollOrResize, true);
+    window.addEventListener('resize', onScrollOrResize);
+    // The zoom-pan-pinch container animates transforms — re-measure across
+    // a few frames so the tooltip stays glued to the room while a zoom or
+    // pan is in progress.
+    let raf = 0, ticks = 0;
+    const loop = () => {
+      updateTipPos();
+      ticks += 1;
+      if (ticks < 8) raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize, true);
+      window.removeEventListener('resize', onScrollOrResize);
+      cancelAnimationFrame(raf);
+    };
+  }, [hovered, updateTipPos]);
+
+  useEffect(() => () => setHovered(false), []);
 
   const name = room.name || '';
   const seatsText = `Seats : ${room.capacity}`;
@@ -1776,22 +1879,121 @@ export function RoomBoxLabel({ room, scale, labelBg, occupiedNow, blocked }) {
         </div>
       )}
 
-      {/* Hover tooltip — same visual language as the NotificationBell
-          tooltip. Uses inverse scaling so it stays a constant on-screen
-          size regardless of the current zoom level. */}
-      <span
-        role="tooltip"
-        className="pointer-events-none absolute left-1/2 -bottom-1 opacity-0 group-hover:opacity-100 transition-opacity z-50"
-        style={{
-          transform: `translate(-50%, 100%) scale(${1 / Math.max(0.01, scale)})`,
-          transformOrigin: 'top center',
-        }}
+      {/* Rich hover tooltip — portaled to document.body so it stays a
+          constant on-screen size at any zoom level, mirrors the workstation
+          seat hover UX (Person + Team + Date lines), and never fights the
+          floor-map z-index stack. When we have a known booking that blocks
+          the room (or occupies it right now), show Title + Organizer +
+          Team + Date · Time-range. Otherwise fall back to the minimal room
+          summary. */}
+      {hovered && tipPos && createPortal(
+        <RoomHoverTooltip
+          room={room}
+          booking={hoverBooking}
+          occupiedNow={occupiedNow}
+          blocked={blocked}
+          left={tipPos.left}
+          top={tipPos.top}
+        />,
+        document.body
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- hover card
+// Extracted so it can be re-used by callers who reference RoomBoxLabel
+// through the shared FloorMap wrapper (Pending Approvals + Workstation
+// Booking page). The visual design mirrors WorkstationSeat's tooltip so
+// the two floor maps feel consistent.
+function RoomHoverTooltip({ room, booking, occupiedNow, blocked, left, top }) {
+  const state = blocked ? "Booked" : (occupiedNow ? "In use" : "Available");
+  const stateClass = blocked
+    ? "bg-red-400/20 text-red-300 ring-red-300/30"
+    : occupiedNow
+      ? "bg-amber-400/20 text-amber-300 ring-amber-300/30"
+      : "bg-emerald-400/20 text-emerald-300 ring-emerald-300/30";
+  const organizerName = booking?.organizer?.name || null;
+  const teamName = booking?.organizer_team_name || null;
+  const dateStr = booking?.start_at ? new Date(booking.start_at) : null;
+  const dateLabel = dateStr && !Number.isNaN(dateStr.getTime())
+    ? dateStr.toLocaleDateString(undefined, { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })
+    : null;
+  const timeLabel = booking?.start_at && booking?.end_at
+    ? `${fmtTime(booking.start_at)} – ${fmtTime(booking.end_at)}`
+    : null;
+  return (
+    <div
+      role="tooltip"
+      data-testid={`mrb-room-hover-${room.room_id}`}
+      style={{
+        position: 'fixed',
+        left,
+        top,
+        transform: 'translateX(-50%)',
+        zIndex: 9999,
+        pointerEvents: 'none',
+      }}
+    >
+      <div
+        className="relative bg-slate-900/95 backdrop-blur-sm text-white text-[12px] rounded-lg shadow-xl ring-1 ring-white/10 min-w-[200px] max-w-[280px]"
+        style={{ fontFamily: 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' }}
       >
-        <span className="inline-block px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap shadow-lg">
-          {room.name} · Seats: {room.capacity}
-          {blocked ? ' · Booked at selected time' : ''}
-        </span>
-      </span>
+        {/* Header — room name + capacity + state badge */}
+        <div className="px-3 pt-2 pb-1.5 border-b border-white/10 flex items-center justify-between gap-2">
+          <span className="font-semibold text-[13px] tracking-tight truncate">
+            {room.name}
+            <span className="ml-1.5 text-white/60 text-[11px] font-normal">· Seats {room.capacity}</span>
+          </span>
+          <span className={`text-[9.5px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 whitespace-nowrap ${stateClass}`}>
+            {state}
+          </span>
+        </div>
+
+        {/* Body */}
+        <div className="px-3 py-2 space-y-1.5">
+          {booking ? (
+            <>
+              {booking.title && (
+                <div className="flex items-center gap-2">
+                  <CalendarClock sx={{ fontSize: 13 }} className="text-sky-300 shrink-0"/>
+                  <span className="truncate font-medium">{booking.title}</span>
+                </div>
+              )}
+              {organizerName && (
+                <div className="flex items-center gap-2">
+                  <Users sx={{ fontSize: 13 }} className="text-sky-300 shrink-0"/>
+                  <span className="truncate">{organizerName}</span>
+                </div>
+              )}
+              {teamName && (
+                <div className="flex items-center gap-2">
+                  <Building2 sx={{ fontSize: 13 }} className="text-sky-300 shrink-0"/>
+                  <span className="truncate">{teamName}</span>
+                </div>
+              )}
+              {(dateLabel || timeLabel) && (
+                <div className="flex items-center gap-2">
+                  <CalendarIcon sx={{ fontSize: 13 }} className="text-sky-300 shrink-0"/>
+                  <span className="opacity-90 truncate">
+                    {dateLabel}{dateLabel && timeLabel ? ' · ' : ''}{timeLabel}
+                  </span>
+                </div>
+              )}
+              <div className="text-[10.5px] text-white/60 pt-1 border-t border-white/10 mt-1.5">
+                Click for details
+              </div>
+            </>
+          ) : (
+            <div className="opacity-80 text-[11.5px]">
+              {blocked ? 'Booked at selected time' : (occupiedNow ? 'Meeting in progress' : 'Available')}
+            </div>
+          )}
+        </div>
+
+        {/* Arrow */}
+        <div className="absolute left-1/2 -translate-x-1/2 -top-1 w-2 h-2 bg-slate-900/95 rotate-45 ring-1 ring-white/10"/>
+      </div>
     </div>
   );
 }

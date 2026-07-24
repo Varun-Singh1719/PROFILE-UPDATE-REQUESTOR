@@ -405,6 +405,7 @@ const WorkstationFloorMap = ({
                             labelBg={labelBg}
                             occupiedNow={false}
                             blocked={hasBookings}
+                            hoverBooking={hasBookings ? bookings[0] : null}
                           />
                         </div>
                       );
