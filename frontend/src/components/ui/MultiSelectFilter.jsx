@@ -57,6 +57,11 @@ export default function MultiSelectFilter({
   countUnitLabel = "selected", // label appended to the count when showCountOnly is on
   single = false, // when true, only one value can be selected; renders radio-style row
   closeOnSelectSingle = true,
+  // Optional render-prop that returns a node to display INSIDE the trigger,
+  // just before the "N selected" text. Ideal for peek-indicators like tiny
+  // colored dots that summarise which options are currently on.
+  // Signature: (selectedOptions) => ReactNode
+  renderTriggerAccessory = null,
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -170,10 +175,13 @@ export default function MultiSelectFilter({
     );
   } else if (showCountOnly) {
     // Compact mode — trigger just reports the count. Selected names are
-    // typically rendered as chips below the field.
+    // typically rendered as chips below the field. Optional accessory
+    // (e.g. tiny colored dots) sits immediately before the count text so
+    // callers can offer an at-a-glance peek of what's selected.
     triggerNode = (
-      <span className="truncate text-gray-900 font-medium">
-        {selectedOptions.length} {countUnitLabel}
+      <span className="truncate text-gray-900 font-medium inline-flex items-center gap-1.5 min-w-0">
+        {renderTriggerAccessory ? renderTriggerAccessory(selectedOptions) : null}
+        <span className="truncate">{selectedOptions.length} {countUnitLabel}</span>
       </span>
     );
   } else if (selectedOptions.length <= maxSelectedLabels) {

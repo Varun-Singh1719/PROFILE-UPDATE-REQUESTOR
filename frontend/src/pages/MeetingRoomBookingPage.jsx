@@ -128,6 +128,16 @@ export default function MeetingRoomBookingPage() {
   // snapshot server-side, so a single fetch drives the entire list.
   const ALL_STATUSES = ["Pending Approval", "Approved", "Declined", "Cancelled"];
   const DEFAULT_STATUS_FILTER = ["Pending Approval", "Approved"];
+  // Peek indicators — one small colored dot per selected status displayed
+  // inside the filter trigger. Colors mirror StatusPill so users learn the
+  // mapping once and recognise it everywhere. `ring` is a subtle contrast
+  // outline so dots stay visible on white backgrounds.
+  const STATUS_DOT = {
+    "Approved":         { bg: "#10b981", ring: "#059669" }, // emerald
+    "Pending Approval": { bg: "#ec9324", ring: "#c2751a" }, // brand orange
+    "Declined":         { bg: "#ef4444", ring: "#b91c1c" }, // red
+    "Cancelled":        { bg: "#9ca3af", ring: "#6b7280" }, // gray
+  };
   const [statusFilter, setStatusFilter] = useState(DEFAULT_STATUS_FILTER);
   const [myRequests, setMyRequests] = useState([]);
   const loadMyRequests = useCallback(async () => {
@@ -625,8 +635,11 @@ export default function MeetingRoomBookingPage() {
                     - Date input stays visible even when Next 7 days is active — its value
                       becomes the START of the 7-day window.
                     - "Clear All" resets both filters back to defaults.
-                    - Widths are explicit so nothing gets truncated at ≥ 460px panel width. */}
-                <div className="flex items-center gap-2 mb-2 flex-shrink-0 flex-nowrap">
+                    - Widths are explicit so nothing gets truncated at ≥ 460px panel width.
+                    - Sticky-pinned to the TOP of the panel body: as the meeting list below
+                      scrolls, this row stays reachable. `bg-white` + border-b + z-10 keep
+                      the seam clean over overlapping content. */}
+                <div className="sticky top-0 z-10 bg-white flex items-center gap-2 mb-2 pb-2 pt-0.5 flex-shrink-0 flex-nowrap border-b border-gray-100">
                   <div className="w-[180px] shrink-0">
                     <MultiSelectFilter
                       label="Status"
@@ -639,6 +652,26 @@ export default function MeetingRoomBookingPage() {
                       showCountOnly
                       countUnitLabel="Selected"
                       maxSelectedLabels={1}
+                      renderTriggerAccessory={(opts) => (
+                        <span
+                          className="inline-flex items-center gap-[3px] shrink-0"
+                          data-testid="mrb-status-filter-dots"
+                          aria-hidden="true"
+                        >
+                          {opts.map((o) => (
+                            <span
+                              key={o.value}
+                              title={o.label}
+                              data-status-dot={o.value}
+                              className="inline-block w-2 h-2 rounded-full ring-1"
+                              style={{
+                                backgroundColor: STATUS_DOT[o.value]?.bg || "#9ca3af",
+                                boxShadow: `0 0 0 1px ${STATUS_DOT[o.value]?.ring || "#e5e7eb"} inset`,
+                              }}
+                            />
+                          ))}
+                        </span>
+                      )}
                     />
                   </div>
                   <input
