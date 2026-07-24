@@ -819,6 +819,71 @@ DEFAULT_TEMPLATES = [
             "<p>— Infollion Workspace Manager</p>"
         ),
     },
+    {
+        # Sent when a meeting-room **request** is submitted (status = Pending Approval).
+        # Goes to the approver(s). Variables: {{name}} (approver), {{requested_by}},
+        # {{requested_on}}, {{title}}, {{room_name}}, {{plan_name}}, {{start_at}}, {{end_at}}.
+        "kind": "meeting_room_requested",
+        "name": "Meeting room requested — pending approval",
+        "category": "notification",
+        "subject": "Meeting room request pending approval",
+        "body": (
+            "<p>Hi {{name}},</p>"
+            "<p>A meeting room request is waiting for your approval.</p>"
+            "<ul>"
+            "<li><b>Requested by:</b> {{requested_by}}</li>"
+            "<li><b>Requested on:</b> {{requested_on}}</li>"
+            "<li><b>Meeting title:</b> {{title}}</li>"
+            "<li><b>Floor plan:</b> {{plan_name}}</li>"
+            "<li><b>Meeting room:</b> {{room_name}}</li>"
+            "<li><b>Start:</b> {{start_at}}</li>"
+            "<li><b>End:</b> {{end_at}}</li>"
+            "</ul>"
+            "<p>Open <a href=\"{{approvals_url}}\">Pending Approvals</a> to approve or decline.</p>"
+            "<p>— Infollion Workspace Manager</p>"
+        ),
+    },
+    {
+        # Sent to the requester when their meeting-room request is approved.
+        "kind": "meeting_room_request_approved",
+        "name": "Meeting room request approved",
+        "category": "notification",
+        "subject": "Your meeting room request is approved",
+        "body": (
+            "<p>Hi {{name}},</p>"
+            "<p>Your meeting room request has been <strong>approved</strong> and a booking has been created.</p>"
+            "<ul>"
+            "<li><b>Meeting title:</b> {{title}}</li>"
+            "<li><b>Floor plan:</b> {{plan_name}}</li>"
+            "<li><b>Meeting room:</b> {{room_name}}</li>"
+            "<li><b>Start:</b> {{start_at}}</li>"
+            "<li><b>End:</b> {{end_at}}</li>"
+            "<li><b>Approved by:</b> {{approved_by}}</li>"
+            "</ul>"
+            "<p>— Infollion Workspace Manager</p>"
+        ),
+    },
+    {
+        # Sent to the requester when their meeting-room request is declined.
+        "kind": "meeting_room_request_declined",
+        "name": "Meeting room request declined",
+        "category": "notification",
+        "subject": "Your meeting room request was declined",
+        "body": (
+            "<p>Hi {{name}},</p>"
+            "<p>Unfortunately your meeting room request has been <strong>declined</strong>.</p>"
+            "<ul>"
+            "<li><b>Meeting title:</b> {{title}}</li>"
+            "<li><b>Floor plan:</b> {{plan_name}}</li>"
+            "<li><b>Meeting room:</b> {{room_name}}</li>"
+            "<li><b>Start:</b> {{start_at}}</li>"
+            "<li><b>End:</b> {{end_at}}</li>"
+            "<li><b>Declined by:</b> {{declined_by}}</li>"
+            "</ul>"
+            "<p>You can submit a new request for a different meeting room or time.</p>"
+            "<p>— Infollion Workspace Manager</p>"
+        ),
+    },
 ]
 
 # ---------- Team color palette ----------

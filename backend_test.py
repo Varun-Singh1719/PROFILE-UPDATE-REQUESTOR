@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 # Backend URL from frontend/.env
-BACKEND_URL = os.getenv("REACT_APP_BACKEND_URL", "https://35624ad2-20d1-4abe-b2ea-bf30d9912147.preview.emergentagent.com")
+BACKEND_URL = os.getenv("REACT_APP_BACKEND_URL", "https://meeting-room-emails.preview.emergentagent.com")
 API_BASE = f"{BACKEND_URL}/api"
 
 # Test credentials
