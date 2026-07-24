@@ -132,7 +132,7 @@ export default function WorkspaceOverallDashboard() {
   const myWeekDays = weekData?.days || [];
 
   return (
-    <div className="w-full px-9 sm:px-12 pt-2 pb-4 space-y-4" data-testid="workspace-overall-dashboard">
+    <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 pt-2 pb-4 space-y-4" data-testid="workspace-overall-dashboard">
       {/* Greeting */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
@@ -159,9 +159,9 @@ export default function WorkspaceOverallDashboard() {
       </div>
 
       {/* Combined Row 1 + 2 — Left column: My Seat Today (top) + Occupancy/Meeting rooms (bottom) · Right column: This Week + Presence per day, stretched full height */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-stretch">
         {/* LEFT COLUMN — My Seat Today (row 1) + [Occupancy + Meeting rooms] (row 2) */}
-        <div className="lg:col-span-2 flex flex-col gap-4">
+        <div className="xl:col-span-2 flex flex-col gap-4">
           {/* Hero: My Seat Today (mirrors MyWorkspaceDashboard exactly) */}
           <div
             className="rounded-2xl border border-gray-200 bg-gradient-to-br from-orange-50 via-white to-white p-5 shadow-sm"
@@ -243,14 +243,14 @@ export default function WorkspaceOverallDashboard() {
           </div>
 
           {/* Row 2 — Occupancy right now + Meeting rooms today */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden flex flex-col">
               <div className="px-5 pt-4 pb-3 flex items-center gap-2 border-b border-gray-100 flex-shrink-0">
                 <Armchair sx={{ fontSize: 16 }} className="text-[#ec9324]"/>
                 <h3 className="font-semibold text-gray-900">Occupancy right now</h3>
               </div>
-              <div className="p-5 flex-1 flex items-center justify-between gap-4">
-                <div className="relative w-36 h-36 flex-shrink-0">
+              <div className="p-5 flex-1 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="relative w-32 h-32 sm:w-36 sm:h-36 flex-shrink-0">
                   <svg width="144" height="144" viewBox="0 0 144 144" className="-rotate-90 drop-shadow-sm">
                     <circle cx="72" cy="72" r="58" stroke="#f3f4f6" strokeWidth="14" fill="none" />
                     <circle
@@ -318,7 +318,7 @@ export default function WorkspaceOverallDashboard() {
                       <DoorOpen sx={{ fontSize: 16 }}/>
                     </span>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 min-w-0">
+                      <div className="flex flex-col min-w-0">
                         <div className="text-sm font-semibold text-gray-900 truncate">{r.room_name || "Room"}</div>
                         {r.plan_name && <div className="text-[10px] text-gray-500 truncate">{r.plan_name}</div>}
                       </div>

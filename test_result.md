@@ -103,6 +103,14 @@
 #====================================================================================================
 
 user_problem_statement: |
+  Dashboard responsiveness bug (Jul 24 2026):
+  User reported that the Dashboard screen (organisation-wide Workspace Manager
+  dashboard + personal My Workspace dashboard) doesn't fit well across
+  multiple device widths. Screenshot at ~1050px width showed room names
+  ("Gam...", "Gal...", "Be...") and stat labels ("PRES", "AVAILA") being
+  truncated because the 3-column layout kicked in at `lg:` (1024px) and
+  squeezed everything.
+
   Manage → Teams — Team Management Enhancements (Jul 2026):
   1. Add/Edit Team form:
      • Disable (freeze) users already assigned as a Team Member of another team
@@ -518,6 +526,109 @@ frontend:
               GET /api/my-workspace/floor      → coloured floor plan for popup
             NOTE: Not yet tested by any agent — awaiting user approval.
 
+  - task: "Dashboard responsiveness fix — WorkspaceOverallDashboard + MyWorkspaceDashboard"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/WorkspaceOverallDashboard.jsx, frontend/src/components/MyWorkspaceDashboard.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            BUG: At ~1050px viewport (above lg 1024 but below xl 1280) the
+            dashboard's 3-column grid squeezed sub-cards, truncating room
+            names ("Gam...","Gal...","Be...") and stat labels ("PRES","AVAILA").
+
+            FIX:
+            1. WorkspaceOverallDashboard.jsx
+               - Container padding responsive: px-9 sm:px-12 -> px-4 sm:px-6 lg:px-8 xl:px-12
+               - Outer grid stacks until desktop: lg:grid-cols-3 -> xl:grid-cols-3,
+                 lg:col-span-2 -> xl:col-span-2
+               - Inner Occupancy+MeetingRooms row: sm:grid-cols-2 -> md:grid-cols-2
+               - Occupancy card donut+stats now flex-col on very narrow widths
+                 (flex flex-col sm:flex-row)
+               - Meeting-rooms row: room_name + plan_name stacked vertically
+                 instead of side-by-side truncation
+            2. MyWorkspaceDashboard.jsx
+               - Same padding fix
+               - lg:grid-cols-3 -> xl:grid-cols-3 (row 1)
+               - lg:grid-cols-12 -> xl:grid-cols-12 (row 2)
+               - lg:col-span-{2,5,4,3} -> xl:col-span-{2,5,4,3}
+
+            RESULT:
+            - <768px: everything stacks (single column)
+            - 768-1279px: outer stacks, Occupancy + Meeting rooms 2-col inside;
+              room names fully visible (Gamma/Galaxy/Beta not truncated)
+            - 1280px+: full desktop 3-col layout preserved
+
+            Verified via playwright screenshots at 768/1050/1280 widths.
+
+  - task: "Email Template View modal — Edit button + X close overlap fix"
+    implemented: true
+    working: true
+    file: "frontend/src/components/ViewEmailTemplateModal.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            BUG: In Manage > Email Templates > (click template name) View
+            modal, the orange "Edit" button in the header overlapped the
+            Radix Dialog auto-generated X close button (positioned absolute
+            right-4 top-4). The X icon sat on top of the Edit label,
+            breaking clickability of both. Applies to ALL templates.
+
+            FIX: Added `mr-7 flex-shrink-0` to the Edit button in
+            frontend/src/components/ViewEmailTemplateModal.jsx so there is
+            ~28px right margin, reserving space for the built-in X button.
+
+            Verified via playwright bounding boxes: Edit ends at x=1031,
+            X starts at x=1043 -> 12px clean gap, no overlap. Test done on
+            "Pending Approval - Meeting room requested" template.
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ BUG FIX VERIFIED - ALL 10 TEMPLATES TESTED SUCCESSFULLY
+            
+            Comprehensive overlap testing completed on ALL email templates:
+            
+            **TEMPLATES TESTED (10/10):**
+            1. admin_password_reset - Gap: 11.5px ✅
+            2. forgot_password - Gap: 12.0px ✅
+            3. meeting_room_request_approved - Gap: 12.0px ✅
+            4. meeting_room_request_declined - Gap: 12.0px ✅
+            5. meeting_room_requested - Gap: 12.0px ✅
+            6. new_employee - Gap: 12.0px ✅
+            7. request_closed - Gap: 12.0px ✅
+            8. workstation_request_approved - Gap: 12.0px ✅
+            9. workstation_request_declined - Gap: 12.0px ✅
+            10. workstation_requested - Gap: 12.0px ✅
+            
+            **BOUNDING BOX VERIFICATION:**
+            - Edit button ends at: x=1031px (consistent across 9/10 templates)
+            - X close button starts at: x=1043px
+            - Gap between buttons: 12px (11.5px on admin_password_reset)
+            - NO OVERLAP detected on any template
+            
+            **FUNCTIONALITY VERIFICATION:**
+            ✅ Edit button fully clickable on all templates
+            ✅ X close button fully clickable on all templates
+            ✅ Edit button correctly closes view modal and opens edit dialog
+            ✅ X button correctly closes view modal
+            
+            **RESPONSIVE TESTING:**
+            ✅ Desktop (1400×900): All templates pass with 12px gap
+            ✅ Smaller viewport (1024×768): Gap maintained at 12px
+            
+            **CONCLUSION:**
+            The `mr-7 flex-shrink-0` CSS fix successfully prevents overlap
+            across ALL email templates. Both buttons have proper spacing and
+            are fully functional. Bug fix is complete and working perfectly.
+
 metadata:
   created_by: "main_agent"
   version: "1.0"
@@ -526,12 +637,40 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Manage → Notifications: Refresh Rate editor — dropdown clipping fix + subtitle/X removal"
+    - "Email Template View modal — Edit button + X close overlap fix"
+    - "Dashboard responsiveness fix — WorkspaceOverallDashboard + MyWorkspaceDashboard"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
+    - agent: "testing"
+      message: |
+        ✅ EMAIL TEMPLATE VIEW MODAL OVERLAP BUG FIX VERIFIED (Jul 24 2026)
+        
+        Completed comprehensive testing of the Edit button + X close button overlap fix.
+        
+        **TEST SCOPE:**
+        - Tested ALL 10 email templates as specified in review request
+        - Verified bounding boxes at 1400×900 viewport (primary)
+        - Smoke tested at 1024×768 viewport (responsive check)
+        
+        **RESULTS:**
+        ✅ 10/10 templates pass - NO overlap detected
+        ✅ Consistent 12px gap between Edit and X buttons
+        ✅ Both buttons fully clickable on all templates
+        ✅ Modal functionality works correctly (Edit opens edit dialog, X closes modal)
+        ✅ Spacing maintained across different viewport sizes
+        
+        **BOUNDING BOX DATA:**
+        Edit button right edge: ~1031px
+        X close button left edge: ~1043px
+        Gap: 12px (11.5px on admin_password_reset)
+        
+        The `mr-7 flex-shrink-0` CSS fix is working perfectly. Bug fix complete.
+        
+        **NEXT STEPS:**
+        Main agent can summarize and finish. No further action needed on this task.
     - agent: "main"
       message: |
         Refresh-Rate editor bug fix (Jul 20 2026):

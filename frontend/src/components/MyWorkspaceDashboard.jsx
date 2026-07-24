@@ -163,7 +163,7 @@ export default function MyWorkspaceDashboard({ showTeamSection = false } = {}) {
   const isCheckedIn = !!mySeat && mySeat.status === "assigned";
 
   return (
-    <div className="w-full px-9 sm:px-12 pt-2 pb-4 space-y-4" data-testid="my-workspace-dashboard">
+    <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 pt-2 pb-4 space-y-4" data-testid="my-workspace-dashboard">
       {/* Greeting */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
@@ -195,9 +195,9 @@ export default function MyWorkspaceDashboard({ showTeamSection = false } = {}) {
       </div>
 
       {/* Row 1 — My Seat Today (hero) + This Week */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         {/* My Seat Today */}
-        <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-gradient-to-br from-orange-50 via-white to-white p-5 shadow-sm"
+        <div className="xl:col-span-2 rounded-2xl border border-gray-200 bg-gradient-to-br from-orange-50 via-white to-white p-5 shadow-sm"
              data-testid="my-seat-today-card">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
@@ -302,7 +302,7 @@ export default function MyWorkspaceDashboard({ showTeamSection = false } = {}) {
       </div>
 
       {/* Row 2 — Upcoming Meetings + Quick Actions + Team on Floor */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
         <UpcomingMeetingsCard meetings={dashboard?.upcoming_meetings || []} loading={loading} />
 
         <QuickActionsCard navigate={navigate} openFloor={openFloor} />
@@ -442,7 +442,7 @@ function ThisWeekCard({ weekData, weekLoading, onPrev, onNext, onToday, today })
 // ============================================================ UpcomingMeetingsCard
 function UpcomingMeetingsCard({ meetings, loading }) {
   return (
-    <div className="lg:col-span-5 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden"
+    <div className="xl:col-span-5 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden"
          data-testid="my-workspace-meetings-card">
       <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-gray-100">
         <div className="inline-flex items-center gap-2">
@@ -503,7 +503,7 @@ function QuickActionsCard({ navigate, openFloor }) {
     { key: "floor",  label: "View floor plan",   sub: "who's on site today",      Icon: MapIcon,             onClick: openFloor },
   ];
   return (
-    <div className="lg:col-span-4 rounded-2xl border border-gray-200 bg-white shadow-sm p-5"
+    <div className="xl:col-span-4 rounded-2xl border border-gray-200 bg-white shadow-sm p-5"
          data-testid="my-workspace-quick-actions-card">
       <h3 className="font-semibold text-gray-900">Quick actions</h3>
       <p className="text-xs text-gray-500 mt-0.5">Everything you need in one tap.</p>
@@ -531,7 +531,7 @@ function QuickActionsCard({ navigate, openFloor }) {
 // ============================================================ TeamOnFloorCard
 function TeamOnFloorCard({ team, navigate }) {
   return (
-    <div className="lg:col-span-3 rounded-2xl border border-gray-200 bg-white shadow-sm p-5"
+    <div className="xl:col-span-3 rounded-2xl border border-gray-200 bg-white shadow-sm p-5"
          data-testid="my-workspace-team-card">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-gray-900 inline-flex items-center gap-1.5">

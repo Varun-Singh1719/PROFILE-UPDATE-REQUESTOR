@@ -133,7 +133,7 @@ export default function ViewEmailTemplateModal({
               <Button
                 size="sm"
                 onClick={() => template && onEdit?.(template)}
-                className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-8"
+                className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-8 mr-7 flex-shrink-0"
                 data-testid="view-tpl-edit-btn"
               >
                 <Pencil sx={{ fontSize: 14 }} className="mr-1.5"/> Edit
