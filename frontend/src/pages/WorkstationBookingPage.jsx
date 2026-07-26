@@ -355,6 +355,34 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
     [employees, bookedEmpIds],
   );
 
+  // Employee dropdown options — show ALL active employees, tag the ones
+  // already booked / with a pending request on this date with an "Alloted"
+  // chip and disable them (so they visibly exist but cannot be selected).
+  // Sort: unallotted first (alphabetical) → alloted at the bottom (alpha).
+  const employeeOptions = useMemo(() => {
+    return employees
+      .filter((e) => (e.status || "").toLowerCase() !== "inactive")
+      .map((e) => {
+        const alloted = bookedEmpIds.has(e.id);
+        return {
+          value: e.id,
+          label: e.name,
+          sublabel: e.emp_id || undefined,
+          chip: alloted ? "Alloted" : undefined,
+          disabled: alloted,
+          _alloted: alloted,
+        };
+      })
+      .sort((a, b) => {
+        if (a._alloted !== b._alloted) return a._alloted ? 1 : -1;
+        return String(a.label || "").localeCompare(
+          String(b.label || ""),
+          undefined,
+          { sensitivity: "base" }
+        );
+      });
+  }, [employees, bookedEmpIds]);
+
   // Team eligible members for the manual allocation modal
   const selectedTeam = useMemo(() => teams.find((t) => t.id === teamId), [teams, teamId]);
   const teamPool = useMemo(() => {
@@ -1132,16 +1160,12 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                         </label>
                         <div className="mt-1">
                           <SingleSelect
-                            options={availableEmployees.map((e) => ({
-                              value: e.id,
-                              label: e.name,
-                              sublabel: e.emp_id || undefined,
-                            }))}
+                            options={employeeOptions}
                             value={employeeId}
                             onChange={(v) => setEmployeeId(v || "")}
                             placeholder={refLoading ? "Loading…" : "Select employee"}
                             disabled={!canEdit || !isSingle || refLoading}
-                            searchable={availableEmployees.length > 8}
+                            searchable={employeeOptions.length > 8}
                             allowClear={false}
                             testId="ws-employee-select"
                           />
