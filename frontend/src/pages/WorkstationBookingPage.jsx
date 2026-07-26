@@ -76,6 +76,7 @@ import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import SingleSelect from "../components/SingleSelect";
 import DateFilter from "../components/DateFilter";
 import WorkstationFloorMap from "../components/WorkstationFloorMap";
+import ConfirmProposalDialog from "../components/ConfirmProposalDialog";
 import { useAuth } from "../context/AuthContext";
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
 
@@ -186,6 +187,14 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
   //   { chosenStart:{id,label}, suggestedStart:{id,label}, suggestedSeats:[...], required:N }
   // null means the dialog is closed.
   const [autoSuggestion, setAutoSuggestion] = useState(null);
+
+  // ---- Team Auto Assignment: proposal review dialog state ------------------
+  // Opened when the user clicks "Confirm Booking" in Auto mode. The dialog
+  // lets the manager review each workstation's proposed occupant, swap in a
+  // different team member, or drop rows before the booking is actually
+  // created. Confirming the dialog is what triggers the API POST.
+  //   { seats:[{id,label}], assignment:{seatId:empId} }  when open, else null
+  const [proposalReview, setProposalReview] = useState(null);
 
   // -------------------------------------------------- Initial loads
   const loadPlans = useCallback(async () => {
@@ -367,6 +376,18 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
     ]);
     return allIds.size;
   }, [selectedTeam]);
+
+  // ---- Teams already alloted workstations on THIS plan+date ---------------
+  // Used to freeze those teams in the Auto Assignment "Team" dropdown so a
+  // manager can't double-book them. A team is "alloted" if at least one
+  // existing booking on the current plan+date carries its team_id.
+  const allotedTeamIds = useMemo(() => {
+    const s = new Set();
+    for (const b of (availability?.bookings || [])) {
+      if (b?.team_id) s.add(b.team_id);
+    }
+    return s;
+  }, [availability]);
 
   // Auto Assignment phase — derived from the mode + form state.
   //   awaiting-team  : mode='auto' & no team picked
@@ -593,7 +614,35 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
     return a.slice(0, count);
   };
 
-  const handleSave = async () => {
+  // Team Auto Assignment: when the user clicks "Confirm Booking" we DO NOT
+  // save right away. Instead we compute a starting employee proposal (random
+  // draw from the team pool, one per selected seat) and hand it to the
+  // ConfirmProposalDialog so the manager can review / swap / drop rows
+  // before committing.
+  const openProposalReview = () => {
+    if (!canEdit) {
+      toast.error("Only Super Admin can create workstation bookings");
+      return;
+    }
+    const err = validate();
+    if (err) { toast.error(err); return; }
+    const orderedSeats = selectedSeatIds
+      .map((sid) => allSeats.find((x) => x.id === sid) || { id: sid, label: sid });
+    const empIds = pickRandom(teamPool.map((e) => e.id), orderedSeats.length);
+    const assignment = {};
+    orderedSeats.forEach((s, i) => { assignment[s.id] = empIds[i] || null; });
+    setProposalReview({
+      seats: orderedSeats.map((s) => ({ id: s.id, label: s.label || s.id })),
+      assignment,
+    });
+  };
+
+  const handleSave = async (opts = {}) => {
+    // opts.explicitAssignment — [{ seatId, empId }] when the user has just
+    // confirmed the Team Auto Assignment proposal dialog. When present it
+    // OVERRIDES the random pick that would otherwise happen for auto mode,
+    // and it also becomes the effective seat list (rows the user removed
+    // in the dialog are dropped here).
     if (!canEdit) {
       toast.error(isRequestMode
         ? "Only Super Admin can submit workstation requests"
@@ -603,21 +652,40 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
     const err = validate();
     if (err) { toast.error(err); return; }
 
+    // Effective seat + employee lists — normally derived from state, but the
+    // auto-mode dialog can override both (removed rows / edited employees).
+    let effectiveSeatIds = selectedSeatIds;
+    let explicitEmpIds = null;
+    if (Array.isArray(opts.explicitAssignment) && opts.explicitAssignment.length) {
+      effectiveSeatIds = opts.explicitAssignment.map((r) => r.seatId);
+      explicitEmpIds   = opts.explicitAssignment.map((r) => r.empId);
+      if (effectiveSeatIds.length === 0) {
+        toast.error("At least one workstation is required.");
+        return;
+      }
+      if (explicitEmpIds.some((e) => !e)) {
+        toast.error("Every workstation needs an occupant.");
+        return;
+      }
+    }
+    const effectiveCount = effectiveSeatIds.length;
+
     let payload = {
       plan_id: selectedPlanId,
       date,
-      seat_ids: selectedSeatIds,
+      seat_ids: effectiveSeatIds,
     };
     // Request mode doesn't support recurring — single date only.
     if (!isRequestMode) {
       payload.recurring = recurringOn ? { end_date: recurringEnd, days: recurringDays } : null;
     }
     if (bookingMode === "auto") {
-      // Auto Assignment path — always books via team, even when the modified
-      // proposal ends up as a single seat. Employees are drawn randomly from
-      // the team's available pool so the user doesn't have to hand-pick.
-      const teamEmps = pickRandom(teamPool.map((e) => e.id), seatCount);
-      if (isSingle) {
+      // Auto Assignment path — either the dialog handed us the finalised
+      // (seat -> employee) mapping or we fall back to random selection.
+      const teamEmps = explicitEmpIds
+        ? explicitEmpIds
+        : pickRandom(teamPool.map((e) => e.id), effectiveCount);
+      if (effectiveCount === 1) {
         payload.employee_id = teamEmps[0];
       } else {
         payload.team_id = teamId;
@@ -629,13 +697,13 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
       payload.team_id = teamId;
       let teamEmps;
       if (allocationMode === "random") {
-        if (teamPool.length < seatCount) {
-          toast.error(`Team has only ${teamPool.length} available member(s) but ${seatCount} workstation(s) selected.`);
+        if (teamPool.length < effectiveCount) {
+          toast.error(`Team has only ${teamPool.length} available member(s) but ${effectiveCount} workstation(s) selected.`);
           return;
         }
-        teamEmps = pickRandom(teamPool.map((e) => e.id), seatCount);
+        teamEmps = pickRandom(teamPool.map((e) => e.id), effectiveCount);
       } else {
-        teamEmps = manualEmpIds.slice(0, seatCount);
+        teamEmps = manualEmpIds.slice(0, effectiveCount);
       }
       payload.team_employee_ids = teamEmps;
     }
@@ -650,6 +718,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
         toast.success(`Booked ${count} workstation${count === 1 ? "" : "s"}`);
       }
       resetForm();
+      setProposalReview(null);
       await loadAvailability(selectedPlanId, date);
     } catch (e) {
       const detail = e?.response?.data?.detail;
@@ -879,14 +948,25 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                   {bookingMode === "auto" && (
                     <>
                       {/* Team selector — required before the user can click a
-                          starting seat. Changing team resets any proposal. */}
+                          starting seat. Changing team resets any proposal.
+                          Teams that already have bookings on this plan+date
+                          are rendered with an "Alloted" chip and frozen so a
+                          manager cannot double-book them. */}
                       <div>
                         <label className="text-xs font-medium text-gray-700">
                           Team <span className="text-red-500">*</span>
                         </label>
                         <div className="mt-1">
                           <SingleSelect
-                            options={teams.map((t) => ({ value: t.id, label: t.name }))}
+                            options={teams.map((t) => {
+                              const alloted = allotedTeamIds.has(t.id);
+                              return {
+                                value: t.id,
+                                label: t.name,
+                                chip: alloted ? "Alloted" : undefined,
+                                disabled: alloted,
+                              };
+                            })}
                             value={teamId}
                             onChange={(v) => {
                               setTeamId(v || "");
@@ -1288,7 +1368,11 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                   <div className="flex gap-2 pt-2 border-t border-gray-200 sticky bottom-0 bg-white">
                     {permBook.isVisible && (
                     <Button
-                      onClick={handleSave}
+                      onClick={
+                        bookingMode === "auto" && !isRequestMode
+                          ? openProposalReview
+                          : handleSave
+                      }
                       disabled={!canEdit || saving || !selectedPlanId || noSeats || (bookingMode === "auto" && autoPhase !== "proposed") || !permBook.canUse}
                       className="flex-1 bg-[#ec9324] hover:bg-[#d8821a] text-white"
                       data-testid="ws-save-button"
@@ -1411,6 +1495,21 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Team Auto Assignment — proposal review dialog. Opens when the user
+          clicks "Confirm Booking" in Auto mode. Confirming this dialog is
+          what actually creates the bookings via handleSave. */}
+      <ConfirmProposalDialog
+        open={!!proposalReview}
+        onClose={() => setProposalReview(null)}
+        onConfirm={(rows) => handleSave({ explicitAssignment: rows })}
+        team={selectedTeam}
+        date={date}
+        seats={proposalReview?.seats || []}
+        initialAssignment={proposalReview?.assignment || {}}
+        teamPool={teamPool}
+        saving={saving}
+      />
     </Layout>
   );
 }

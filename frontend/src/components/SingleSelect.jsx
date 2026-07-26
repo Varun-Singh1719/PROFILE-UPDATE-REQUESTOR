@@ -7,7 +7,9 @@ import Search from "@mui/icons-material/SearchOutlined";
  * SingleSelect dropdown — plain list style (no checkboxes).
  *
  * Props:
- * - options:      [{ value, label, sublabel? }]
+ * - options:      [{ value, label, sublabel?, chip?, disabled? }]
+ *                 • chip     — optional right-aligned pill label
+ *                 • disabled — grey the option out and prevent selection
  * - value:        string | null (selected value)
  * - onChange:     (newValue: string | null) => void
  * - placeholder?: string
@@ -129,23 +131,44 @@ export default function SingleSelect({
             )}
             {filtered.map((o) => {
               const sel = o.value === value;
+              const optDisabled = !!o.disabled;
               return (
                 <button
                   key={o.value}
                   type="button"
-                  onClick={() => pick(o.value)}
+                  onClick={() => { if (!optDisabled) pick(o.value); }}
+                  disabled={optDisabled}
                   data-testid={testId ? `${testId}-option-${o.value}` : undefined}
-                  className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                    sel
+                  title={optDisabled && o.chip ? `${o.label} — ${o.chip}` : undefined}
+                  className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2 ${
+                    optDisabled
+                      ? "bg-gray-50 text-gray-400 cursor-not-allowed"
+                      : sel
                       ? "bg-[#ec9324]/10 text-[#ec9324] font-semibold"
                       : "text-gray-800 hover:bg-orange-50/60"
                   }`}
                 >
-                  <div className="truncate">{o.label}</div>
-                  {o.sublabel && (
-                    <div className={`text-xs truncate ${sel ? "text-[#ec9324]/80" : "text-gray-500"}`}>
-                      {o.sublabel}
-                    </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="truncate">{o.label}</div>
+                    {o.sublabel && (
+                      <div className={`text-xs truncate ${
+                        optDisabled ? "text-gray-400" : sel ? "text-[#ec9324]/80" : "text-gray-500"
+                      }`}>
+                        {o.sublabel}
+                      </div>
+                    )}
+                  </div>
+                  {o.chip && (
+                    <span
+                      className={`ml-auto flex-shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                        optDisabled
+                          ? "bg-amber-50 text-amber-700 border-amber-200"
+                          : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      }`}
+                      data-testid={testId ? `${testId}-option-${o.value}-chip` : undefined}
+                    >
+                      {o.chip}
+                    </span>
                   )}
                 </button>
               );
