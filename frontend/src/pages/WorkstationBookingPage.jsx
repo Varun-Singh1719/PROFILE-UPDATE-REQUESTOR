@@ -440,7 +440,16 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
       });
   }, [employees, bookedEmpIdsOnly, pendingOnlyEmpIds]);
 
-  // Team eligible members for the manual allocation modal
+  // Team eligible members for the manual allocation modal.
+  //
+  // IMPORTANT (Jul-2026 bug fix): the pool must include team members who
+  // have a Pending Approval request for the selected date. Excluding them
+  // would silently drop those employees from Team Auto Assignment, which
+  // is exactly the behaviour the spec prohibits — the backend already
+  // returns 409 PENDING_REQUESTS_WILL_BE_DECLINED for these cases and the
+  // client shows the confirmation dialog before proceeding.
+  // We ONLY exclude members who already have a confirmed booking on that
+  // date (they'd raise EMPLOYEE_ALREADY_BOOKED anyway).
   const selectedTeam = useMemo(() => teams.find((t) => t.id === teamId), [teams, teamId]);
   const teamPool = useMemo(() => {
     if (!selectedTeam) return [];
@@ -448,8 +457,22 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
       ...(selectedTeam.member_ids || []),
       ...(selectedTeam.manager_ids || []),
     ]);
-    return employees.filter((e) => allIds.has(e.id) && !bookedEmpIds.has(e.id));
-  }, [selectedTeam, employees, bookedEmpIds]);
+    return employees.filter((e) => allIds.has(e.id) && !bookedEmpIdsOnly.has(e.id));
+  }, [selectedTeam, employees, bookedEmpIdsOnly]);
+
+  // Free-only slice of the team pool — used only for the "N available"
+  // display chip on the Auto Assignment side card so the user knows how
+  // many members will not trigger a confirmation dialog.
+  const teamPoolFreeCount = useMemo(() => {
+    if (!selectedTeam) return 0;
+    const allIds = new Set([
+      ...(selectedTeam.member_ids || []),
+      ...(selectedTeam.manager_ids || []),
+    ]);
+    return employees.filter(
+      (e) => allIds.has(e.id) && !bookedEmpIdsOnly.has(e.id) && !pendingOnlyEmpIds.has(e.id),
+    ).length;
+  }, [selectedTeam, employees, bookedEmpIdsOnly, pendingOnlyEmpIds]);
 
   // Total distinct team-member count (union of member_ids + manager_ids).
   // Drives the "Team Size" shown in the Auto Assignment sidebar and the
