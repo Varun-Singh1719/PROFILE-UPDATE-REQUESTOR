@@ -46,7 +46,7 @@ from typing import List, Optional, Dict, Any
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from core import api_router, db, get_current_user, require_role, now_iso, log_audit
+from core import api_router, db, get_current_user, require_role, now_iso, log_audit, client as _mongo_client
 
 
 # --------------------------------------------------------------------------- #
@@ -76,6 +76,11 @@ class WorkstationBookingCreate(BaseModel):
     team_id: Optional[str] = None
     team_employee_ids: Optional[List[str]] = None
     recurring: Optional[Recurring] = None
+    # Pending-Approval conflict flow: when the client hits a
+    # PENDING_REQUESTS_WILL_BE_DECLINED 409 and the user confirms in the
+    # dialog, they re-submit with this flag set. The backend then wraps
+    # (decline pending) + (insert bookings) in a single transaction.
+    confirm_auto_decline_pending: bool = False
 
 
 class WorkstationBookingUpdate(BaseModel):
@@ -446,10 +451,60 @@ async def create_workstation_booking(
             })
 
     # ---- Cross-module: pending workstation requests that clash with this
-    # allotment are NOT blocking anymore — they will be auto-declined right
-    # after the booking rows are inserted, so an admin's manual allotment
-    # always takes precedence over a still-pending request.
-    from routers.workstation_requests import ACTIVE_PENDING_STATUSES  # type: ignore  # noqa: F401
+    # allotment. Behaviour depends on `confirm_auto_decline_pending`:
+    #   • False (default) — return 409 PENDING_REQUESTS_WILL_BE_DECLINED
+    #     with the full list of conflicting pending requests so the client
+    #     can show the "N Pending Approval request(s) will be automatically
+    #     declined and M workstation booking(s) will be created" dialog.
+    #   • True — proceed. The decline of every pending row + the insert of
+    #     the new bookings is wrapped in a Mongo transaction so the two
+    #     halves succeed-or-fail together (concurrent-approval CAS built
+    #     into the update filter).
+    from routers.workstation_requests import ACTIVE_PENDING_STATUSES, auto_decline_conflicting_requests  # type: ignore
+    pending_query = {
+        "date": {"$in": iso_dates},
+        "status": {"$in": ACTIVE_PENDING_STATUSES},
+        "$or": [
+            {"plan_id": payload.plan_id, "seat_id": {"$in": seat_ids}},
+            {"employee.id": {"$in": all_emp_ids}},
+        ],
+    }
+    pending_matches = await db.workstation_requests.find(
+        pending_query,
+        {"_id": 0, "id": 1, "date": 1, "seat_id": 1, "seat_label": 1,
+         "status": 1, "employee": 1, "requested_by": 1, "requested_on": 1,
+         "plan_name": 1, "team_name": 1},
+    ).to_list(2000)
+
+    if pending_matches and not payload.confirm_auto_decline_pending:
+        # Build (employee_id -> proposed seat label) mapping so the UI can
+        # show "Requested Workstation" vs "Proposed Workstation" columns.
+        proposed_by_emp = {}
+        for sid in seat_ids:
+            eid = seat_to_emp.get(sid)
+            if eid:
+                proposed_by_emp[eid] = {
+                    "seat_id": sid,
+                    "seat_label": (seat_index[sid].get("label") or sid),
+                }
+        enriched = []
+        for m in pending_matches:
+            eid = (m.get("employee") or {}).get("id")
+            enriched.append({
+                **m,
+                "proposed_seat": proposed_by_emp.get(eid),
+            })
+        proposed_count = len(seat_ids) * len(iso_dates)
+        raise HTTPException(409, {
+            "code": "PENDING_REQUESTS_WILL_BE_DECLINED",
+            "message": (
+                f"{len(pending_matches)} Pending Approval request(s) will be automatically "
+                f"declined and {proposed_count} workstation booking(s) will be created."
+            ),
+            "pending_count": len(pending_matches),
+            "proposed_count": proposed_count,
+            "pending_requests": enriched,
+        })
 
     # ---- Insert all bookings (date × seat combinations)
     now = now_iso()
@@ -483,24 +538,108 @@ async def create_workstation_booking(
             }
             inserted.append(doc)
     if inserted:
-        await db.workstation_bookings.insert_many(inserted)
-        for d in inserted:
-            d.pop("_id", None)
+        if payload.confirm_auto_decline_pending and pending_matches:
+            # ---- Transactional path: decline pending + insert bookings as
+            # a single atomic unit. Concurrent-approval detection uses a CAS
+            # on `status == Pending Approval` in the update filter.
+            pending_ids = [m["id"] for m in pending_matches]
+            reason = "Automatically declined due to workstation allocation through Workstation Booking"
+            now_dec = now_iso()
+            async with await _mongo_client.start_session() as session:
+                async with session.start_transaction():
+                    res = await db.workstation_requests.update_many(
+                        {"id": {"$in": pending_ids},
+                         "status": {"$in": list(ACTIVE_PENDING_STATUSES)}},
+                        {"$set": {
+                            "status": "Declined",
+                            "decided_by": {**actor, "auto_declined": True},
+                            "decided_on": now_dec,
+                            "decision_note": reason,
+                            "updated_at": now_dec,
+                        }},
+                        session=session,
+                    )
+                    if res.modified_count != len(pending_ids):
+                        # A concurrent approver acted on at least one row —
+                        # abort so we never end up with partially-declined
+                        # state or duplicate bookings.
+                        raise HTTPException(409, {
+                            "code": "PENDING_STATE_CHANGED",
+                            "message": "One or more requests have already been processed. Please refresh the page and try again.",
+                        })
+                    await db.workstation_bookings.insert_many(inserted, session=session)
+            for d in inserted:
+                d.pop("_id", None)
+        else:
+            await db.workstation_bookings.insert_many(inserted)
+            for d in inserted:
+                d.pop("_id", None)
 
-    # ---- Auto-decline any pending workstation_requests that conflict with
-    # this fresh allotment (same seat OR same employee on any booked date).
+    # ---- Auto-decline pending workstation_requests
+    # After transactional path we already declined them (skip). Otherwise
+    # keep legacy behaviour (best-effort, non-blocking).
     auto_declined: List[dict] = []
-    try:
-        from routers.workstation_requests import auto_decline_conflicting_requests  # type: ignore
-        auto_declined = await auto_decline_conflicting_requests(
-            plan_id=payload.plan_id,
-            seat_ids=seat_ids,
-            employee_ids=all_emp_ids,
-            dates=iso_dates,
-            actor=actor,
-        )
-    except Exception:  # noqa: BLE001 — never fail the booking on this
-        auto_declined = []
+    if payload.confirm_auto_decline_pending and pending_matches:
+        # Return the declined rows for the response payload
+        try:
+            declined_ids = [m["id"] for m in pending_matches]
+            auto_declined = await db.workstation_requests.find(
+                {"id": {"$in": declined_ids}}, {"_id": 0}
+            ).to_list(2000)
+            # In-app notifications to each declined-request requester
+            try:
+                from inapp_notifications import notify_user_inapp
+                for m in pending_matches:
+                    emp = (m.get("employee") or {})
+                    eid = emp.get("id")
+                    if not eid:
+                        continue
+                    try:
+                        await notify_user_inapp(
+                            db,
+                            user_id=eid,
+                            kind="workstation_request_declined",
+                            variables={
+                                "seat_label": m.get("seat_label"),
+                                "date": m.get("date"),
+                                "plan_name": m.get("plan_name"),
+                                "decided_by": actor.get("name"),
+                                "name": emp.get("name"),
+                                "reason": "Automatically declined due to workstation allocation through Workstation Booking",
+                            },
+                            related_id=m["id"],
+                            related_type="workstation_request",
+                            action_url="/workspace-manager/workstation-requests",
+                        )
+                    except Exception:  # noqa: BLE001
+                        pass
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                await log_audit(
+                    actor=actor, action="workstation_request.auto_decline",
+                    resource="workstation_request",
+                    detail=f"Auto-declined {len(declined_ids)} pending workstation request(s) via Workstation Booking confirm-flow",
+                    metadata={"request_ids": declined_ids,
+                              "reason": "Automatically declined due to workstation allocation through Workstation Booking",
+                              "dates": iso_dates, "seat_ids": seat_ids,
+                              "employee_ids": all_emp_ids},
+                )
+            except Exception:  # noqa: BLE001
+                pass
+        except Exception:  # noqa: BLE001
+            auto_declined = []
+    else:
+        try:
+            auto_declined = await auto_decline_conflicting_requests(
+                plan_id=payload.plan_id,
+                seat_ids=seat_ids,
+                employee_ids=all_emp_ids,
+                dates=iso_dates,
+                actor=actor,
+            )
+        except Exception:  # noqa: BLE001 — never fail the booking on this
+            auto_declined = []
 
     await log_audit(
         actor=actor, action="workstation_booking.create",
@@ -540,7 +679,14 @@ async def create_workstation_booking(
     except Exception:  # noqa: BLE001
         pass
 
-    return {"ok": True, "created": len(inserted), "series_id": series_id, "bookings": inserted, "auto_declined_requests": auto_declined}
+    return {
+        "ok": True,
+        "created": len(inserted),
+        "series_id": series_id,
+        "bookings": inserted,
+        "auto_declined_requests": auto_declined,
+        "auto_declined_count": len(auto_declined),
+    }
 
 
 @api_router.patch("/workstation-bookings/{booking_id}")

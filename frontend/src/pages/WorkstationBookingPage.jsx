@@ -78,6 +78,7 @@ import DateFilter from "../components/DateFilter";
 import WorkstationFloorMap from "../components/WorkstationFloorMap";
 import ConfirmProposalDialog from "../components/ConfirmProposalDialog";
 import DuplicatePendingConfirmDialog from "../components/DuplicatePendingConfirmDialog";
+import PendingConflictConfirmDialog from "../components/PendingConflictConfirmDialog";
 import SingleDatePicker from "../components/SingleDatePicker";
 import { useAuth } from "../context/AuthContext";
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
@@ -205,6 +206,15 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
   // the user clicks Confirm we can re-submit with `replace_request_id` set.
   //   dupPending = { conflict, retryPayload }  when open, else null
   const [dupPending, setDupPending] = useState(null);
+
+  // ---- Pending-Approval Conflict dialog state ------------------------------
+  // Shown when the server returns 409 PENDING_REQUESTS_WILL_BE_DECLINED —
+  // the manager is booking workstations for employees who already have
+  // Pending Approval requests on the same date. Confirming re-submits
+  // the booking with `confirm_auto_decline_pending: true` so the backend
+  // atomically declines those requests + inserts the bookings.
+  //   pendingConflict = { pendingCount, proposedCount, conflicts, retryPayload }
+  const [pendingConflict, setPendingConflict] = useState(null);
 
   // -------------------------------------------------- Initial loads
   const loadPlans = useCallback(async () => {
@@ -815,10 +825,17 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
     if (opts.replaceRequestId) {
       payload.replace_request_id = opts.replaceRequestId;
     }
+    // Pending-Approval booking-conflict flow: user has confirmed the
+    // "Pending Approval requests will be declined" dialog. Tell the
+    // backend to atomically decline + insert.
+    if (opts.confirmAutoDeclinePending) {
+      payload.confirm_auto_decline_pending = true;
+    }
     try {
       const res = await api.post(apiBase, payload);
       const count = res.data?.created || 0;
       const replaced = res.data?.replaced_request || null;
+      const autoDeclinedCount = res.data?.auto_declined_count || 0;
       if (isRequestMode) {
         if (replaced) {
           // Spec-mandated success message for the replace flow.
@@ -827,11 +844,20 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
           toast.success(`Submitted ${count} workstation request${count === 1 ? "" : "s"} — pending approval`);
         }
       } else {
-        toast.success(`Booked ${count} workstation${count === 1 ? "" : "s"}`);
+        if (autoDeclinedCount > 0) {
+          // Spec-mandated success message when pending requests were auto-declined.
+          toast.success(
+            `Successfully created ${count} workstation booking${count === 1 ? "" : "s"}. ` +
+            `${autoDeclinedCount} Pending Approval request${autoDeclinedCount === 1 ? "" : "s"} ${autoDeclinedCount === 1 ? "was" : "were"} automatically declined.`
+          );
+        } else {
+          toast.success(`Booked ${count} workstation${count === 1 ? "" : "s"}`);
+        }
       }
       resetForm();
       setProposalReview(null);
       setDupPending(null);
+      setPendingConflict(null);
       await loadAvailability(selectedPlanId, date);
     } catch (e) {
       // Duplicate-Pending Validation flow: backend returns 409 with
@@ -864,6 +890,34 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
       ) {
         toast.error("The existing request has already been processed. Please refresh the page and try again.");
         setDupPending(null);
+        return;
+      }
+      // Pending-Approval Booking Conflict flow — spec dialog before we
+      // create the bookings. Fires only on the Workstation Booking POST
+      // (not on Request Workstation POST which uses EMPLOYEE_PENDING).
+      if (
+        e?.response?.status === 409 &&
+        typeof detail === "object" &&
+        detail?.code === "PENDING_REQUESTS_WILL_BE_DECLINED" &&
+        Array.isArray(detail?.pending_requests) &&
+        !opts.confirmAutoDeclinePending
+      ) {
+        setPendingConflict({
+          pendingCount: detail.pending_count || detail.pending_requests.length,
+          proposedCount: detail.proposed_count || 0,
+          conflicts: detail.pending_requests,
+          retryPayload: { ...opts, confirmAutoDeclinePending: true },
+        });
+        return;
+      }
+      // Concurrent-approval race — spec-mandated message
+      if (
+        e?.response?.status === 409 &&
+        typeof detail === "object" &&
+        detail?.code === "PENDING_STATE_CHANGED"
+      ) {
+        toast.error("One or more requests have already been processed. Please refresh the page and try again.");
+        setPendingConflict(null);
         return;
       }
       // Build the most informative toast we can:
@@ -1705,6 +1759,24 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
         conflict={dupPending?.conflict || null}
         busy={saving}
         currentUserId={user?.id}
+      />
+
+      {/* Pending-Approval Conflict Confirm dialog — spec dialog. Fires on
+          the Workstation Booking POST when the target employee(s) have
+          Pending Approval requests on the same date. Confirming re-runs
+          handleSave with `confirmAutoDeclinePending: true`. */}
+      <PendingConflictConfirmDialog
+        open={!!pendingConflict}
+        onClose={() => setPendingConflict(null)}
+        onConfirm={() => {
+          const retry = pendingConflict?.retryPayload;
+          if (!retry) { setPendingConflict(null); return; }
+          handleSave(retry);
+        }}
+        pendingCount={pendingConflict?.pendingCount || 0}
+        proposedCount={pendingConflict?.proposedCount || 0}
+        conflicts={pendingConflict?.conflicts || []}
+        busy={saving}
       />
     </Layout>
   );
