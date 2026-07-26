@@ -77,6 +77,19 @@ DEFAULT_INAPP_NOTIFICATION_TEMPLATES = [
         "action_label": "View request",
     },
     {
+        "kind": "meeting_room_request_submitted",
+        "name": "Meeting Room Request Submitted (Pending Approval)",
+        "description": "Fires when a new meeting room request is submitted "
+                       "— notifies all approvers (Super Admins) that a new "
+                       "request is awaiting their approval.",
+        "trigger": "A meeting room request is created and is pending approval",
+        "title": "Pending Approval — Meeting Room Requested",
+        "body": "{{requested_by_name}} submitted a meeting room request "
+                "\"{{meeting_title}}\" for {{room_name}} on {{start_at}}. "
+                "It is awaiting your approval.",
+        "action_label": "Review request",
+    },
+    {
         "kind": "meeting_room_request_approved",
         "name": "Meeting Room Request Approved",
         "description": "Fires when a Workspace Manager approves a meeting "

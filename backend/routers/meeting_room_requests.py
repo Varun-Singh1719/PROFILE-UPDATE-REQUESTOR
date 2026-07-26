@@ -349,6 +349,49 @@ async def create_meeting_room_request(
         for d in inserted:
             d.pop("_id", None)
 
+    # ---- Notify approvers of the new pending-approval request(s).
+    # Fires the "Pending Approval — Meeting Room Requested" in-app
+    # notification for every active Super Admin. Best-effort; a
+    # notification hiccup never breaks the request-submit flow.
+    try:
+        from inapp_notifications import notify_user_inapp
+        approvers = [
+            u async for u in db.contacts.find(
+                {"role": "Super Admin", "status": {"$ne": "Inactive"}},
+                {"_id": 0, "id": 1, "name": 1, "email": 1},
+            )
+        ]
+        if approvers:
+            for req in inserted:
+                reqby = req.get("requested_by") or actor or {}
+                variables = {
+                    "meeting_title": req.get("title") or "",
+                    "room_name": req.get("room_name") or "",
+                    "plan_name": req.get("plan_name") or "",
+                    "start_at": req.get("start_at") or "",
+                    "end_at": req.get("end_at") or "",
+                    "requested_by_name": reqby.get("name") or reqby.get("email") or "—",
+                    "requested_by_email": reqby.get("email") or "",
+                }
+                for approver in approvers:
+                    aid = approver.get("id")
+                    if not aid:
+                        continue
+                    try:
+                        await notify_user_inapp(
+                            db,
+                            user_id=aid,
+                            kind="meeting_room_request_submitted",
+                            variables=variables,
+                            related_id=req.get("id"),
+                            related_type="meeting_room_request",
+                            action_url="/workspace-manager/meeting-room-requests",
+                        )
+                    except Exception:  # noqa: BLE001
+                        pass
+    except Exception:  # noqa: BLE001 — never break submit
+        pass
+
     await log_audit(
         actor=actor, action="meeting_room_request.create",
         resource="meeting_room_request",
