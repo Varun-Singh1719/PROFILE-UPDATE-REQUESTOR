@@ -25,10 +25,14 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 import { Button } from "./ui/button";
-import PersonIcon from "./icons/PersonIcon";
-import WorkspacesIcon from "./icons/WorkspacesIcon";
 import CalendarMonthIcon from "./icons/CalendarMonthIcon";
-import { paletteForTeam, teamBackground } from "../lib/teamColors";
+import {
+  paletteForTeam,
+  teamBackground,
+  teamInitials,
+  personInitials,
+  personAvatarBackground,
+} from "../lib/teamColors";
 
 // Fallback for legacy hex team colours where paletteForTeam returns a
 // single stop or a raw string.
@@ -126,32 +130,40 @@ export default function FloorSeatDetailDialog({ detail, onClose }) {
             testId="floor-detail-id"
           />
 
-          {/* Employee */}
-          <Row
-            icon={<PersonIcon size={16} />}
-            label="Employee"
-            value={
-              <div className="min-w-0">
-                <div className="truncate" data-testid="floor-detail-employee">
-                  {employee.name || "—"}
-                </div>
+          {/* Employee — deterministic initials-avatar keyed by employee id */}
+          <div className="flex items-start gap-2.5">
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white font-bold text-[11px] shadow-sm ring-1 ring-black/5"
+              style={{
+                background: personAvatarBackground(employee.id || employee.email || employee.name || "?"),
+                letterSpacing: "0.02em",
+              }}
+              aria-label={`Avatar for ${employee.name || "employee"}`}
+            >
+              {personInitials(employee.name)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] text-gray-500">Employee</div>
+              <div className="text-sm font-medium text-gray-900" data-testid="floor-detail-employee">
+                <div className="truncate">{employee.name || "—"}</div>
                 {(employee.emp_id || employee.email) && (
                   <div className="text-[11px] text-gray-500 truncate font-normal">
                     {employee.emp_id || ""}{employee.emp_id && employee.email ? " · " : ""}{employee.email || ""}
                   </div>
                 )}
               </div>
-            }
-          />
+            </div>
+          </div>
 
-          {/* Team */}
+          {/* Team — coloured swatch with team initials (matches Teams page) */}
           {(data.team_name || data.team_id) && (
             <div className="flex items-start gap-2.5">
               <div
-                className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white ring-1 ring-black/5"
-                style={{ background: bg }}
+                className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white font-extrabold text-[11px] shadow-sm ring-1 ring-black/5"
+                style={{ background: bg, letterSpacing: "0.02em" }}
+                aria-label={`Color for ${teamName}`}
               >
-                <WorkspacesIcon size={16} color="#ffffff" />
+                {data.team_initials || teamInitials(teamName)}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-[11px] text-gray-500">Team</div>
