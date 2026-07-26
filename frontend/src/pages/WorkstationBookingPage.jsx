@@ -750,9 +750,41 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
       setProposalReview(null);
       await loadAvailability(selectedPlanId, date);
     } catch (e) {
+      // Build the most informative toast we can:
+      //   1. Backend HTTPException with dict detail → use `detail.message`
+      //   2. Backend HTTPException with string detail → use it
+      //   3. HTTP status without a body → show the status code
+      //   4. Network / CORS / offline → explicit network hint
+      //   5. Otherwise → generic per-mode fallback
+      // Always log the raw error to the browser console so support / devs
+      // can inspect it (Axios error object + response body).
+      console.error("[workstation submit] failed", {
+        payload,
+        status: e?.response?.status,
+        data: e?.response?.data,
+        code: e?.code,
+        message: e?.message,
+        error: e,
+      });
       const detail = e?.response?.data?.detail;
-      const msg = typeof detail === "object" && detail?.message ? detail.message : formatApiError(detail);
-      toast.error(msg || (isRequestMode ? "Failed to submit request" : "Failed to create booking"));
+      const status = e?.response?.status;
+      const detailMsg =
+        typeof detail === "object" && detail?.message
+          ? detail.message
+          : formatApiError(detail);
+      let toastMsg;
+      if (detailMsg && detailMsg !== "Something went wrong.") {
+        toastMsg = detailMsg;
+      } else if (status) {
+        toastMsg = `Request failed (HTTP ${status}). Please refresh the page and try again.`;
+      } else if (e?.code === "ERR_NETWORK" || e?.message === "Network Error") {
+        toastMsg = "Couldn't reach the server. Check your connection and retry.";
+      } else {
+        toastMsg = isRequestMode
+          ? "Failed to submit request. Please retry — if it persists, refresh the page."
+          : "Failed to create booking. Please retry — if it persists, refresh the page.";
+      }
+      toast.error(toastMsg);
     } finally {
       setSaving(false);
     }
