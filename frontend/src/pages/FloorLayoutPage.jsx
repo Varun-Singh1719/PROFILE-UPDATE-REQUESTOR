@@ -12,11 +12,11 @@ import Users from "@mui/icons-material/PeopleOutlined";
 import Building2 from "@mui/icons-material/ApartmentOutlined";
 import Check from "@mui/icons-material/Check";
 import X from "@mui/icons-material/Close";
-import ExternalLink from "@mui/icons-material/OpenInNew";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import Layout from "../components/Layout";
 import WorkstationFloorMap from "../components/WorkstationFloorMap";
+import FloorSeatDetailDialog from "../components/FloorSeatDetailDialog";
 import { paletteForTeam, teamBackground } from "../lib/teamColors";
 import {
   Dialog,
@@ -505,7 +505,7 @@ function PlanInteractiveView({ plan, onBack, hideBack = false, embedded = false 
       </div>
 
       {/* Booking / Request detail modal */}
-      <SeatDetailDialog detail={detail} onClose={closeDetail} navigate={navigate} />
+      <FloorSeatDetailDialog detail={detail} onClose={closeDetail} />
     </>
   );
 
@@ -539,157 +539,6 @@ function PlanInteractiveView({ plan, onBack, hideBack = false, embedded = false 
   );
 }
 
-// -----------------------------------------------------------------------
-// Booking / Request detail modal
-// -----------------------------------------------------------------------
-function SeatDetailDialog({ detail, onClose, navigate }) {
-  if (!detail) return null;
-  const { kind, seat, data } = detail;
-  const isPending = kind === "request";
-  const employee = data.employee || {};
-  const teamColor = data.team_color;
-  const teamBg = teamColor ? teamBackground(teamColor) : "#ec9324";
-  const teamName = data.team_name || "—";
-
-  const fmtIsoDate = (iso) => {
-    if (!iso) return "—";
-    try {
-      const d = new Date(String(iso).length === 10 ? `${iso}T00:00:00` : iso);
-      if (Number.isNaN(d.getTime())) return String(iso);
-      return d.toLocaleDateString(undefined, {
-        weekday: "short", day: "2-digit", month: "short", year: "numeric",
-      });
-    } catch { return String(iso); }
-  };
-  const fmtIsoDateTime = (iso) => {
-    if (!iso) return "—";
-    try {
-      const d = new Date(iso);
-      if (Number.isNaN(d.getTime())) return String(iso);
-      return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-    } catch { return String(iso); }
-  };
-
-  const gotoFullDetail = () => {
-    if (kind === "booking" && data.id) {
-      navigate(`/workspace-manager/bookings?bookingId=${encodeURIComponent(data.id)}`);
-    } else if (kind === "request" && data.id) {
-      navigate(`/workspace-manager/pending-approvals?requestId=${encodeURIComponent(data.id)}`);
-    }
-  };
-
-  return (
-    <Dialog open={!!detail} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent
-        className="sm:max-w-md"
-        data-testid={isPending ? "floor-request-detail-dialog" : "floor-booking-detail-dialog"}
-      >
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-gray-900">
-            <div
-              className="w-2.5 h-2.5 rounded-full ring-1 ring-black/10 flex-shrink-0"
-              style={{ background: isPending ? "#111111" : teamBg }}
-            />
-            Workstation {seat.label}
-            {isPending && (
-              <span className="ml-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 ring-1 ring-amber-200">
-                Pending
-              </span>
-            )}
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-3 pt-1">
-          {/* Employee */}
-          <div className="flex items-start gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 text-slate-600">
-              <PersonIcon size={16} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-[11px] text-gray-500">Employee</div>
-              <div className="text-sm font-medium text-gray-900 truncate" data-testid="floor-detail-employee">
-                {employee.name || "—"}
-              </div>
-              {employee.emp_id && (
-                <div className="text-[11px] text-gray-500 truncate">
-                  {employee.emp_id}{employee.email ? ` · ${employee.email}` : ""}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Team */}
-          {(data.team_name || data.team_id) && (
-            <div className="flex items-start gap-2.5">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white ring-1 ring-black/5"
-                style={{ background: teamBg }}
-              >
-                <WorkspacesIcon size={16} color="#ffffff" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-[11px] text-gray-500">Team</div>
-                <div className="text-sm font-medium text-gray-900 truncate" data-testid="floor-detail-team">
-                  {teamName}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Date */}
-          <div className="flex items-start gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 text-slate-600">
-              <CalendarMonthIcon size={16} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-[11px] text-gray-500">Booking Date</div>
-              <div className="text-sm font-medium text-gray-900" data-testid="floor-detail-date">
-                {fmtIsoDate(data.date)}
-              </div>
-            </div>
-          </div>
-
-          {/* Meta — booked by / created */}
-          {(data.created_at || (data.requested_by || {}).name) && (
-            <div className="pt-2 mt-1 border-t border-gray-100 text-[11.5px] text-gray-500 space-y-1">
-              {isPending && (data.requested_by || {}).name && (
-                <div>
-                  Requested by <span className="text-gray-800 font-medium">{(data.requested_by || {}).name}</span>
-                </div>
-              )}
-              {data.created_at && (
-                <div>
-                  Booked on <span className="text-gray-800">{fmtIsoDateTime(data.created_at)}</span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="flex gap-2 pt-3 border-t border-gray-100 mt-1">
-          <Button
-            variant="outline"
-            onClick={onClose}
-            className="flex-1"
-            data-testid="floor-detail-close"
-          >
-            Close
-          </Button>
-          {data.id && (
-            <Button
-              onClick={gotoFullDetail}
-              className="flex-1 bg-[#ec9324] hover:bg-[#d8821a] text-white"
-              data-testid="floor-detail-open-full"
-            >
-              <ExternalLink sx={{ fontSize: 14 }} className="mr-1.5"/>
-              {isPending ? "View Request" : "View Booking"}
-            </Button>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 // ---------- Small helpers used by the interactive view ----------
 function StatRow({ label, value, color, testId }) {

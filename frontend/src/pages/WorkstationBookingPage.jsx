@@ -29,7 +29,8 @@
  *
  * Click rules
  *   • Available seat  → toggle into selection (mirrored in workstation dropdown)
- *   • Occupied seat   → navigate to /workspace-manager/bookings?bookingId=<id> (centralised detail)
+ *   • Occupied seat   → open in-page **FloorSeatDetailDialog** (centered modal)
+ *   • Pending seat    → open the same modal in "request" mode
  *
  * Form rules
  *   • 1 seat   → Employee dropdown enabled, Team disabled
@@ -76,6 +77,7 @@ import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import SingleSelect from "../components/SingleSelect";
 import DateFilter from "../components/DateFilter";
 import WorkstationFloorMap from "../components/WorkstationFloorMap";
+import FloorSeatDetailDialog from "../components/FloorSeatDetailDialog";
 import ConfirmProposalDialog from "../components/ConfirmProposalDialog";
 import DuplicatePendingConfirmDialog from "../components/DuplicatePendingConfirmDialog";
 import PendingConflictConfirmDialog from "../components/PendingConflictConfirmDialog";
@@ -666,10 +668,20 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
     // and switches from Manual → Auto shouldn't have to pick it again.
   }, [bookingMode]);
 
+  // ─── Floor-map booking / pending detail modal ─────────────────────────
+  // Clicking an occupied or pending seat pops the shared centered modal
+  // on top of the current page — no navigation to /bookings so users who
+  // don't have Bookings-module permission can still inspect the record.
+  const [seatDetail, setSeatDetail] = useState(null); // { kind, seat, data }
   const openBookingDetail = useCallback((seat, booking) => {
     if (!booking) return;
-    navigate(`/workspace-manager/bookings?bookingId=${encodeURIComponent(booking.id)}`);
-  }, [navigate]);
+    setSeatDetail({ kind: "booking", seat, data: booking });
+  }, []);
+  const openRequestDetail = useCallback((seat, request) => {
+    if (!request) return;
+    setSeatDetail({ kind: "request", seat, data: request });
+  }, []);
+  const closeSeatDetail = useCallback(() => setSeatDetail(null), []);
 
   const toggleRecurringDay = (code) => {
     setRecurringDays((prev) => prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]);
@@ -1109,6 +1121,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                   selectedSeatIds={selectedSeatIds}
                   onToggleSeat={toggleSeat}
                   onOpenBookingDetail={openBookingDetail}
+                  onOpenRequestDetail={openRequestDetail}
                   loading={availLoading}
                   disabled={!canEdit}
                   zoomToSeatIds={bookingMode === "auto" && autoPhase === "proposed" ? selectedSeatIds : null}
@@ -1813,6 +1826,11 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
         conflicts={pendingConflict?.conflicts || []}
         busy={saving}
       />
+
+      {/* Floor-map booking / pending detail — centered modal. Never navigates
+          away from the current page so users without Bookings-module access
+          can still inspect the record. */}
+      <FloorSeatDetailDialog detail={seatDetail} onClose={closeSeatDetail} />
     </Layout>
   );
 }
