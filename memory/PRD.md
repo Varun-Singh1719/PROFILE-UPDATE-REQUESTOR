@@ -2,13 +2,13 @@
 
 
 ## Latest UI polish (Jul 2026) — Workstation Booking · Team Auto Assignment
-- **Diagnostic error messages** on the Workstation Booking / Request Workstation submit flow. Previously any error caught in the `catch` block that had no `detail` field displayed a generic "Something went wrong." (from `formatApiError`). It now:
-  1. Prefers a backend `detail.message` when present (unchanged for 409 conflicts, etc.).
-  2. Falls back to `Request failed (HTTP <status>). Please refresh the page and try again.` when there is an HTTP status but no body.
-  3. Falls back to a network-specific hint on `ERR_NETWORK` / offline.
-  4. Otherwise gives a per-mode ("submit request" / "create booking") retry hint.
-  Every failure is also `console.error`-ed with the full payload, HTTP status, response body, and axios error, so support / dev can copy-paste the log to pinpoint the cause without having to guess.
-- **Employee Name dropdown (Request Workstation + Workstation Booking single-seat mode)** now behaves like the Team dropdown: instead of *hiding* employees who already have a booking or pending request on the selected date, it shows **all active employees** with an orange outlined **"ALLOTED" chip** on the ones that are booked/pending, keeps them disabled (so they can't be picked), and sorts **Unalloted (alphabetical) → Alloted (alphabetical) at the bottom**.
+- **Duplicate Pending Approval validation (new feature)** on Workstation Booking / Request Workstation submit.
+  - Backend `POST /api/workstation-requests` now supports an optional `replace_request_id`. Without it, an existing pending request for the same employee + date still returns **HTTP 409 `EMPLOYEE_PENDING`** — but the payload is enriched with the full conflict context (`id`, `seat_label`, `date`, `status`, `requested_by`, `requested_on`, `employee`, `plan_name`, `team_name`).
+  - With `replace_request_id` set, the endpoint atomically (MongoDB replica-set transaction) **cancels the target pending request** (setting `status → Cancelled`, `cancelled_by`, `cancelled_on`, `cancellation_reason: "Replaced by a new booking request"`, `replaced_by_group_id`) **and creates the new request(s)**. A CAS on `status == "Pending Approval"` guards against concurrent approver actions and surfaces `HTTP 409 REPLACE_TARGET_NOT_PENDING` if the row has moved.
+  - Frontend renders a new `DuplicatePendingConfirmDialog` (amber header, per-spec message) with **Request ID, Workstation, Booked For Date, Requested On, Status (Pending Approval chip), and Requested By** (last row only when the request was filed on behalf of someone else). Confirm re-submits with `replace_request_id`; Cancel closes without side-effects.
+  - Success toast on completion of the replace flow: *"Your previous pending request has been cancelled and a new booking request has been submitted for approval."*
+  - Employee-name dropdown now distinguishes booked (chip = **Alloted** — disabled, orange outlined) from pending-only (chip = **Pending** — amber outlined, **still selectable** so the manager can reach the replace flow). Sort order: free → pending → alloted, alphabetical within each bucket.
+- **Diagnostic error messages** on the submit `catch` block. Prefers backend `detail.message`; falls back to `Request failed (HTTP <status>).`, network-specific hint, or per-mode retry hint; always `console.error`s the full context under `[workstation submit] failed` so a repro can be diagnosed exactly.
 - **Dialog title** renamed from "Review proposed workstation plan" → **"Review : Proposed Plan"**.
 - **Recurring context in the dialog**: when the manager has toggled *Recurring* on in the side panel, the dialog header now shows **Start date**, **End date**, and the selected **Days** (sorted Su → S) as solid orange (`#ec9324`) + white-text pills matching the workstation-number style. Each day pill has a hover tooltip (same `group`/`group-hover` gray-900 pattern as the Notification Bell) that reveals the full day name — "Monday", "Wednesday", "Friday", etc.
 - Non-recurring plans still show the single booking date only.

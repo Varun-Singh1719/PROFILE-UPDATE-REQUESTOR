@@ -161,7 +161,13 @@ export default function SingleSelect({
                   {o.chip && (
                     <span
                       className="ml-auto flex-shrink-0 inline-flex items-center justify-center w-24 h-6 text-[10px] font-semibold uppercase tracking-wider rounded-full border-2 select-none whitespace-nowrap bg-white"
-                      style={{ color: "#ec9324", borderColor: "#ec9324" }}
+                      style={
+                        // "Pending" (replaceable) → amber outlined; anything
+                        // else (Alloted, generic) → app-orange outlined.
+                        String(o.chip).toLowerCase() === "pending"
+                          ? { color: "#b45309", borderColor: "#f59e0b" }
+                          : { color: "#ec9324", borderColor: "#ec9324" }
+                      }
                       data-testid={testId ? `${testId}-option-${o.value}-chip` : undefined}
                     >
                       {o.chip}

@@ -77,6 +77,7 @@ import SingleSelect from "../components/SingleSelect";
 import DateFilter from "../components/DateFilter";
 import WorkstationFloorMap from "../components/WorkstationFloorMap";
 import ConfirmProposalDialog from "../components/ConfirmProposalDialog";
+import DuplicatePendingConfirmDialog from "../components/DuplicatePendingConfirmDialog";
 import SingleDatePicker from "../components/SingleDatePicker";
 import { useAuth } from "../context/AuthContext";
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
@@ -196,6 +197,14 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
   // created. Confirming the dialog is what triggers the API POST.
   //   { seats:[{id,label}], assignment:{seatId:empId} }  when open, else null
   const [proposalReview, setProposalReview] = useState(null);
+
+  // ---- Duplicate-Pending Confirm dialog state ------------------------------
+  // Shown when the backend returns 409 EMPLOYEE_PENDING (the employee we're
+  // booking for already has a Pending Approval request on this date). We
+  // stash the conflict payload + the original submit payload so that if
+  // the user clicks Confirm we can re-submit with `replace_request_id` set.
+  //   dupPending = { conflict, retryPayload }  when open, else null
+  const [dupPending, setDupPending] = useState(null);
 
   // -------------------------------------------------- Initial loads
   const loadPlans = useCallback(async () => {
@@ -345,10 +354,29 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
   }, [allSeats, bookingsBySeat, requestsBySeat]);
 
   // Active employees + not already booked or with a pending request on this date
+  // We split the two states so the Employee Name dropdown can render them
+  // differently:
+  //   • bookedEmpIdsOnly  — an existing confirmed workstation booking → the
+  //                         chip is "Alloted" and the row is disabled.
+  //   • pendingEmpIdsOnly — only a pending request (no booking) → the chip
+  //                         is "Pending" and the row STAYS SELECTABLE so
+  //                         the manager can trigger the Duplicate-Pending
+  //                         Confirm dialog (cancel + replace flow).
+  const bookedEmpIdsOnly = useMemo(
+    () => new Set(availability?.booked_employee_ids || []),
+    [availability],
+  );
+  const pendingOnlyEmpIds = useMemo(() => {
+    const booked = new Set(availability?.booked_employee_ids || []);
+    return new Set(
+      (availability?.pending_employee_ids || []).filter((id) => !booked.has(id)),
+    );
+  }, [availability]);
+  // Combined "unavailable-in-pool" set used for other team-side logic.
   const bookedEmpIds = useMemo(() => {
-    const ids = new Set(availability?.booked_employee_ids || []);
-    for (const eid of (availability?.pending_employee_ids || [])) ids.add(eid);
-    return ids;
+    const s = new Set(availability?.booked_employee_ids || []);
+    for (const eid of (availability?.pending_employee_ids || [])) s.add(eid);
+    return s;
   }, [availability]);
   const availableEmployees = useMemo(
     () => employees.filter((e) => !bookedEmpIds.has(e.id)),
@@ -356,32 +384,39 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
   );
 
   // Employee dropdown options — show ALL active employees, tag the ones
-  // already booked / with a pending request on this date with an "Alloted"
-  // chip and disable them (so they visibly exist but cannot be selected).
-  // Sort: unallotted first (alphabetical) → alloted at the bottom (alpha).
+  // already booked / with a pending request on this date with the correct
+  // chip. Booked-elsewhere is disabled; pending-only is still selectable
+  // (submit will trigger the Duplicate-Pending replace confirmation).
+  // Sort order (both for booking + request pages):
+  //   1. Free (no chip) — alphabetical
+  //   2. Pending — alphabetical
+  //   3. Alloted (booked) — alphabetical
   const employeeOptions = useMemo(() => {
     return employees
       .filter((e) => (e.status || "").toLowerCase() !== "inactive")
       .map((e) => {
-        const alloted = bookedEmpIds.has(e.id);
+        const booked = bookedEmpIdsOnly.has(e.id);
+        const pending = !booked && pendingOnlyEmpIds.has(e.id);
+        // Bucket weight for sort: 0 = free, 1 = pending, 2 = alloted
+        const bucket = booked ? 2 : pending ? 1 : 0;
         return {
           value: e.id,
           label: e.name,
           sublabel: e.emp_id || undefined,
-          chip: alloted ? "Alloted" : undefined,
-          disabled: alloted,
-          _alloted: alloted,
+          chip: booked ? "Alloted" : pending ? "Pending" : undefined,
+          disabled: booked,     // pending-only stays selectable
+          _bucket: bucket,
         };
       })
       .sort((a, b) => {
-        if (a._alloted !== b._alloted) return a._alloted ? 1 : -1;
+        if (a._bucket !== b._bucket) return a._bucket - b._bucket;
         return String(a.label || "").localeCompare(
           String(b.label || ""),
           undefined,
           { sensitivity: "base" }
         );
       });
-  }, [employees, bookedEmpIds]);
+  }, [employees, bookedEmpIdsOnly, pendingOnlyEmpIds]);
 
   // Team eligible members for the manual allocation modal
   const selectedTeam = useMemo(() => teams.find((t) => t.id === teamId), [teams, teamId]);
@@ -738,18 +773,63 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
     }
 
     setSaving(true);
+    // Duplicate-Pending replace flow: when the user has confirmed the
+    // "Pending Request Already Exists" dialog we pass the existing pending
+    // request id along so the backend atomically cancels-old + creates-new.
+    if (opts.replaceRequestId) {
+      payload.replace_request_id = opts.replaceRequestId;
+    }
     try {
       const res = await api.post(apiBase, payload);
       const count = res.data?.created || 0;
+      const replaced = res.data?.replaced_request || null;
       if (isRequestMode) {
-        toast.success(`Submitted ${count} workstation request${count === 1 ? "" : "s"} — pending approval`);
+        if (replaced) {
+          // Spec-mandated success message for the replace flow.
+          toast.success("Your previous pending request has been cancelled and a new booking request has been submitted for approval.");
+        } else {
+          toast.success(`Submitted ${count} workstation request${count === 1 ? "" : "s"} — pending approval`);
+        }
       } else {
         toast.success(`Booked ${count} workstation${count === 1 ? "" : "s"}`);
       }
       resetForm();
       setProposalReview(null);
+      setDupPending(null);
       await loadAvailability(selectedPlanId, date);
     } catch (e) {
+      // Duplicate-Pending Validation flow: backend returns 409 with
+      // detail.code == "EMPLOYEE_PENDING" and a rich conflict payload
+      // when the target employee already has a Pending Approval request
+      // for the same date. Instead of showing a plain error toast we
+      // open the confirm dialog offering to cancel-and-replace.
+      const detail = e?.response?.data?.detail;
+      if (
+        e?.response?.status === 409 &&
+        typeof detail === "object" &&
+        detail?.code === "EMPLOYEE_PENDING" &&
+        detail?.conflict?.id &&
+        // Only trigger the replace dialog on the initial submit, not on a
+        // retry that already carried replace_request_id (that would be a
+        // different pending row and needs a fresh confirmation).
+        !opts.replaceRequestId
+      ) {
+        setDupPending({
+          conflict: detail.conflict,
+          retryPayload: { ...opts, replaceRequestId: detail.conflict.id },
+        });
+        return;   // don't fall through to the error toast
+      }
+      // REPLACE_TARGET_NOT_PENDING → spec-mandated message
+      if (
+        e?.response?.status === 409 &&
+        typeof detail === "object" &&
+        detail?.code === "REPLACE_TARGET_NOT_PENDING"
+      ) {
+        toast.error("The existing request has already been processed. Please refresh the page and try again.");
+        setDupPending(null);
+        return;
+      }
       // Build the most informative toast we can:
       //   1. Backend HTTPException with dict detail → use `detail.message`
       //   2. Backend HTTPException with string detail → use it
@@ -766,7 +846,6 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
         message: e?.message,
         error: e,
       });
-      const detail = e?.response?.data?.detail;
       const status = e?.response?.status;
       const detailMsg =
         typeof detail === "object" && detail?.message
@@ -1563,6 +1642,24 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
         teamPool={teamPool}
         saving={saving}
         recurring={recurringOn ? { end_date: recurringEnd, days: recurringDays } : null}
+      />
+
+      {/* Duplicate-Pending Confirm dialog — offers to cancel-and-replace an
+          existing Pending Approval request for the same employee + date.
+          Opens when the initial submit hit a 409 EMPLOYEE_PENDING. */}
+      <DuplicatePendingConfirmDialog
+        open={!!dupPending}
+        onClose={() => setDupPending(null)}
+        onConfirm={() => {
+          // Re-run handleSave carrying the replace_request_id so the
+          // backend can atomically cancel-old + create-new.
+          const retry = dupPending?.retryPayload;
+          if (!retry) { setDupPending(null); return; }
+          handleSave(retry);
+        }}
+        conflict={dupPending?.conflict || null}
+        busy={saving}
+        currentUserId={user?.id}
       />
     </Layout>
   );

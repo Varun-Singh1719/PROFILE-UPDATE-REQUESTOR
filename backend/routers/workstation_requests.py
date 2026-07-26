@@ -66,7 +66,7 @@ from typing import List, Optional, Dict, Any
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from core import api_router, db, get_current_user, require_role, now_iso, log_audit
+from core import api_router, db, get_current_user, require_role, now_iso, log_audit, client as _mongo_client
 
 
 # --------------------------------------------------------------------------- #
@@ -92,6 +92,12 @@ class WorkstationRequestCreate(BaseModel):
     employee_id: Optional[str] = None              # single-seat case
     team_id: Optional[str] = None                  # multi-seat case
     team_employee_ids: Optional[List[str]] = None  # multi-seat case (length == seat count)
+    # Duplicate-pending replacement: when the client hits an EMPLOYEE_PENDING
+    # conflict (same employee has an existing pending request on this date)
+    # and the user confirms in the dialog, they re-submit the payload with
+    # `replace_request_id` set to the existing pending request's id. The
+    # server then atomically cancels that request and creates the new one.
+    replace_request_id: Optional[str] = None
 
 
 # --------------------------------------------------------------------------- #
@@ -575,9 +581,20 @@ async def create_workstation_request(
             })
 
     # ---- Cross-check #2: any seat already has a pending request?
+    # If the client is replacing a specific pending request, exclude that
+    # request from this check — otherwise a "replace with the same seat"
+    # (or with a different seat) would spuriously trip the seat-pending lock
+    # on the request being cancelled.
+    pending_q = {
+        "plan_id": payload.plan_id,
+        "seat_id": {"$in": seat_ids},
+        "date": target_date,
+        "status": {"$in": ACTIVE_PENDING_STATUSES},
+    }
+    if payload.replace_request_id:
+        pending_q["id"] = {"$ne": payload.replace_request_id}
     pending_conflict = await db.workstation_requests.find_one(
-        {"plan_id": payload.plan_id, "seat_id": {"$in": seat_ids}, "date": target_date,
-         "status": {"$in": ACTIVE_PENDING_STATUSES}},
+        pending_q,
         {"_id": 0, "seat_id": 1, "seat_label": 1, "date": 1, "employee": 1, "requested_by": 1},
     )
     if pending_conflict:
@@ -603,14 +620,37 @@ async def create_workstation_request(
             })
     emp_pending_conflict = await db.workstation_requests.find_one(
         {"employee.id": {"$in": all_emp_ids}, "date": target_date, "status": {"$in": ACTIVE_PENDING_STATUSES}},
-        {"_id": 0, "employee": 1, "date": 1, "seat_label": 1},
+        {"_id": 0, "id": 1, "employee": 1, "date": 1, "seat_id": 1, "seat_label": 1,
+         "status": 1, "requested_by": 1, "requested_on": 1, "plan_name": 1, "team_name": 1},
     )
     if emp_pending_conflict:
-        raise HTTPException(409, {
-            "code": "EMPLOYEE_PENDING",
-            "message": f"{(emp_pending_conflict.get('employee') or {}).get('name')} already has a pending request on {emp_pending_conflict['date']}",
-            "conflict": emp_pending_conflict,
-        })
+        # If the client is explicitly asking to REPLACE this pending request
+        # (Duplicate Pending Approval Validation flow), skip the 409 and fall
+        # through to the transactional replace below.
+        if not (
+            payload.replace_request_id
+            and payload.replace_request_id == emp_pending_conflict.get("id")
+        ):
+            emp_name = (emp_pending_conflict.get("employee") or {}).get("name")
+            raise HTTPException(409, {
+                "code": "EMPLOYEE_PENDING",
+                "message": f"{emp_name} already has a pending request on {emp_pending_conflict['date']}",
+                # Rich context so the frontend can render the Duplicate Pending
+                # confirmation dialog directly from this payload without an
+                # extra round-trip.
+                "conflict": {
+                    "id": emp_pending_conflict.get("id"),
+                    "employee": emp_pending_conflict.get("employee"),
+                    "date": emp_pending_conflict.get("date"),
+                    "seat_id": emp_pending_conflict.get("seat_id"),
+                    "seat_label": emp_pending_conflict.get("seat_label"),
+                    "status": emp_pending_conflict.get("status"),
+                    "requested_by": emp_pending_conflict.get("requested_by"),
+                    "requested_on": emp_pending_conflict.get("requested_on"),
+                    "plan_name": emp_pending_conflict.get("plan_name"),
+                    "team_name": emp_pending_conflict.get("team_name"),
+                },
+            })
 
     # ---- Insert one request per (seat) — grouped by group_id
     group_id = str(uuid.uuid4())
@@ -646,19 +686,89 @@ async def create_workstation_request(
             "updated_at": now,
         }
         inserted.append(doc)
-    if inserted:
-        await db.workstation_requests.insert_many(inserted)
+
+    # ---- Duplicate-Pending Replace flow (transactional) --------------------
+    # When the caller explicitly asks to replace their existing pending
+    # request, we (a) revalidate that the target is still Pending Approval
+    # (guards against a race where an approver has just acted on it), and
+    # (b) atomically cancel-old + insert-new so the two operations either
+    # both land or both roll back. Concurrent approval detection is handled
+    # by including `status: STATUS_PENDING` in the update filter — if the
+    # row has moved to Approved / Declined / Cancelled in the meantime, the
+    # update matches 0 rows and we surface REPLACE_TARGET_NOT_PENDING.
+    replaced_request_summary: Optional[dict] = None
+    if payload.replace_request_id:
+        existing = await db.workstation_requests.find_one(
+            {"id": payload.replace_request_id},
+            {"_id": 0, "id": 1, "status": 1, "employee": 1, "date": 1, "seat_label": 1},
+        )
+        if not existing:
+            raise HTTPException(404, {
+                "code": "REPLACE_TARGET_NOT_FOUND",
+                "message": "The existing request could not be found. Please refresh the page and try again.",
+            })
+        if existing.get("status") != STATUS_PENDING:
+            raise HTTPException(409, {
+                "code": "REPLACE_TARGET_NOT_PENDING",
+                "message": "The existing request has already been processed. Please refresh the page and try again.",
+                "current_status": existing.get("status"),
+            })
+        async with await _mongo_client.start_session() as session:
+            async with session.start_transaction():
+                # Cancel old (with audit trail). status guard makes it a CAS.
+                upd = await db.workstation_requests.update_one(
+                    {"id": payload.replace_request_id, "status": STATUS_PENDING},
+                    {"$set": {
+                        "status": STATUS_CANCELLED,
+                        "cancelled_by": actor,
+                        "cancelled_on": now,
+                        "cancellation_reason": "Replaced by a new booking request",
+                        "replaced_by_group_id": group_id,
+                        "updated_at": now,
+                    }},
+                    session=session,
+                )
+                if upd.modified_count == 0:
+                    # Someone else moved it out of Pending in the tiny window
+                    # between our pre-check and the CAS update — abort.
+                    raise HTTPException(409, {
+                        "code": "REPLACE_TARGET_NOT_PENDING",
+                        "message": "The existing request has already been processed. Please refresh the page and try again.",
+                    })
+                # Insert the new request(s)
+                if inserted:
+                    await db.workstation_requests.insert_many(inserted, session=session)
         for d in inserted:
             d.pop("_id", None)
+        replaced_request_summary = {
+            "id": existing.get("id"),
+            "seat_label": existing.get("seat_label"),
+            "date": existing.get("date"),
+            "employee": existing.get("employee"),
+        }
+        await log_audit(
+            actor=actor, action="workstation_request.replace",
+            resource="workstation_request",
+            detail=f"Replaced pending request {existing.get('id')} with a new request on plan '{plan.get('name')}'",
+            metadata={"plan_id": payload.plan_id, "seat_ids": seat_ids,
+                      "date": target_date, "group_id": group_id,
+                      "replaced_request_id": existing.get("id")},
+        )
+    else:
+        # ---- Plain (non-replace) path: just insert
+        if inserted:
+            await db.workstation_requests.insert_many(inserted)
+            for d in inserted:
+                d.pop("_id", None)
 
-    await log_audit(
-        actor=actor, action="workstation_request.create",
-        resource="workstation_request",
-        detail=f"Submitted {len(inserted)} workstation request(s) on plan '{plan.get('name')}'",
-        metadata={"plan_id": payload.plan_id, "seat_ids": seat_ids,
-                  "date": target_date, "group_id": group_id,
-                  "team_id": (team or {}).get("id") if team else None},
-    )
+        await log_audit(
+            actor=actor, action="workstation_request.create",
+            resource="workstation_request",
+            detail=f"Submitted {len(inserted)} workstation request(s) on plan '{plan.get('name')}'",
+            metadata={"plan_id": payload.plan_id, "seat_ids": seat_ids,
+                      "date": target_date, "group_id": group_id,
+                      "team_id": (team or {}).get("id") if team else None},
+        )
 
     # ---- Auto-approval (phase 1: workstation only, single-day, non-recurring)
     # If the current settings match this submitter, immediately approve every
@@ -687,6 +797,7 @@ async def create_workstation_request(
         "group_id": group_id,
         "requests": inserted,
         "auto_approved": auto_approved,
+        "replaced_request": replaced_request_summary,
     }
 
 
