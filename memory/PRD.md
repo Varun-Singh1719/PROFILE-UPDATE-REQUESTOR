@@ -2,13 +2,17 @@
 
 
 ## Latest UI polish (Jul 2026) — Workstation Booking · Team Auto Assignment
-- **Alloted chip** in the Team dropdown (`SingleSelect`) and the "Choose team member" picker inside `ConfirmProposalDialog` now uses the same visual language as the **In Progress** status badge — outlined pill (transparent bg, `border-2`, orange `#ec9324` border+text, uppercase tracking).
-- **Dropdown sort order**: options are now grouped **Unalloted first (alphabetical) → Alloted at the bottom (alphabetical)**. Applies to both the Team dropdown and the row-level Choose-team-member dropdown.
-- **Workstation number** pill (A1, R1, …) inside "Review proposed workstation plan" is now the solid **Medium-priority** style — solid orange `#ec9324` background + white text (same shape / size retained).
-- **"N workstations"** chip in the same dialog header now uses the same solid orange + white style as the workstation-number pill.
-- **Edit / Remove** row actions are now icon-only (pencil / trash) with a hover tooltip identical to the top-bar Notification Bell (`group`/`group-hover` gray-900 tooltip appearing below-right).
-- **Row layout**: employee name and Emp ID render **in-line on a single row** (parallel), the row auto-adjusts its width, and the modal's boilerplate description ("Confirm which team member will sit at each workstation…") is removed.
-- **Awaiting-start hint block** ("Click a starting workstation on the floor map. The system will auto-select the next N consecutive available seats.") removed from the Team Auto Assignment side panel. Bottom summary line rewritten to "Ready to auto-assign N seat(s) for team …" so it no longer echoes the removed instruction.
+- **Dialog title** renamed from "Review proposed workstation plan" → **"Review : Proposed Plan"**.
+- **Recurring context in the dialog**: when the manager has toggled *Recurring* on in the side panel, the dialog header now shows **Start date**, **End date**, and the selected **Days** (sorted Su → S) as solid orange (`#ec9324`) + white-text pills matching the workstation-number style. Each day pill has a hover tooltip (same `group`/`group-hover` gray-900 pattern as the Notification Bell) that reveals the full day name — "Monday", "Wednesday", "Friday", etc.
+- Non-recurring plans still show the single booking date only.
+- **Behavior confirmed**: the backend (`workstation_bookings.py::_expand_recurring`) walks day-by-day from the start date to the recurring `end_date` and creates a booking on every future date whose weekday is in the selected `days` list — i.e., picking M / W / F with an end date one month out yields ~12 bookings, one on each Mon/Wed/Fri in that window.
+- **Alloted chip** in the Team dropdown (`SingleSelect`) and the "Choose team member" picker inside `ConfirmProposalDialog` uses the same visual language as the **In Progress** status badge — outlined pill (transparent bg, `border-2`, orange `#ec9324` border+text, uppercase tracking).
+- **Dropdown sort order**: options are grouped **Unalloted first (alphabetical) → Alloted at the bottom (alphabetical)**. Applies to both the Team dropdown and the row-level Choose-team-member dropdown.
+- **Workstation number** pill (A1, R1, …) inside the review dialog uses the solid **Medium-priority** style — solid orange `#ec9324` background + white text (shape / size retained).
+- **"N workstations"** chip in the dialog header shares the same solid orange + white style.
+- **Edit / Remove** row actions are icon-only (pencil / trash) with a hover tooltip identical to the top-bar Notification Bell.
+- **Row layout**: employee name and Emp ID render in-line on a single row (parallel), and the modal's boilerplate description ("Confirm which team member will sit at each workstation…") is removed.
+- **Awaiting-start hint block** ("Click a starting workstation on the floor map. The system will auto-select the next N consecutive available seats.") removed. Bottom summary line rewritten so it no longer echoes the removed instruction.
 
 
 

@@ -1502,6 +1502,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
         initialAssignment={proposalReview?.assignment || {}}
         teamPool={teamPool}
         saving={saving}
+        recurring={recurringOn ? { end_date: recurringEnd, days: recurringDays } : null}
       />
     </Layout>
   );

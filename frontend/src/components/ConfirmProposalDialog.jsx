@@ -41,6 +41,28 @@ function fmtDateLong(iso) {
   } catch { return iso; }
 }
 
+// Weekday code helpers — codes come from the recurring config on the
+// WorkstationBookingPage: Su, M, T, W, Th, F, S (Sunday .. Saturday).
+const DAY_ORDER = ["Su", "M", "T", "W", "Th", "F", "S"];
+const DAY_SHORT_LABELS = {
+  Su: "Su", M: "M", T: "T", W: "W", Th: "Th", F: "F", S: "S",
+};
+const FULL_DAY_NAMES = {
+  Su: "Sunday",
+  M:  "Monday",
+  T:  "Tuesday",
+  W:  "Wednesday",
+  Th: "Thursday",
+  F:  "Friday",
+  S:  "Saturday",
+};
+// Sort selected day codes into calendar order (Su → S) so a user who picked
+// F, M, W sees them rendered as M W F (not the order they clicked).
+function sortDayCodes(codes) {
+  const set = new Set(codes || []);
+  return DAY_ORDER.filter((c) => set.has(c));
+}
+
 export default function ConfirmProposalDialog({
   open,
   onClose,
@@ -51,6 +73,7 @@ export default function ConfirmProposalDialog({
   initialAssignment = {},
   teamPool = [],
   saving = false,
+  recurring = null,   // { end_date, days: ['Su','M','T','W','Th','F','S'] } | null
 }) {
   // Local mutable state: one row per seat with the currently chosen employee.
   // Row shape: { seatId, seatLabel, empId }
@@ -167,7 +190,7 @@ export default function ConfirmProposalDialog({
         <DialogHeader className="px-6 pt-5 pb-3 border-b border-gray-200 bg-gray-50/60">
           <DialogTitle className="flex items-center gap-2 text-base font-semibold text-gray-900">
             <Users sx={{ fontSize: 18 }} className="text-[#ec9324]"/>
-            Review proposed workstation plan
+            Review : Proposed Plan
           </DialogTitle>
           <DialogDescription className="sr-only">
             Review the proposed workstation plan before confirming.
@@ -177,10 +200,42 @@ export default function ConfirmProposalDialog({
               <Users sx={{ fontSize: 13 }} className="text-gray-400"/>
               Team <span className="font-semibold text-gray-900">{team?.name || "—"}</span>
             </span>
-            <span className="inline-flex items-center gap-1">
-              <CalendarToday sx={{ fontSize: 12 }} className="text-gray-400"/>
-              {fmtDateLong(date)}
-            </span>
+            {recurring ? (
+              <>
+                <span className="inline-flex items-center gap-1">
+                  <CalendarToday sx={{ fontSize: 12 }} className="text-gray-400"/>
+                  <span>Start</span>
+                  <span className="font-semibold text-gray-900">{fmtDateLong(date)}</span>
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <CalendarToday sx={{ fontSize: 12 }} className="text-gray-400"/>
+                  <span>End</span>
+                  <span className="font-semibold text-gray-900">{fmtDateLong(recurring.end_date)}</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5 flex-wrap">
+                  <span className="text-gray-600">Days</span>
+                  {sortDayCodes(recurring.days || []).map((code) => (
+                    <span
+                      key={code}
+                      className="group relative inline-flex items-center justify-center min-w-[24px] h-6 px-2 rounded text-[11px] font-bold text-white select-none cursor-default"
+                      style={{ backgroundColor: "#ec9324" }}
+                      data-testid={`proposal-day-${code}`}
+                      aria-label={FULL_DAY_NAMES[code] || code}
+                    >
+                      {DAY_SHORT_LABELS[code] || code}
+                      <span className="pointer-events-none absolute top-full mt-1.5 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+                        {FULL_DAY_NAMES[code] || code}
+                      </span>
+                    </span>
+                  ))}
+                </span>
+              </>
+            ) : (
+              <span className="inline-flex items-center gap-1">
+                <CalendarToday sx={{ fontSize: 12 }} className="text-gray-400"/>
+                {fmtDateLong(date)}
+              </span>
+            )}
             <span className="ml-auto inline-flex items-center gap-2">
               <span
                 className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white whitespace-nowrap"
