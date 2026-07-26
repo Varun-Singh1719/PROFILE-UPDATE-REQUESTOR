@@ -196,10 +196,12 @@ export default function ConfirmProposalDialog({
             Review the proposed workstation plan before confirming.
           </DialogDescription>
           <div className="mt-2 flex items-center flex-wrap gap-3 text-[11.5px] text-gray-600">
-            <span className="inline-flex items-center gap-1">
-              <Users sx={{ fontSize: 13 }} className="text-gray-400"/>
-              Team <span className="font-semibold text-gray-900">{team?.name || "—"}</span>
-            </span>
+            {team && (
+              <span className="inline-flex items-center gap-1">
+                <Users sx={{ fontSize: 13 }} className="text-gray-400"/>
+                Team <span className="font-semibold text-gray-900">{team?.name || "—"}</span>
+              </span>
+            )}
             {recurring ? (
               <>
                 <span className="inline-flex items-center gap-1">
@@ -243,9 +245,11 @@ export default function ConfirmProposalDialog({
               >
                 {rows.length} workstation{rows.length === 1 ? "" : "s"}
               </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-gray-100 text-gray-600 border-gray-200">
-                {unassignedCount} unassigned member{unassignedCount === 1 ? "" : "s"}
-              </span>
+              {team && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-gray-100 text-gray-600 border-gray-200">
+                  {unassignedCount} unassigned member{unassignedCount === 1 ? "" : "s"}
+                </span>
+              )}
             </span>
           </div>
         </DialogHeader>

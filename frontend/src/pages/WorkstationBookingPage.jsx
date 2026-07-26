@@ -685,16 +685,44 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
   // before committing.
   const openProposalReview = () => {
     if (!canEdit) {
-      toast.error("Only Super Admin can create workstation bookings");
+      toast.error(isRequestMode
+        ? "Only Super Admin can submit workstation requests"
+        : "Only Super Admin can create workstation bookings");
       return;
     }
     const err = validate();
     if (err) { toast.error(err); return; }
     const orderedSeats = selectedSeatIds
       .map((sid) => allSeats.find((x) => x.id === sid) || { id: sid, label: sid });
-    const empIds = pickRandom(teamPool.map((e) => e.id), orderedSeats.length);
-    const assignment = {};
-    orderedSeats.forEach((s, i) => { assignment[s.id] = empIds[i] || null; });
+
+    // Build the (seat → employee) assignment for the review dialog based
+    // on the current mode. All three flows — Team Auto Assignment,
+    // Manual + Team (Random / Manual allocation), and Manual + Employee
+    // (single seat) — route through the same review step so the user
+    // always confirms the exact plan before it is committed.
+    let assignment = {};
+    if (bookingMode === "auto") {
+      // Auto mode — random pick over the team pool (existing behavior).
+      const empIds = pickRandom(teamPool.map((e) => e.id), orderedSeats.length);
+      orderedSeats.forEach((s, i) => { assignment[s.id] = empIds[i] || null; });
+    } else if (isSingle) {
+      // Manual + single seat → the picked employee sits at the picked seat.
+      assignment[orderedSeats[0].id] = employeeId || null;
+    } else {
+      // Manual + team (multi-seat)
+      let empIds;
+      if (allocationMode === "random") {
+        if (teamPool.length < orderedSeats.length) {
+          toast.error(`Team has only ${teamPool.length} available member(s) but ${orderedSeats.length} workstation(s) selected.`);
+          return;
+        }
+        empIds = pickRandom(teamPool.map((e) => e.id), orderedSeats.length);
+      } else {
+        // Manual allocation — user has already chosen a member per seat.
+        empIds = manualEmpIds.slice(0, orderedSeats.length);
+      }
+      orderedSeats.forEach((s, i) => { assignment[s.id] = empIds[i] || null; });
+    }
     setProposalReview({
       seats: orderedSeats.map((s) => ({ id: s.id, label: s.label || s.id })),
       assignment,
@@ -756,11 +784,19 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
         payload.team_employee_ids = teamEmps;
       }
     } else if (isSingle) {
-      payload.employee_id = employeeId;
+      // Manual + single seat — prefer the dialog's edited employee if
+      // the user tweaked it in the review dialog; otherwise fall back to
+      // the form's selected employee.
+      payload.employee_id = explicitEmpIds ? explicitEmpIds[0] : employeeId;
     } else {
+      // Manual + team (multi-seat)
       payload.team_id = teamId;
       let teamEmps;
-      if (allocationMode === "random") {
+      if (explicitEmpIds) {
+        // Dialog-confirmed assignment overrides random / manual state so
+        // any last-minute edit / remove in the review dialog is honored.
+        teamEmps = explicitEmpIds;
+      } else if (allocationMode === "random") {
         if (teamPool.length < effectiveCount) {
           toast.error(`Team has only ${teamPool.length} available member(s) but ${effectiveCount} workstation(s) selected.`);
           return;
@@ -1501,9 +1537,11 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                     {permBook.isVisible && (
                     <Button
                       onClick={
-                        bookingMode === "auto" && !isRequestMode
-                          ? openProposalReview
-                          : handleSave
+                        // Every submit — Auto and Manual (Employee / Team) —
+                        // now routes through the "Review : Proposed Plan"
+                        // dialog first. The dialog is the single point that
+                        // triggers the actual create via handleSave.
+                        openProposalReview
                       }
                       disabled={!canEdit || saving || !selectedPlanId || noSeats || (bookingMode === "auto" && autoPhase !== "proposed") || !permBook.canUse}
                       className="flex-1 bg-[#ec9324] hover:bg-[#d8821a] text-white"
@@ -1635,13 +1673,20 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
         open={!!proposalReview}
         onClose={() => setProposalReview(null)}
         onConfirm={(rows) => handleSave({ explicitAssignment: rows })}
-        team={selectedTeam}
+        team={bookingMode === "auto" || (isMulti && teamId) ? selectedTeam : null}
         date={date}
         seats={proposalReview?.seats || []}
         initialAssignment={proposalReview?.assignment || {}}
-        teamPool={teamPool}
+        teamPool={
+          // For Auto mode & Manual + Team, restrict swap-picker to team
+          // members. For Manual + Employee (single seat) the "pool" is all
+          // active employees who don't have a conflicting booking.
+          bookingMode === "auto" || (isMulti && teamId)
+            ? teamPool
+            : employees.filter((e) => (e.status || "").toLowerCase() !== "inactive" && !bookedEmpIdsOnly.has(e.id))
+        }
         saving={saving}
-        recurring={recurringOn ? { end_date: recurringEnd, days: recurringDays } : null}
+        recurring={recurringOn && !isRequestMode ? { end_date: recurringEnd, days: recurringDays } : null}
       />
 
       {/* Duplicate-Pending Confirm dialog — offers to cancel-and-replace an
