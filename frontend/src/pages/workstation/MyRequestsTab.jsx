@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import api, { formatApiError } from "../../lib/api";
 import notify from "../../lib/notify";
 import { useAuth } from "../../context/AuthContext";
@@ -85,6 +86,72 @@ export default function MyRequestsTab() {
   }, [user?.id, range]);
 
   useEffect(() => { load(); }, [load]);
+
+  // ─── Deep-link handling ────────────────────────────────────────────────
+  // Bell notifications for workstation_request_approved / declined route to
+  // /workspace-manager/request-workstation?requestId=<id>. We wait for the
+  // request list to load, find the matching row, and pop the detail dialog.
+  // If the id isn't in the current visible range we broaden the date range
+  // to "All" (whole year) so the notification can still be inspected.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkRequestId = searchParams.get("requestId");
+  const deepLinkAppliedRef = useRef(null);
+  const deepLinkExpandedRef = useRef(false);
+  // Marked true once the very first load() completes (regardless of item
+  // count) — prevents the deep-link effect from mistaking the pre-fetch
+  // empty state for "target not found".
+  const hasLoadedOnceRef = useRef(false);
+  // Tracks whether we've observed a full load cycle (loading true → false).
+  // Prevents the deep-link effect from running before the initial fetch
+  // even starts (initial state has loading=false but items=[]).
+  const seenLoadingRef = useRef(false);
+  // True from the moment we call setRange (widening the search window)
+  // until the next load() cycle finishes — so the effect doesn't hit the
+  // "still missing → error" branch before the new fetch resolves.
+  const justWidenedRef = useRef(false);
+  useEffect(() => {
+    if (loading) {
+      seenLoadingRef.current = true;
+    } else if (seenLoadingRef.current) {
+      hasLoadedOnceRef.current = true;
+      justWidenedRef.current = false;   // load cycle completed
+    }
+  }, [loading, items]);
+  useEffect(() => {
+    if (!deepLinkRequestId) return;
+    if (loading) return;
+    if (!hasLoadedOnceRef.current) return;                 // wait for 1st fetch
+    if (justWidenedRef.current) return;                    // widen fetch pending
+    if (deepLinkAppliedRef.current === deepLinkRequestId) return;
+    const match = items.find((r) => r.id === deepLinkRequestId);
+    if (match) {
+      deepLinkAppliedRef.current = deepLinkRequestId;
+      setOpenReq(match);
+      const sp = new URLSearchParams(searchParams);
+      sp.delete("requestId");
+      setSearchParams(sp, { replace: true });
+      return;
+    }
+    // Not in the currently-loaded window — try widening the date range once
+    // before giving up. This handles the "declined last month" case.
+    if (!deepLinkExpandedRef.current) {
+      deepLinkExpandedRef.current = true;
+      justWidenedRef.current = true;
+      seenLoadingRef.current = false;      // wait for new load cycle
+      const today = new Date();
+      const from = new Date(today.getFullYear() - 1, 0, 1).toISOString().slice(0, 10);
+      const to = new Date(today.getFullYear() + 1, 11, 31).toISOString().slice(0, 10);
+      setRange((prev) => ({ ...prev, mode: "between", from, to }));
+      return;
+    }
+    // Still missing after widening → deleted / no permission.
+    deepLinkAppliedRef.current = deepLinkRequestId;
+    notify.error("Request no longer available");
+    const sp = new URLSearchParams(searchParams);
+    sp.delete("requestId");
+    setSearchParams(sp, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkRequestId, loading, items]);
 
   const grouped = useMemo(() => {
     // Group by status, and inside each group sort by date desc so the most

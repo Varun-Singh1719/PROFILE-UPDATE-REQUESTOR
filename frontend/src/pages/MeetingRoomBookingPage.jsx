@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef, useLayoutEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { Document, Page, pdfjs } from "react-pdf";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
@@ -211,6 +212,67 @@ export default function MeetingRoomBookingPage() {
   useEffect(() => { loadBookingsForDate(filterDate, rangeMode); }, [filterDate, rangeMode, loadBookingsForDate]);
   // Refresh pending requests whenever filter date changes
   useEffect(() => { loadPendingRequests(); }, [filterDate, loadPendingRequests]);
+
+  // ─── Deep-link handling ────────────────────────────────────────────────
+  // Bell-notification action_urls carry `?bookingId=<id>` (Approved) or
+  // `?requestId=<id>` (Pending / Declined) so clicking a Meeting-Room
+  // notification lands here with the exact row auto-opened in the detail
+  // modal. If the id is not in the current user's visible set (permission,
+  // cancelled, older than filter window) we show a toast + strip the query.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkBookingId = searchParams.get("bookingId");
+  const deepLinkRequestId = searchParams.get("requestId");
+  const deepLinkAppliedRef = useRef(null);
+  const hasLoadedOnceRef = useRef(false);
+  const seenLoadingRef = useRef(false);
+  useEffect(() => {
+    if (loading) seenLoadingRef.current = true;
+    else if (seenLoadingRef.current) hasLoadedOnceRef.current = true;
+  }, [loading, myRequests]);
+  useEffect(() => {
+    const target = deepLinkBookingId || deepLinkRequestId;
+    if (!target) return;
+    if (loading) return;                              // wait for first load
+    if (!hasLoadedOnceRef.current) return;
+    if (deepLinkAppliedRef.current === target) return;
+    let row = null;
+    if (deepLinkBookingId) {
+      const found = (myRequests || []).find(
+        (r) => r?.booking?.id === deepLinkBookingId,
+      );
+      if (found?.booking) {
+        row = {
+          ...found.booking,
+          _request_id: found.id,
+          _request_seq_no: found.seq_no,
+          organizer: found.requested_by,
+          _kind: "booking",
+          _status: found.booking.cancelled ? "Cancelled" : "Approved",
+        };
+      }
+    } else if (deepLinkRequestId) {
+      const found = (myRequests || []).find((r) => r?.id === deepLinkRequestId);
+      if (found) {
+        row = {
+          ...found,
+          organizer: found.requested_by,
+          _kind: "request",
+          _status: found.status || "Pending Approval",
+        };
+      }
+    }
+    if (row) {
+      setDetailRow(row);
+    } else {
+      toast.error("This meeting is no longer available or you don't have access to it");
+    }
+    deepLinkAppliedRef.current = target;
+    const sp = new URLSearchParams(searchParams);
+    sp.delete("bookingId");
+    sp.delete("requestId");
+    setSearchParams(sp, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkBookingId, deepLinkRequestId, loading, myRequests]);
 
   // Compute room status sets for the floor map:
   //  • occupiedNowRoomIds — rooms currently mid-meeting (any active booking spans `now`)

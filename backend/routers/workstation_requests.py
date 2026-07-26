@@ -171,7 +171,9 @@ async def _notify_approvers_of_new_request(requests: List[dict], actor: dict) ->
                     variables=variables,
                     related_id=req.get("id"),
                     related_type="workstation_request",
-                    action_url="/workspace-manager/workstation-requests",
+                    # Deep-link into Pending Approvals with this specific request
+                    # auto-focused (see PendingApprovalsPage → ?requestId=…).
+                    action_url=f"/workspace-manager/pending-approvals?requestId={req.get('id')}",
                 )
     except Exception:  # noqa: BLE001 — never break submit / replace
         return
@@ -379,7 +381,9 @@ async def auto_decline_conflicting_requests(
                         },
                         related_id=m["id"],
                         related_type="workstation_request",
-                        action_url="/workspace-manager/workstation-requests",
+                        # Deep-link into "My Bookings" tab of Request Workstation
+                        # with the declined request auto-opened.
+                        action_url=f"/workspace-manager/request-workstation?requestId={m['id']}",
                     )
                 except Exception:  # noqa: BLE001
                     pass
@@ -957,7 +961,8 @@ async def approve_workstation_request(
                 },
                 related_id=booking["id"],
                 related_type="workstation_booking",
-                action_url="/workspace-manager/bookings",
+                # Deep-link directly into the newly-created booking's detail drawer.
+                action_url=f"/workspace-manager/bookings?bookingId={booking['id']}",
             )
     except Exception:  # noqa: BLE001 — never break the approval flow
         pass
@@ -1012,7 +1017,8 @@ async def decline_workstation_request(
                 },
                 related_id=request_id,
                 related_type="workstation_request",
-                action_url="/workspace-manager/workstation-requests",
+                # Deep-link into "My Bookings" tab with the declined request auto-opened.
+                action_url=f"/workspace-manager/request-workstation?requestId={request_id}",
             )
     except Exception:  # noqa: BLE001
         pass

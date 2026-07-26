@@ -147,6 +147,18 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
   // the page is in "request" mode (i.e. Request Workstation page).
   const [panelTab, setPanelTab] = useState("form");
 
+  // Deep-link: if a bell notification lands here with `?requestId=<id>`
+  // (workstation_request_approved / declined), auto-switch to the
+  // "My Bookings" tab so MyRequestsTab picks the id up from the URL and
+  // pops the request detail dialog open.
+  useEffect(() => {
+    if (isRequestMode && searchParams.get("requestId")) {
+      setPanelTab("my-bookings");
+    }
+    // Run once on mount / when isRequestMode toggles.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRequestMode]);
+
   // --------- Plan + availability ---------
   const [livePlans, setLivePlans] = useState([]);          // [{id, name, pdfUrl, seat_count}]
   const [selectedPlanId, setSelectedPlanId] = useState("");

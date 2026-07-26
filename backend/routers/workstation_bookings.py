@@ -609,7 +609,8 @@ async def create_workstation_booking(
                             },
                             related_id=m["id"],
                             related_type="workstation_request",
-                            action_url="/workspace-manager/workstation-requests",
+                            # Deep-link into "My Bookings" tab with the declined request auto-opened.
+                            action_url=f"/workspace-manager/request-workstation?requestId={m['id']}",
                         )
                     except Exception:  # noqa: BLE001
                         pass
@@ -674,7 +675,8 @@ async def create_workstation_booking(
                 },
                 related_id=bk["id"],
                 related_type="workstation_booking",
-                action_url="/workspace-manager/bookings",
+                # Deep-link directly into the newly-created booking's detail drawer.
+                action_url=f"/workspace-manager/bookings?bookingId={bk['id']}",
             )
     except Exception:  # noqa: BLE001
         pass

@@ -113,6 +113,46 @@ async def startup():
     # Seed default notification templates (idempotent — skips existing kinds)
     from inapp_notifications import seed_default_templates as _seed_inapp_tpl
     await _seed_inapp_tpl(db)
+
+    # ─── Migration: rewrite legacy in-app notification action_urls so old
+    # notifications also deep-link to the specific record (Jul 2026). We
+    # only rewrite rows whose current action_url is one of the historical
+    # module-only paths — user-edited urls (if any) are left alone.
+    try:
+        legacy_to_kind_map = {
+            "/workspace-manager/workstation-requests": {
+                "workstation_request_submitted": "/workspace-manager/pending-approvals?requestId={rid}",
+                "workstation_request_declined":  "/workspace-manager/request-workstation?requestId={rid}",
+            },
+            "/workspace-manager/meeting-room-requests": {
+                "meeting_room_request_submitted": "/workspace-manager/pending-approvals?requestId={rid}",
+            },
+            "/workspace-manager/bookings": {
+                "workstation_request_approved": "/workspace-manager/bookings?bookingId={rid}",
+                "workstation_assigned":         "/workspace-manager/bookings?bookingId={rid}",
+            },
+            "/workspace-manager/meeting-room-booking": {
+                "meeting_room_request_approved": "/workspace-manager/meeting-room-booking?bookingId={rid}",
+                "meeting_room_request_declined": "/workspace-manager/meeting-room-booking?requestId={rid}",
+            },
+        }
+        total_fixed = 0
+        for legacy_url, kind_map in legacy_to_kind_map.items():
+            for kind, tmpl in kind_map.items():
+                cursor = db.inapp_notifications.find(
+                    {"kind": kind, "action_url": legacy_url, "related_id": {"$ne": None}},
+                    {"_id": 1, "related_id": 1},
+                )
+                async for doc in cursor:
+                    new_url = tmpl.format(rid=doc["related_id"])
+                    await db.inapp_notifications.update_one(
+                        {"_id": doc["_id"]}, {"$set": {"action_url": new_url}}
+                    )
+                    total_fixed += 1
+        if total_fixed:
+            logger.info(f"Migrated action_url on {total_fixed} in-app notifications to deep-link format")
+    except Exception as _e:  # noqa: BLE001 — never break startup
+        logger.warning(f"in-app notification action_url migration skipped: {_e}")
     # NOTE: do NOT call init_storage() here — it makes a blocking outbound
     # HTTPS call (timeout=30s) that returns 400 when the storage feature
     # isn't wired up, which adds 5–10s to every cold-start / hot-reload and

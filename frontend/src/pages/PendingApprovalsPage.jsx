@@ -19,7 +19,8 @@
  * declined requests live in the Request History tab (Request Workstation page)
  * and approved requests also appear as bookings in the Bookings module.
  */
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import Check from "@mui/icons-material/Check";
 import X from "@mui/icons-material/Close";
 import Loader2 from "@mui/icons-material/Autorenew";
@@ -219,6 +220,56 @@ export default function PendingApprovalsPage() {
 
   useEffect(() => { loadPlans(); }, [loadPlans]);
   useEffect(() => { loadRequests(); }, [loadRequests]);
+
+  // ─── Deep-link handling ────────────────────────────────────────────────
+  // Bell-notification action_urls carry `?requestId=<id>` so opening a
+  // "Pending Approval — …" alert lands here with the exact request auto-
+  // focused (camera panned + card visually highlighted). If the id is not
+  // in the currently-loaded queue (already approved / declined by someone
+  // else, or user has no access) we show a toast and strip the query so
+  // refreshing doesn't keep retrying.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkRequestId = searchParams.get("requestId");
+  const deepLinkAppliedRef = useRef(null);
+  const cardRefs = useRef({});
+  // Marked true once loadRequests() has settled — prevents "not found"
+  // errors from firing on the very first render before the fetch resolves.
+  const hasLoadedOnceRef = useRef(false);
+  const seenLoadingRef = useRef(false);
+  useEffect(() => {
+    if (loading) seenLoadingRef.current = true;
+    else if (seenLoadingRef.current) hasLoadedOnceRef.current = true;
+  }, [loading, requests]);
+  useEffect(() => {
+    if (!deepLinkRequestId) return;
+    if (loading) return; // wait for the queue to load
+    if (!hasLoadedOnceRef.current) return;
+    if (deepLinkAppliedRef.current === deepLinkRequestId) return;
+    const match = requests.find((r) => r.id === deepLinkRequestId);
+    if (match) {
+      deepLinkAppliedRef.current = deepLinkRequestId;
+      handleCardClick(match);
+      // Scroll the highlighted card into the visible pane
+      setTimeout(() => {
+        const el = cardRefs.current[match.id];
+        if (el && typeof el.scrollIntoView === "function") {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 120);
+      const sp = new URLSearchParams(searchParams);
+      sp.delete("requestId");
+      setSearchParams(sp, { replace: true });
+    } else {
+      // Requests are loaded but this id isn't in the queue — likely already
+      // decided or the current user cannot see it. Fall back to the listing.
+      deepLinkAppliedRef.current = deepLinkRequestId;
+      toast.error("Request no longer pending or unavailable");
+      const sp = new URLSearchParams(searchParams);
+      sp.delete("requestId");
+      setSearchParams(sp, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkRequestId, loading, requests]);
 
   // When plan / focus date change → fetch availability for that combo
   useEffect(() => {
@@ -676,6 +727,7 @@ export default function PendingApprovalsPage() {
                       return (
                         <div
                           key={req.id}
+                          ref={(el) => { if (el) cardRefs.current[req.id] = el; else delete cardRefs.current[req.id]; }}
                           onClick={() => handleCardClick(req)}
                           className={`rounded-lg border p-3 cursor-pointer transition shadow-sm ${
                             focused

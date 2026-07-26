@@ -385,7 +385,9 @@ async def create_meeting_room_request(
                             variables=variables,
                             related_id=req.get("id"),
                             related_type="meeting_room_request",
-                            action_url="/workspace-manager/meeting-room-requests",
+                            # Deep-link into Pending Approvals with this specific
+                            # meeting-room request auto-focused.
+                            action_url=f"/workspace-manager/pending-approvals?requestId={req.get('id')}",
                         )
                     except Exception:  # noqa: BLE001
                         pass
@@ -755,7 +757,8 @@ async def approve_meeting_room_request(
                 },
                 related_id=booking["id"],
                 related_type="room_booking",
-                action_url="/workspace-manager/meeting-room-booking",
+                # Deep-link into Meeting Room Booking with this booking auto-opened.
+                action_url=f"/workspace-manager/meeting-room-booking?bookingId={booking['id']}",
             )
     except Exception:
         pass
@@ -813,7 +816,9 @@ async def decline_meeting_room_request(
                 },
                 related_id=request_id,
                 related_type="meeting_room_request",
-                action_url="/workspace-manager/meeting-room-booking",
+                # Deep-link into Meeting Room Booking with the declined request
+                # auto-opened in the detail modal.
+                action_url=f"/workspace-manager/meeting-room-booking?requestId={request_id}",
             )
     except Exception:
         pass
