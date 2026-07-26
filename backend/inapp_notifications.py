@@ -42,6 +42,19 @@ def now_iso() -> str:
 # ---------------------------------------------------------------------------
 DEFAULT_INAPP_NOTIFICATION_TEMPLATES = [
     {
+        "kind": "workstation_request_submitted",
+        "name": "Workstation Request Submitted (Pending Approval)",
+        "description": "Fires when a new workstation request is submitted — "
+                       "notifies all approvers (Super Admins) that a new "
+                       "request is awaiting their approval.",
+        "trigger": "A workstation request is created and is pending approval",
+        "title": "Pending Approval — Workstation Requested",
+        "body": "{{requested_by_name}} submitted a workstation request for "
+                "{{employee_name}} — seat {{seat_label}} on {{date}}. "
+                "It is awaiting your approval.",
+        "action_label": "Review request",
+    },
+    {
         "kind": "workstation_request_approved",
         "name": "Workstation Request Approved",
         "description": "Fires when a Workspace Manager approves a workstation "

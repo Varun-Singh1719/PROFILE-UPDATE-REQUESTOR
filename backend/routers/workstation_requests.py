@@ -124,6 +124,60 @@ def _actor(user: dict) -> dict:
     return {"id": user.get("id"), "email": user.get("email"), "name": user.get("name")}
 
 
+async def _notify_approvers_of_new_request(requests: List[dict], actor: dict) -> None:
+    """Fire the ``workstation_request_submitted`` (Pending Approval —
+    Workstation Requested) in-app notification for every active approver.
+
+    - Runs for every newly-created request, including replacements coming
+      out of the Duplicate-Pending Confirm flow.
+    - Best-effort: swallows all errors so a notification failure never
+      breaks the submit / replace transaction.
+    - Approvers are all active Super Admins (they hold the approve /
+      decline privilege on workstation requests).
+    """
+    if not requests:
+        return
+    try:
+        from inapp_notifications import notify_user_inapp
+        approvers = [
+            u async for u in db.contacts.find(
+                {"role": "Super Admin", "status": {"$ne": "Inactive"}},
+                {"_id": 0, "id": 1, "name": 1, "email": 1},
+            )
+        ]
+        if not approvers:
+            return
+        for req in requests:
+            emp = req.get("employee") or {}
+            reqby = req.get("requested_by") or actor or {}
+            variables = {
+                "seat_label": req.get("seat_label"),
+                "date": req.get("date"),
+                "plan_name": req.get("plan_name"),
+                "team_name": req.get("team_name") or "",
+                "employee_name": emp.get("name") or emp.get("email") or "—",
+                "employee_emp_id": emp.get("emp_id") or "",
+                "requested_by_name": reqby.get("name") or reqby.get("email") or "—",
+                "requested_by_email": reqby.get("email") or "",
+            }
+            for approver in approvers:
+                aid = approver.get("id")
+                if not aid:
+                    continue
+                await notify_user_inapp(
+                    db,
+                    user_id=aid,
+                    kind="workstation_request_submitted",
+                    variables=variables,
+                    related_id=req.get("id"),
+                    related_type="workstation_request",
+                    action_url="/workspace-manager/workstation-requests",
+                )
+    except Exception:  # noqa: BLE001 — never break submit / replace
+        return
+
+
+
 async def _auto_approve_request(request_id: str, actor: dict) -> Optional[dict]:
     """Server-side approval used by the auto-approval flow.
 
@@ -769,6 +823,13 @@ async def create_workstation_request(
                       "date": target_date, "group_id": group_id,
                       "team_id": (team or {}).get("id") if team else None},
         )
+
+    # ---- Notify approvers of the new pending-approval request(s).
+    # Fires the "Pending Approval — Workstation Requested" in-app
+    # notification for every active Super Admin. Runs for BOTH the
+    # normal-create path AND the Duplicate-Pending replace path so
+    # approvers always see the freshly created request in the bell.
+    await _notify_approvers_of_new_request(inserted, actor)
 
     # ---- Auto-approval (phase 1: workstation only, single-day, non-recurring)
     # If the current settings match this submitter, immediately approve every
