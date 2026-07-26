@@ -77,6 +77,7 @@ import SingleSelect from "../components/SingleSelect";
 import DateFilter from "../components/DateFilter";
 import WorkstationFloorMap from "../components/WorkstationFloorMap";
 import ConfirmProposalDialog from "../components/ConfirmProposalDialog";
+import SingleDatePicker from "../components/SingleDatePicker";
 import { useAuth } from "../context/AuthContext";
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
 
@@ -803,15 +804,14 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                   testId="ws-date-filter"
                 />
               ) : (
-                <div className="relative">
-                  <input
-                    type="date"
+                <div className="w-[160px]">
+                  <SingleDatePicker
                     value={date}
-                    onChange={(e) => setDateAndClear(e.target.value)}
-                    className="text-sm rounded-md border border-gray-300 pl-8 pr-2 py-1.5 bg-white"
-                    data-testid="ws-date-filter"
+                    onChange={(iso) => setDateAndClear(iso || "")}
+                    testId="ws-date-filter"
+                    placeholder="DD/MM/YYYY"
+                    size="sm"
                   />
-                  <CalendarIcon sx={{ fontSize: 14 }} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400"/>
                 </div>
               )}
               <Button
@@ -1251,14 +1251,17 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                         />
                       </div>
                     ) : (
-                      <input
-                        type="date"
-                        value={date}
-                        onChange={(e) => setDateAndClear(e.target.value)}
-                        disabled={!canEdit}
-                        className="mt-1 w-full text-sm rounded-md border border-gray-300 px-2 py-2 bg-white"
-                        data-testid="ws-form-date"
-                      />
+                      <div className="mt-1">
+                        <SingleDatePicker
+                          value={date}
+                          onChange={(iso) => setDateAndClear(iso || "")}
+                          disabled={!canEdit}
+                          testId="ws-form-date"
+                          placeholder="DD/MM/YYYY"
+                          size="md"
+                          className="w-full"
+                        />
+                      </div>
                     )}
                   </div>
 
@@ -1287,26 +1290,27 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                       <div className="space-y-2">
                         <div>
                           <label className="text-[11px] text-gray-600">End Date <span className="text-red-500">*</span></label>
-                          <input
-                            type="date"
-                            value={recurringEnd}
-                            min={date}
-                            max={(() => {
-                              // 3 months from the booking (start) date
-                              const d = new Date(date + "T00:00:00");
-                              d.setMonth(d.getMonth() + 3);
-                              const y = d.getFullYear();
-                              const m = String(d.getMonth() + 1).padStart(2, "0");
-                              const dd = String(d.getDate()).padStart(2, "0");
-                              return `${y}-${m}-${dd}`;
-                            })()}
-                            onChange={(e) => setRecurringEnd(e.target.value)}
-                            disabled={!canEdit}
-                            required
-                            placeholder="Select end date"
-                            className="mt-1 w-full text-sm rounded-md border border-gray-300 px-2 py-1.5 bg-white"
-                            data-testid="ws-recurring-end"
-                          />
+                          <div className="mt-1">
+                            <SingleDatePicker
+                              value={recurringEnd}
+                              onChange={(iso) => setRecurringEnd(iso || "")}
+                              disabled={!canEdit}
+                              min={date}
+                              max={(() => {
+                                // 3 months from the booking (start) date
+                                const d = new Date(date + "T00:00:00");
+                                d.setMonth(d.getMonth() + 3);
+                                const y = d.getFullYear();
+                                const m = String(d.getMonth() + 1).padStart(2, "0");
+                                const dd = String(d.getDate()).padStart(2, "0");
+                                return `${y}-${m}-${dd}`;
+                              })()}
+                              testId="ws-recurring-end"
+                              placeholder="Select end date"
+                              size="sm"
+                              className="w-full"
+                            />
+                          </div>
                           <div className="text-[10px] text-gray-500 mt-0.5">Max 3 months from booking date.</div>
                         </div>
                         <div>
