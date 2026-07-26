@@ -1,6 +1,17 @@
 # Infollion Utilities — PRD
 
 
+## Latest UI polish (Jul 2026) — Workstation Booking · Team Auto Assignment
+- **Alloted chip** in the Team dropdown (`SingleSelect`) and the "Choose team member" picker inside `ConfirmProposalDialog` now uses the same visual language as the **In Progress** status badge — outlined pill (transparent bg, `border-2`, orange `#ec9324` border+text, uppercase tracking).
+- **Dropdown sort order**: options are now grouped **Unalloted first (alphabetical) → Alloted at the bottom (alphabetical)**. Applies to both the Team dropdown and the row-level Choose-team-member dropdown.
+- **Workstation number** pill (A1, R1, …) inside "Review proposed workstation plan" is now the solid **Medium-priority** style — solid orange `#ec9324` background + white text (same shape / size retained).
+- **"N workstations"** chip in the same dialog header now uses the same solid orange + white style as the workstation-number pill.
+- **Edit / Remove** row actions are now icon-only (pencil / trash) with a hover tooltip identical to the top-bar Notification Bell (`group`/`group-hover` gray-900 tooltip appearing below-right).
+- **Row layout**: employee name and Emp ID render **in-line on a single row** (parallel), the row auto-adjusts its width, and the modal's boilerplate description ("Confirm which team member will sit at each workstation…") is removed.
+- **Awaiting-start hint block** ("Click a starting workstation on the floor map. The system will auto-select the next N consecutive available seats.") removed from the Team Auto Assignment side panel. Bottom summary line rewritten to "Ready to auto-assign N seat(s) for team …" so it no longer echoes the removed instruction.
+
+
+
 ## Latest UI polish (Jul 2026) — Sidebar
 - Removed "Infollion" wordmark and "Super Admin" role subtitle from sidebar header. Only the Infollion logo is now shown, centered, at a larger size (h-10) for a cleaner look.
 - Unified label typography across all sidebar entries (top-level links + group headers + children) at `text-sm`.

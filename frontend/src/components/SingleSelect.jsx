@@ -160,11 +160,8 @@ export default function SingleSelect({
                   </div>
                   {o.chip && (
                     <span
-                      className={`ml-auto flex-shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                        optDisabled
-                          ? "bg-amber-50 text-amber-700 border-amber-200"
-                          : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      }`}
+                      className="ml-auto flex-shrink-0 inline-flex items-center justify-center w-24 h-6 text-[10px] font-semibold uppercase tracking-wider rounded-full border-2 select-none whitespace-nowrap bg-white"
+                      style={{ color: "#ec9324", borderColor: "#ec9324" }}
                       data-testid={testId ? `${testId}-option-${o.value}-chip` : undefined}
                     >
                       {o.chip}

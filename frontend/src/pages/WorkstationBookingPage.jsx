@@ -958,15 +958,26 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                         </label>
                         <div className="mt-1">
                           <SingleSelect
-                            options={teams.map((t) => {
-                              const alloted = allotedTeamIds.has(t.id);
-                              return {
-                                value: t.id,
-                                label: t.name,
-                                chip: alloted ? "Alloted" : undefined,
-                                disabled: alloted,
-                              };
-                            })}
+                            options={teams
+                              .map((t) => {
+                                const alloted = allotedTeamIds.has(t.id);
+                                return {
+                                  value: t.id,
+                                  label: t.name,
+                                  chip: alloted ? "Alloted" : undefined,
+                                  disabled: alloted,
+                                  _alloted: alloted,
+                                };
+                              })
+                              .sort((a, b) => {
+                                // Unalloted first, then alphabetical within each group
+                                if (a._alloted !== b._alloted) return a._alloted ? 1 : -1;
+                                return String(a.label || "").localeCompare(
+                                  String(b.label || ""),
+                                  undefined,
+                                  { sensitivity: "base" }
+                                );
+                              })}
                             value={teamId}
                             onChange={(v) => {
                               setTeamId(v || "");
@@ -1017,25 +1028,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                         </div>
                       )}
 
-                      {/* Awaiting-start hint */}
-                      {autoPhase === "awaiting-start" && (
-                        <div
-                          className="rounded-md border border-blue-100 bg-blue-50 p-3 text-[12px] text-blue-900 flex items-start gap-2"
-                          data-testid="ws-auto-instruction"
-                        >
-                          <MousePointerClick sx={{ fontSize: 14 }} className="mt-[1px] flex-shrink-0"/>
-                          <div>
-                            Click a <strong>starting workstation</strong> on the floor map.
-                            {teamMemberCount > 0 && (
-                              <>
-                                {" "}The system will auto-select the next{" "}
-                                <strong>{teamMemberCount}</strong> consecutive
-                                available seat{teamMemberCount === 1 ? "" : "s"}.
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      )}
+                      {/* Awaiting-start hint removed per design update. */}
 
                       {/* Proposed selection summary */}
                       {autoPhase === "proposed" && (
@@ -1345,8 +1338,8 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
 
                   {/* Summary line */}
                   <div className="text-[11px] text-gray-500 bg-blue-50 border border-blue-100 rounded p-2">
-                    {bookingMode === "auto" && autoPhase === "awaiting-team" && "Pick a team, then click a starting workstation on the map."}
-                    {bookingMode === "auto" && autoPhase === "awaiting-start" && `Click any available workstation to auto-select ${teamMemberCount} seats for ${selectedTeam?.name || "the team"}.`}
+                    {bookingMode === "auto" && autoPhase === "awaiting-team" && "Pick a team to enable auto-assignment."}
+                    {bookingMode === "auto" && autoPhase === "awaiting-start" && `Ready to auto-assign ${teamMemberCount} seat${teamMemberCount === 1 ? "" : "s"} for team "${selectedTeam?.name || "—"}".`}
                     {bookingMode === "auto" && autoPhase === "proposed" && (isRequestMode
                       ? `Requesting ${seatCount} workstation${seatCount === 1 ? "" : "s"} for team "${selectedTeam?.name}" on ${fmtDate(date)}.`
                       : `Booking ${seatCount} workstation${seatCount === 1 ? "" : "s"} for team "${selectedTeam?.name}" on ${fmtDate(date)}.`)}

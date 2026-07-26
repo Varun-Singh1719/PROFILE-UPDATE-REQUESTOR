@@ -101,18 +101,29 @@ export default function ConfirmProposalDialog({
   };
 
   // Build employee options for the picker of a given row. Employees already
-  // used in ANOTHER row are shown but disabled.
+  // used in ANOTHER row are shown but disabled. Order: Unalloted first
+  // (alphabetical), then Alloted (alphabetical) at the bottom.
   const employeeOptionsFor = (currentEmpId) => {
-    return teamPool.map((e) => {
-      const takenElsewhere = usedEmpIds.has(e.id) && e.id !== currentEmpId;
-      return {
-        value: e.id,
-        label: e.name || e.email || e.emp_id || "Unknown",
-        sublabel: e.emp_id || e.email || "",
-        disabled: takenElsewhere,
-        chip: takenElsewhere ? "Alloted" : undefined,
-      };
-    });
+    return teamPool
+      .map((e) => {
+        const takenElsewhere = usedEmpIds.has(e.id) && e.id !== currentEmpId;
+        return {
+          value: e.id,
+          label: e.name || e.email || e.emp_id || "Unknown",
+          sublabel: e.emp_id || e.email || "",
+          disabled: takenElsewhere,
+          chip: takenElsewhere ? "Alloted" : undefined,
+          _alloted: takenElsewhere,
+        };
+      })
+      .sort((a, b) => {
+        if (a._alloted !== b._alloted) return a._alloted ? 1 : -1;
+        return String(a.label || "").localeCompare(
+          String(b.label || ""),
+          undefined,
+          { sensitivity: "base" }
+        );
+      });
   };
 
   // Members from the team who are NOT yet placed in the proposal — used to
@@ -158,9 +169,8 @@ export default function ConfirmProposalDialog({
             <Users sx={{ fontSize: 18 }} className="text-[#ec9324]"/>
             Review proposed workstation plan
           </DialogTitle>
-          <DialogDescription className="text-[12px] text-gray-600 mt-1">
-            Confirm which team member will sit at each workstation before the
-            booking is created. You can swap or remove any row.
+          <DialogDescription className="sr-only">
+            Review the proposed workstation plan before confirming.
           </DialogDescription>
           <div className="mt-2 flex items-center flex-wrap gap-3 text-[11.5px] text-gray-600">
             <span className="inline-flex items-center gap-1">
@@ -172,7 +182,10 @@ export default function ConfirmProposalDialog({
               {fmtDateLong(date)}
             </span>
             <span className="ml-auto inline-flex items-center gap-2">
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
+              <span
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white whitespace-nowrap"
+                style={{ backgroundColor: "#ec9324" }}
+              >
                 {rows.length} workstation{rows.length === 1 ? "" : "s"}
               </span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-gray-100 text-gray-600 border-gray-200">
@@ -205,7 +218,8 @@ export default function ConfirmProposalDialog({
                     {idx + 1}
                   </span>
                   <span
-                    className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-2 py-1"
+                    className="text-[11px] font-bold text-white rounded px-2 py-1"
+                    style={{ backgroundColor: "#ec9324" }}
                     data-testid={`proposal-row-${r.seatId}-seat`}
                   >
                     {r.seatLabel}
@@ -229,12 +243,14 @@ export default function ConfirmProposalDialog({
                       testId={`proposal-emp-select-${r.seatId}`}
                     />
                   ) : r.empId ? (
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-gray-900 truncate" title={nameOf(r.empId)}>
+                    <div className="min-w-0 flex items-baseline gap-2 flex-wrap">
+                      <span className="text-sm font-semibold text-gray-900 truncate" title={nameOf(r.empId)}>
                         {nameOf(r.empId)}
-                      </div>
+                      </span>
                       {subOf(r.empId) && (
-                        <div className="text-[11px] text-gray-500 truncate">{subOf(r.empId)}</div>
+                        <span className="text-[11px] text-gray-500 truncate">
+                          {subOf(r.empId)}
+                        </span>
                       )}
                     </div>
                   ) : (
@@ -248,40 +264,48 @@ export default function ConfirmProposalDialog({
                 {/* Row actions */}
                 <div className="flex-shrink-0 flex items-center gap-1">
                   {isEditing ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
+                    <button
+                      type="button"
                       onClick={() => setEditingSeatId(null)}
                       disabled={saving || !r.empId}
-                      className="h-7 px-2 text-[11px]"
+                      className="group relative inline-flex items-center justify-center w-8 h-8 rounded-full hover:bg-gray-100 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
                       data-testid={`proposal-row-${r.seatId}-done`}
+                      aria-label="Done"
+                      title="Done"
                     >
-                      <Check sx={{ fontSize: 14 }} className="mr-1"/> Done
-                    </Button>
+                      <Check sx={{ fontSize: 18 }}/>
+                      <span className="pointer-events-none absolute top-full mt-1.5 right-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+                        Done
+                      </span>
+                    </button>
                   ) : (
                     <>
-                      <Button
-                        variant="outline"
-                        size="sm"
+                      <button
+                        type="button"
                         onClick={() => (r.empId ? clearRow(r.seatId) : setEditingSeatId(r.seatId))}
                         disabled={saving}
-                        className="h-7 px-2 text-[11px] text-gray-700"
+                        className="group relative inline-flex items-center justify-center w-8 h-8 rounded-full hover:bg-gray-100 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
                         data-testid={`proposal-row-${r.seatId}-edit`}
-                        title={r.empId ? "Change occupant" : "Pick occupant"}
+                        aria-label="Edit"
                       >
-                        <Pencil sx={{ fontSize: 13 }} className="mr-1"/> Edit
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
+                        <Pencil sx={{ fontSize: 17 }}/>
+                        <span className="pointer-events-none absolute top-full mt-1.5 right-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+                          Edit
+                        </span>
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => removeRow(r.seatId)}
                         disabled={saving}
-                        className="h-7 px-2 text-[11px] text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                        className="group relative inline-flex items-center justify-center w-8 h-8 rounded-full hover:bg-red-50 text-red-600 disabled:opacity-40 disabled:cursor-not-allowed"
                         data-testid={`proposal-row-${r.seatId}-remove`}
-                        title="Remove this workstation from the proposal"
+                        aria-label="Remove"
                       >
-                        <Trash sx={{ fontSize: 13 }} className="mr-1"/> Remove
-                      </Button>
+                        <Trash sx={{ fontSize: 17 }}/>
+                        <span className="pointer-events-none absolute top-full mt-1.5 right-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+                          Remove
+                        </span>
+                      </button>
                     </>
                   )}
                 </div>
