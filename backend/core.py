@@ -1083,6 +1083,12 @@ class BulkContactRole(BaseModel):
     contact_ids: List[str]
     role: ContactRole
 
+class BulkContactPermissionSets(BaseModel):
+    contact_ids: List[str]
+    permission_set_ids: List[str]
+    # replace = overwrite; add = union; remove = subtract
+    mode: Literal["replace", "add", "remove"] = "replace"
+
 class EmailTemplateIn(BaseModel):
     name: str
     kind: str  # new_employee | admin_password_reset | forgot_password | custom-<slug>

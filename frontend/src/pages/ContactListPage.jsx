@@ -696,6 +696,9 @@ export default function ContactListPage() {
   const [selected, setSelected] = useState([]);
   const [bulkRoleOpen, setBulkRoleOpen] = useState(false);
   const [bulkRole, setBulkRole] = useState("Admin");
+  const [bulkPsetOpen, setBulkPsetOpen] = useState(false);
+  const [bulkPsetIds, setBulkPsetIds] = useState([]);
+  const [bulkPsetMode, setBulkPsetMode] = useState("replace"); // replace | add | remove
 
   const [detailContact, setDetailContact] = useState(null);
   const [generated, setGenerated] = useState(null); // {password, email}
@@ -777,6 +780,36 @@ export default function ContactListPage() {
       const r = await api.post("/contacts/bulk-role", { contact_ids: selected, role: bulkRole });
       notify.success(`${r.data?.updated || 0} employee(s) → ${bulkRole}`);
       setBulkRoleOpen(false);
+      setSelected([]);
+      load();
+    } catch (e) { notify.error(e?.response?.data?.detail || "Failed"); }
+  };
+
+  const openBulkPset = () => {
+    setBulkPsetIds([]);
+    setBulkPsetMode("replace");
+    setBulkPsetOpen(true);
+  };
+
+  const applyBulkPset = async () => {
+    if (selected.length === 0) return;
+    if (bulkPsetMode !== "remove" && bulkPsetIds.length === 0) {
+      notify.error("Select at least one permission set");
+      return;
+    }
+    if (bulkPsetMode === "remove" && bulkPsetIds.length === 0) {
+      notify.error("Select the permission sets to remove");
+      return;
+    }
+    try {
+      const r = await api.post("/contacts/bulk-permission-sets", {
+        contact_ids: selected,
+        permission_set_ids: bulkPsetIds,
+        mode: bulkPsetMode,
+      });
+      const verb = bulkPsetMode === "replace" ? "assigned" : bulkPsetMode === "add" ? "added to" : "removed from";
+      notify.success(`Permission sets ${verb} ${r.data?.updated || 0} employee(s)`);
+      setBulkPsetOpen(false);
       setSelected([]);
       load();
     } catch (e) { notify.error(e?.response?.data?.detail || "Failed"); }
@@ -897,6 +930,7 @@ export default function ContactListPage() {
                 <DropdownMenuItem onClick={() => bulkActivate("Active")} data-testid="bulk-activate">Activate</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => bulkActivate("Inactive")} data-testid="bulk-deactivate">Deactivate</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setBulkRoleOpen(true)} data-testid="bulk-change-role">Change role…</DropdownMenuItem>
+                <DropdownMenuItem onClick={openBulkPset} data-testid="bulk-assign-psets">Assign Permission Sets…</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -983,6 +1017,86 @@ export default function ContactListPage() {
             <Button variant="outline" onClick={() => setBulkRoleOpen(false)}>Cancel</Button>
             <Button onClick={applyBulkRole} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="bulk-role-apply">
               Apply
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkPsetOpen} onOpenChange={setBulkPsetOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldCheck sx={{ fontSize: 18 }} className="text-[#ec9324]"/>
+              Assign Permission Sets to {selected.length} employee(s)
+            </DialogTitle>
+            <DialogDescription>
+              Pick one or more permission sets and choose how they should be applied.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-2 space-y-4">
+            <div>
+              <Label className="text-xs uppercase tracking-wide text-gray-500">Mode</Label>
+              <div className="mt-1.5 grid grid-cols-3 gap-2" data-testid="bulk-pset-mode-group">
+                {[
+                  { key: "replace", title: "Replace",   hint: "Overwrite existing sets" },
+                  { key: "add",     title: "Add",       hint: "Append to existing sets" },
+                  { key: "remove",  title: "Remove",    hint: "Take the chosen sets away" },
+                ].map((m) => {
+                  const active = bulkPsetMode === m.key;
+                  return (
+                    <button
+                      key={m.key}
+                      type="button"
+                      onClick={() => setBulkPsetMode(m.key)}
+                      data-testid={`bulk-pset-mode-${m.key}`}
+                      className={`rounded-md border px-2.5 py-2 text-left transition-colors ${
+                        active
+                          ? "border-[#ec9324] bg-[#ec9324]/10 text-[#ec9324]"
+                          : "border-gray-200 hover:border-gray-300 text-gray-700"
+                      }`}
+                    >
+                      <div className="text-[13px] font-semibold leading-tight">{m.title}</div>
+                      <div className="text-[10.5px] text-gray-500 mt-0.5">{m.hint}</div>
+                    </button>
+                  );
+                })}
+              </div>
+              {bulkPsetMode === "replace" && (
+                <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2 mt-2">
+                  Heads-up: <b>Replace</b> will overwrite the current permission sets on every selected employee.
+                </div>
+              )}
+            </div>
+            <div>
+              <Label className="text-xs uppercase tracking-wide text-gray-500">
+                Permission Sets {bulkPsetMode === "remove" ? "to remove" : "to assign"}
+              </Label>
+              <div className="mt-1.5">
+                <MultiSelectFilter
+                  label="Permission Sets"
+                  options={permissionSets.map((p) => ({
+                    value: p.id,
+                    label: `#${p.numeric_id || p.seq_no || "?"} · ${p.title || p.name || "Untitled"}`,
+                  }))}
+                  value={bulkPsetIds}
+                  onChange={setBulkPsetIds}
+                  placeholder="Pick one or more permission sets…"
+                  testIdPrefix="bulk-pset-multiselect"
+                  hideLabelPrefix
+                  fullWidth
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkPsetOpen(false)}>Cancel</Button>
+            <Button
+              onClick={applyBulkPset}
+              disabled={bulkPsetIds.length === 0}
+              className="bg-[#ec9324] hover:bg-[#d4811f] text-white disabled:opacity-50"
+              data-testid="bulk-pset-apply"
+            >
+              Apply to {selected.length}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1162,15 +1276,30 @@ export default function ContactListPage() {
             })}
           </div>
         )}
-        <div className="bg-white p-4 rounded-xl shadow-soft border border-gray-100 space-y-3" data-testid="contacts-filter-bar">
-          {/* Row 1 — free-text name search + existing multi-select filters */}
-          <div className="flex gap-3 flex-wrap items-center">
+        <div className="bg-white p-4 rounded-xl shadow-soft border border-gray-100" data-testid="contacts-filter-bar">
+          {/* Single-row filter bar — wraps to next line if width is limited */}
+          <div className="flex gap-2.5 flex-wrap items-center">
             <DeferredSearchInput
-              className="flex-1 min-w-[240px]"
+              className="min-w-[200px] flex-1 basis-[200px]"
               placeholder="Search name..."
               testId="contact-search"
               value={q}
               onCommit={setQ}
+            />
+            <ChipInput
+              className="min-w-[220px] flex-1 basis-[220px]"
+              value={empIds}
+              onCommit={setEmpIds}
+              placeholder="Employee IDs (INF857, INF631…)"
+              testId="contact-empid-chips"
+            />
+            <ChipInput
+              className="min-w-[240px] flex-1 basis-[240px]"
+              value={emails}
+              onCommit={setEmails}
+              placeholder="Email IDs (a@b.com, x@y.com…)"
+              testId="contact-email-chips"
+              transform={(v) => v.toLowerCase()}
             />
             <MultiSelectFilter
               label="Role"
@@ -1178,7 +1307,7 @@ export default function ContactListPage() {
               onChange={setRole}
               options={ALL_ROLE_FILTERS.map((r) => ({ value: r, label: r }))}
               testIdPrefix="contact-role-filter"
-              className="w-48"
+              className="w-40"
             />
             <MultiSelectFilter
               label="Status"
@@ -1189,7 +1318,7 @@ export default function ContactListPage() {
                 { value: "Inactive", label: "Inactive" },
               ]}
               testIdPrefix="contact-status-filter"
-              className="w-40"
+              className="w-36"
             />
             <MultiSelectFilter
               label="Permission Set"
@@ -1207,53 +1336,28 @@ export default function ContactListPage() {
                 label: `#${p.numeric_id || p.seq_no || "?"} · ${p.title || p.name || "Untitled"}`,
               }))}
               testIdPrefix="contact-pset-filter"
-              className="w-64"
+              className="w-52"
             />
-          </div>
-
-          {/* Row 2 — chip-based bulk search for Employee IDs and Emails */}
-          <div className="flex gap-3 flex-wrap items-start">
-            <div className="flex-1 min-w-[280px]">
-              <div className="text-[11px] font-medium text-gray-500 mb-1">Employee ID</div>
-              <ChipInput
-                value={empIds}
-                onCommit={setEmpIds}
-                placeholder="Type or paste emp IDs (e.g. INF857, INF631)…"
-                testId="contact-empid-chips"
-              />
-            </div>
-            <div className="flex-1 min-w-[280px]">
-              <div className="text-[11px] font-medium text-gray-500 mb-1">Email ID</div>
-              <ChipInput
-                value={emails}
-                onCommit={setEmails}
-                placeholder="Type or paste emails (e.g. a@b.com, x@y.com)…"
-                testId="contact-email-chips"
-                transform={(v) => v.toLowerCase()}
-              />
-            </div>
             {(q || empIds.length > 0 || emails.length > 0 || role.length > 0 || status.length > 0 || psetFilter.length > 0) && (
-              <div className="pt-[22px]">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setQ("");
-                    setEmpIds([]);
-                    setEmails([]);
-                    setRole([]);
-                    setStatus([]);
-                    setPsetFilter([]);
-                    const sp = new URLSearchParams(searchParams);
-                    sp.delete("permission_set");
-                    setSearchParams(sp, { replace: true });
-                  }}
-                  className="h-9 border-gray-300 text-gray-600 hover:bg-gray-50"
-                  data-testid="clear-all-filters-btn"
-                >
-                  <X sx={{ fontSize: 14 }} className="mr-1" /> Clear all filters
-                </Button>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setQ("");
+                  setEmpIds([]);
+                  setEmails([]);
+                  setRole([]);
+                  setStatus([]);
+                  setPsetFilter([]);
+                  const sp = new URLSearchParams(searchParams);
+                  sp.delete("permission_set");
+                  setSearchParams(sp, { replace: true });
+                }}
+                className="inline-flex items-center gap-1 h-8 px-2.5 rounded-md border border-gray-300 bg-white text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-800 hover:border-gray-400 transition-colors whitespace-nowrap"
+                data-testid="clear-all-filters-btn"
+                title="Clear all filters"
+              >
+                <X sx={{ fontSize: 12 }} /> Clear All
+              </button>
             )}
           </div>
         </div>

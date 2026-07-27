@@ -17,7 +17,7 @@ from core import (
     api_router, db, log_audit, now_iso, require_role, get_current_user,
     hash_password, encrypt_password, decrypt_password, generate_password,
     _public_contact,
-    ContactCreate, ContactUpdate, BulkContactStatus, BulkContactRole,
+    ContactCreate, ContactUpdate, BulkContactStatus, BulkContactRole, BulkContactPermissionSets,
 )
 from notifications import (
     send_email, render_new_employee_email, render_admin_password_reset_email,
@@ -309,6 +309,81 @@ async def bulk_contact_role(body: BulkContactRole, user=Depends(require_role("Su
         severity="warning",
     )
     return {"updated": r.modified_count}
+
+
+@api_router.post("/contacts/bulk-permission-sets")
+async def bulk_contact_permission_sets(body: BulkContactPermissionSets, user=Depends(require_role("Super Admin"))):
+    """Assign / add / remove permission sets on multiple employees at once.
+
+    `mode` controls how ``permission_set_ids`` is applied:
+      • replace — overwrite each target's permission_set_ids with the payload
+      • add     — union: append the payload ids (deduped, order preserved)
+      • remove  — subtract: strip the payload ids from each target
+    """
+    if not body.contact_ids:
+        raise HTTPException(400, "No contacts selected")
+    if body.mode != "remove" and not body.permission_set_ids:
+        raise HTTPException(400, "Select at least one permission set")
+
+    # Deduplicate incoming ids while preserving order
+    incoming: List[str] = []
+    for pid in body.permission_set_ids or []:
+        if pid and pid not in incoming:
+            incoming.append(pid)
+
+    # Validate that every id exists — reject the whole request on any miss so
+    # the admin doesn't silently apply a partial change.
+    if incoming:
+        found = await db.permission_sets.find(
+            {"id": {"$in": incoming}}, {"_id": 0, "id": 1}
+        ).to_list(len(incoming))
+        found_ids = {p["id"] for p in found}
+        missing = [pid for pid in incoming if pid not in found_ids]
+        if missing:
+            raise HTTPException(400, f"Unknown permission set id(s): {', '.join(missing)}")
+
+    targets = list(dict.fromkeys(body.contact_ids))  # dedupe while preserving order
+    if not targets:
+        raise HTTPException(400, "No valid contacts")
+
+    updated = 0
+    if body.mode == "replace":
+        r = await db.contacts.update_many(
+            {"id": {"$in": targets}},
+            {"$set": {"permission_set_ids": incoming}},
+        )
+        updated = r.modified_count
+    else:
+        # add / remove are per-row because they depend on the row's current
+        # permission_set_ids. We still batch DB reads for efficiency.
+        rows = await db.contacts.find(
+            {"id": {"$in": targets}},
+            {"_id": 0, "id": 1, "permission_set_ids": 1},
+        ).to_list(len(targets))
+        for row in rows:
+            current: List[str] = row.get("permission_set_ids") or []
+            if body.mode == "add":
+                next_ids = list(current)
+                for pid in incoming:
+                    if pid not in next_ids:
+                        next_ids.append(pid)
+            else:  # remove
+                remove_set = set(incoming)
+                next_ids = [pid for pid in current if pid not in remove_set]
+            if next_ids != current:
+                await db.contacts.update_one(
+                    {"id": row["id"]},
+                    {"$set": {"permission_set_ids": next_ids}},
+                )
+                updated += 1
+
+    await log_audit(
+        actor=user, action="contact.bulk_permission_sets", resource="contact",
+        detail=f"Bulk {body.mode} permission_set_ids={incoming} for {updated} employee(s)",
+        metadata={"count": updated, "mode": body.mode, "permission_set_ids": incoming},
+        severity="warning",
+    )
+    return {"updated": updated, "mode": body.mode}
 
 
 @api_router.post("/contacts")
