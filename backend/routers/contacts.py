@@ -1,5 +1,6 @@
 """Contacts (employees): CRUD + bulk + csv export + password retrieval/reset."""
 import os
+import re
 import csv
 import io
 import uuid
@@ -98,6 +99,8 @@ async def list_contacts(
     type: Optional[str] = None,
     status: Optional[str] = None,
     permission_set_id: Optional[str] = None,
+    emp_ids: Optional[str] = None,
+    emails: Optional[str] = None,
     page: Optional[int] = None,
     page_size: int = 25,
     sort_by: str = "name",
@@ -128,8 +131,26 @@ async def list_contacts(
             else:
                 resolved.append(pid)
         query["permission_set_ids"] = {"$in": resolved} if len(resolved) > 1 else resolved[0]
+    # Multi-value chip filters — Emp ID (exact match) and Email
+    # (case-insensitive). When BOTH are provided we OR them together — the
+    # user is asking for "records matching any of these emp_ids OR any of
+    # these emails" (never a record having both an emp_id from list A and
+    # a different email from list B, which is impossible per-row anyway).
+    emp_id_list = _csv_list(emp_ids)
+    email_list = _csv_list(emails)
+    chip_ors: List[Dict] = []
+    if emp_id_list:
+        chip_ors.append({"emp_id": {"$in": emp_id_list}})
+    if email_list:
+        # Case-insensitive exact match via anchored regex — supports mixed-case
+        # emails without requiring a data migration.
+        email_regexes = [re.compile(f"^{re.escape(e)}$", re.IGNORECASE) for e in email_list]
+        chip_ors.append({"email": {"$in": email_regexes}})
     if q:
-        query["$or"] = [{"name": {"$regex": q, "$options": "i"}}, {"email": {"$regex": q, "$options": "i"}}]
+        chip_ors.append({"name": {"$regex": q, "$options": "i"}})
+        chip_ors.append({"email": {"$regex": q, "$options": "i"}})
+    if chip_ors:
+        query["$or"] = chip_ors
     if page is not None:
         page = max(1, page)
         page_size = max(1, min(page_size, 200))
@@ -202,6 +223,8 @@ async def export_contacts_csv(
     q: Optional[str] = None,
     role: Optional[str] = None,
     status: Optional[str] = None,
+    emp_ids: Optional[str] = None,
+    emails: Optional[str] = None,
 ):
     query = {}
     role_list = _csv_list(role)
@@ -210,8 +233,19 @@ async def export_contacts_csv(
     status_list = _csv_list(status)
     if status_list:
         query["status"] = {"$in": status_list} if len(status_list) > 1 else status_list[0]
+    emp_id_list = _csv_list(emp_ids)
+    email_list = _csv_list(emails)
+    chip_ors: List[Dict] = []
+    if emp_id_list:
+        chip_ors.append({"emp_id": {"$in": emp_id_list}})
+    if email_list:
+        email_regexes = [re.compile(f"^{re.escape(e)}$", re.IGNORECASE) for e in email_list]
+        chip_ors.append({"email": {"$in": email_regexes}})
     if q:
-        query["$or"] = [{"name": {"$regex": q, "$options": "i"}}, {"email": {"$regex": q, "$options": "i"}}]
+        chip_ors.append({"name": {"$regex": q, "$options": "i"}})
+        chip_ors.append({"email": {"$regex": q, "$options": "i"}})
+    if chip_ors:
+        query["$or"] = chip_ors
     items = await db.contacts.find(query, {"_id": 0, "password_hash": 0, "password_encrypted": 0}).to_list(10000)
     items = await _enrich_contacts_with_team(items)
     buf = io.StringIO()

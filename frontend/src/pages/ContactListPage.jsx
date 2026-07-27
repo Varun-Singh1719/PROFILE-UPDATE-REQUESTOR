@@ -11,6 +11,7 @@ import { BulkSelectCheckbox } from "../components/ui/bulk-select-checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import SingleSelect from "../components/SingleSelect";
 import DeferredSearchInput from "../components/DeferredSearchInput";
+import ChipInput from "../components/ChipInput";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from "../components/ui/dialog";
@@ -684,6 +685,8 @@ export default function ContactListPage() {
   const [sortBy, setSortBy] = useState("name");
   const [sortDir, setSortDir] = useState("asc");
   const [q, setQ] = useState("");
+  const [empIds, setEmpIds] = useState([]);      // chip-based Employee ID filter
+  const [emails, setEmails] = useState([]);      // chip-based Email ID filter
   const [role, setRole] = useState([]);
   const [status, setStatus] = useState([]);
   const [psetFilter, setPsetFilter] = useState([]);
@@ -725,6 +728,8 @@ export default function ContactListPage() {
     const r = await api.get("/contacts", {
       params: {
         q: q || undefined,
+        emp_ids: empIds.length ? empIds.join(",") : undefined,
+        emails: emails.length ? emails.join(",") : undefined,
         role: role.length ? role.join(",") : undefined,
         status: status.length ? status.join(",") : undefined,
         permission_set_id: psetFilter.length ? psetFilter.join(",") : undefined,
@@ -741,8 +746,8 @@ export default function ContactListPage() {
     }
     setSelected([]);
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [q, role, status, psetFilter, page, pageSize, sortBy, sortDir]);
-  useEffect(() => { setPage(1); /* reset on filter change */ }, [q, role, status, psetFilter, pageSize]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [q, empIds, emails, role, status, psetFilter, page, pageSize, sortBy, sortDir]);
+  useEffect(() => { setPage(1); /* reset on filter change */ }, [q, empIds, emails, role, status, psetFilter, pageSize]);
 
   const toggleSort = (field) => {
     if (sortBy === field) setSortDir(sortDir === "asc" ? "desc" : "asc");
@@ -1157,51 +1162,100 @@ export default function ContactListPage() {
             })}
           </div>
         )}
-        <div className="flex gap-3 flex-wrap items-center bg-white p-4 rounded-xl shadow-soft border border-gray-100" data-testid="contacts-filter-bar">
-        <DeferredSearchInput
-          className="flex-1 min-w-[240px]"
-          placeholder="Search name or email..."
-          testId="contact-search"
-          value={q}
-          onCommit={setQ}
-        />
-        <MultiSelectFilter
-          label="Role"
-          value={role}
-          onChange={setRole}
-          options={ALL_ROLE_FILTERS.map((r) => ({ value: r, label: r }))}
-          testIdPrefix="contact-role-filter"
-          className="w-48"
-        />
-        <MultiSelectFilter
-          label="Status"
-          value={status}
-          onChange={setStatus}
-          options={[
-            { value: "Active", label: "Active" },
-            { value: "Inactive", label: "Inactive" },
-          ]}
-          testIdPrefix="contact-status-filter"
-          className="w-40"
-        />
-        <MultiSelectFilter
-          label="Permission Set"
-          value={psetFilter}
-          onChange={(v) => {
-            setPsetFilter(v);
-            // Keep the URL in sync so the deep-link is preserved / cleared
-            const sp = new URLSearchParams(searchParams);
-            if (v.length === 1) sp.set("permission_set", v[0]);
-            else sp.delete("permission_set");
-            setSearchParams(sp, { replace: true });
-          }}
-          options={permissionSets.map((p) => ({
-            value: p.id,
-            label: `#${p.numeric_id || p.seq_no || "?"} · ${p.title || p.name || "Untitled"}`,
-          }))}
-          testIdPrefix="contact-pset-filter"
-          className="w-64"
-        />
+        <div className="bg-white p-4 rounded-xl shadow-soft border border-gray-100 space-y-3" data-testid="contacts-filter-bar">
+          {/* Row 1 — free-text name search + existing multi-select filters */}
+          <div className="flex gap-3 flex-wrap items-center">
+            <DeferredSearchInput
+              className="flex-1 min-w-[240px]"
+              placeholder="Search name..."
+              testId="contact-search"
+              value={q}
+              onCommit={setQ}
+            />
+            <MultiSelectFilter
+              label="Role"
+              value={role}
+              onChange={setRole}
+              options={ALL_ROLE_FILTERS.map((r) => ({ value: r, label: r }))}
+              testIdPrefix="contact-role-filter"
+              className="w-48"
+            />
+            <MultiSelectFilter
+              label="Status"
+              value={status}
+              onChange={setStatus}
+              options={[
+                { value: "Active", label: "Active" },
+                { value: "Inactive", label: "Inactive" },
+              ]}
+              testIdPrefix="contact-status-filter"
+              className="w-40"
+            />
+            <MultiSelectFilter
+              label="Permission Set"
+              value={psetFilter}
+              onChange={(v) => {
+                setPsetFilter(v);
+                // Keep the URL in sync so the deep-link is preserved / cleared
+                const sp = new URLSearchParams(searchParams);
+                if (v.length === 1) sp.set("permission_set", v[0]);
+                else sp.delete("permission_set");
+                setSearchParams(sp, { replace: true });
+              }}
+              options={permissionSets.map((p) => ({
+                value: p.id,
+                label: `#${p.numeric_id || p.seq_no || "?"} · ${p.title || p.name || "Untitled"}`,
+              }))}
+              testIdPrefix="contact-pset-filter"
+              className="w-64"
+            />
+          </div>
+
+          {/* Row 2 — chip-based bulk search for Employee IDs and Emails */}
+          <div className="flex gap-3 flex-wrap items-start">
+            <div className="flex-1 min-w-[280px]">
+              <div className="text-[11px] font-medium text-gray-500 mb-1">Employee ID</div>
+              <ChipInput
+                value={empIds}
+                onCommit={setEmpIds}
+                placeholder="Type or paste emp IDs (e.g. INF857, INF631)…"
+                testId="contact-empid-chips"
+              />
+            </div>
+            <div className="flex-1 min-w-[280px]">
+              <div className="text-[11px] font-medium text-gray-500 mb-1">Email ID</div>
+              <ChipInput
+                value={emails}
+                onCommit={setEmails}
+                placeholder="Type or paste emails (e.g. a@b.com, x@y.com)…"
+                testId="contact-email-chips"
+                transform={(v) => v.toLowerCase()}
+              />
+            </div>
+            {(q || empIds.length > 0 || emails.length > 0 || role.length > 0 || status.length > 0 || psetFilter.length > 0) && (
+              <div className="pt-[22px]">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setQ("");
+                    setEmpIds([]);
+                    setEmails([]);
+                    setRole([]);
+                    setStatus([]);
+                    setPsetFilter([]);
+                    const sp = new URLSearchParams(searchParams);
+                    sp.delete("permission_set");
+                    setSearchParams(sp, { replace: true });
+                  }}
+                  className="h-9 border-gray-300 text-gray-600 hover:bg-gray-50"
+                  data-testid="clear-all-filters-btn"
+                >
+                  <X sx={{ fontSize: 14 }} className="mr-1" /> Clear all filters
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
