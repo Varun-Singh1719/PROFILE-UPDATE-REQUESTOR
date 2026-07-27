@@ -197,12 +197,29 @@ _TEST_VARIABLES_BY_KIND = {
     },
 }
 
-# The bell popover navigates using `action_url` when the row is clicked. For
-# a test notification we send the user back to the templates page (with a
-# hash pointing to this specific template) so clicking the notification
-# takes the admin straight to the entry that fired it.
+# The bell popover navigates using `action_url` when the row is clicked.
+# For each template kind we route to the same destination a real production
+# notification of that kind would hit, so admins can validate the entire
+# click-through flow. When we don't have a real booking/request ID to point
+# at (this is a synthetic test after all), we fall back to the listing page
+# for that resource — the admin still lands on the correct module.
 def _test_action_url_for(kind: str) -> str:
-    return f"/admin/notification-templates#{kind}"
+    routes = {
+        # Approvers land on the pending-approvals queue
+        "workstation_request_submitted":  "/workspace-manager/pending-approvals",
+        "meeting_room_request_submitted": "/workspace-manager/pending-approvals",
+        # Approved workstation → the workstation bookings listing
+        "workstation_request_approved":   "/workspace-manager/bookings",
+        "workstation_assigned":           "/workspace-manager/bookings",
+        # Declined workstation → the requestor's own workstation request page
+        "workstation_request_declined":   "/workspace-manager/request-workstation",
+        # Meeting-room approved / declined → the booking screen
+        "meeting_room_request_approved":  "/workspace-manager/meeting-room-booking",
+        "meeting_room_request_declined":  "/workspace-manager/meeting-room-booking",
+        # Profix request closed → the admin's tickets list
+        "request_closed":                 "/admin/open-requests",
+    }
+    return routes.get(kind, "/admin/notification-templates")
 
 
 async def _materialise_test_notification(user: dict, tpl: dict) -> dict:
@@ -283,7 +300,16 @@ async def send_test_notifications_all(
 ):
     """Create one sample in-app notification per template for the current
     user in a single call. This gives admins a quick way to populate the
-    bell with one entry for every template so all cards can be validated."""
+    bell with one entry for every template so all cards can be validated.
+
+    Prior test-notifications for this user are wiped first so the bell only
+    contains the freshly-created set — otherwise repeated presses would
+    quickly clutter the dropdown with duplicates.
+    """
+    await db.inapp_notifications.delete_many({
+        "user_id": user["id"],
+        "related_type": "notification_template_test",
+    })
     tpls = await db.notification_templates.find({}, {"_id": 0}).to_list(500)
     created = []
     for tpl in tpls:

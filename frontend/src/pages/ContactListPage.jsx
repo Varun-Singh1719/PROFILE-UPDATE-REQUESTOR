@@ -96,20 +96,20 @@ function PermissionSetsHoverList({ sets, testId }) {
       <HoverCardContent
         align="start"
         sideOffset={6}
-        className="w-[320px] p-0 overflow-hidden shadow-lg border border-gray-200"
+        className="w-[340px] p-0 overflow-hidden shadow-xl border border-gray-900 bg-gray-900 text-white"
         data-testid={`${testId}-popover`}
       >
-        {/* Header — mirrors NotificationBell */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
-          <div className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+        {/* Header — dark theme, matches NotificationBell layout */}
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/10">
+          <div className="text-sm font-semibold text-white flex items-center gap-1.5">
             <ShieldCheck sx={{ fontSize: 16 }} className="text-[#ec9324]" />
             Permission Sets
           </div>
-          <span className="text-[11px] font-medium text-gray-500">
+          <span className="text-[11px] font-medium text-white/60">
             {count} assigned
           </span>
         </div>
-        {/* Rows */}
+        {/* Rows — one line each, name left / ID right */}
         <div className="max-h-[300px] overflow-y-auto">
           {items.map((p) => {
             const num = p.numeric_id || p.seq_no || "?";
@@ -118,23 +118,17 @@ function PermissionSetsHoverList({ sets, testId }) {
               <div
                 key={p.id}
                 data-testid={`${testId}-item-${num}`}
-                className="flex items-start gap-3 px-4 py-2.5 border-b border-gray-50 last:border-b-0 hover:bg-gray-50 transition-colors"
+                className="flex items-center justify-between gap-3 px-4 py-2 border-b border-white/5 last:border-b-0 hover:bg-white/5 transition-colors"
               >
-                <span
-                  className="mt-0.5 inline-flex items-center justify-center w-7 h-7 rounded-full shrink-0"
-                  style={{ backgroundColor: "#fff7ed", color: "#ec9324" }}
-                >
-                  <ShieldCheck sx={{ fontSize: 14 }} />
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-semibold text-gray-900 truncate" title={nm}>
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <ShieldCheck sx={{ fontSize: 14 }} className="text-[#ec9324] shrink-0" />
+                  <span className="text-[13px] font-medium text-white truncate" title={nm}>
                     {nm}
-                  </div>
-                  <div className="text-[11px] text-gray-500 mt-0.5">
-                    <span className="text-gray-500">ID</span>&nbsp;:&nbsp;
-                    <span className="font-mono font-medium text-[#ec9324]">{num}</span>
-                  </div>
+                  </span>
                 </div>
+                <span className="text-[11px] text-white/60 shrink-0 tabular-nums text-right">
+                  ID&nbsp;:&nbsp;<span className="font-mono font-semibold text-[#ec9324]">{num}</span>
+                </span>
               </div>
             );
           })}

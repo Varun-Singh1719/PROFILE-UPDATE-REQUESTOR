@@ -3042,3 +3042,79 @@ agent_communication:
           - ✅ Radio buttons, compact trigger, Remove mode filtering all working
           - ✅ No regression in Add Employee form
           - ❌ CRITICAL: Title and X button overlap by 16px - MUST BE FIXED
+
+---
+
+user_problem_statement: "Employee list: show permission set COUNT with hover popover (black bg, white text, name left / ID right on same line). Notification templates: 'Send Test' + 'Send test for all' create test notifications in bell that link to the RESPECTIVE booking/request page, not the templates page."
+
+backend:
+  - task: "Test notification action_url routes to correct page per kind"
+    implemented: true
+    working: "NA"
+    file: "backend/routers/notifications_inapp.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Updated `_test_action_url_for` to map each notification kind to the same destination a real production notification hits: workstation_request_submitted/meeting_room_request_submitted → /workspace-manager/pending-approvals; workstation_request_approved/workstation_assigned → /workspace-manager/bookings; workstation_request_declined → /workspace-manager/request-workstation; meeting_room_request_approved/declined → /workspace-manager/meeting-room-booking; request_closed → /admin/open-requests. Also send-test-all now wipes prior test notifications (related_type='notification_template_test') for the current user first so the bell isn't cluttered."
+
+frontend:
+  - task: "Employee list permission set count pill + dark hover popover"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/ContactListPage.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "PermissionSetsHoverList now uses a DARK popover (bg-gray-900, white text) with each set rendered on a single line — name left with shield icon, 'ID : N' right-aligned in orange. The trigger stays as an outlined orange pill showing '<count> set(s)'."
+
+  - task: "Notification Templates 'Send Test' per card + 'Send test for all'"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/NotificationTemplatesPage.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Each template card has a Send Test button (orange outline). Top-right layout action has Send test for all. Both hit /api/notification-templates/{id}/send-test and /api/notification-templates/send-test-all respectively. The 'Send test for all' now clears prior test notifications first so re-runs stay tidy."
+
+metadata:
+  test_sequence: 4
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Test notification action_url routes to correct page per kind"
+    - "Employee list permission set count pill + dark hover popover"
+    - "Notification Templates 'Send Test' per card + 'Send test for all'"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: |
+      Please verify these targeted changes only:
+      
+      1. BACKEND: POST /api/notification-templates/send-test-all as admin@ticketing.com / Admin@123.
+         - Response must have ok=true and count=8.
+         - Confirm each of the 8 kinds now has action_url pointing to the REAL destination (NOT /admin/notification-templates):
+             workstation_request_submitted   -> /workspace-manager/pending-approvals
+             workstation_request_approved    -> /workspace-manager/bookings
+             workstation_request_declined    -> /workspace-manager/request-workstation
+             workstation_assigned            -> /workspace-manager/bookings
+             meeting_room_request_submitted  -> /workspace-manager/pending-approvals
+             meeting_room_request_approved   -> /workspace-manager/meeting-room-booking
+             meeting_room_request_declined   -> /workspace-manager/meeting-room-booking
+             request_closed                  -> /admin/open-requests
+         - Re-run send-test-all and confirm the count of related_type='notification_template_test' rows for admin stays at 8 (not doubled) — dedup wipe must work.
+         - POST /api/notification-templates/{id}/send-test for one template id — must create exactly one additional row for that kind for admin, and its action_url matches the map above.
+      
+      Do NOT test the UI hover popover styling — main agent has already visually confirmed it. Only exercise the backend routes.
