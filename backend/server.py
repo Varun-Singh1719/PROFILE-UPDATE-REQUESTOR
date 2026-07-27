@@ -110,6 +110,19 @@ async def startup():
     await db.inapp_notifications.create_index([("user_id", 1), ("created_at", -1)])
     await db.inapp_notifications.create_index([("user_id", 1), ("read", 1)])
     await db.notification_templates.create_index("kind", unique=True)
+    # ─── Migration: default phone_isd = "+91" for existing contacts that
+    # pre-date the ISD split (Jul-2026). Idempotent — the query only matches
+    # rows that don't already have a phone_isd persisted.
+    try:
+        migr = await db.contacts.update_many(
+            {"$or": [{"phone_isd": {"$exists": False}}, {"phone_isd": None}, {"phone_isd": ""}]},
+            {"$set": {"phone_isd": "+91"}},
+        )
+        if migr.modified_count:
+            logger.info(f"Defaulted phone_isd=+91 on {migr.modified_count} contact(s)")
+    except Exception as _e:  # noqa: BLE001
+        logger.warning(f"phone_isd default migration skipped: {_e}")
+
     # Seed default notification templates (idempotent — skips existing kinds)
     from inapp_notifications import seed_default_templates as _seed_inapp_tpl
     await _seed_inapp_tpl(db)

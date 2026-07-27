@@ -294,6 +294,7 @@ async def create_contact(body: ContactCreate, user=Depends(require_role("Super A
         "email": email,
         "name": body.name,
         "phone": body.phone or "",
+        "phone_isd": (body.phone_isd or "+91").strip() or "+91",
         "role": body.role,
         "emp_id": body.emp_id.strip(),
         "doj": body.doj,

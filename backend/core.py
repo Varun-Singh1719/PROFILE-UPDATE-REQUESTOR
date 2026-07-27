@@ -924,6 +924,9 @@ def _public_contact(doc: dict) -> dict:
     doc.pop("_id", None)
     doc.pop("password_hash", None)
     doc.pop("password_encrypted", None)
+    # Backwards-compat default for legacy rows that pre-date the ISD split.
+    if not doc.get("phone_isd"):
+        doc["phone_isd"] = "+91"
     return doc
 
 async def get_current_user(request: Request) -> dict:
@@ -992,6 +995,7 @@ class ContactCreate(BaseModel):
     email: EmailStr
     name: str
     phone: Optional[str] = None
+    phone_isd: Optional[str] = "+91"
     role: ContactRole
     emp_id: str
     doj: str  # YYYY-MM-DD — mandatory
@@ -1000,6 +1004,7 @@ class ContactCreate(BaseModel):
 class ContactUpdate(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
+    phone_isd: Optional[str] = None
     role: Optional[ContactRole] = None
     status: Optional[ContactStatus] = None
     emp_id: Optional[str] = None

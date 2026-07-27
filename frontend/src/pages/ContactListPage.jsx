@@ -55,13 +55,15 @@ import FileDown from "@mui/icons-material/FileDownloadOutlined";
 import Loader2 from "@mui/icons-material/Autorenew";
 import { teamBackground } from "../lib/teamColors";
 import { confirm as confirmDialog } from '../lib/dialog';
+import ISDPicker from "../components/ISDPicker";
+import { DEFAULT_ISD } from "../lib/isdCodes";
 
 function fmt(iso) { if (!iso) return "Never"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
 
 // v3 role model — only Super Admin and Admin remain.
 const ROLE_OPTIONS = ["Super Admin", "Admin"];
 const ALL_ROLE_FILTERS = ["Super Admin", "Admin"];
-const EMPTY_FORM = { email: "", name: "", phone: "", role: "Admin", emp_id: "", doj: "", permission_set_ids: [] };
+const EMPTY_FORM = { email: "", name: "", phone: "", phone_isd: DEFAULT_ISD, role: "Admin", emp_id: "", doj: "", permission_set_ids: [] };
 
 function PasswordField({ contactId, testIdPrefix = "contact" }) {
   const [pwd, setPwd] = useState(null); // decrypted password (or null)
@@ -182,7 +184,16 @@ function EmployeeDetailModal({ contact, open, onClose }) {
           </div>
           <div className="flex items-center gap-2 text-gray-700">
             <Phone sx={{ fontSize: 14 }} className="text-gray-400"/>
-            <span>{contact.phone || <span className="text-gray-400">No phone</span>}</span>
+            <span>
+              {contact.phone ? (
+                <>
+                  <span className="text-gray-500">{contact.phone_isd || DEFAULT_ISD}</span>{" "}
+                  <span>{contact.phone}</span>
+                </>
+              ) : (
+                <span className="text-gray-400">No phone</span>
+              )}
+            </span>
           </div>
           <div className="flex items-center gap-2 text-gray-700">
             <IdCard sx={{ fontSize: 14 }} className="text-gray-400"/>
@@ -809,6 +820,7 @@ export default function ContactListPage() {
       email: c.email,
       name: c.name,
       phone: c.phone || "",
+      phone_isd: c.phone_isd || DEFAULT_ISD,
       role: c.role,
       emp_id: c.emp_id || "",
       doj: c.doj || "",
@@ -824,6 +836,7 @@ export default function ContactListPage() {
         const payload = {
           name: form.name,
           phone: form.phone,
+          phone_isd: form.phone_isd || DEFAULT_ISD,
           role: form.role,
           emp_id: form.emp_id || "",
           doj: form.doj || null,
@@ -836,6 +849,7 @@ export default function ContactListPage() {
           email: form.email,
           name: form.name,
           phone: form.phone,
+          phone_isd: form.phone_isd || DEFAULT_ISD,
           role: form.role,
           emp_id: form.emp_id || "",
           doj: form.doj || null,
@@ -988,7 +1002,23 @@ export default function ContactListPage() {
               </div>
               <div>
                 <Label>Phone</Label>
-                <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} data-testid="contact-phone"/>
+                <div className="mt-1.5 flex gap-2">
+                  <div className="w-[110px] flex-shrink-0">
+                    <ISDPicker
+                      value={form.phone_isd || DEFAULT_ISD}
+                      onChange={(dial) => setForm({ ...form, phone_isd: dial })}
+                      testId="contact-phone-isd"
+                    />
+                  </div>
+                  <Input
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/[^0-9]/g, "") })}
+                    inputMode="numeric"
+                    placeholder="Mobile Number"
+                    className="flex-1"
+                    data-testid="contact-phone"
+                  />
+                </div>
               </div>
               <div>
                 <Label>Emp ID *</Label>
