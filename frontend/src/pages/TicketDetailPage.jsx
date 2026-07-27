@@ -8,6 +8,9 @@ import { Textarea } from "../components/ui/textarea";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from "../components/ui/dropdown-menu";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "../components/ui/dialog";
 import notify from "../lib/notify";
 import { useAuth } from "../context/AuthContext";
 import { useEffectivePage } from "../context/EffectivePermissionsContext";
@@ -18,6 +21,7 @@ import Calendar from "@mui/icons-material/CalendarTodayOutlined";
 import User from "@mui/icons-material/PersonOutlined";
 import Hash from "@mui/icons-material/TagOutlined";
 import Activity from "@mui/icons-material/Timeline";
+import RefreshIcon from "@mui/icons-material/Refresh";
 
 function fmt(iso) { if (!iso) return "-"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
 
@@ -37,6 +41,10 @@ export default function TicketDetailPage() {
   const [comments, setComments] = useState([]);
   const [members, setMembers] = useState([]);
   const [comment, setComment] = useState("");
+  // Reopen dialog state
+  const [reopenOpen, setReopenOpen] = useState(false);
+  const [reopenReason, setReopenReason] = useState("");
+  const [reopenSubmitting, setReopenSubmitting] = useState(false);
 
   const load = async () => {
     const r = await api.get(`/tickets/${id}`); setTicket(r.data);
@@ -68,11 +76,48 @@ export default function TicketDetailPage() {
     setComment(""); load();
   };
 
+  // ── Reopen flow ─────────────────────────────────────────────
+  // Visible when the ticket is Closed AND the viewer is the creator OR an admin.
+  const isCreator = ticket && user && ticket.created_by_id === user.id;
+  const canReopen = ticket?.status === "Closed" && (isCreator || isAdmin);
+  const reopenReasonTrimmed = reopenReason.trim();
+  const reopenReasonValid = reopenReasonTrimmed.length >= 5 && reopenReasonTrimmed.length <= 500;
+
+  const openReopenDialog = () => {
+    setReopenReason("");
+    setReopenOpen(true);
+  };
+
+  const confirmReopen = async () => {
+    if (!reopenReasonValid || reopenSubmitting) return;
+    setReopenSubmitting(true);
+    try {
+      await api.post(`/tickets/${id}/reopen`, { reason: reopenReasonTrimmed });
+      notify.success("Request reopened");
+      setReopenOpen(false);
+      setReopenReason("");
+      load();
+    } catch (e) {
+      notify.error(e?.response?.data?.detail || "Failed to reopen request");
+    } finally {
+      setReopenSubmitting(false);
+    }
+  };
+
   return (
     <Layout
       title={`Request ${numericId(ticket.ticket_id)}`}
       actions={
         <div className="flex gap-2">
+          {canReopen && (
+            <Button
+              onClick={openReopenDialog}
+              className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9 flex items-center gap-1.5"
+              data-testid="detail-reopen-btn"
+            >
+              <RefreshIcon sx={{ fontSize: 16 }}/> Reopen Request
+            </Button>
+          )}
           {canUpdateStatus && permChangeStatus.isVisible && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -178,7 +223,7 @@ export default function TicketDetailPage() {
             {activity.length === 0 && <div className="text-sm text-gray-400">No activity yet.</div>}
             {activity.map((a) => (
               <div key={a.id} className="flex gap-3 text-sm">
-                <div className="w-2 h-2 rounded-full bg-[#ec9324] mt-2 flex-shrink-0"/>
+                <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${a.action === "reopened" ? "bg-emerald-500" : "bg-[#ec9324]"}`}/>
                 <div>
                   <div className="text-gray-800">{a.detail}</div>
                   <div className="text-xs text-gray-500">{a.by_name} · {fmt(a.at)}</div>
@@ -188,6 +233,60 @@ export default function TicketDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Reopen Request Dialog */}
+      <Dialog open={reopenOpen} onOpenChange={(v) => { if (!reopenSubmitting) setReopenOpen(v); }}>
+        <DialogContent className="max-w-md" data-testid="reopen-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshIcon sx={{ fontSize: 20 }} className="text-[#ec9324]"/> Reopen Request
+            </DialogTitle>
+            <DialogDescription>
+              This request will move back to <span className="font-medium">Open</span> and the team will be notified through the activity log. Please share why it needs to be reopened.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-wider text-gray-600">
+              Reason <span className="text-red-500">*</span>
+            </label>
+            <Textarea
+              value={reopenReason}
+              onChange={(e) => setReopenReason(e.target.value)}
+              placeholder="Describe why this request needs to be reopened (minimum 5 characters)"
+              rows={4}
+              maxLength={500}
+              data-testid="reopen-reason-input"
+              disabled={reopenSubmitting}
+            />
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span>
+                {reopenReasonTrimmed.length < 5
+                  ? `At least ${5 - reopenReasonTrimmed.length} more character${5 - reopenReasonTrimmed.length === 1 ? "" : "s"} required`
+                  : "Looks good."}
+              </span>
+              <span>{reopenReasonTrimmed.length}/500</span>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setReopenOpen(false)}
+              disabled={reopenSubmitting}
+              data-testid="reopen-cancel-btn"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmReopen}
+              disabled={!reopenReasonValid || reopenSubmitting}
+              className="bg-[#ec9324] hover:bg-[#d4811f] text-white"
+              data-testid="reopen-confirm-btn"
+            >
+              {reopenSubmitting ? "Reopening..." : "Reopen Request"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

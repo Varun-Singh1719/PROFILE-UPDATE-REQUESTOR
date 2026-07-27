@@ -1068,6 +1068,9 @@ class BulkStatus(BaseModel):
 class CommentCreate(BaseModel):
     content: str
 
+class TicketReopen(BaseModel):
+    reason: str
+
 class ForgotPasswordIn(BaseModel):
     email: EmailStr
 

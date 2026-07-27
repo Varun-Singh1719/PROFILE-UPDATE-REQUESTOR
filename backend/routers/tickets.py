@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 
 from core import (
     api_router, db, now_iso, get_current_user,
-    TicketCreate, TicketUpdate, BulkAssign, BulkStatus, CommentCreate,
+    TicketCreate, TicketUpdate, BulkAssign, BulkStatus, CommentCreate, TicketReopen,
 )
 from notifications import send_email
 from routers.permissions import get_effective_scope, get_user_scope_context, scope_to_id_filter
@@ -847,3 +847,68 @@ async def add_comment(ticket_id: str, body: CommentCreate, user=Depends(get_curr
         "detail": "Added a comment"
     })
     return doc
+
+
+# ---------- Reopen ----------
+@api_router.post("/tickets/{ticket_id}/reopen")
+async def reopen_ticket(ticket_id: str, body: TicketReopen, user=Depends(get_current_user)):
+    """Reopen a Closed ticket.
+
+    Rules:
+      - Ticket must exist and its current status must be "Closed".
+      - Only the ticket creator (requester) OR Super Admin / Admin may reopen.
+        Admins additionally must have "edit" scope over the ticket.
+      - `reason` is required (min 5 chars after trimming, max 500).
+      - Status transitions Closed → Open. Stamps `reopened_by_id/name/on`,
+        stores the most-recent `reopen_reason`, and increments `reopen_count`.
+      - Logs a single `action="reopened"` activity row carrying the reason.
+    """
+    reason = (body.reason or "").strip()
+    if len(reason) < 5:
+        raise HTTPException(400, "Please provide a reason (at least 5 characters).")
+    if len(reason) > 500:
+        raise HTTPException(400, "Reason must be 500 characters or fewer.")
+
+    t = await db.tickets.find_one({"id": ticket_id})
+    if not t:
+        raise HTTPException(404, "Not found")
+    # View-scope check first — hides existence for out-of-scope tickets.
+    if not await _check_ticket_action_scope(user, t, "view"):
+        raise HTTPException(404, "Not found")
+    if t.get("status") != "Closed":
+        raise HTTPException(400, "Only Closed requests can be reopened.")
+
+    role = user.get("role")
+    is_creator = t.get("created_by_id") == user.get("id")
+    is_admin = role in ("Super Admin", "Admin")
+    if not (is_creator or is_admin):
+        raise HTTPException(403, "Only the requester or an admin can reopen this request.")
+    # Admins additionally must pass their edit scope on this ticket.
+    if role == "Admin" and not await _check_ticket_action_scope(user, t, "edit"):
+        raise HTTPException(403, "Edit scope does not cover this ticket")
+
+    ts = now_iso()
+    await db.tickets.update_one(
+        {"id": ticket_id},
+        {
+            "$set": {
+                "status": "Open",
+                "reopen_reason": reason,
+                "reopened_by_id": user.get("id"),
+                "reopened_by_name": user.get("name"),
+                "reopened_on": ts,
+                "updated_on": ts,
+            },
+            "$inc": {"reopen_count": 1},
+        },
+    )
+    await db.activity.insert_one({
+        "id": str(uuid.uuid4()),
+        "ticket_id": ticket_id,
+        "action": "reopened",
+        "by_id": user.get("id"),
+        "by_name": user.get("name"),
+        "at": ts,
+        "detail": f"Request reopened. Reason: {reason}",
+    })
+    return await db.tickets.find_one({"id": ticket_id}, {"_id": 0})
