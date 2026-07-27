@@ -146,121 +146,240 @@ async def update_notification_template(
 # These endpoints materialise a sample in-app notification for the current
 # user using an existing template. They exist so a Super Admin / Admin can
 # quickly validate that every template renders correctly in the bell
-# dropdown without needing to trigger the real business flow (workstation
-# request, meeting room booking, ticket close, etc.).
-
-# Realistic-looking dummy variables per kind so placeholders like
-# `{{seat_label}}` render as something meaningful in the bell.
+# dropdown AND clicks through to the correct focused view.
 #
-# IMPORTANT — value formats MUST mirror what the production callers pass:
-#   • `date` is always YYYY-MM-DD (workstation_bookings.py / workstation_requests.py)
-#   • `start_at` is an ISO datetime string (meeting_room_requests.py)
-# The bell's `formatNotification` in NotificationBell.jsx has strict regexes
-# (e.g. `on ([\d-]+)`) that ONLY match these formats. Using display-friendly
-# variants like "20 Aug 2026" here breaks the parser and the row falls back
-# to raw prose. Keep these values byte-identical in shape to real payloads.
-_TEST_VARIABLES_BY_KIND = {
-    "workstation_request_submitted": {
-        "requested_by_name": "Admin User",
-        "employee_name": "Aarushi Bhatia",
-        "seat_label": "A-101",
-        "date": "2026-08-20",
-    },
-    "workstation_request_approved": {
-        "seat_label": "A-101",
-        "date": "2026-08-20",
-        "decided_by": "Admin User",
-    },
-    "workstation_request_declined": {
-        "seat_label": "A-101",
-        "date": "2026-08-20",
-        "decided_by": "Admin User",
-    },
-    "workstation_assigned": {
-        "seat_label": "B-204",
-        "date": "2026-08-20",
-        "assigned_by": "Admin User",
-    },
-    "meeting_room_request_submitted": {
-        "requested_by_name": "Admin User",
-        "meeting_title": "Sprint Planning",
-        "room_name": "Alpha",
-        "start_at": "2026-08-20T10:00:00Z",
-    },
-    "meeting_room_request_approved": {
-        "title": "Sprint Planning",
-        "room_name": "Alpha",
-        "start_at": "2026-08-20T10:00:00Z",
-        "decided_by": "Admin User",
-    },
-    "meeting_room_request_declined": {
-        "title": "Sprint Planning",
-        "room_name": "Alpha",
-        "start_at": "2026-08-20T10:00:00Z",
-        "decided_by": "Admin User",
-    },
-    "request_closed": {
-        "ticket_id": "TCK-00512",
-        "closed_by": "Admin User",
-    },
-}
-
-# The bell popover navigates using `action_url` when the row is clicked.
-# For each template kind we route to the same destination a real production
-# notification of that kind would hit, so admins can validate the entire
-# click-through flow. When we don't have a real booking/request ID to point
-# at (this is a synthetic test after all), we fall back to the listing page
-# for that resource — the admin still lands on the correct module.
-def _test_action_url_for(kind: str) -> str:
-    routes = {
-        # Approvers land on the pending-approvals queue
-        "workstation_request_submitted":  "/workspace-manager/pending-approvals",
-        "meeting_room_request_submitted": "/workspace-manager/pending-approvals",
-        # Approved workstation → the workstation bookings listing
-        "workstation_request_approved":   "/workspace-manager/bookings",
-        "workstation_assigned":           "/workspace-manager/bookings",
-        # Declined workstation → the requestor's own workstation request page
-        "workstation_request_declined":   "/workspace-manager/request-workstation",
-        # Meeting-room approved / declined → the booking screen
-        "meeting_room_request_approved":  "/workspace-manager/meeting-room-booking",
-        "meeting_room_request_declined":  "/workspace-manager/meeting-room-booking",
-        # Profix request closed → the admin's tickets list
-        "request_closed":                 "/admin/open-requests",
-    }
-    return routes.get(kind, "/admin/notification-templates")
+# CRITICAL — we DO NOT invent synthetic data. Every test notification points
+# at a REAL entry in the database (a real pending request, a real declined
+# meeting-room booking, a real closed ticket, …). That way clicking the
+# notification opens the target page with the correct row selected and
+# focused, exactly as a production notification would.
 
 
-async def _materialise_test_notification(user: dict, tpl: dict) -> dict:
-    """Insert one inapp_notifications row for ``user`` using ``tpl``.
+async def _pick_real_entry_for_kind(kind: str) -> Optional[dict]:
+    """Return a fresh dict {id, action_url, variables} sourced from a REAL
+    DB entry that matches the state a notification of ``kind`` fires from.
+    Returns None only when no matching row exists — in that case the caller
+    should skip this kind (never invent a fake id).
+    """
+    # ------------------------------------------------------------------
+    # Workstation requests
+    # ------------------------------------------------------------------
+    if kind == "workstation_request_submitted":
+        req = await db.workstation_requests.find_one(
+            {"status": "Pending Approval"}, {"_id": 0}, sort=[("requested_on", -1)]
+        )
+        if not req:
+            return None
+        rid = req["id"]
+        return {
+            "id": rid,
+            "action_url": f"/workspace-manager/pending-approvals?requestId={rid}",
+            "variables": {
+                "requested_by_name": (req.get("requested_by") or {}).get("name") or "Admin User",
+                "employee_name":     (req.get("employee") or {}).get("name") or "Employee",
+                "seat_label":        req.get("seat_label") or "—",
+                "date":              req.get("date") or "",
+            },
+            "related_type": "workstation_request",
+        }
 
-    Uses the standard ``notify_user_inapp`` helper so the resulting row is
-    indistinguishable from a production one — including template rendering
-    of ``{{placeholders}}``.
+    if kind == "workstation_request_approved":
+        # Prefer an Approved request that has a linked booking so the click
+        # opens the booking detail (matches real production behaviour).
+        req = await db.workstation_requests.find_one(
+            {"status": "Approved", "approved_booking_id": {"$exists": True, "$ne": None}},
+            {"_id": 0},
+            sort=[("decided_on", -1)],
+        )
+        if not req:
+            req = await db.workstation_requests.find_one({"status": "Approved"}, {"_id": 0})
+        if not req:
+            return None
+        booking_id = req.get("approved_booking_id") or req["id"]
+        return {
+            "id": booking_id,
+            "action_url": f"/workspace-manager/bookings?bookingId={booking_id}",
+            "variables": {
+                "seat_label": req.get("seat_label") or "—",
+                "date":       req.get("date") or "",
+                "decided_by": (req.get("decided_by") or {}).get("name") or "Admin User",
+            },
+            "related_type": "workstation_booking",
+        }
+
+    if kind == "workstation_request_declined":
+        req = await db.workstation_requests.find_one(
+            {"status": "Declined"}, {"_id": 0}, sort=[("decided_on", -1)]
+        )
+        if not req:
+            return None
+        rid = req["id"]
+        return {
+            "id": rid,
+            "action_url": f"/workspace-manager/request-workstation?requestId={rid}",
+            "variables": {
+                "seat_label": req.get("seat_label") or "—",
+                "date":       req.get("date") or "",
+                "decided_by": (req.get("decided_by") or {}).get("name") or "Admin User",
+            },
+            "related_type": "workstation_request",
+        }
+
+    if kind == "workstation_assigned":
+        booking = await db.workstation_bookings.find_one({}, {"_id": 0}, sort=[("created_at", -1)])
+        if not booking:
+            return None
+        bid = booking["id"]
+        return {
+            "id": bid,
+            "action_url": f"/workspace-manager/bookings?bookingId={bid}",
+            "variables": {
+                "seat_label":  booking.get("seat_label") or "—",
+                "date":        booking.get("date") or "",
+                "assigned_by": (booking.get("created_by") or {}).get("name") or "Admin User",
+            },
+            "related_type": "workstation_booking",
+        }
+
+    # ------------------------------------------------------------------
+    # Meeting room requests
+    # ------------------------------------------------------------------
+    if kind == "meeting_room_request_submitted":
+        req = await db.meeting_room_requests.find_one(
+            {"status": "Pending Approval"}, {"_id": 0}, sort=[("requested_on", -1)]
+        )
+        if not req:
+            return None
+        rid = req["id"]
+        return {
+            "id": rid,
+            "action_url": f"/workspace-manager/pending-approvals?requestId={rid}",
+            "variables": {
+                "requested_by_name": (req.get("requested_by") or {}).get("name") or "Admin User",
+                "meeting_title":     req.get("title") or "Meeting",
+                "room_name":         req.get("room_name") or "Room",
+                "start_at":          req.get("start_at") or "",
+            },
+            "related_type": "meeting_room_request",
+        }
+
+    if kind == "meeting_room_request_approved":
+        booking = await db.room_bookings.find_one({}, {"_id": 0}, sort=[("created_at", -1)])
+        if not booking:
+            return None
+        bid = booking["id"]
+        # For {{decided_by}} — pull the request that spawned this booking if
+        # available, otherwise fall back to the organizer.
+        decided_by = ""
+        from_req_id = booking.get("from_request_id")
+        if from_req_id:
+            req = await db.meeting_room_requests.find_one({"id": from_req_id}, {"_id": 0})
+            if req:
+                decided_by = (req.get("decided_by") or {}).get("name", "")
+        if not decided_by:
+            decided_by = (booking.get("organizer") or {}).get("name") or "Admin User"
+        return {
+            "id": bid,
+            "action_url": f"/workspace-manager/meeting-room-booking?bookingId={bid}",
+            "variables": {
+                "title":      booking.get("title") or "Meeting",
+                "room_name":  booking.get("room_name") or "Room",
+                "start_at":   booking.get("start_at") or "",
+                "decided_by": decided_by,
+            },
+            "related_type": "room_booking",
+        }
+
+    if kind == "meeting_room_request_declined":
+        req = await db.meeting_room_requests.find_one(
+            {"status": "Declined"}, {"_id": 0}, sort=[("decided_on", -1)]
+        )
+        if not req:
+            return None
+        rid = req["id"]
+        return {
+            "id": rid,
+            "action_url": f"/workspace-manager/meeting-room-booking?requestId={rid}",
+            "variables": {
+                "title":      req.get("title") or "Meeting",
+                "room_name":  req.get("room_name") or "Room",
+                "start_at":   req.get("start_at") or "",
+                "decided_by": (req.get("decided_by") or {}).get("name") or "Admin User",
+            },
+            "related_type": "meeting_room_request",
+        }
+
+    # ------------------------------------------------------------------
+    # Profix ticket closed
+    # ------------------------------------------------------------------
+    if kind == "request_closed":
+        ticket = await db.tickets.find_one(
+            {"status": "Closed"}, {"_id": 0}, sort=[("closed_on", -1)]
+        )
+        if not ticket:
+            return None
+        tid = ticket["id"]
+        # Tickets carry a human-readable id (e.g. "TKT-1102") separate from
+        # the internal uuid. Use it in the body so the bell's regex parser
+        # extracts a clean number, matching real production notifications.
+        display_id = ticket.get("ticket_id") or tid[:8]
+        closed_by = (
+            (ticket.get("closed_by") or {}).get("name")
+            if isinstance(ticket.get("closed_by"), dict)
+            else (ticket.get("closed_by") if isinstance(ticket.get("closed_by"), str) else None)
+        )
+        if not closed_by:
+            closed_by = (ticket.get("updated_by") or {}).get("name", "") or "Admin User"
+        return {
+            "id": tid,
+            "action_url": f"/admin/tickets/{tid}",
+            "variables": {
+                "ticket_id": display_id,
+                "closed_by": closed_by,
+            },
+            "related_type": "ticket",
+        }
+
+    return None
+
+
+async def _materialise_test_notification(user: dict, tpl: dict) -> Optional[dict]:
+    """Insert one inapp_notifications row for ``user`` using ``tpl`` and a
+    REAL matching-state DB entry. Returns None (and inserts nothing) when
+    no suitable entry exists — callers should log and skip that kind.
+
+    The inserted row is tagged with related_type='notification_template_test'
+    so the dedup wipe in send-test-all can find it, but the action_url and
+    the visible id refer to real data — clicking the bell row opens the
+    target page with the correct entity selected, exactly as production.
     """
     from inapp_notifications import notify_user_inapp
 
     kind = tpl["kind"]
-    variables = _TEST_VARIABLES_BY_KIND.get(kind, {})
+    src = await _pick_real_entry_for_kind(kind)
+    if not src:
+        return None
     doc = await notify_user_inapp(
         db,
         user_id=user["id"],
         kind=kind,
-        variables=variables,
-        related_id=tpl["id"],
+        variables=src["variables"],
+        related_id=src["id"],
+        # We keep the test tag so the dedup wipe in send-test-all can
+        # target it, but expose the real underlying entity via
+        # related_id + action_url so click-through works.
         related_type="notification_template_test",
-        action_url=_test_action_url_for(kind),
+        action_url=src["action_url"],
         default_title=tpl.get("title") or "Test notification",
         default_body=tpl.get("body") or "This is a test notification.",
     )
     if doc is None:
-        # Template is Inactive — still surface a row so the admin can see
-        # something in the bell for validation. Bypass status check by
-        # inserting directly with a "(Test — Inactive)" tag in the title.
+        # Template Inactive → bypass status check with a manual insert so
+        # the admin can still validate the row (title tagged with [Test]).
         import uuid as _uuid
         title = tpl.get("title") or "Test notification"
         body = tpl.get("body") or "This is a test notification."
-        # Render placeholders manually for the inactive case.
-        for k, v in variables.items():
+        for k, v in src["variables"].items():
             title = title.replace("{{" + k + "}}", str(v))
             body = body.replace("{{" + k + "}}", str(v))
         doc = {
@@ -269,9 +388,9 @@ async def _materialise_test_notification(user: dict, tpl: dict) -> dict:
             "kind": kind,
             "title": f"[Test] {title}",
             "body": body,
-            "related_id": tpl["id"],
+            "related_id": src["id"],
             "related_type": "notification_template_test",
-            "action_url": _test_action_url_for(kind),
+            "action_url": src["action_url"],
             "read": False,
             "created_at": now_iso(),
             "read_at": None,
@@ -287,12 +406,18 @@ async def send_test_notification(
     user=Depends(require_role("Super Admin", "Admin")),
 ):
     """Create one sample in-app notification for the current user from a
-    single template. Useful for previewing what a real notification will
-    look like in the bell dropdown."""
+    single template, linked to a REAL matching-state entry so click-through
+    opens the correct focused view."""
     tpl = await db.notification_templates.find_one({"id": tpl_id})
     if not tpl:
         raise HTTPException(404, "Template not found")
     doc = await _materialise_test_notification(user, tpl)
+    if not doc:
+        raise HTTPException(
+            409,
+            f"No matching-state entry exists for kind '{tpl['kind']}' — "
+            "create a real request/booking/ticket in the appropriate state first.",
+        )
     await log_audit(
         actor=user, action="notification_template.send_test",
         resource="notification_template", resource_id=tpl_id,
@@ -307,30 +432,37 @@ async def send_test_notifications_all(
     user=Depends(require_role("Super Admin", "Admin")),
 ):
     """Create one sample in-app notification per template for the current
-    user in a single call. This gives admins a quick way to populate the
-    bell with one entry for every template so all cards can be validated.
+    user, each linked to a REAL matching-state DB entry so click-through
+    opens the correct focused view. Templates whose kind has no matching
+    entry are reported in the ``skipped`` list rather than silently ignored.
 
     Prior test-notifications for this user are wiped first so the bell only
-    contains the freshly-created set — otherwise repeated presses would
-    quickly clutter the dropdown with duplicates.
+    contains the freshly-created set.
     """
     await db.inapp_notifications.delete_many({
         "user_id": user["id"],
         "related_type": "notification_template_test",
     })
     tpls = await db.notification_templates.find({}, {"_id": 0}).to_list(500)
-    created = []
+    created, skipped = [], []
     for tpl in tpls:
         doc = await _materialise_test_notification(user, tpl)
         if doc:
-            created.append({"kind": tpl["kind"], "id": doc.get("id")})
+            created.append({"kind": tpl["kind"], "id": doc.get("id"),
+                            "related_id": doc.get("related_id"),
+                            "action_url": doc.get("action_url")})
+        else:
+            skipped.append({"kind": tpl["kind"], "name": tpl.get("name"),
+                            "reason": "no matching-state entry in DB"})
     await log_audit(
         actor=user, action="notification_template.send_test_all",
         resource="notification_template", resource_id="*",
-        detail=f"Sent test notifications for {len(created)} templates to self",
+        detail=f"Sent test notifications for {len(created)} templates "
+               f"(skipped {len(skipped)})",
         severity="info",
     )
-    return {"ok": True, "count": len(created), "notifications": created}
+    return {"ok": True, "count": len(created), "notifications": created,
+            "skipped": skipped}
 
 
 
