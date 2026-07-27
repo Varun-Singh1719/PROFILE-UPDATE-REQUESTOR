@@ -19,6 +19,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator
 } from "../components/ui/dropdown-menu";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "../components/ui/tooltip";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "../components/ui/hover-card";
 import MultiSelect from "../components/MultiSelect";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import UserAvatar from "../components/UserAvatar";
@@ -61,6 +62,87 @@ import ISDPicker from "../components/ISDPicker";
 import { DEFAULT_ISD } from "../lib/isdCodes";
 
 function fmt(iso) { if (!iso) return "Never"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
+
+/**
+ * PermissionSetsHoverList
+ * -----------------------
+ * Renders a single count-pill in the employees table (e.g. "3 sets") and,
+ * on hover, opens a NotificationBell-style popover listing every assigned
+ * permission set as "ID - Name". Matches the visual language of the bell
+ * dropdown: white surface, orange accents, header row, scrollable list,
+ * shield icon per row.
+ */
+function PermissionSetsHoverList({ sets, testId }) {
+  const items = Array.isArray(sets) ? sets : [];
+  const count = items.length;
+  if (count === 0) {
+    return <span className="text-gray-300 text-xs">—</span>;
+  }
+  return (
+    <HoverCard openDelay={80} closeDelay={80}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          data-testid={testId}
+          aria-label={`${count} permission set${count > 1 ? "s" : ""} assigned`}
+          className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border-2 text-[11px] font-semibold bg-white select-none whitespace-nowrap hover:bg-[#fff7ec] focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40 cursor-default"
+          style={{ color: "#ec9324", borderColor: "#ec9324" }}
+        >
+          <ShieldCheck sx={{ fontSize: 13 }} />
+          <span>{count}</span>
+          <span className="opacity-70">{count === 1 ? "set" : "sets"}</span>
+        </button>
+      </HoverCardTrigger>
+      <HoverCardContent
+        align="start"
+        sideOffset={6}
+        className="w-[320px] p-0 overflow-hidden shadow-lg border border-gray-200"
+        data-testid={`${testId}-popover`}
+      >
+        {/* Header — mirrors NotificationBell */}
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
+          <div className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+            <ShieldCheck sx={{ fontSize: 16 }} className="text-[#ec9324]" />
+            Permission Sets
+          </div>
+          <span className="text-[11px] font-medium text-gray-500">
+            {count} assigned
+          </span>
+        </div>
+        {/* Rows */}
+        <div className="max-h-[300px] overflow-y-auto">
+          {items.map((p) => {
+            const num = p.numeric_id || p.seq_no || "?";
+            const nm = p.name || p.title || "Untitled";
+            return (
+              <div
+                key={p.id}
+                data-testid={`${testId}-item-${num}`}
+                className="flex items-start gap-3 px-4 py-2.5 border-b border-gray-50 last:border-b-0 hover:bg-gray-50 transition-colors"
+              >
+                <span
+                  className="mt-0.5 inline-flex items-center justify-center w-7 h-7 rounded-full shrink-0"
+                  style={{ backgroundColor: "#fff7ed", color: "#ec9324" }}
+                >
+                  <ShieldCheck sx={{ fontSize: 14 }} />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-semibold text-gray-900 truncate" title={nm}>
+                    {nm}
+                  </div>
+                  <div className="text-[11px] text-gray-500 mt-0.5">
+                    <span className="text-gray-500">ID</span>&nbsp;:&nbsp;
+                    <span className="font-mono font-medium text-[#ec9324]">{num}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
 
 // v3 role model — only Super Admin and Admin remain.
 const ROLE_OPTIONS = ["Super Admin", "Admin"];
@@ -1646,29 +1728,10 @@ export default function ContactListPage() {
                     <span className="inline-flex text-xs font-semibold rounded-full px-2 py-1 bg-[#ec9324]/10 text-[#ec9324]">{c.role}</span>
                   </td>
                   <td className="px-4 py-3">
-                    {(c.permission_sets || []).length === 0 ? (
-                      <span className="text-gray-300 text-xs">—</span>
-                    ) : (
-                      <div className="flex flex-wrap gap-1 max-w-[260px]">
-                        {(c.permission_sets || []).slice(0, 2).map((p) => (
-                          <span
-                            key={p.id}
-                            title={`${p.numeric_id} - ${p.name}`}
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-100 max-w-[160px]"
-                            data-testid={`row-pset-chip-${c.email}-${p.numeric_id}`}
-                          >
-                            <span className="font-mono text-blue-500">{p.numeric_id}</span>
-                            <span className="text-blue-300">-</span>
-                            <span className="truncate">{p.name}</span>
-                          </span>
-                        ))}
-                        {(c.permission_sets || []).length > 2 && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">
-                            +{(c.permission_sets || []).length - 2}
-                          </span>
-                        )}
-                      </div>
-                    )}
+                    <PermissionSetsHoverList
+                      sets={c.permission_sets || []}
+                      testId={`row-psets-${c.email}`}
+                    />
                   </td>
                   <td className="px-4 py-3">
                     <Switch

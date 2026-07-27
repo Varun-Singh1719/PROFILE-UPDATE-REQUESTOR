@@ -140,6 +140,167 @@ async def update_notification_template(
 
 
 # ---------------------------------------------------------------------------
+# Test-notification helpers (for the bell)
+# ---------------------------------------------------------------------------
+#
+# These endpoints materialise a sample in-app notification for the current
+# user using an existing template. They exist so a Super Admin / Admin can
+# quickly validate that every template renders correctly in the bell
+# dropdown without needing to trigger the real business flow (workstation
+# request, meeting room booking, ticket close, etc.).
+
+# Realistic-looking dummy variables per kind so placeholders like
+# `{{seat_label}}` render as something meaningful in the bell.
+_TEST_VARIABLES_BY_KIND = {
+    "workstation_request_submitted": {
+        "requested_by_name": "Aarushi Bhatia",
+        "employee_name": "Aarushi Bhatia",
+        "seat_label": "A-101",
+        "date": "20 Aug 2026",
+    },
+    "workstation_request_approved": {
+        "seat_label": "A-101",
+        "date": "20 Aug 2026",
+        "decided_by": "Admin User",
+    },
+    "workstation_request_declined": {
+        "seat_label": "A-101",
+        "date": "20 Aug 2026",
+        "decided_by": "Admin User",
+    },
+    "workstation_assigned": {
+        "seat_label": "B-204",
+        "date": "20 Aug 2026",
+        "assigned_by": "Admin User",
+    },
+    "meeting_room_request_submitted": {
+        "requested_by_name": "Aarushi Bhatia",
+        "meeting_title": "Sprint Planning",
+        "room_name": "Alpha",
+        "start_at": "20 Aug 2026, 10:00 AM",
+    },
+    "meeting_room_request_approved": {
+        "title": "Sprint Planning",
+        "room_name": "Alpha",
+        "start_at": "20 Aug 2026, 10:00 AM",
+        "decided_by": "Admin User",
+    },
+    "meeting_room_request_declined": {
+        "title": "Sprint Planning",
+        "room_name": "Alpha",
+        "start_at": "20 Aug 2026, 10:00 AM",
+        "decided_by": "Admin User",
+    },
+    "request_closed": {
+        "ticket_id": "TCK-00512",
+        "closed_by": "Admin User",
+    },
+}
+
+# The bell popover navigates using `action_url` when the row is clicked. For
+# a test notification we send the user back to the templates page (with a
+# hash pointing to this specific template) so clicking the notification
+# takes the admin straight to the entry that fired it.
+def _test_action_url_for(kind: str) -> str:
+    return f"/admin/notification-templates#{kind}"
+
+
+async def _materialise_test_notification(user: dict, tpl: dict) -> dict:
+    """Insert one inapp_notifications row for ``user`` using ``tpl``.
+
+    Uses the standard ``notify_user_inapp`` helper so the resulting row is
+    indistinguishable from a production one — including template rendering
+    of ``{{placeholders}}``.
+    """
+    from inapp_notifications import notify_user_inapp
+
+    kind = tpl["kind"]
+    variables = _TEST_VARIABLES_BY_KIND.get(kind, {})
+    doc = await notify_user_inapp(
+        db,
+        user_id=user["id"],
+        kind=kind,
+        variables=variables,
+        related_id=tpl["id"],
+        related_type="notification_template_test",
+        action_url=_test_action_url_for(kind),
+        default_title=tpl.get("title") or "Test notification",
+        default_body=tpl.get("body") or "This is a test notification.",
+    )
+    if doc is None:
+        # Template is Inactive — still surface a row so the admin can see
+        # something in the bell for validation. Bypass status check by
+        # inserting directly with a "(Test — Inactive)" tag in the title.
+        import uuid as _uuid
+        title = tpl.get("title") or "Test notification"
+        body = tpl.get("body") or "This is a test notification."
+        # Render placeholders manually for the inactive case.
+        for k, v in variables.items():
+            title = title.replace("{{" + k + "}}", str(v))
+            body = body.replace("{{" + k + "}}", str(v))
+        doc = {
+            "id": str(_uuid.uuid4()),
+            "user_id": user["id"],
+            "kind": kind,
+            "title": f"[Test] {title}",
+            "body": body,
+            "related_id": tpl["id"],
+            "related_type": "notification_template_test",
+            "action_url": _test_action_url_for(kind),
+            "read": False,
+            "created_at": now_iso(),
+            "read_at": None,
+        }
+        await db.inapp_notifications.insert_one(doc)
+        doc.pop("_id", None)
+    return doc
+
+
+@api_router.post("/notification-templates/{tpl_id}/send-test")
+async def send_test_notification(
+    tpl_id: str,
+    user=Depends(require_role("Super Admin", "Admin")),
+):
+    """Create one sample in-app notification for the current user from a
+    single template. Useful for previewing what a real notification will
+    look like in the bell dropdown."""
+    tpl = await db.notification_templates.find_one({"id": tpl_id})
+    if not tpl:
+        raise HTTPException(404, "Template not found")
+    doc = await _materialise_test_notification(user, tpl)
+    await log_audit(
+        actor=user, action="notification_template.send_test",
+        resource="notification_template", resource_id=tpl_id,
+        detail=f"Sent test notification '{tpl.get('name')}' to self",
+        severity="info",
+    )
+    return {"ok": True, "notification": doc}
+
+
+@api_router.post("/notification-templates/send-test-all")
+async def send_test_notifications_all(
+    user=Depends(require_role("Super Admin", "Admin")),
+):
+    """Create one sample in-app notification per template for the current
+    user in a single call. This gives admins a quick way to populate the
+    bell with one entry for every template so all cards can be validated."""
+    tpls = await db.notification_templates.find({}, {"_id": 0}).to_list(500)
+    created = []
+    for tpl in tpls:
+        doc = await _materialise_test_notification(user, tpl)
+        if doc:
+            created.append({"kind": tpl["kind"], "id": doc.get("id")})
+    await log_audit(
+        actor=user, action="notification_template.send_test_all",
+        resource="notification_template", resource_id="*",
+        detail=f"Sent test notifications for {len(created)} templates to self",
+        severity="info",
+    )
+    return {"ok": True, "count": len(created), "notifications": created}
+
+
+
+# ---------------------------------------------------------------------------
 # Notification-settings singleton (bell refresh cadence)
 # ---------------------------------------------------------------------------
 #

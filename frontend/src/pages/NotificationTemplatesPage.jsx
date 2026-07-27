@@ -367,20 +367,72 @@ export default function NotificationTemplatesPage() {
     }
   };
 
+  // ---- Test notifications --------------------------------------------------
+  // Materialise a sample bell notification for the current user so admins can
+  // validate the template's on-bell rendering without triggering the real
+  // business flow. Uses the backend `/send-test` and `/send-test-all` routes.
+  const [sendingTestId, setSendingTestId] = useState(null);
+  const [sendingTestAll, setSendingTestAll] = useState(false);
+
+  const handleSendTest = async (tpl) => {
+    if (sendingTestId) return;
+    setSendingTestId(tpl.id);
+    try {
+      await api.post(`/notification-templates/${tpl.id}/send-test`);
+      notify.success(`Test notification sent for "${tpl.name}". Open the bell to view it.`);
+    } catch (e) {
+      notify.error(formatApiError(e?.response?.data?.detail) || "Failed to send test");
+    } finally {
+      setSendingTestId(null);
+    }
+  };
+
+  const handleSendTestAll = async () => {
+    if (sendingTestAll) return;
+    setSendingTestAll(true);
+    try {
+      const r = await api.post("/notification-templates/send-test-all");
+      const n = r?.data?.count ?? items.length;
+      notify.success(`Sent ${n} test notification${n === 1 ? "" : "s"}. Open the bell to view them.`);
+    } catch (e) {
+      notify.error(formatApiError(e?.response?.data?.detail) || "Failed to send tests");
+    } finally {
+      setSendingTestAll(false);
+    }
+  };
+
   return (
     <Layout
       title="Notification Templates"
       actions={
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={load}
-          disabled={loading}
-          className="border-gray-300 hover:border-[#ec9324] hover:text-[#ec9324]"
-        >
-          {loading ? <Loader2 sx={{ fontSize: 14 }} className="animate-spin mr-1.5" /> : null}
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSendTestAll}
+            disabled={sendingTestAll || loading || items.length === 0}
+            data-testid="notif-templates-send-test-all"
+            title="Push one sample notification to your bell for every template — great for validating rendering end-to-end"
+            className="border-[#ec9324] text-[#ec9324] hover:bg-[#fff7ec] hover:text-[#d4811f]"
+          >
+            {sendingTestAll ? (
+              <Loader2 sx={{ fontSize: 14 }} className="animate-spin mr-1.5" />
+            ) : (
+              <Notifications sx={{ fontSize: 14 }} className="mr-1.5" />
+            )}
+            Send test for all
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={load}
+            disabled={loading}
+            className="border-gray-300 hover:border-[#ec9324] hover:text-[#ec9324]"
+          >
+            {loading ? <Loader2 sx={{ fontSize: 14 }} className="animate-spin mr-1.5" /> : null}
+            Refresh
+          </Button>
+        </div>
       }
     >
       <TooltipProvider delayDuration={150}>
@@ -531,6 +583,26 @@ export default function NotificationTemplatesPage() {
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent side="top">See how this notification appears in the bell dropdown</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSendTest(t)}
+                            disabled={sendingTestId === t.id || sendingTestAll}
+                            data-testid={`notif-template-send-test-${t.kind}`}
+                            className="h-8 border-[#ec9324] text-[#ec9324] hover:bg-[#fff7ec] hover:text-[#d4811f]"
+                          >
+                            {sendingTestId === t.id ? (
+                              <Loader2 sx={{ fontSize: 14 }} className="animate-spin mr-1" />
+                            ) : (
+                              <Notifications sx={{ fontSize: 14 }} className="mr-1" />
+                            )}
+                            Send Test
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">Push a sample notification to your bell using this template</TooltipContent>
                       </Tooltip>
                       <Tooltip>
                         <TooltipTrigger asChild>
