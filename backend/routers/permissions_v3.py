@@ -60,6 +60,29 @@ from core import (
 # Broader scope wins.
 _SCOPE_RANK = {None: 0, "individual": 1, "team": 2, "overall": 3}
 
+# max_editable_status precedence (broader wins) — used on
+# profix.ticket_detail.edit to lock the "Edit" action once a ticket passes a
+# given status. "closed" means the ticket is editable in any status.
+_MAX_EDITABLE_STATUS_VALUES = ("open", "in_progress", "closed")
+_MAX_EDITABLE_STATUS_RANK = {None: 0, "open": 1, "in_progress": 2, "closed": 3}
+
+# Ticket-status ordinal used to compare a ticket's current status against a
+# permission set's max_editable_status. Kept in sync with the TicketStatus
+# enum below.
+TICKET_STATUS_RANK = {"Open": 1, "In Progress": 2, "Closed": 3}
+
+
+def _sanitize_max_editable_status(v: Any) -> Optional[str]:
+    if v in _MAX_EDITABLE_STATUS_VALUES:
+        return v
+    return None
+
+
+def _merge_max_editable_status(a: Optional[str], b: Optional[str]) -> Optional[str]:
+    ra = _MAX_EDITABLE_STATUS_RANK.get(a, 0)
+    rb = _MAX_EDITABLE_STATUS_RANK.get(b, 0)
+    return a if ra >= rb else b
+
 # Dashboard access-level precedence — higher wins when merging.
 _DASHBOARD_ACCESS_RANK = {None: 0, "individual": 1, "manager": 2, "overall": 3}
 _DASHBOARD_ACCESS_VALUES = ("individual", "manager", "overall")
@@ -79,22 +102,31 @@ def _merge_access_level(a: Optional[str], b: Optional[str]) -> Optional[str]:
 
 
 def _merge_rw(a: Optional[dict], b: Optional[dict]) -> dict:
-    """Merge two {enabled, visible, scope} triples using OR semantics.
+    """Merge two {enabled, visible, scope[, max_editable_status]} triples using
+    OR semantics.
 
     - `enabled` = OR of both
     - `visible` = OR of both (a function is visible if ANY assigned set marks it visible)
     - `scope`   = broader wins (overall > team > individual > None)
+    - `max_editable_status` (edit-only field) — broader wins
+      (closed > in_progress > open > None). Only surfaces when at least one
+      side carries it.
     """
     a = a or {}
     b = b or {}
     scope_a = a.get("scope")
     scope_b = b.get("scope")
     scope = scope_a if _SCOPE_RANK.get(scope_a, 0) >= _SCOPE_RANK.get(scope_b, 0) else scope_b
-    return {
+    out = {
         "enabled": bool(a.get("enabled")) or bool(b.get("enabled")),
         "visible": bool(a.get("visible")) or bool(b.get("visible")),
         "scope": scope,
     }
+    max_a = a.get("max_editable_status")
+    max_b = b.get("max_editable_status")
+    if max_a is not None or max_b is not None:
+        out["max_editable_status"] = _merge_max_editable_status(max_a, max_b)
+    return out
 
 
 def _merge_modules(target: Dict[str, dict], src: Dict[str, dict]) -> None:
@@ -147,8 +179,8 @@ def _sanitize_scope(v: Any) -> Optional[str]:
     return None
 
 
-def _sanitize_rw(v: Any, scoped: bool = True) -> dict:
-    """Sanitize a {enabled, visible, scope} triple."""
+def _sanitize_rw(v: Any, scoped: bool = True, has_status_lock: bool = False) -> dict:
+    """Sanitize a {enabled, visible, scope[, max_editable_status]} triple."""
     out = _empty_rw()
     if not isinstance(v, dict):
         return out
@@ -158,6 +190,8 @@ def _sanitize_rw(v: Any, scoped: bool = True) -> dict:
     if "visible" in v:
         out["visible"] = bool(v.get("visible"))
     out["scope"] = _sanitize_scope(v.get("scope")) if scoped else None
+    if has_status_lock:
+        out["max_editable_status"] = _sanitize_max_editable_status(v.get("max_editable_status"))
     return out
 
 
@@ -242,7 +276,8 @@ def _normalize_v3_modules(modules: Any) -> Dict[str, dict]:
                 if fkey not in valid_functions:
                     continue
                 scoped = bool(valid_functions[fkey].get("scoped", False))
-                fn_out[fkey] = _sanitize_rw(fdata, scoped=scoped)
+                has_lock = bool(valid_functions[fkey].get("has_status_lock", False))
+                fn_out[fkey] = _sanitize_rw(fdata, scoped=scoped, has_status_lock=has_lock)
             pages_out[pkey] = {
                 "view": _sanitize_rw(pdata.get("view")),
                 "edit": _sanitize_rw(pdata.get("edit")),
@@ -816,3 +851,57 @@ async def my_effective_permissions(user=Depends(get_current_user)):
         "set_ids": set_ids,
         "modules": merged,
     }
+
+
+# --------------------------------------------------------------------------- #
+# V3 helper used by other routers                                              #
+# --------------------------------------------------------------------------- #
+
+async def get_v3_function(user: dict, mkey: str, pkey: str, fkey: str) -> Optional[dict]:
+    """Return the effective v3 function entry for `user` at (mkey, pkey, fkey).
+
+    - Super Admin → returns a permissive entry {enabled:True, visible:True,
+      scope:"overall", max_editable_status:"closed"}.
+    - Otherwise → OR-union across the user's assigned Permission Sets.
+      Returns `None` if the user has no assigned sets AND the fallback is
+      permissive (caller should treat this as full-access), or an entry with
+      `enabled: False` when explicitly denied.
+
+    Fallback rule (aligned with the client-side EffectivePermissionsContext):
+      if the user has NO assigned permission sets, we return a permissive
+      entry so pre-onboarded users aren't locked out.
+    """
+    if user.get("role") == "Super Admin":
+        return {
+            "enabled": True,
+            "visible": True,
+            "scope": "overall",
+            "max_editable_status": "closed",
+        }
+
+    set_ids: List[str] = list(user.get("permission_set_ids") or [])
+    if not set_ids:
+        # Permissive fallback — matches EffectivePermissionsContext behavior.
+        return {
+            "enabled": True,
+            "visible": True,
+            "scope": "overall",
+            "max_editable_status": "closed",
+        }
+
+    docs = await db.permission_sets.find(
+        {"id": {"$in": set_ids}}, {"_id": 0}
+    ).to_list(500)
+    merged: Dict[str, dict] = {}
+    for doc in docs:
+        modules = doc.get("modules") or {}
+        if doc.get("version") != 3:
+            migrated = _migrate_legacy_to_v3(doc)
+            modules = migrated.get("modules") or {}
+        else:
+            modules = _normalize_v3_modules(modules)
+        _merge_modules(merged, modules)
+
+    page = ((merged.get(mkey) or {}).get("pages") or {}).get(pkey) or {}
+    entry = (page.get("functions") or {}).get(fkey)
+    return entry  # None ⇒ not granted

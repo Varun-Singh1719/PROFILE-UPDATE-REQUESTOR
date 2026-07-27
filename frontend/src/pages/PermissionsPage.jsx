@@ -119,6 +119,36 @@ function ScopeSelect({ value, onChange, disabled, testId, size = "sm" }) {
   );
 }
 
+/**
+ * StatusLockSelect — dropdown that appears next to the Scope selector for
+ * function entries in the catalog with `has_status_lock: true` (currently
+ * profix.ticket_detail.edit). Lets Admins pick until which ticket status the
+ * edit action stays unlocked. After the chosen status, the ticket is locked
+ * from field-level edits.
+ */
+function StatusLockSelect({ value, onChange, disabled, options, testId }) {
+  const opts = (options && options.length
+    ? options
+    : [
+        { value: "open",         label: "Only when Open" },
+        { value: "in_progress",  label: "Open & In Progress" },
+        { value: "closed",       label: "Any status (incl. Closed)" },
+      ]
+  ).map((o) => ({ value: o.value, label: o.label }));
+  return (
+    <SingleSelect
+      options={opts}
+      value={value || null}
+      onChange={(v) => onChange(v || null)}
+      placeholder="— editable until —"
+      disabled={disabled}
+      testId={testId}
+      size="sm"
+      allowClear
+    />
+  );
+}
+
 function VisChip({ visible, onClick, testId }) {
   return (
     <button type="button" onClick={onClick} data-testid={testId}
@@ -235,6 +265,20 @@ function PageDetail({ page, state, onView, onEdit, onFunction, onEnableAll, onHi
                             testId={`fn-scope-${f.key}`}
                           />
                         ) : <span className="text-[10px] text-gray-400">—</span>}
+                        {/* Extra config: "Editable Until" for functions with a
+                            status lock (currently profix.ticket_detail.edit) */}
+                        {f.has_status_lock && (
+                          <div className="mt-1.5">
+                            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-0.5">Editable until</div>
+                            <StatusLockSelect
+                              value={v.max_editable_status || (v.enabled ? (f.status_lock_default || "in_progress") : null)}
+                              onChange={(s) => onFunction(f.key, { ...v, max_editable_status: s })}
+                              disabled={!v.enabled || !v.visible}
+                              options={f.status_lock_options}
+                              testId={`fn-status-lock-${f.key}`}
+                            />
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );

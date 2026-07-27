@@ -15,6 +15,7 @@ from core import (
 )
 from notifications import send_email
 from routers.permissions import get_effective_scope, get_user_scope_context, scope_to_id_filter
+from routers.permissions_v3 import get_v3_function, TICKET_STATUS_RANK, _MAX_EDITABLE_STATUS_RANK
 
 
 async def _ticket_view_filter(user: dict) -> dict:
@@ -620,6 +621,65 @@ async def update_ticket(ticket_id: str, body: TicketUpdate, user=Depends(get_cur
         else:
             raise HTTPException(403, "Cannot assign")
 
+    # ── Field edits (description / priority / due_date / number_of_profiles / attachments)
+    # Gated by the v3 permission `profix.ticket_detail.edit` + a per-set
+    # `max_editable_status` lock. Super Admin bypasses the lock entirely.
+    _EDIT_FIELDS = {
+        "description":        (body.description,        "Description"),
+        "priority":           (body.priority,           "Priority"),
+        "due_date":           (body.due_date,           "Due Date"),
+        "number_of_profiles": (body.number_of_profiles, "No. of Records"),
+    }
+    _sent_field_edits = {k: v for k, (v, _) in _EDIT_FIELDS.items() if v is not None}
+    _attachment_edit = body.attachments is not None or body.attachment_path is not None or body.attachment_name is not None
+    if _sent_field_edits or _attachment_edit:
+        # Permission check — Super Admin always passes; others must have the
+        # profix.ticket_detail.edit function enabled + status lock satisfied.
+        if role != "Super Admin":
+            fn_entry = await get_v3_function(user, "profix", "ticket_detail", "edit")
+            if not fn_entry or not fn_entry.get("enabled"):
+                raise HTTPException(403, "You do not have permission to edit this request.")
+            # Number-of-records validation must still hold.
+            max_editable = fn_entry.get("max_editable_status") or "in_progress"
+            cur_rank = TICKET_STATUS_RANK.get(t.get("status") or "Open", 1)
+            allowed_rank = _MAX_EDITABLE_STATUS_RANK.get(max_editable, 2)
+            if cur_rank > allowed_rank:
+                _labels = {"open": "Open", "in_progress": "In Progress", "closed": "Closed"}
+                raise HTTPException(
+                    403,
+                    f"This request is locked from editing after status \"{_labels.get(max_editable, max_editable)}\".",
+                )
+        # Validate No. of Records if being changed.
+        if "number_of_profiles" in _sent_field_edits:
+            n = _sent_field_edits["number_of_profiles"]
+            if n is None or n == 0:
+                raise HTTPException(400, "No. of Records must be greater than 0")
+            if n < 0:
+                raise HTTPException(400, "No. of Records must be greater than 0")
+        # Apply each field, log per-field activity.
+        for k, (new_val, label) in _EDIT_FIELDS.items():
+            if new_val is None:
+                continue
+            old_val = t.get(k)
+            if old_val == new_val:
+                continue
+            update[k] = new_val
+            # Description is usually long — skip embedding old/new in activity detail.
+            if k == "description":
+                activity.append("Description updated")
+            else:
+                _old = old_val if old_val not in (None, "") else "—"
+                activity.append(f"{label} changed from \"{_old}\" to \"{new_val}\"")
+        if _attachment_edit:
+            new_attachments = body.attachments if body.attachments is not None else t.get("attachments") or []
+            update["attachments"] = new_attachments
+            # Keep legacy single-attachment fields in sync with the first entry
+            # so existing readers (email templates, CSV export) don't break.
+            first = new_attachments[0] if new_attachments else {}
+            update["attachment_path"] = body.attachment_path if body.attachment_path is not None else first.get("path")
+            update["attachment_name"] = body.attachment_name if body.attachment_name is not None else first.get("filename")
+            activity.append(f"Attachments updated ({len(new_attachments)} file(s))")
+
     if not update:
         raise HTTPException(400, "Nothing to update")
     update["updated_on"] = now_iso()
@@ -880,11 +940,18 @@ async def reopen_ticket(ticket_id: str, body: TicketReopen, user=Depends(get_cur
 
     role = user.get("role")
     is_creator = t.get("created_by_id") == user.get("id")
-    is_admin = role in ("Super Admin", "Admin")
-    if not (is_creator or is_admin):
-        raise HTTPException(403, "Only the requester or an admin can reopen this request.")
+    is_super = role == "Super Admin"
+    # Permission gate:
+    #   • Super Admin — always
+    #   • Creator      — always (the requester can reopen their own request)
+    #   • Others       — only if profix.ticket_detail.reopen is enabled in
+    #                    their assigned permission set(s).
+    if not (is_super or is_creator):
+        fn_entry = await get_v3_function(user, "profix", "ticket_detail", "reopen")
+        if not fn_entry or not fn_entry.get("enabled"):
+            raise HTTPException(403, "Only the requester or an admin can reopen this request.")
     # Admins additionally must pass their edit scope on this ticket.
-    if role == "Admin" and not await _check_ticket_action_scope(user, t, "edit"):
+    if role == "Admin" and not is_creator and not await _check_ticket_action_scope(user, t, "edit"):
         raise HTTPException(403, "Edit scope does not cover this ticket")
 
     ts = now_iso()

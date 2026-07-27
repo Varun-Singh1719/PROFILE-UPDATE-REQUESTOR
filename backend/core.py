@@ -329,7 +329,20 @@ PERMISSION_MODULES_V3 = [
             {
                 "key": "ticket_detail", "label": "Request Details", "route": "/admin/tickets/:id",
                 "functions": [
-                    {"key": "edit",          "label": "Edit",           "scoped": True},
+                    {
+                        "key": "edit", "label": "Edit", "scoped": True,
+                        # UI hint: render the "Editable Until" dropdown next to
+                        # the scope selector so admins can choose the max status
+                        # after which the ticket is locked from field-edits.
+                        "has_status_lock": True,
+                        "status_lock_options": [
+                            {"value": "open",         "label": "Only when Open"},
+                            {"value": "in_progress",  "label": "Open & In Progress"},
+                            {"value": "closed",       "label": "Any status (incl. Closed)"},
+                        ],
+                        "status_lock_default": "in_progress",
+                    },
+                    {"key": "reopen",        "label": "Reopen Request", "scoped": True},
                     {"key": "delete",        "label": "Delete",         "scoped": True},
                     {"key": "assign",        "label": "Assign",         "scoped": True},
                     {"key": "add_comment",   "label": "Add Comment",    "scoped": True},
@@ -1056,6 +1069,17 @@ class TicketCreate(BaseModel):
 class TicketUpdate(BaseModel):
     status: Optional[TicketStatus] = None
     assigned_to: Optional[str] = None  # contact id, or empty string for unassign
+    # ── Edit-Ticket (Jul 2026): field-level edits gated by
+    # profix.ticket_detail.edit permission + max_editable_status lock. Super
+    # Admin bypasses the lock. Sending any of these fields triggers the
+    # permission check.
+    description: Optional[str] = None
+    priority: Optional[TicketPriority] = None
+    due_date: Optional[str] = None
+    number_of_profiles: Optional[int] = None
+    attachments: Optional[List[dict]] = None
+    attachment_path: Optional[str] = None
+    attachment_name: Optional[str] = None
 
 class BulkAssign(BaseModel):
     ticket_ids: List[str]

@@ -17,12 +17,18 @@ import X from "@mui/icons-material/Close";
 import Send from "@mui/icons-material/Send";
 import Pagination from "../components/Pagination";
 import CreateTicketModal from "../components/CreateTicketModal";
+import EditTicketModal from "../components/EditTicketModal";
 import notify from "../lib/notify";
 import { StatusBadge } from "../components/Badges";
 import DateFilter, { dateFilterToParams } from "../components/DateFilter";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from "../components/ui/dropdown-menu";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "../components/ui/dialog";
+import { Textarea } from "../components/ui/textarea";
+import RefreshIcon from "@mui/icons-material/Refresh";
 
 export default function TicketListPage({
   scope = "mine",
@@ -237,6 +243,37 @@ export default function TicketListPage({
   const permExport     = permFn("export_tickets");
   const permCreate     = permFn("create_ticket");
   const permBulkAssign = permFn("bulk_assign");
+  // Row-level actions live on the ticket_detail page in the catalog.
+  const { fn: permDetailFn } = useEffectivePage("profix", "ticket_detail");
+  const permEditRow   = permDetailFn("edit");
+  const permReopenRow = permDetailFn("reopen");
+  const canEditRow    = isAdmin && permEditRow.isVisible;      // Backend still enforces max_editable_status
+  const canReopenRow  = permReopenRow.isVisible;               // creator or admin — creator always OK on backend
+
+  // ── Edit modal + Reopen dialog state ──
+  const [editTicket, setEditTicket] = useState(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const openEdit = (t) => { setEditTicket(t); setEditOpen(true); };
+
+  const [reopenTicket, setReopenTicket] = useState(null);
+  const [reopenOpen, setReopenOpen] = useState(false);
+  const [reopenReason, setReopenReason] = useState("");
+  const [reopenSubmitting, setReopenSubmitting] = useState(false);
+  const openReopen = (t) => { setReopenTicket(t); setReopenReason(""); setReopenOpen(true); };
+  const reopenReasonTrimmed = reopenReason.trim();
+  const reopenReasonValid = reopenReasonTrimmed.length >= 5 && reopenReasonTrimmed.length <= 500;
+  const confirmReopen = async () => {
+    if (!reopenTicket || !reopenReasonValid || reopenSubmitting) return;
+    setReopenSubmitting(true);
+    try {
+      await api.post(`/tickets/${reopenTicket.id}/reopen`, { reason: reopenReasonTrimmed });
+      notify.success("Request reopened");
+      setReopenOpen(false); setReopenTicket(null); setReopenReason("");
+      load();
+    } catch (e) {
+      notify.error(e?.response?.data?.detail || "Failed to reopen request");
+    } finally { setReopenSubmitting(false); }
+  };
 
   // Row actions are now rendered inside TicketTable (single triple-dot menu).
   // We pass the callbacks + role hints through props below.
@@ -423,6 +460,10 @@ export default function TicketListPage({
             onUpdateStatus={updateStatus}
             onReassign={reassign}
             onAssignSelf={assignSelf}
+            onEdit={openEdit}
+            onReopen={openReopen}
+            canEdit={canEditRow}
+            canReopen={canReopenRow}
           />
         </div>
         {/* Pagination footer — pinned inside the card, above the viewport bottom */}
@@ -442,6 +483,66 @@ export default function TicketListPage({
         onOpenChange={setCreateOpen}
         onCreated={() => load()}
       />
+      <EditTicketModal
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        ticket={editTicket}
+        onSaved={() => load()}
+      />
+      {/* Row-level Reopen Request dialog */}
+      <Dialog open={reopenOpen} onOpenChange={(v) => { if (!reopenSubmitting) setReopenOpen(v); }}>
+        <DialogContent className="max-w-md" data-testid="list-reopen-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshIcon sx={{ fontSize: 20 }} className="text-[#ec9324]"/> Reopen Request
+              {reopenTicket ? ` #${reopenTicket.ticket_id?.replace(/^TKT-/, "")}` : ""}
+            </DialogTitle>
+            <DialogDescription>
+              This request will move back to <span className="font-medium">Open</span> and the reason will be recorded in the activity log.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-wider text-gray-600">
+              Reason <span className="text-red-500">*</span>
+            </label>
+            <Textarea
+              value={reopenReason}
+              onChange={(e) => setReopenReason(e.target.value)}
+              placeholder="Describe why this request needs to be reopened (minimum 5 characters)"
+              rows={4}
+              maxLength={500}
+              data-testid="list-reopen-reason-input"
+              disabled={reopenSubmitting}
+            />
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span>
+                {reopenReasonTrimmed.length < 5
+                  ? `At least ${5 - reopenReasonTrimmed.length} more character${5 - reopenReasonTrimmed.length === 1 ? "" : "s"} required`
+                  : "Looks good."}
+              </span>
+              <span>{reopenReasonTrimmed.length}/500</span>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setReopenOpen(false)}
+              disabled={reopenSubmitting}
+              data-testid="list-reopen-cancel-btn"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmReopen}
+              disabled={!reopenReasonValid || reopenSubmitting}
+              className="bg-[#ec9324] hover:bg-[#d4811f] text-white"
+              data-testid="list-reopen-confirm-btn"
+            >
+              {reopenSubmitting ? "Reopening..." : "Reopen Request"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

@@ -7,6 +7,8 @@ import { Button } from "./ui/button";
 import { numericId } from "../lib/ticketId";
 import MoreVertical from "@mui/icons-material/MoreVert";
 import Eye from "@mui/icons-material/Visibility";
+import EditIcon from "@mui/icons-material/EditOutlined";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub,
   DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuSeparator, DropdownMenuLabel,
@@ -34,6 +36,10 @@ export default function TicketTable({
   onUpdateStatus, // (ticketId, newStatus) => void
   onReassign,     // (ticketId, memberId | "") => void
   onAssignSelf,   // (ticketId) => void
+  onEdit,         // (ticket)             => void — open the Edit Ticket modal
+  onReopen,       // (ticket)             => void — open the Reopen dialog
+  canEdit = false,   // gate visibility of the Edit menu item (permission-driven)
+  canReopen = false, // gate visibility of the Reopen menu item (permission-driven)
 }) {
   const navigate = useNavigate();
   const allSelected = tickets.length > 0 && selected.length === tickets.length;
@@ -53,6 +59,30 @@ export default function TicketTable({
             data-testid={`row-action-view-${t.ticket_id}`}
           >
             <Eye sx={{ fontSize: 14 }} className="mr-2"/> View
+          </DropdownMenuItem>
+        )}
+
+        {/* Edit — permission-gated by profix.ticket_detail.edit + max_editable_status.
+            Backend still enforces; UI just hides the row when clearly denied. */}
+        {onEdit && canEdit && t.status !== "Closed" && (
+          <DropdownMenuItem
+            onClick={() => onEdit(t)}
+            data-testid={`row-action-edit-${t.ticket_id}`}
+          >
+            <EditIcon sx={{ fontSize: 14 }} className="mr-2"/> Edit
+          </DropdownMenuItem>
+        )}
+
+        {/* Reopen — only when the ticket is Closed. Permission-gated by
+            profix.ticket_detail.reopen; creators are also allowed at the
+            backend but we still show the item to admins here so it appears
+            in every "actions" list. */}
+        {onReopen && canReopen && t.status === "Closed" && (
+          <DropdownMenuItem
+            onClick={() => onReopen(t)}
+            data-testid={`row-action-reopen-${t.ticket_id}`}
+          >
+            <RefreshIcon sx={{ fontSize: 14 }} className="mr-2 text-[#ec9324]"/> Reopen Request
           </DropdownMenuItem>
         )}
 

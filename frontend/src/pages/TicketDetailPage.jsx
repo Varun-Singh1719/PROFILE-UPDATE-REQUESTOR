@@ -22,6 +22,8 @@ import User from "@mui/icons-material/PersonOutlined";
 import Hash from "@mui/icons-material/TagOutlined";
 import Activity from "@mui/icons-material/Timeline";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import EditIcon from "@mui/icons-material/EditOutlined";
+import EditTicketModal from "../components/EditTicketModal";
 
 function fmt(iso) { if (!iso) return "-"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
 
@@ -45,6 +47,8 @@ export default function TicketDetailPage() {
   const [reopenOpen, setReopenOpen] = useState(false);
   const [reopenReason, setReopenReason] = useState("");
   const [reopenSubmitting, setReopenSubmitting] = useState(false);
+  // Edit modal state
+  const [editOpen, setEditOpen] = useState(false);
 
   const load = async () => {
     const r = await api.get(`/tickets/${id}`); setTicket(r.data);
@@ -109,6 +113,17 @@ export default function TicketDetailPage() {
       title={`Request ${numericId(ticket.ticket_id)}`}
       actions={
         <div className="flex gap-2">
+          {isAdmin && permEdit.isVisible && ticket.status !== "Closed" && (
+            <Button
+              variant="outline"
+              onClick={() => setEditOpen(true)}
+              className="h-9 flex items-center gap-1.5"
+              data-testid="detail-edit-btn"
+              disabled={!permEdit.canUse}
+            >
+              <EditIcon sx={{ fontSize: 16 }}/> Edit
+            </Button>
+          )}
           {canReopen && (
             <Button
               onClick={openReopenDialog}
@@ -287,6 +302,14 @@ export default function TicketDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit ticket modal */}
+      <EditTicketModal
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        ticket={ticket}
+        onSaved={() => load()}
+      />
     </Layout>
   );
 }
