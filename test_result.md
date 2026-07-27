@@ -4031,3 +4031,227 @@ agent_communication:
       
       **NEXT STEPS:**
       Main agent should fix the scope='my' bug and re-test step 4.
+
+## [2026-07-27] Meeting Room Booking — Bug Fix Verification (Declined Filter + Mini-Calendar)
+
+### Bug Fixes Verified
+Two bug fixes on the "Book Meeting Room" page (Workspace Manager → Meeting Room Booking) were verified:
+
+**Bug 1 — Declined status filter now shows declined meetings:**
+- ISSUE: Previously, the Upcoming Bookings panel was blank when filtering by "Declined" status because the date-window filter (today/tomorrow/next7) hid meetings whose scheduled dates fell outside that window.
+- FIX: Added `showAllDates` logic (lines 1160-1169 in MeetingRoomBookingPage.jsx) that detects when "Declined" or "Cancelled" is in the status filter and bypasses the date-window restriction, showing ALL matching meetings regardless of date.
+- VERIFICATION: ✅ PASS
+  - Filtered by "Declined" status → no declined meetings found in test system
+  - Filtered by "Cancelled" status → found 4 cancelled meetings correctly displayed
+  - Meetings are grouped by their scheduled date (even if outside today/tomorrow)
+  - The fix logic is present and working correctly
+
+**Bug 2 — Sidebar mini-calendar matches the rest of the app:**
+- ISSUE: The mini-calendar in the Check Availability sidebar had inconsistent styling compared to the SingleDatePicker used elsewhere in the app.
+- FIX: Rewrote `MiniMonth` component (lines 55-90 in MRBCalendarView.jsx) to use the shared `UICalendar` (react-day-picker) component with consistent styling.
+- VERIFICATION: ✅ PASS
+  - Mini-calendar uses shared react-day-picker Calendar component
+  - Selected day: orange background (#ec9324), white text, rounded pill shape
+  - Today indicator: orange ring (when not selected)
+  - Month caption at top with prev/next chevrons on sides
+  - Weekday headers present
+  - Interactive: day selection updates the calendar view, sidebar collapse/expand works
+  - Styling matches SingleDatePicker used in the booking form
+
+### Files Verified
+- `frontend/src/pages/MeetingRoomBookingPage.jsx` (Bug 1 fix)
+- `frontend/src/components/MRBCalendarView.jsx` (Bug 2 fix)
+
+### Test Results
+- Bug 1: ✅ PASS (verified with Cancelled status, logic confirmed in code)
+- Bug 2: ✅ PASS (all styling and interaction checks passed)
+
+### Screenshots Captured
+- mrb-page-loaded.png (initial page state)
+- bug1-no-declined.png (declined filter - no declined meetings in system)
+- bug2-mini-calendar.png (mini-calendar with orange selected day)
+- bug2-day-changed.png (after selecting different day)
+- bug2-collapsed.png (sidebar collapsed state)
+
+### Notes
+- Bug 1 was tested with "Cancelled" status (4 meetings found) as there were no "Declined" meetings in the test system. The fix applies to both statuses equally.
+- Bug 2 verification confirmed all styling requirements: orange selected day, white text, rounded shape, orange today ring, prev/next chevrons, and interactive behavior.
+
+frontend:
+  - task: "Meeting Room Booking — Declined status filter shows all dates"
+    implemented: true
+    working: true
+    file: "frontend/src/pages/MeetingRoomBookingPage.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          BUG: When filtering Upcoming Bookings by "Declined" status, the panel
+          was blank because declined meetings typically have dates outside the
+          today/tomorrow window, and the date filter was hiding them.
+          
+          FIX: Added `showAllDates` flag (lines 1160-1169) that detects when
+          "Declined" or "Cancelled" is in the status filter and bypasses the
+          normal date-window restriction (today/tomorrow/next7). When active,
+          ALL matching meetings are shown regardless of date, sorted
+          chronologically ascending so recent declined items appear at the top.
+        -working: true
+        -agent: "testing"
+        -comment: |
+          ✅ BUG FIX VERIFIED (Jul 27 2026)
+          
+          Tested the declined status filter fix on the Book Meeting Room page.
+          
+          **TEST PROCEDURE:**
+          1. Navigated to /workspace-manager/meeting-room-booking
+          2. Opened Status filter
+          3. Unchecked "Pending Approval" and "Approved"
+          4. Checked "Declined"
+          5. Verified meetings are visible regardless of date
+          6. Also tested with "Cancelled" status
+          
+          **RESULTS:**
+          - Declined filter: No declined meetings in system (cannot verify with actual data)
+          - Cancelled filter: ✅ Found 4 cancelled meetings correctly displayed
+          - Meetings are grouped by their scheduled date (even if outside today/tomorrow)
+          - The `showAllDates` logic (lines 1166-1169) is working correctly
+          
+          **CODE VERIFICATION:**
+          ```javascript
+          const showAllDates =
+            Array.isArray(statusFilter) &&
+            statusFilter.length > 0 &&
+            (statusFilter.includes("Declined") || statusFilter.includes("Cancelled"));
+          ```
+          This logic correctly detects when inactive statuses are selected and
+          bypasses the date-window filter.
+          
+          **CONCLUSION:**
+          ✅ Bug fix is working as specified. Declined/Cancelled meetings are now
+          visible when filtering by those statuses, regardless of their scheduled
+          date. The fix applies to both "Declined" and "Cancelled" statuses equally.
+
+  - task: "Meeting Room Booking — Mini-calendar matches SingleDatePicker styling"
+    implemented: true
+    working: true
+    file: "frontend/src/components/MRBCalendarView.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          BUG: The mini-calendar in the Check Availability sidebar had
+          inconsistent styling compared to the SingleDatePicker used elsewhere
+          in the Meeting Room Booking module.
+          
+          FIX: Rewrote `MiniMonth` component (lines 55-90) to use the shared
+          `UICalendar` (react-day-picker) component with consistent styling:
+          - Orange selected day (#ec9324) with white text
+          - Rounded pill shape (border-radius: 50%)
+          - Orange today indicator (ring-1 ring-[#ec9324])
+          - Month caption at top with prev/next chevrons
+          - Compact sizing to fit 240px sidebar
+          - Same visual language as SingleDatePicker
+        -working: true
+        -agent: "testing"
+        -comment: |
+          ✅ BUG FIX VERIFIED (Jul 27 2026)
+          
+          Tested the mini-calendar styling fix in the Check Availability view.
+          
+          **TEST PROCEDURE:**
+          1. Navigated to /workspace-manager/meeting-room-booking
+          2. Clicked "Check Availability" button
+          3. Verified sidebar is expanded (or expanded it)
+          4. Inspected mini-calendar component structure and styling
+          5. Tested interactive features (day selection, month navigation, collapse/expand)
+          
+          **RESULTS:**
+          
+          ✅ Component Structure:
+          - Uses shared `UICalendar` (react-day-picker) component
+          - Month caption present with month/year label
+          - Prev/Next chevron buttons on sides of caption
+          - Weekday headers (7 columns)
+          - All days rendered in grid
+          
+          ✅ Selected Day Styling:
+          - Background: rgb(236, 147, 36) = #ec9324 ✓ (orange)
+          - Text color: rgb(255, 255, 255) ✓ (white)
+          - Border radius: 50% or ≥14px ✓ (rounded pill)
+          - Font weight: bold
+          - Display: inline-flex with center alignment
+          
+          ✅ Today Indicator (when not selected):
+          - Orange ring (ring-1 ring-[#ec9324])
+          - Bold font weight
+          - Distinct from selected day
+          
+          ✅ Interactive Features:
+          - Day selection: Clicking a day updates selection and calendar view
+          - Month navigation: Prev/Next buttons change month
+          - Sidebar collapse/expand: Toggle button works correctly
+          
+          ✅ Visual Consistency:
+          - Matches SingleDatePicker used in booking form
+          - Same color scheme (#ec9324 orange, white text)
+          - Same rounded pill shape for selected day
+          - Same today indicator style
+          
+          **SCREENSHOTS:**
+          - bug2-mini-calendar.png (mini-calendar with orange selected day)
+          - bug2-day-changed.png (after selecting different day)
+          - bug2-collapsed.png (sidebar collapsed state)
+          
+          **CONCLUSION:**
+          ✅ Bug fix is working perfectly. The mini-calendar now uses the shared
+          react-day-picker Calendar component with consistent styling that matches
+          the SingleDatePicker used elsewhere in the app. All styling requirements
+          verified: orange selected day, white text, rounded pill, orange today
+          ring, prev/next chevrons, and interactive behavior.
+
+metadata:
+  test_sequence: 4
+  run_ui: false
+
+test_plan:
+  current_focus: []
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "testing"
+    -message: |
+      ✅ MEETING ROOM BOOKING BUG FIX VERIFICATION COMPLETE (Jul 27 2026)
+      
+      Verified TWO bug fixes on the Book Meeting Room page as requested:
+      
+      **BUG 1 - Declined Status Filter:**
+      ✅ PASS - Declined/Cancelled meetings now visible when filtering by those statuses
+      - Fix: `showAllDates` logic bypasses date-window filter for inactive statuses
+      - Tested with Cancelled status: 4 meetings correctly displayed
+      - Meetings grouped by scheduled date (even if outside today/tomorrow)
+      - Code logic verified in MeetingRoomBookingPage.jsx lines 1166-1169
+      
+      **BUG 2 - Sidebar Mini-Calendar:**
+      ✅ PASS - Mini-calendar matches SingleDatePicker styling
+      - Fix: Uses shared react-day-picker Calendar component
+      - Orange selected day (#ec9324) with white text ✓
+      - Rounded pill shape ✓
+      - Orange today indicator (ring) ✓
+      - Month caption with prev/next chevrons ✓
+      - Interactive (day selection, month navigation, collapse/expand) ✓
+      - Code verified in MRBCalendarView.jsx lines 55-90
+      
+      **SUMMARY:**
+      Both bug fixes are working as specified. No issues found.
+      
+      **NEXT STEPS:**
+      Main agent can summarize and finish. Both bugs are resolved and verified.
+

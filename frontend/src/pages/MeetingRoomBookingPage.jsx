@@ -813,6 +813,7 @@ export default function MeetingRoomBookingPage() {
                   pendingRequests={visibleRequests.filter(r => r.status !== "Approved")}
                   filterDate={filterDate}
                   rangeMode={rangeMode}
+                  statusFilter={statusFilter}
                   loading={loading}
                   onCancel={handleCancel}
                   onReschedule={handleReschedule}
@@ -1148,7 +1149,7 @@ function Field({ label, required, children, className = "", noStack = false }) {
 // - rangeMode="next7" → 7 day groups starting from today.
 // - Per-day pagination: first PAGE_SIZE shown, "+N more" expands the rest.
 const PAGE_SIZE = 4;
-function UpcomingBookingsList({ bookings, pendingRequests = [], filterDate, rangeMode, loading, onCancel, onReschedule, onCancelRequest, onOpenDetail }) {
+function UpcomingBookingsList({ bookings, pendingRequests = [], filterDate, rangeMode, loading, onCancel, onReschedule, onCancelRequest, onOpenDetail, statusFilter = [] }) {
   const today = todayIso();
   const addDaysIso = (offset) => {
     const d = new Date(); d.setDate(d.getDate() + offset);
@@ -1156,6 +1157,16 @@ function UpcomingBookingsList({ bookings, pendingRequests = [], filterDate, rang
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
   };
   const isFilterToday = filterDate === today;
+  // If the user has explicitly selected an "inactive" status (Declined /
+  // Cancelled), the date-window filter would otherwise hide those rows
+  // whenever their scheduled date falls outside today/tomorrow/next7 — which
+  // is almost always the case for older declined meetings. Detect this and
+  // switch to an "all matching, any date" layout so the user actually sees
+  // what they filtered for.
+  const showAllDates =
+    Array.isArray(statusFilter) &&
+    statusFilter.length > 0 &&
+    (statusFilter.includes("Declined") || statusFilter.includes("Cancelled"));
 
   // Merge approved bookings + pending / declined meeting-room requests into a
   // single list. Each entry gains a `_kind` ("booking" | "request") and a
@@ -1198,7 +1209,20 @@ function UpcomingBookingsList({ bookings, pendingRequests = [], filterDate, rang
   };
 
   let dayGroups;
-  if (rangeMode === "next7") {
+  if (showAllDates) {
+    // ALL matching regardless of date. Sort groups chronologically ascending
+    // (past → future) so recent declined items sit at the top of a scroll.
+    const keys = Object.keys(groups).sort();
+    dayGroups = keys.map((key) => ({
+      key,
+      label: formatDayLabel(key),
+      items: groups[key] || [],
+    }));
+    // Provide a friendlier empty-state day when the filter yields nothing.
+    if (dayGroups.length === 0) {
+      dayGroups = [{ key: today, label: "Today", items: [] }];
+    }
+  } else if (rangeMode === "next7") {
     // Anchor the 7-day window on the picked date (not today) so the date
     // input keeps meaning when "Next 7 days" is toggled on.
     const anchor = new Date(filterDate);

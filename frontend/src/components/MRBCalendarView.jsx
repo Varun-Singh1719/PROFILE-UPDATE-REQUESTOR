@@ -16,6 +16,7 @@ import AlertCircle from "@mui/icons-material/ErrorOutlined";
 import Loader2 from "@mui/icons-material/Autorenew";
 import api from "../lib/api";
 import { Button } from "./ui/button";
+import { Calendar as UICalendar } from "./ui/calendar";
 import { toast } from "../lib/notify";
 import { confirm as confirmDialog } from '../lib/dialog';
 
@@ -52,80 +53,38 @@ const isoToRowOffset = (iso) => {
 };
 
 // ============================================================ Mini month calendar (sidebar)
+// Renders the same react-day-picker calendar used everywhere else in the
+// Meeting Room booking module (via <SingleDatePicker/>), so the sidebar UI
+// stays visually consistent. Single-date selection; the surrounding page
+// controls date navigation and clicking a day fires onChange(Date).
 function MiniMonth({ value, onChange }) {
-  // Track the displayed month with a "key reset" pattern: navigating prev/next bumps a
-  // local offset; when the externally-controlled `value` jumps to a new month we reset.
-  const valueKey = `${value.getFullYear()}-${value.getMonth()}`;
-  const [navOffset, setNavOffset] = useState(0);
-  const [prevKey, setPrevKey] = useState(valueKey);
-  if (prevKey !== valueKey) {
-    setPrevKey(valueKey);
-    setNavOffset(0);
-  }
-  const viewMonth = useMemo(
-    () => new Date(value.getFullYear(), value.getMonth() + navOffset, 1),
-    [value, navOffset],
-  );
-
-  // Build a grid of 6 weeks × 7 days starting Monday.
-  const grid = useMemo(() => {
-    const first = new Date(viewMonth);
-    const offset = (first.getDay() + 6) % 7; // 0 if Monday, 6 if Sunday
-    const start = new Date(first); start.setDate(first.getDate() - offset);
-    return Array.from({ length: 42 }, (_, i) => {
-      const d = new Date(start); d.setDate(start.getDate() + i);
-      return d;
-    });
-  }, [viewMonth]);
-
-  const today = new Date();
-  const monthLabel = viewMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-
   return (
     <div className="select-none" data-testid="mrb-mini-month">
-      <div className="flex items-center justify-between mb-2">
-        <button
-          type="button"
-          onClick={() => setNavOffset(navOffset - 1)}
-          className="p-1 text-gray-500 hover:text-[#ec9324] hover:bg-orange-50 rounded"
-          data-testid="mrb-mini-prev"
-          aria-label="Previous month"
-        ><ChevronLeft sx={{ fontSize: 14 }}/></button>
-        <div className="text-[12px] font-bold text-gray-800">{monthLabel}</div>
-        <button
-          type="button"
-          onClick={() => setNavOffset(navOffset + 1)}
-          className="p-1 text-gray-500 hover:text-[#ec9324] hover:bg-orange-50 rounded"
-          data-testid="mrb-mini-next"
-          aria-label="Next month"
-        ><ChevronRight sx={{ fontSize: 14 }}/></button>
-      </div>
-      <div className="grid grid-cols-7 gap-y-1 text-[9px] font-bold text-gray-400 mb-1 text-center">
-        {["M","T","W","T","F","S","S"].map((d, i) => <div key={i}>{d}</div>)}
-      </div>
-      <div className="grid grid-cols-7 gap-y-0.5">
-        {grid.map((d) => {
-          const outside = d.getMonth() !== viewMonth.getMonth();
-          const isToday = sameDay(d, today);
-          const selected = sameDay(d, value);
-          return (
-            <button
-              key={d.toISOString()}
-              type="button"
-              onClick={() => onChange(d)}
-              data-testid={`mrb-mini-day-${toIsoDate(d)}`}
-              className={[
-                "h-7 w-7 mx-auto rounded-full text-[11px] flex items-center justify-center transition-colors",
-                outside ? "text-gray-300" : "text-gray-700",
-                selected ? "bg-[#ec9324] text-white font-bold hover:bg-[#d4811f]" : "hover:bg-orange-50 hover:text-[#ec9324]",
-                !selected && isToday ? "ring-1 ring-[#ec9324] text-[#ec9324] font-bold" : "",
-              ].join(" ")}
-            >
-              {d.getDate()}
-            </button>
-          );
-        })}
-      </div>
+      <UICalendar
+        mode="single"
+        selected={value}
+        onSelect={(d) => { if (d) onChange(d); }}
+        initialFocus={false}
+        showOutsideDays
+        className="p-0"
+        classNames={{
+          // Compact sizing to fit the 240px sidebar comfortably.
+          months: "flex flex-col",
+          month: "space-y-2",
+          caption: "flex justify-center pt-1 relative items-center text-[12px] font-bold text-gray-800",
+          caption_label: "text-[12px] font-bold",
+          nav_button: "h-6 w-6 rounded text-gray-500 hover:text-[#ec9324] hover:bg-orange-50 inline-flex items-center justify-center",
+          nav_button_previous: "absolute left-1",
+          nav_button_next: "absolute right-1",
+          head_cell: "text-[9px] font-bold text-gray-400 w-7",
+          cell: "text-center text-[11px] p-0",
+          day: "h-7 w-7 p-0 font-normal text-gray-700 rounded-full hover:bg-orange-50 hover:text-[#ec9324] transition-colors inline-flex items-center justify-center",
+          day_selected:
+            "bg-[#ec9324] text-white hover:bg-[#d4811f] hover:text-white focus:bg-[#ec9324] focus:text-white font-bold",
+          day_today: "ring-1 ring-[#ec9324] text-[#ec9324] font-bold",
+          day_outside: "text-gray-300",
+        }}
+      />
     </div>
   );
 }
