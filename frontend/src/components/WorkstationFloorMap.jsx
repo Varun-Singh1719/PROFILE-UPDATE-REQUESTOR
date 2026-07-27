@@ -51,6 +51,10 @@ const WorkstationFloorMap = ({
   highlightRoomId = null,
   rooms = [],
   roomBookingsByRoom = {},
+  // Optional callback fired when the user clicks a meeting-room box on the
+  // floor. Signature: `(room, bookingsForThatRoom) => void`. When provided,
+  // room boxes render with a pointer cursor so their affordance is clear.
+  onRoomClick,
   // Floor Layout view — only shows Available / Pending Approval / Teams
   legendPreset,
   // Multi-seat zoom target: when a single team filter is active, the parent
@@ -385,7 +389,12 @@ const WorkstationFloorMap = ({
                         <div
                           key={r.id}
                           data-testid={`ws-room-${r.id}`}
-                          className="absolute group"
+                          className={`absolute group${onRoomClick ? " cursor-pointer" : ""}`}
+                          onClick={onRoomClick ? (e) => { e.stopPropagation(); onRoomClick(r, bookings); } : undefined}
+                          role={onRoomClick ? "button" : undefined}
+                          tabIndex={onRoomClick ? 0 : undefined}
+                          onKeyDown={onRoomClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onRoomClick(r, bookings); } } : undefined}
+                          title={onRoomClick ? `${r.name || "Meeting Room"} — click for bookings` : undefined}
                           style={{
                             left: `${r.x}%`,
                             top: `${r.y}%`,

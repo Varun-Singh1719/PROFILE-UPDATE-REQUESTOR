@@ -17,6 +17,7 @@ import Loader2 from "@mui/icons-material/Autorenew";
 import api from "../lib/api";
 import { Button } from "./ui/button";
 import { Calendar as UICalendar } from "./ui/calendar";
+import RoomBookingDetailDialog from "./RoomBookingDetailDialog";
 import { toast } from "../lib/notify";
 import { confirm as confirmDialog } from '../lib/dialog';
 
@@ -269,7 +270,7 @@ function EventDetails({ booking, onClose, onEdit, onCancel, canEdit, canCancel }
 }
 
 // ============================================================ Day schedule grid (resource columns)
-function DayGrid({ rooms, bookings, date, onPickSlot, onPickEvent, hoverSlot, setHoverSlot }) {
+function DayGrid({ rooms, bookings, date, onPickSlot, onPickEvent, onPickRoom, hoverSlot, setHoverSlot }) {
   const roomCount = rooms.length;
 
   // Index bookings by room id and sort each set by start.
@@ -432,17 +433,22 @@ function DayGrid({ rooms, bookings, date, onPickSlot, onPickEvent, hoverSlot, se
           className="sticky top-0 left-0 z-30 bg-white border-b border-r border-gray-200"
           style={{ height: HEADER_PX }}
         />
-        {/* Sticky room headers — pin to top of the scroll container during vertical scroll. */}
+        {/* Sticky room headers — pin to top of the scroll container during vertical scroll.
+            Clicking a header opens the shared Room Booking Detail dialog with
+            every booking scheduled on this day for that room. */}
         {rooms.map((r) => (
-          <div
+          <button
             key={`h-${r.room_id}`}
-            className="sticky top-0 z-20 bg-white border-b border-l border-gray-200 px-3 flex flex-col items-center justify-center text-center"
+            type="button"
+            onClick={() => onPickRoom?.(r, byRoom.get(r.room_id) || [])}
+            className="sticky top-0 z-20 bg-white border-b border-l border-gray-200 px-3 flex flex-col items-center justify-center text-center hover:bg-orange-50 focus:outline-none focus:bg-orange-50 transition-colors"
             style={{ height: HEADER_PX }}
             data-testid={`mrb-cal-room-header-${r.room_id}`}
+            title={`${r.name} — click for bookings`}
           >
             <div className="text-[12px] font-bold text-gray-900 truncate max-w-full">{r.name}</div>
             <div className="text-[10px] text-gray-500 truncate max-w-full">{r.capacity} seats</div>
-          </div>
+          </button>
         ))}
 
         {/* Body rows. We render one row per 30-min slot per column. */}
@@ -697,6 +703,10 @@ export default function MRBCalendarView({ user, onClose, onPickSlot, onReschedul
   const [hoverSlot, setHoverSlot] = useState(null);
   const [preview, setPreview] = useState(null); // { booking, anchor }
   const [details, setDetails] = useState(null); // booking
+  // Meeting-room booking detail modal — opened when a room-header on the
+  // DayGrid is clicked. Shows every booking scheduled for that room on the
+  // currently-visible date.
+  const [roomDetail, setRoomDetail] = useState(null); // { room, bookings }
   const [tick, setTick] = useState(0);          // bumped after mutations to refresh
 
   // Permission helpers — admins can edit/cancel any meeting; owners only their own.
@@ -836,6 +846,7 @@ export default function MRBCalendarView({ user, onClose, onPickSlot, onReschedul
             date={date}
             onPickSlot={(slot) => onPickSlot?.(slot)}
             onPickEvent={handlePickEvent}
+            onPickRoom={(room, roomBookings) => setRoomDetail({ room, bookings: roomBookings })}
             hoverSlot={hoverSlot}
             setHoverSlot={setHoverSlot}
           />
@@ -867,6 +878,14 @@ export default function MRBCalendarView({ user, onClose, onPickSlot, onReschedul
           canCancel={canCancel(details)}
         />
       )}
+
+      {/* Room-level booking detail (from clicking a room header on the day grid) */}
+      <RoomBookingDetailDialog
+        room={roomDetail?.room ? { id: roomDetail.room.room_id, name: roomDetail.room.name, capacity: roomDetail.room.capacity } : null}
+        date={toIsoDate(date)}
+        bookings={roomDetail?.bookings || []}
+        onClose={() => setRoomDetail(null)}
+      />
     </div>
   );
 }

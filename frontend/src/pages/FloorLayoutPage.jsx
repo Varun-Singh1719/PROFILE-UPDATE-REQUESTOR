@@ -17,6 +17,7 @@ import api from "../lib/api";
 import Layout from "../components/Layout";
 import WorkstationFloorMap from "../components/WorkstationFloorMap";
 import FloorSeatDetailDialog from "../components/FloorSeatDetailDialog";
+import RoomBookingDetailDialog from "../components/RoomBookingDetailDialog";
 import { paletteForTeam, teamBackground } from "../lib/teamColors";
 import {
   Dialog,
@@ -214,6 +215,14 @@ function PlanInteractiveView({ plan, onBack, hideBack = false, embedded = false 
   // workstation on the floor map. `kind` distinguishes an active booking from
   // a pending workstation request so the modal can label & link accordingly.
   const [detail, setDetail] = useState(null); // { kind:'booking'|'request', seat, data }
+  // Meeting-room booking detail modal state — opened from the room click on
+  // the floor map. `data` holds the bookings array we already have in
+  // `roomBookingsByRoom` so the modal renders instantly with no extra fetch.
+  const [roomDetail, setRoomDetail] = useState(null); // { room, bookings }
+  const openRoomDetail = useCallback((room, bookings) => {
+    setRoomDetail({ room, bookings: bookings || [] });
+  }, []);
+  const closeRoomDetail = useCallback(() => setRoomDetail(null), []);
 
   const openBookingDetail = useCallback((seat, booking) => {
     if (!booking) return;
@@ -379,6 +388,7 @@ function PlanInteractiveView({ plan, onBack, hideBack = false, embedded = false 
               disabled={false}
               rooms={availability.rooms || []}
               roomBookingsByRoom={roomBookingsByRoom}
+              onRoomClick={openRoomDetail}
               legendPreset="floor-layout"
               zoomToSeatIds={zoomTargetSeatIds}
               dimSeatsNotIn={highlightedSeatIds}
@@ -506,6 +516,12 @@ function PlanInteractiveView({ plan, onBack, hideBack = false, embedded = false 
 
       {/* Booking / Request detail modal */}
       <FloorSeatDetailDialog detail={detail} onClose={closeDetail} />
+      <RoomBookingDetailDialog
+        room={roomDetail?.room || null}
+        date={date}
+        bookings={roomDetail?.bookings || []}
+        onClose={closeRoomDetail}
+      />
     </>
   );
 
