@@ -19,7 +19,7 @@ import requests
 from typing import Optional
 
 # Backend URL from frontend/.env
-BACKEND_URL = "https://86adcb7e-5826-4691-8aba-f4c99ca53ebc.preview.emergentagent.com"
+BACKEND_URL = "https://profix-qa-run.preview.emergentagent.com"
 API_BASE = f"{BACKEND_URL}/api"
 
 # Test credentials
