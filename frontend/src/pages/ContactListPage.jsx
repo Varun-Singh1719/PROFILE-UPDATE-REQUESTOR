@@ -1181,10 +1181,8 @@ export default function ContactListPage() {
 
       <Dialog open={bulkPsetOpen} onOpenChange={setBulkPsetOpen}>
         <DialogContent
-          className="max-w-md"
+          className="max-w-md overflow-hidden"
           onPointerDownOutside={(e) => {
-            // Clicks inside a portalled MultiSelectFilter popup are still
-            // "inside" this dialog logically — don't close it.
             const t = e.target;
             if (t instanceof Element && t.closest('[data-multiselect-popup="1"]')) {
               e.preventDefault();
@@ -1198,14 +1196,14 @@ export default function ContactListPage() {
           }}
         >
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ShieldCheck sx={{ fontSize: 18 }} className="text-[#ec9324]"/>
-              Assign Permission Sets : {selected.length} employees
+            <DialogTitle className="flex items-center gap-2 pr-6">
+              <ShieldCheck sx={{ fontSize: 18 }} className="text-[#ec9324] shrink-0"/>
+              <span className="truncate">Assign Permission Sets : {selected.length} employees</span>
             </DialogTitle>
             <DialogDescription className="sr-only">Bulk permission set assignment</DialogDescription>
           </DialogHeader>
-          <div className="mt-2 space-y-4">
-            <div>
+          <div className="mt-2 space-y-4 min-w-0">
+            <div className="min-w-0">
               <Label className="text-xs uppercase tracking-wide text-gray-500">Mode</Label>
               <div className="mt-2 flex items-center gap-6" role="radiogroup" data-testid="bulk-pset-mode-group">
                 {[
@@ -1238,11 +1236,11 @@ export default function ContactListPage() {
                 })}
               </div>
             </div>
-            <div>
+            <div className="min-w-0">
               <Label className="text-xs uppercase tracking-wide text-gray-500">
                 Permission Sets {bulkPsetMode === "remove" ? "to remove" : "to assign"}
               </Label>
-              <div className="mt-1.5">
+              <div className="mt-1.5 min-w-0">
                 <MultiSelectFilter
                   key={`bulk-pset-mode-${bulkPsetMode}`}
                   label="Permission Sets"
@@ -1259,11 +1257,47 @@ export default function ContactListPage() {
                   testIdPrefix="bulk-pset-multiselect"
                   hideLabelPrefix
                   fullWidth
+                  showCountOnly
+                  countUnitLabel={bulkPsetMode === "remove" ? "to remove" : "to assign"}
                 />
               </div>
+              {/* Selected sets shown as removable chips — same treatment as the
+                  Employee ID / Email ID chip inputs so the trigger never gets
+                  crowded even with many selections. */}
+              {bulkPsetIds.length > 0 && (
+                <div
+                  className="flex flex-wrap gap-1.5 mt-2 max-w-full"
+                  data-testid="bulk-pset-selected-chips"
+                >
+                  {bulkPsetIds.map((pid) => {
+                    const opt = bulkPsetOptions.find((o) => o.value === pid);
+                    const labelText = opt ? opt.label : pid;
+                    return (
+                      <span
+                        key={pid}
+                        className="inline-flex items-center gap-1 rounded-md bg-gray-100 border border-gray-200 pl-2 pr-1 py-0.5 text-[12px] text-gray-700 leading-none max-w-full"
+                        data-testid={`bulk-pset-chip-${pid}`}
+                      >
+                        <span className="truncate max-w-[220px]">{labelText}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setBulkPsetIds(bulkPsetIds.filter((x) => x !== pid))
+                          }
+                          className="rounded-full hover:bg-gray-200 p-0.5 text-gray-500 hover:text-gray-700 shrink-0"
+                          aria-label={`Remove ${labelText}`}
+                          data-testid={`bulk-pset-chip-remove-${pid}`}
+                        >
+                          <X sx={{ fontSize: 12 }} />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="mt-2">
             <Button variant="outline" onClick={() => setBulkPsetOpen(false)}>Cancel</Button>
             <Button
               onClick={applyBulkPset}
