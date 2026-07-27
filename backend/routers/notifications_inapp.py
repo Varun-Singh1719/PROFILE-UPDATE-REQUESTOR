@@ -151,44 +151,52 @@ async def update_notification_template(
 
 # Realistic-looking dummy variables per kind so placeholders like
 # `{{seat_label}}` render as something meaningful in the bell.
+#
+# IMPORTANT — value formats MUST mirror what the production callers pass:
+#   • `date` is always YYYY-MM-DD (workstation_bookings.py / workstation_requests.py)
+#   • `start_at` is an ISO datetime string (meeting_room_requests.py)
+# The bell's `formatNotification` in NotificationBell.jsx has strict regexes
+# (e.g. `on ([\d-]+)`) that ONLY match these formats. Using display-friendly
+# variants like "20 Aug 2026" here breaks the parser and the row falls back
+# to raw prose. Keep these values byte-identical in shape to real payloads.
 _TEST_VARIABLES_BY_KIND = {
     "workstation_request_submitted": {
-        "requested_by_name": "Aarushi Bhatia",
+        "requested_by_name": "Admin User",
         "employee_name": "Aarushi Bhatia",
         "seat_label": "A-101",
-        "date": "20 Aug 2026",
+        "date": "2026-08-20",
     },
     "workstation_request_approved": {
         "seat_label": "A-101",
-        "date": "20 Aug 2026",
+        "date": "2026-08-20",
         "decided_by": "Admin User",
     },
     "workstation_request_declined": {
         "seat_label": "A-101",
-        "date": "20 Aug 2026",
+        "date": "2026-08-20",
         "decided_by": "Admin User",
     },
     "workstation_assigned": {
         "seat_label": "B-204",
-        "date": "20 Aug 2026",
+        "date": "2026-08-20",
         "assigned_by": "Admin User",
     },
     "meeting_room_request_submitted": {
-        "requested_by_name": "Aarushi Bhatia",
+        "requested_by_name": "Admin User",
         "meeting_title": "Sprint Planning",
         "room_name": "Alpha",
-        "start_at": "20 Aug 2026, 10:00 AM",
+        "start_at": "2026-08-20T10:00:00Z",
     },
     "meeting_room_request_approved": {
         "title": "Sprint Planning",
         "room_name": "Alpha",
-        "start_at": "20 Aug 2026, 10:00 AM",
+        "start_at": "2026-08-20T10:00:00Z",
         "decided_by": "Admin User",
     },
     "meeting_room_request_declined": {
         "title": "Sprint Planning",
         "room_name": "Alpha",
-        "start_at": "20 Aug 2026, 10:00 AM",
+        "start_at": "2026-08-20T10:00:00Z",
         "decided_by": "Admin User",
     },
     "request_closed": {
