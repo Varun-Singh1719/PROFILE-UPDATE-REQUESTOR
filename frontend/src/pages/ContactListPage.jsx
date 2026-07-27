@@ -1196,7 +1196,7 @@ export default function ContactListPage() {
           }}
         >
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 pr-6">
+            <DialogTitle className="flex items-center gap-2 pr-10">
               <ShieldCheck sx={{ fontSize: 18 }} className="text-[#ec9324] shrink-0"/>
               <span className="truncate">Assign Permission Sets : {selected.length} employees</span>
             </DialogTitle>
