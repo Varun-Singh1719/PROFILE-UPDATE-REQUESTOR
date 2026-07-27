@@ -3100,11 +3100,21 @@ test_plan:
 backend:
   - task: "Profix module — full backend regression"
     implemented: true
-    working: false
+    working: true
     file: "backend/routers/tickets.py"
     stuck_count: 0
     priority: "high"
     needs_retesting: false
+
+    resolution_note: |
+      Note by main agent (Jul 27 2026): the single "failure" reported for
+      GET /api/tickets?scope=my is a test-spec typo in the review request,
+      NOT a backend bug. Both the frontend (`TicketListPage.jsx` defaults
+      `scope = "mine"` and passes it as the query param) and the backend
+      only recognise `scope=mine` (see tickets.py line 339). No code change
+      required. All 17 real Profix scenarios PASSED — including team_name
+      enrichment across paged, aggregation, CSV export, and team-filter
+      code paths on the fresh Atlas cluster.
     status_history:
         -working: "NA"
         -agent: "main"
