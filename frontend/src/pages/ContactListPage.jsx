@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import api, { API } from "../lib/api";
 import Layout from "../components/Layout";
@@ -187,34 +187,32 @@ function EmployeeDetailModal({ contact, open, onClose }) {
         </DialogHeader>
         {/* --- Header banner --- */}
         <div className="relative px-5 pt-5 pb-4 bg-gradient-to-br from-[#ec9324]/10 via-white to-white border-b border-gray-100">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <UserAvatar user={contact} size={52} showStatusDot={false}/>
-              <div className="min-w-0">
-                <div className="text-lg font-bold text-gray-900 truncate">{contact.name}</div>
-                <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-semibold bg-[#ec9324]/15 text-[#ec9324]">
-                    {contact.role}
+          <div className="flex items-center gap-3 pr-8 min-w-0">
+            <UserAvatar user={contact} size={52} showStatusDot={false}/>
+            <div className="min-w-0">
+              <div className="text-lg font-bold text-gray-900 truncate">{contact.name}</div>
+              <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-semibold bg-[#ec9324]/15 text-[#ec9324]">
+                  {contact.role}
+                </span>
+                {contact.emp_id && (
+                  <span className="inline-flex items-center gap-1 text-[11px] text-gray-500 font-mono">
+                    <IdCard sx={{ fontSize: 12 }}/> {contact.emp_id}
                   </span>
-                  {contact.emp_id && (
-                    <span className="inline-flex items-center gap-1 text-[11px] text-gray-500 font-mono">
-                      <IdCard sx={{ fontSize: 12 }}/> {contact.emp_id}
-                    </span>
-                  )}
-                </div>
+                )}
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+                    isActive
+                      ? "bg-green-50 text-green-700 border-green-200"
+                      : "bg-gray-100 text-gray-500 border-gray-200"
+                  }`}
+                  data-testid="detail-status-pill"
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-green-500" : "bg-gray-400"}`}/>
+                  {contact.status}
+                </span>
               </div>
             </div>
-            <span
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${
-                isActive
-                  ? "bg-green-50 text-green-700 border-green-200"
-                  : "bg-gray-100 text-gray-500 border-gray-200"
-              }`}
-              data-testid="detail-status-pill"
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-green-500" : "bg-gray-400"}`}/>
-              {contact.status}
-            </span>
           </div>
         </div>
 
@@ -273,11 +271,12 @@ function EmployeeDetailModal({ contact, open, onClose }) {
                 {(contact.permission_sets || []).map((p) => (
                   <span
                     key={p.id}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-white text-[#ec9324] border border-[#ec9324]/30 shadow-sm"
+                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium bg-white text-[#ec9324] border border-[#ec9324]/30 shadow-sm"
                     data-testid={`detail-pset-chip-${p.numeric_id}`}
                   >
-                    <span className="font-mono text-[10px] text-[#ec9324]/70">#{p.numeric_id}</span>
-                    {p.name}
+                    <span className="font-mono text-[10px] text-[#ec9324]/70">{p.numeric_id}</span>
+                    <span className="text-gray-300">-</span>
+                    <span>{p.name}</span>
                   </span>
                 ))}
               </div>
@@ -438,7 +437,7 @@ function BulkUploadModal({ open, onClose, onComplete }) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && close()}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload sx={{ fontSize: 18 }} className="text-[#ec9324]"/> Upload Employees
@@ -447,7 +446,7 @@ function BulkUploadModal({ open, onClose, onComplete }) {
         </DialogHeader>
 
         {!result && (
-          <div className="space-y-4">
+          <div className="space-y-4 min-w-0">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Button
@@ -469,12 +468,12 @@ function BulkUploadModal({ open, onClose, onComplete }) {
             </div>
 
             {/* Example rows — kept on a single horizontal line, scroll on tight widths */}
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <div className="border border-gray-200 rounded-lg overflow-hidden min-w-0">
               <div className="bg-gray-50 px-3 py-2 text-[11px] font-semibold text-gray-600 uppercase tracking-wide">
                 Example rows
               </div>
-              <div className="overflow-x-auto">
-                <table className="text-[11px] w-full">
+              <div className="overflow-x-auto min-w-0">
+                <table className="text-[11px] min-w-full w-max">
                   <thead className="bg-gray-100 text-gray-700">
                     <tr>
                       <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Name</th>
@@ -903,6 +902,37 @@ export default function ContactListPage() {
     setBulkPsetOpen(true);
   };
 
+  // In Add mode we show every permission set the admin can assign. In Remove
+  // mode we narrow the picker to only the sets already assigned to any of the
+  // selected employees — you cannot remove what isn't there.
+  const bulkPsetOptions = useMemo(() => {
+    const mkLabel = (p) => {
+      const num = p.numeric_id || p.seq_no || "?";
+      const name = p.title || p.name || "Untitled";
+      return `${num} - ${name}`;
+    };
+    if (bulkPsetMode !== "remove" || selected.length === 0) {
+      return permissionSets.map((p) => ({ value: p.id, label: mkLabel(p) }));
+    }
+    const selectedContacts = contacts.filter((c) => selected.includes(c.id));
+    const assignedIds = new Set();
+    for (const c of selectedContacts) {
+      for (const pid of (c.permission_set_ids || [])) assignedIds.add(pid);
+    }
+    return permissionSets
+      .filter((p) => assignedIds.has(p.id))
+      .map((p) => ({ value: p.id, label: mkLabel(p) }));
+  }, [bulkPsetMode, permissionSets, selected, contacts]);
+
+  // Clear any chosen values that are no longer visible when the mode flips.
+  useEffect(() => {
+    if (bulkPsetIds.length === 0) return;
+    const visible = new Set(bulkPsetOptions.map((o) => o.value));
+    const trimmed = bulkPsetIds.filter((id) => visible.has(id));
+    if (trimmed.length !== bulkPsetIds.length) setBulkPsetIds(trimmed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bulkPsetOptions]);
+
   const applyBulkPset = async () => {
     if (selected.length === 0) return;
     if (bulkPsetIds.length === 0) {
@@ -1194,13 +1224,13 @@ export default function ContactListPage() {
                       className="inline-flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900"
                     >
                       <span
-                        className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                        className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${
                           active
-                            ? "bg-[#ec9324] border-[#ec9324] text-white"
-                            : "bg-white border-gray-300"
+                            ? "border-[#ec9324]"
+                            : "border-gray-300"
                         }`}
                       >
-                        {active && <Check sx={{ fontSize: 12 }}/>}
+                        {active && <span className="w-2 h-2 rounded-full bg-[#ec9324]"/>}
                       </span>
                       {m.title}
                     </button>
@@ -1214,14 +1244,18 @@ export default function ContactListPage() {
               </Label>
               <div className="mt-1.5">
                 <MultiSelectFilter
+                  key={`bulk-pset-mode-${bulkPsetMode}`}
                   label="Permission Sets"
-                  options={permissionSets.map((p) => ({
-                    value: p.id,
-                    label: `#${p.numeric_id || p.seq_no || "?"} · ${p.title || p.name || "Untitled"}`,
-                  }))}
+                  options={bulkPsetOptions}
                   value={bulkPsetIds}
                   onChange={setBulkPsetIds}
-                  placeholder="Pick one or more permission sets…"
+                  placeholder={
+                    bulkPsetMode === "remove"
+                      ? (bulkPsetOptions.length === 0
+                          ? "No permission sets currently assigned"
+                          : "Pick sets to remove…")
+                      : "Pick one or more permission sets…"
+                  }
                   testIdPrefix="bulk-pset-multiselect"
                   hideLabelPrefix
                   fullWidth
@@ -1359,7 +1393,7 @@ export default function ContactListPage() {
                   label="Permission Sets"
                   options={permissionSets.map((p) => ({
                     value: p.id,
-                    label: `#${p.numeric_id} · ${p.name}`,
+                    label: `${p.numeric_id} - ${p.name}`,
                   }))}
                   value={form.permission_set_ids || []}
                   onChange={(ids) => setForm({ ...form, permission_set_ids: ids })}
@@ -1391,7 +1425,7 @@ export default function ContactListPage() {
             <span className="text-[11px] uppercase tracking-wider font-semibold text-gray-500">Filtered by permission set:</span>
             {psetFilter.map((pid) => {
               const p = permissionSets.find((x) => x.id === pid);
-              const label = p ? `#${p.numeric_id || p.seq_no || "?"} · ${p.title || p.name || "Untitled"}` : pid;
+              const label = p ? `${p.numeric_id || p.seq_no || "?"} - ${p.title || p.name || "Untitled"}` : pid;
               return (
                 <span
                   key={pid}
@@ -1474,7 +1508,7 @@ export default function ContactListPage() {
               }}
               options={permissionSets.map((p) => ({
                 value: p.id,
-                label: `#${p.numeric_id || p.seq_no || "?"} · ${p.title || p.name || "Untitled"}`,
+                label: `${p.numeric_id || p.seq_no || "?"} - ${p.title || p.name || "Untitled"}`,
               }))}
               testIdPrefix="contact-pset-filter"
               className="w-52"
@@ -1577,11 +1611,12 @@ export default function ContactListPage() {
                         {(c.permission_sets || []).slice(0, 2).map((p) => (
                           <span
                             key={p.id}
-                            title={p.name}
-                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-100 max-w-[120px] truncate"
+                            title={`${p.numeric_id} - ${p.name}`}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-100 max-w-[160px]"
                             data-testid={`row-pset-chip-${c.email}-${p.numeric_id}`}
                           >
-                            <span className="font-mono text-blue-500">#{p.numeric_id}</span>
+                            <span className="font-mono text-blue-500">{p.numeric_id}</span>
+                            <span className="text-blue-300">-</span>
                             <span className="truncate">{p.name}</span>
                           </span>
                         ))}

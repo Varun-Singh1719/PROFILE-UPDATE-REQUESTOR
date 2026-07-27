@@ -243,6 +243,13 @@ export default function MultiSelectFilter({
           aria-multiselectable="true"
           data-testid={tid ? `${tid}-popup` : undefined}
           data-multiselect-popup="1"
+          // Stop pointer/mouse events from bubbling to document so Radix
+          // Dialog's DismissableLayer (which listens at document level) never
+          // sees them as "outside" the dialog. Fixes the popup collapsing on
+          // option click when the MultiSelectFilter is used inside a modal.
+          onPointerDownCapture={(e) => e.stopPropagation()}
+          onMouseDownCapture={(e) => e.stopPropagation()}
+          onClickCapture={(e) => e.stopPropagation()}
           style={{
             position: "fixed",
             top: popupPos.direction === "down" ? popupPos.top : undefined,
@@ -266,6 +273,9 @@ export default function MultiSelectFilter({
                 16,
             ),
             zIndex: 9999,
+            // Force-enable pointer events — Radix modal Dialog can set
+            // pointer-events:none on siblings of the dialog's portal.
+            pointerEvents: "auto",
           }}
           className="bg-white border border-gray-200 shadow-lg rounded-md py-1"
         >
