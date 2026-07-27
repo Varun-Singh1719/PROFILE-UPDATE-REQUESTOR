@@ -2849,3 +2849,42 @@ agent_communication:
       Both enhancements are working exactly as specified. The status chip peek provides at-a-glance visual feedback with correctly colored dots (orange, green, red, gray) that match the status pill colors. The sticky filter bar stays perfectly pinned at the top when the meeting list scrolls, with clean visual rendering and no overlap issues.
       
       NO ISSUES FOUND. Both enhancements ready for production.
+    -agent: "main"
+    -message: |
+      BUG-FIX + UI POLISH ROUND — need backend regression + frontend verification of the bulk-permission-sets Assign dialog and the Employee-Detail modal on the Employee List (/admin/contacts).
+
+      **CONTEXT:** User reported a live bug where the MultiSelectFilter popup inside the "Bulk actions → Assign Permission Sets" dialog collapses on its own the moment the user clicks any permission-set option, so nothing can be picked.
+
+      **ROOT CAUSE:** MultiSelectFilter portals its popup to `document.body`, i.e. outside the Radix DialogContent DOM subtree. Radix Dialog's dismiss layer treats a pointerdown on this portalled popup as "outside" the dialog, but crucially the pointer event *also* closes the MultiSelectFilter itself before its own toggle handler runs (because the dismiss layer runs at the document level).
+
+      **FIX APPLIED:**
+      1. Tagged the MultiSelectFilter popup with `data-multiselect-popup="1"` (frontend/src/components/ui/MultiSelectFilter.jsx).
+      2. On the bulk-pset DialogContent, added `onPointerDownOutside` + `onInteractOutside` handlers that call `e.preventDefault()` when the event target is inside `[data-multiselect-popup="1"]` (frontend/src/pages/ContactListPage.jsx). This preserves normal outside-click behaviour but lets the MultiSelectFilter own its own popup lifecycle.
+
+      **OTHER CHANGES IN THE SAME COMMIT (please regression-check they didn't break existing behaviour):**
+      - Bulk Assign dialog header changed to "Assign Permission Sets : N employees"; description line removed.
+      - Mode reduced to Add / Remove; radio-style pickers now (checkbox visual matches row select).
+      - Replace mode + amber banner removed from UI (backend still accepts `mode="replace"` — API surface unchanged).
+      - Employee Detail modal redesigned: gradient header, two-column info grid, permission-sets card, footer meta line.
+      - PasswordField: helper text "Click the eye icon…" removed, native `title=` swapped for group-hover tooltips that mirror the Notification bell style.
+      - Upload Employees dialog: title dropped "(.csv or .xlsx)", description + required/optional legend removed, `Max ~5000 rows recommended` replaced with `Max ~500 rows`, example rows now single-line via `whitespace-nowrap` inside `overflow-x-auto`.
+
+      **REGRESSION SCOPE (BACKEND):** These endpoints must still work exactly as before (no schema changes were introduced):
+      - POST /api/contacts/bulk-permission-sets — all 3 modes (add / remove / replace) still accepted; unknown pset id still rejected 400.
+      - GET  /api/contacts/sample-template?format=csv|xlsx
+      - POST /api/contacts/bulk-upload (CSV + XLSX)
+      - GET  /api/contacts/export.csv and /api/contacts/export.xlsx (with chip filters).
+      - Standard /api/contacts CRUD, list, filter by emp_ids / emails.
+
+      Credentials: admin@ticketing.com / Admin@123.
+  - task: "Bulk Assign Permission Sets — chip popup closes on selection (fix + regression)"
+    implemented: true
+    working: "NA"
+    file: "backend/routers/contacts.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "No backend changes to the bulk-permission-sets endpoint itself — fix was purely frontend (MultiSelectFilter portal marker + Dialog outside-click guard). Backend regression only: confirm POST /api/contacts/bulk-permission-sets still supports {mode: 'add' | 'remove' | 'replace'} and returns 400 on unknown pset id. Also confirm GET /api/contacts/sample-template?format=csv|xlsx, POST /api/contacts/bulk-upload (both csv and xlsx), GET /api/contacts/export.csv and /api/contacts/export.xlsx still work."

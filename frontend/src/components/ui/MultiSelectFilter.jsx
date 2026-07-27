@@ -242,6 +242,7 @@ export default function MultiSelectFilter({
           role="listbox"
           aria-multiselectable="true"
           data-testid={tid ? `${tid}-popup` : undefined}
+          data-multiselect-popup="1"
           style={{
             position: "fixed",
             top: popupPos.direction === "down" ? popupPos.top : undefined,

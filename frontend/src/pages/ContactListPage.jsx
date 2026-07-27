@@ -51,6 +51,7 @@ import Upload from "@mui/icons-material/FileUploadOutlined";
 import FileSpreadsheet from "@mui/icons-material/TableChartOutlined";
 import History from "@mui/icons-material/HistoryOutlined";
 import CheckCircle2 from "@mui/icons-material/CheckCircleOutlined";
+import Check from "@mui/icons-material/Check";
 import AlertTriangle from "@mui/icons-material/WarningAmber";
 import FileDown from "@mui/icons-material/FileDownloadOutlined";
 import Loader2 from "@mui/icons-material/Autorenew";
@@ -117,142 +118,199 @@ function PasswordField({ contactId, testIdPrefix = "contact" }) {
           className="font-mono"
           data-testid={`${testIdPrefix}-password-display`}
         />
-        <Button
-          type="button"
-          size="icon"
-          variant="outline"
-          onClick={fetchPwd}
-          disabled={loading}
-          data-testid={`${testIdPrefix}-password-toggle`}
-          className="border-gray-300"
-          aria-label={show ? "Hide password" : "Show password"}
-          title={show ? "Hide" : "Show"}
-        >
-          {show ? <EyeOff sx={{ fontSize: 16 }}/> : <Eye sx={{ fontSize: 16 }}/>}
-        </Button>
-        {pwd && (
+        <div className="relative group">
           <Button
             type="button"
             size="icon"
             variant="outline"
-            onClick={copy}
-            data-testid={`${testIdPrefix}-password-copy`}
+            onClick={fetchPwd}
+            disabled={loading}
+            data-testid={`${testIdPrefix}-password-toggle`}
             className="border-gray-300"
-            title="Copy"
-            aria-label="Copy password"
+            aria-label={show ? "Hide password" : "Show password"}
           >
-            <Copy sx={{ fontSize: 16 }}/>
+            {show ? <EyeOff sx={{ fontSize: 16 }}/> : <Eye sx={{ fontSize: 16 }}/>}
           </Button>
+          <span className="pointer-events-none absolute top-full mt-1.5 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+            {show ? "Hide" : "Show"}
+          </span>
+        </div>
+        {pwd && (
+          <div className="relative group">
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              onClick={copy}
+              data-testid={`${testIdPrefix}-password-copy`}
+              className="border-gray-300"
+              aria-label="Copy password"
+            >
+              <Copy sx={{ fontSize: 16 }}/>
+            </Button>
+            <span className="pointer-events-none absolute top-full mt-1.5 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+              Copy
+            </span>
+          </div>
         )}
-        <Button
-          type="button"
-          size="icon"
-          variant="outline"
-          onClick={reset}
-          disabled={loading}
-          data-testid={`${testIdPrefix}-password-reset`}
-          className="border-gray-300"
-          title="Reset password"
-          aria-label="Reset password"
-        >
-          <RefreshCw sx={{ fontSize: 16 }}/>
-        </Button>
+        <div className="relative group">
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            onClick={reset}
+            disabled={loading}
+            data-testid={`${testIdPrefix}-password-reset`}
+            className="border-gray-300"
+            aria-label="Reset password"
+          >
+            <RefreshCw sx={{ fontSize: 16 }}/>
+          </Button>
+          <span className="pointer-events-none absolute top-full mt-1.5 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+            Reset
+          </span>
+        </div>
       </div>
-      <div className="text-xs text-gray-500 mt-1">Click the eye icon to reveal. Reset generates a new password.</div>
     </div>
   );
 }
 
 function EmployeeDetailModal({ contact, open, onClose }) {
   if (!contact) return null;
+  const isActive = contact.status === "Active";
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            <UserAvatar user={contact} size={44} showStatusDot={false}/>
-            <div>
-              <div className="text-lg font-bold">{contact.name}</div>
-              <div className="text-xs text-gray-500 font-normal">{contact.role}</div>
-            </div>
-          </DialogTitle>
-          <DialogDescription className="sr-only">Employee details</DialogDescription>
+      <DialogContent className="max-w-lg p-0 overflow-hidden">
+        <DialogHeader className="sr-only">
+          <DialogTitle>{contact.name}</DialogTitle>
+          <DialogDescription>Employee details</DialogDescription>
         </DialogHeader>
-        <div className="space-y-3 mt-2 text-sm">
-          <div className="flex items-center gap-2 text-gray-700">
-            <Mail sx={{ fontSize: 14 }} className="text-gray-400"/>
-            <span>{contact.email}</span>
-          </div>
-          <div className="flex items-center gap-2 text-gray-700">
-            <Phone sx={{ fontSize: 14 }} className="text-gray-400"/>
-            <span>
-              {contact.phone ? (
-                <>
-                  <span className="text-gray-500">{contact.phone_isd || DEFAULT_ISD}</span>{" "}
-                  <span>{contact.phone}</span>
-                </>
-              ) : (
-                <span className="text-gray-400">No phone</span>
-              )}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 text-gray-700">
-            <IdCard sx={{ fontSize: 14 }} className="text-gray-400"/>
-            <span><span className="text-gray-500">Emp ID:</span> {contact.emp_id || "—"}</span>
-          </div>
-          <div className="flex items-center gap-2 text-gray-700">
-            <Calendar sx={{ fontSize: 14 }} className="text-gray-400"/>
-            <span><span className="text-gray-500">DOJ:</span> {contact.doj || "—"}</span>
-          </div>
-          <div className="flex items-center gap-2 text-gray-700">
-            <UsersRound sx={{ fontSize: 14 }} className="text-gray-400"/>
-            <span>
-              <span className="text-gray-500">Team:</span>{" "}
-              {contact.team_name ? (
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm" style={{ background: teamBackground(contact.team_color) }} />
-                  {contact.team_name}
-                </span>
-              ) : <span className="text-gray-400">No team</span>}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 text-gray-700">
-            <Briefcase sx={{ fontSize: 14 }} className="text-gray-400"/>
-            <span><span className="text-gray-500">Manager(s):</span> {(contact.manager_names || []).join(", ") || <span className="text-gray-400">—</span>}</span>
-          </div>
-          <div className="flex items-start gap-2 text-gray-700">
-            <ShieldCheck sx={{ fontSize: 14 }} className="text-gray-400 mt-1"/>
-            <div className="flex-1">
-              <div className="text-gray-500 mb-1">Permission Sets:</div>
-              {(contact.permission_sets || []).length === 0 ? (
-                <span className="text-gray-400 text-xs">None assigned</span>
-              ) : (
-                <div className="flex flex-wrap gap-1.5" data-testid="detail-permission-sets">
-                  {(contact.permission_sets || []).map((p) => (
-                    <span
-                      key={p.id}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/20"
-                      data-testid={`detail-pset-chip-${p.numeric_id}`}
-                    >
-                      <span className="font-mono text-[10px] text-[#ec9324]/70">#{p.numeric_id}</span>
-                      {p.name}
+        {/* --- Header banner --- */}
+        <div className="relative px-5 pt-5 pb-4 bg-gradient-to-br from-[#ec9324]/10 via-white to-white border-b border-gray-100">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <UserAvatar user={contact} size={52} showStatusDot={false}/>
+              <div className="min-w-0">
+                <div className="text-lg font-bold text-gray-900 truncate">{contact.name}</div>
+                <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-semibold bg-[#ec9324]/15 text-[#ec9324]">
+                    {contact.role}
+                  </span>
+                  {contact.emp_id && (
+                    <span className="inline-flex items-center gap-1 text-[11px] text-gray-500 font-mono">
+                      <IdCard sx={{ fontSize: 12 }}/> {contact.emp_id}
                     </span>
-                  ))}
+                  )}
                 </div>
-              )}
+              </div>
             </div>
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+                isActive
+                  ? "bg-green-50 text-green-700 border-green-200"
+                  : "bg-gray-100 text-gray-500 border-gray-200"
+              }`}
+              data-testid="detail-status-pill"
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-green-500" : "bg-gray-400"}`}/>
+              {contact.status}
+            </span>
           </div>
-          <div className="border-t pt-3 mt-3">
+        </div>
+
+        {/* --- Info grid --- */}
+        <div className="px-5 py-4 space-y-4">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <DetailField icon={Mail} label="Email" value={contact.email} span={2}/>
+            <DetailField
+              icon={Phone}
+              label="Phone"
+              value={
+                contact.phone
+                  ? `${contact.phone_isd || DEFAULT_ISD} ${contact.phone}`
+                  : "—"
+              }
+            />
+            <DetailField icon={Calendar} label="DOJ" value={contact.doj || "—"}/>
+            <DetailField
+              icon={UsersRound}
+              label="Team"
+              value={
+                contact.team_name ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span
+                      className="w-2.5 h-2.5 rounded-sm"
+                      style={{ background: teamBackground(contact.team_color) }}
+                    />
+                    {contact.team_name}
+                  </span>
+                ) : (
+                  <span className="text-gray-400">No team</span>
+                )
+              }
+            />
+            <DetailField
+              icon={Briefcase}
+              label="Manager(s)"
+              value={
+                (contact.manager_names || []).length
+                  ? (contact.manager_names || []).join(", ")
+                  : <span className="text-gray-400">—</span>
+              }
+            />
+          </div>
+
+          {/* Permission sets */}
+          <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-3">
+            <div className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 flex items-center gap-1 mb-1.5">
+              <ShieldCheck sx={{ fontSize: 12 }} className="text-gray-500"/>
+              Permission Sets
+            </div>
+            {(contact.permission_sets || []).length === 0 ? (
+              <span className="text-xs text-gray-400 italic">None assigned</span>
+            ) : (
+              <div className="flex flex-wrap gap-1.5" data-testid="detail-permission-sets">
+                {(contact.permission_sets || []).map((p) => (
+                  <span
+                    key={p.id}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-white text-[#ec9324] border border-[#ec9324]/30 shadow-sm"
+                    data-testid={`detail-pset-chip-${p.numeric_id}`}
+                  >
+                    <span className="font-mono text-[10px] text-[#ec9324]/70">#{p.numeric_id}</span>
+                    {p.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Password */}
+          <div className="border-t border-gray-100 pt-3">
             <PasswordField contactId={contact.id} testIdPrefix="detail" />
           </div>
-          <div className="pt-2 text-xs text-gray-500">
-            <div>Status: <span className={contact.status === "Active" ? "text-green-600 font-medium" : "text-gray-500"}>{contact.status}</span></div>
-            <div>Created: {fmt(contact.created_on)}</div>
-            <div>Last Login: {fmt(contact.last_login)}</div>
+
+          {/* Footer meta */}
+          <div className="flex items-center justify-between text-[11px] text-gray-500 border-t border-gray-100 pt-3">
+            <span>Created&nbsp;<span className="text-gray-700 font-medium">{fmt(contact.created_on)}</span></span>
+            <span>Last Login&nbsp;<span className="text-gray-700 font-medium">{fmt(contact.last_login) || "Never"}</span></span>
           </div>
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function DetailField({ icon: Icon, label, value, span = 1 }) {
+  return (
+    <div className={span === 2 ? "col-span-2 min-w-0" : "min-w-0"}>
+      <div className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 flex items-center gap-1 mb-0.5">
+        {Icon && <Icon sx={{ fontSize: 11 }} className="text-gray-400"/>}
+        {label}
+      </div>
+      <div className="text-sm text-gray-800 truncate" title={typeof value === "string" ? value : undefined}>
+        {value}
+      </div>
+    </div>
   );
 }
 
@@ -380,14 +438,12 @@ function BulkUploadModal({ open, onClose, onComplete }) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && close()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Upload sx={{ fontSize: 18 }} className="text-[#ec9324]"/> Upload Employees (.csv or .xlsx)
+            <Upload sx={{ fontSize: 18 }} className="text-[#ec9324]"/> Upload Employees
           </DialogTitle>
-          <DialogDescription>
-            Bulk-add employees from a CSV or Excel file. Download the sample template to see the required columns.
-          </DialogDescription>
+          <DialogDescription className="sr-only">Upload employees from a CSV or Excel file</DialogDescription>
         </DialogHeader>
 
         {!result && (
@@ -409,55 +465,51 @@ function BulkUploadModal({ open, onClose, onComplete }) {
                   <FileSpreadsheet sx={{ fontSize: 14 }} className="mr-2"/> XLSX Template
                 </Button>
               </div>
-              <span className="text-xs text-gray-500"><b>.csv</b> or <b>.xlsx</b> · Max ~5000 rows recommended</span>
+              <span className="text-xs text-gray-500">Max ~500 rows</span>
             </div>
 
-            {/* Example preview — mirrors the Add Employee form fields */}
+            {/* Example rows — kept on a single horizontal line, scroll on tight widths */}
             <div className="border border-gray-200 rounded-lg overflow-hidden">
               <div className="bg-gray-50 px-3 py-2 text-[11px] font-semibold text-gray-600 uppercase tracking-wide">
-                Example rows (matches the Add Employee form)
+                Example rows
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-[11px]">
+                <table className="text-[11px] w-full">
                   <thead className="bg-gray-100 text-gray-700">
                     <tr>
-                      <th className="px-2 py-1.5 text-left font-semibold">Name</th>
-                      <th className="px-2 py-1.5 text-left font-semibold">Email</th>
-                      <th className="px-2 py-1.5 text-left font-semibold">Phone ISD</th>
-                      <th className="px-2 py-1.5 text-left font-semibold">Phone</th>
-                      <th className="px-2 py-1.5 text-left font-semibold">DOJ</th>
-                      <th className="px-2 py-1.5 text-left font-semibold">Employee ID</th>
-                      <th className="px-2 py-1.5 text-left font-semibold">Role</th>
-                      <th className="px-2 py-1.5 text-left font-semibold">Permission Sets</th>
+                      <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Name</th>
+                      <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Email</th>
+                      <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Phone ISD</th>
+                      <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Phone</th>
+                      <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">DOJ</th>
+                      <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Employee ID</th>
+                      <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Role</th>
+                      <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Permission Sets</th>
                     </tr>
                   </thead>
                   <tbody className="text-gray-700">
                     <tr className="border-t border-gray-100">
-                      <td className="px-2 py-1.5">John Smith</td>
-                      <td className="px-2 py-1.5">john.smith@company.com</td>
-                      <td className="px-2 py-1.5">+91</td>
-                      <td className="px-2 py-1.5">9876543210</td>
-                      <td className="px-2 py-1.5">01-15-2026</td>
-                      <td className="px-2 py-1.5">EMP001</td>
-                      <td className="px-2 py-1.5">Admin</td>
-                      <td className="px-2 py-1.5">Request Manager</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">John Smith</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">john.smith@company.com</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">+91</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">9876543210</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">01-15-2026</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">EMP001</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">Admin</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">Request Manager</td>
                     </tr>
                     <tr className="border-t border-gray-100">
-                      <td className="px-2 py-1.5">Sarah Johnson</td>
-                      <td className="px-2 py-1.5">sarah.johnson@company.com</td>
-                      <td className="px-2 py-1.5">+1</td>
-                      <td className="px-2 py-1.5">5551234567</td>
-                      <td className="px-2 py-1.5">02-01-2026</td>
-                      <td className="px-2 py-1.5">EMP002</td>
-                      <td className="px-2 py-1.5">Super Admin</td>
-                      <td className="px-2 py-1.5">Request Manager, #8</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">Sarah Johnson</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">sarah.johnson@company.com</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">+1</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">5551234567</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">02-01-2026</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">EMP002</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">Super Admin</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">Request Manager, #8</td>
                     </tr>
                   </tbody>
                 </table>
-              </div>
-              <div className="bg-amber-50 border-t border-amber-100 px-3 py-1.5 text-[10.5px] text-amber-800 leading-snug">
-                <b>Required:</b> Name, Email, DOJ (MM-DD-YYYY), Employee ID, Role.
-                &nbsp;<b>Optional:</b> Phone ISD (e.g. +91), Phone, Permission Sets (comma-separated names or #ids).
               </div>
             </div>
 
@@ -758,7 +810,7 @@ export default function ContactListPage() {
   const [bulkRole, setBulkRole] = useState("Admin");
   const [bulkPsetOpen, setBulkPsetOpen] = useState(false);
   const [bulkPsetIds, setBulkPsetIds] = useState([]);
-  const [bulkPsetMode, setBulkPsetMode] = useState("replace"); // replace | add | remove
+  const [bulkPsetMode, setBulkPsetMode] = useState("add"); // add | remove
 
   const [detailContact, setDetailContact] = useState(null);
   const [generated, setGenerated] = useState(null); // {password, email}
@@ -847,18 +899,18 @@ export default function ContactListPage() {
 
   const openBulkPset = () => {
     setBulkPsetIds([]);
-    setBulkPsetMode("replace");
+    setBulkPsetMode("add");
     setBulkPsetOpen(true);
   };
 
   const applyBulkPset = async () => {
     if (selected.length === 0) return;
-    if (bulkPsetMode !== "remove" && bulkPsetIds.length === 0) {
-      notify.error("Select at least one permission set");
-      return;
-    }
-    if (bulkPsetMode === "remove" && bulkPsetIds.length === 0) {
-      notify.error("Select the permission sets to remove");
+    if (bulkPsetIds.length === 0) {
+      notify.error(
+        bulkPsetMode === "remove"
+          ? "Select the permission sets to remove"
+          : "Select at least one permission set"
+      );
       return;
     }
     try {
@@ -867,7 +919,7 @@ export default function ContactListPage() {
         permission_set_ids: bulkPsetIds,
         mode: bulkPsetMode,
       });
-      const verb = bulkPsetMode === "replace" ? "assigned" : bulkPsetMode === "add" ? "added to" : "removed from";
+      const verb = bulkPsetMode === "add" ? "added to" : "removed from";
       notify.success(`Permission sets ${verb} ${r.data?.updated || 0} employee(s)`);
       setBulkPsetOpen(false);
       setSelected([]);
@@ -1098,49 +1150,63 @@ export default function ContactListPage() {
       </Dialog>
 
       <Dialog open={bulkPsetOpen} onOpenChange={setBulkPsetOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent
+          className="max-w-md"
+          onPointerDownOutside={(e) => {
+            // Clicks inside a portalled MultiSelectFilter popup are still
+            // "inside" this dialog logically — don't close it.
+            const t = e.target;
+            if (t instanceof Element && t.closest('[data-multiselect-popup="1"]')) {
+              e.preventDefault();
+            }
+          }}
+          onInteractOutside={(e) => {
+            const t = e.target;
+            if (t instanceof Element && t.closest('[data-multiselect-popup="1"]')) {
+              e.preventDefault();
+            }
+          }}
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ShieldCheck sx={{ fontSize: 18 }} className="text-[#ec9324]"/>
-              Assign Permission Sets to {selected.length} employee(s)
+              Assign Permission Sets : {selected.length} employees
             </DialogTitle>
-            <DialogDescription>
-              Pick one or more permission sets and choose how they should be applied.
-            </DialogDescription>
+            <DialogDescription className="sr-only">Bulk permission set assignment</DialogDescription>
           </DialogHeader>
           <div className="mt-2 space-y-4">
             <div>
               <Label className="text-xs uppercase tracking-wide text-gray-500">Mode</Label>
-              <div className="mt-1.5 grid grid-cols-3 gap-2" data-testid="bulk-pset-mode-group">
+              <div className="mt-2 flex items-center gap-6" role="radiogroup" data-testid="bulk-pset-mode-group">
                 {[
-                  { key: "replace", title: "Replace",   hint: "Overwrite existing sets" },
-                  { key: "add",     title: "Add",       hint: "Append to existing sets" },
-                  { key: "remove",  title: "Remove",    hint: "Take the chosen sets away" },
+                  { key: "add",     title: "Add" },
+                  { key: "remove",  title: "Remove" },
                 ].map((m) => {
                   const active = bulkPsetMode === m.key;
                   return (
                     <button
                       key={m.key}
                       type="button"
+                      role="radio"
+                      aria-checked={active}
                       onClick={() => setBulkPsetMode(m.key)}
                       data-testid={`bulk-pset-mode-${m.key}`}
-                      className={`rounded-md border px-2.5 py-2 text-left transition-colors ${
-                        active
-                          ? "border-[#ec9324] bg-[#ec9324]/10 text-[#ec9324]"
-                          : "border-gray-200 hover:border-gray-300 text-gray-700"
-                      }`}
+                      className="inline-flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900"
                     >
-                      <div className="text-[13px] font-semibold leading-tight">{m.title}</div>
-                      <div className="text-[10.5px] text-gray-500 mt-0.5">{m.hint}</div>
+                      <span
+                        className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                          active
+                            ? "bg-[#ec9324] border-[#ec9324] text-white"
+                            : "bg-white border-gray-300"
+                        }`}
+                      >
+                        {active && <Check sx={{ fontSize: 12 }}/>}
+                      </span>
+                      {m.title}
                     </button>
                   );
                 })}
               </div>
-              {bulkPsetMode === "replace" && (
-                <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2 mt-2">
-                  Heads-up: <b>Replace</b> will overwrite the current permission sets on every selected employee.
-                </div>
-              )}
             </div>
             <div>
               <Label className="text-xs uppercase tracking-wide text-gray-500">
