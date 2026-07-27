@@ -268,17 +268,23 @@ function EmployeeDetailModal({ contact, open, onClose }) {
               <span className="text-xs text-gray-400 italic">None assigned</span>
             ) : (
               <div className="flex flex-wrap gap-1.5" data-testid="detail-permission-sets">
-                {(contact.permission_sets || []).map((p) => (
-                  <span
-                    key={p.id}
-                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium bg-white text-[#ec9324] border border-[#ec9324]/30 shadow-sm"
-                    data-testid={`detail-pset-chip-${p.numeric_id}`}
-                  >
-                    <span className="font-mono text-[10px] text-[#ec9324]/70">{p.numeric_id}</span>
-                    <span className="text-gray-300">-</span>
-                    <span>{p.name}</span>
-                  </span>
-                ))}
+                {(contact.permission_sets || []).map((p) => {
+                  const num = p.numeric_id || p.seq_no || "?";
+                  const nm = p.name || p.title || "Untitled";
+                  return (
+                    <span
+                      key={p.id}
+                      className="inline-flex items-center h-6 px-2.5 rounded-full border-2 text-[11px] font-semibold bg-white select-none whitespace-nowrap"
+                      style={{ color: "#ec9324", borderColor: "#ec9324" }}
+                      data-testid={`detail-pset-chip-${num}`}
+                      title={`${num} - ${nm}`}
+                    >
+                      <span className="font-mono opacity-80 mr-1">{num}</span>
+                      <span className="opacity-60 mr-1">-</span>
+                      <span className="truncate max-w-[220px]">{nm}</span>
+                    </span>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1275,8 +1281,10 @@ export default function ContactListPage() {
                     return (
                       <span
                         key={pid}
-                        className="inline-flex items-center gap-1 rounded-md bg-gray-100 border border-gray-200 pl-2 pr-1 py-0.5 text-[12px] text-gray-700 leading-none max-w-full"
+                        className="inline-flex items-center h-6 pl-2.5 pr-1 rounded-full border-2 text-[11px] font-semibold bg-white select-none whitespace-nowrap max-w-full"
+                        style={{ color: "#ec9324", borderColor: "#ec9324" }}
                         data-testid={`bulk-pset-chip-${pid}`}
+                        title={labelText}
                       >
                         <span className="truncate max-w-[220px]">{labelText}</span>
                         <button
@@ -1284,7 +1292,7 @@ export default function ContactListPage() {
                           onClick={() =>
                             setBulkPsetIds(bulkPsetIds.filter((x) => x !== pid))
                           }
-                          className="rounded-full hover:bg-gray-200 p-0.5 text-gray-500 hover:text-gray-700 shrink-0"
+                          className="ml-1 inline-flex items-center justify-center h-5 w-5 rounded-full text-[#ec9324] hover:bg-[#fff7ec] focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40 shrink-0"
                           aria-label={`Remove ${labelText}`}
                           data-testid={`bulk-pset-chip-remove-${pid}`}
                         >

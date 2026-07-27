@@ -52,9 +52,16 @@ async def _enrich_contacts_with_team(contacts: List[dict]) -> List[dict]:
     if all_set_ids:
         psets = await db.permission_sets.find(
             {"id": {"$in": list(all_set_ids)}},
-            {"_id": 0, "id": 1, "numeric_id": 1, "name": 1},
+            {"_id": 0, "id": 1, "numeric_id": 1, "seq_no": 1, "name": 1, "title": 1},
         ).to_list(2000)
-        pset_map = {p["id"]: p for p in psets}
+        # Normalize each pset to expose a resolved `name` (fallback to `title`)
+        # and a resolved `numeric_id` (fallback to `seq_no`) so the frontend can
+        # rely on a single field regardless of legacy schema variants.
+        pset_map = {}
+        for p in psets:
+            p["name"] = p.get("name") or p.get("title") or ""
+            p["numeric_id"] = p.get("numeric_id") or p.get("seq_no")
+            pset_map[p["id"]] = p
 
     for c in contacts:
         t = member_team.get(c["id"])

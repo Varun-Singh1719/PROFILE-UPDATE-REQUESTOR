@@ -3,7 +3,7 @@ import os
 import pytest
 import requests
 
-BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://employee-mgmt-update.preview.emergentagent.com").rstrip("/")
+BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://perm-pill-design.preview.emergentagent.com").rstrip("/")
 API = f"{BASE}/api"
 
 CREDS = {
