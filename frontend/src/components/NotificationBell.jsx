@@ -6,6 +6,7 @@ import CheckCircle from "@mui/icons-material/CheckCircleOutlined";
 import EventAvailable from "@mui/icons-material/EventAvailableOutlined";
 import Chair from "@mui/icons-material/Chair";
 import Cancel from "@mui/icons-material/CancelOutlined";
+import Bolt from "@mui/icons-material/BoltOutlined";
 import Article from "@mui/icons-material/DescriptionOutlined";
 import DoneAll from "@mui/icons-material/DoneAll";
 import {
@@ -30,9 +31,13 @@ export const NOTIFICATION_POLL_MS = 10 * 60 * 1000; // 10 minutes — fallback
  * kinds fall back to the neutral Article icon.
  */
 const KIND_META = {
+  workstation_request_submitted: { Icon: Bolt,          color: "#ec9324", bg: "#fff7ed" },
   workstation_request_approved: { Icon: CheckCircle,   color: "#16a34a", bg: "#f0fdf4" },
   workstation_request_declined: { Icon: Cancel,        color: "#dc2626", bg: "#fef2f2" },
   workstation_assigned:         { Icon: Chair,         color: "#ec9324", bg: "#fff7ed" },
+  meeting_room_request_submitted: { Icon: Bolt,        color: "#ec9324", bg: "#fff7ed" },
+  meeting_room_request_approved:  { Icon: CheckCircle, color: "#16a34a", bg: "#f0fdf4" },
+  meeting_room_request_declined:  { Icon: Cancel,      color: "#dc2626", bg: "#fef2f2" },
   request_closed:               { Icon: EventAvailable,color: "#0284c7", bg: "#f0f9ff" },
 };
 
@@ -71,6 +76,26 @@ function formatDate(s) {
   return new Date(t).toLocaleDateString(undefined, {
     day: "2-digit", month: "short", year: "numeric",
   });
+}
+
+/**
+ * Format an ISO datetime as e.g. "20 Aug 2026, 10:00 AM". If the input has
+ * no time component we return the same output as {@link formatDate}.
+ */
+function formatDateTime(s) {
+  if (!s) return "";
+  const t = Date.parse(s);
+  if (Number.isNaN(t)) return String(s);
+  const hasTime = /T\d/.test(String(s));
+  if (!hasTime) return formatDate(s);
+  const d = new Date(t);
+  const datePart = d.toLocaleDateString(undefined, {
+    day: "2-digit", month: "short", year: "numeric",
+  });
+  const timePart = d.toLocaleTimeString(undefined, {
+    hour: "numeric", minute: "2-digit", hour12: true,
+  });
+  return `${datePart}, ${timePart}`;
 }
 
 /**
@@ -145,6 +170,71 @@ function formatNotification(n) {
         { label: "Seat",        value: seat  || "—" },
         { label: "Date",        value: formatDate(on) || dateStr },
         { label: decidedLabel,  value: byName || "—" },
+      ],
+      done: !!m,
+    };
+  }
+
+  // workstation_request_submitted
+  //   title: "Pending Approval — Workstation Requested"
+  //   body : "<requester> submitted a workstation request for <employee> — seat <seat> on <date>. It is awaiting your approval."
+  if (kind === "workstation_request_submitted") {
+    const m = body.match(/^(.+?)\s+submitted\s+a\s+workstation\s+request\s+for\s+(.+?)\s+[—-]\s+seat\s+(\S+)\s+on\s+([\d-]+)\.?/i);
+    const requester = m ? m[1].trim() : null;
+    const employee  = m ? m[2].trim() : null;
+    const seat      = m ? m[3] : null;
+    const on        = m ? m[4] : null;
+    return {
+      title: `${seat || "Workstation"} : Pending Approval`,
+      rows: [
+        { label: "Requested By", value: requester || "—" },
+        { label: "Employee",     value: employee  || "—" },
+        { label: "Seat",         value: seat      || "—" },
+        { label: "Date",         value: formatDate(on) || dateStr },
+      ],
+      done: !!m,
+    };
+  }
+
+  // meeting_room_request_submitted
+  //   title: "Pending Approval — Meeting Room Requested"
+  //   body : "<requester> submitted a meeting room request \"<title>\" for <room> on <start_at>. It is awaiting your approval."
+  if (kind === "meeting_room_request_submitted") {
+    const m = body.match(/^(.+?)\s+submitted\s+a\s+meeting\s+room\s+request\s+"([^"]*)"\s+for\s+(.+?)\s+on\s+(\S+?)\.?\s+It\s+is/i);
+    const requester = m ? m[1].trim() : null;
+    const title     = m ? m[2].trim() : null;
+    const room      = m ? m[3].trim() : null;
+    const startAt   = m ? m[4] : null;
+    return {
+      title: `${room || "Meeting Room"} : Pending Approval`,
+      rows: [
+        { label: "Requested By", value: requester || "—" },
+        { label: "Meeting",      value: title     || "—" },
+        { label: "Room",         value: room      || "—" },
+        { label: "Starts",       value: formatDateTime(startAt) || dateStr },
+      ],
+      done: !!m,
+    };
+  }
+
+  // meeting_room_request_approved / declined
+  //   title: "Meeting room request approved" | "Meeting room request declined"
+  //   body : "Your meeting room request \"<title>\" for <room> on <start_at> was approved|declined by <name>."
+  if (kind === "meeting_room_request_approved" || kind === "meeting_room_request_declined") {
+    const verb = kind === "meeting_room_request_approved" ? "Approved" : "Declined";
+    const decidedLabel = kind === "meeting_room_request_approved" ? "Approved By" : "Declined By";
+    const m = body.match(/meeting\s+room\s+request\s+"([^"]*)"\s+for\s+(.+?)\s+on\s+(\S+?)\s+was\s+(?:approved|declined)\s+by\s+([^.]+?)\.?\s*$/i);
+    const title    = m ? m[1].trim() : null;
+    const room     = m ? m[2].trim() : null;
+    const startAt  = m ? m[3] : null;
+    const byName   = m ? m[4].trim() : null;
+    return {
+      title: `${room || "Meeting Room"} : ${verb}`,
+      rows: [
+        { label: "Meeting",      value: title    || "—" },
+        { label: "Room",         value: room     || "—" },
+        { label: "Starts",       value: formatDateTime(startAt) || dateStr },
+        { label: decidedLabel,   value: byName   || "—" },
       ],
       done: !!m,
     };
