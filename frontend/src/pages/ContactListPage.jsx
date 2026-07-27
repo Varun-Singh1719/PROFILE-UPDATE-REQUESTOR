@@ -895,53 +895,57 @@ export default function ContactListPage() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <TooltipProvider delayDuration={150}>
-            {permExport.isVisible && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline" onClick={exportCsv} data-testid="export-csv-btn"
-                  size="icon" className="h-9 w-9 border-gray-300"
-                  aria-label="Export CSV"
-                  disabled={!permExport.canUse}
-                >
-                  <Download sx={{ fontSize: 16 }}/>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Export CSV</TooltipContent>
-            </Tooltip>
-            )}
-            {permImport.isVisible && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline" onClick={() => setHistoryOpen(true)} data-testid="upload-history-btn"
-                  size="icon" className="h-9 w-9 border-gray-300"
-                  aria-label="Upload History"
-                  disabled={!permImport.canUse}
-                >
-                  <History sx={{ fontSize: 16 }}/>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Upload History</TooltipContent>
-            </Tooltip>
-            )}
-            {permImport.isVisible && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline" onClick={() => setUploadOpen(true)} data-testid="open-bulk-upload-btn"
-                  size="icon" className="h-9 w-9 border-[#ec9324] text-[#ec9324] hover:bg-[#ec9324]/10"
-                  aria-label="Upload Employees"
-                  disabled={!permImport.canUse}
-                >
-                  <Upload sx={{ fontSize: 16 }}/>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Upload Employees</TooltipContent>
-            </Tooltip>
-            )}
-          </TooltipProvider>
+          {permExport.isVisible && (
+            <div className="relative group">
+              <button
+                type="button"
+                onClick={exportCsv}
+                data-testid="export-csv-btn"
+                aria-label="Export CSV"
+                disabled={!permExport.canUse}
+                className="relative inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-100 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <Download sx={{ fontSize: 20 }}/>
+              </button>
+              <span className="pointer-events-none absolute top-full mt-1.5 right-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+                Export CSV
+              </span>
+            </div>
+          )}
+          {permImport.isVisible && (
+            <div className="relative group">
+              <button
+                type="button"
+                onClick={() => setHistoryOpen(true)}
+                data-testid="upload-history-btn"
+                aria-label="Upload History"
+                disabled={!permImport.canUse}
+                className="relative inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-100 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <History sx={{ fontSize: 20 }}/>
+              </button>
+              <span className="pointer-events-none absolute top-full mt-1.5 right-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+                Upload History
+              </span>
+            </div>
+          )}
+          {permImport.isVisible && (
+            <div className="relative group">
+              <button
+                type="button"
+                onClick={() => setUploadOpen(true)}
+                data-testid="open-bulk-upload-btn"
+                aria-label="Upload Employees"
+                disabled={!permImport.canUse}
+                className="relative inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-[#ec9324]/10 text-[#ec9324] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <Upload sx={{ fontSize: 20 }}/>
+              </button>
+              <span className="pointer-events-none absolute top-full mt-1.5 right-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+                Upload Employees
+              </span>
+            </div>
+          )}
           {permCreate.isVisible && (
           <Button onClick={openCreate} className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9" data-testid="add-contact-btn" disabled={!permCreate.canUse}>
             <UserPlus sx={{ fontSize: 16 }} className="mr-2"/> Add Employee
@@ -985,66 +989,112 @@ export default function ContactListPage() {
             <DialogTitle>{editing ? "Edit Employee" : "Add New Employee"}</DialogTitle>
             <DialogDescription className="sr-only">Employee form</DialogDescription>
           </DialogHeader>
-          <form onSubmit={submit} className="space-y-4">
+          <form onSubmit={submit} className="space-y-5 pt-2">
             <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <Label>Email {editing ? "" : "*"}</Label>
+              {/* Email */}
+              <div className="col-span-2 relative">
+                <label className="absolute -top-2 left-3 px-1.5 bg-white text-[11px] font-medium text-gray-500 z-10 pointer-events-none">
+                  Email {editing ? "" : "*"}
+                </label>
                 <Input
                   type="email" required value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   data-testid="contact-email"
                   disabled={!!editing}
+                  className="h-11"
                 />
               </div>
-              <div className="col-span-2">
-                <Label>Name *</Label>
-                <Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="contact-name"/>
+
+              {/* Name */}
+              <div className="col-span-2 relative">
+                <label className="absolute -top-2 left-3 px-1.5 bg-white text-[11px] font-medium text-gray-500 z-10 pointer-events-none">
+                  Name *
+                </label>
+                <Input
+                  required
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  data-testid="contact-name"
+                  className="h-11"
+                />
               </div>
-              <div>
-                <Label>Phone</Label>
-                <div className="mt-1.5 flex gap-2">
-                  <div className="w-[110px] flex-shrink-0">
-                    <ISDPicker
-                      value={form.phone_isd || DEFAULT_ISD}
-                      onChange={(dial) => setForm({ ...form, phone_isd: dial })}
-                      testId="contact-phone-isd"
-                    />
-                  </div>
+
+              {/* Phone (ISD + Mobile Number) */}
+              <div className="col-span-2 grid grid-cols-[110px_1fr] gap-3">
+                <div className="relative">
+                  <label className="absolute -top-2 left-3 px-1.5 bg-white text-[11px] font-medium text-gray-500 z-10 pointer-events-none">
+                    ISD
+                  </label>
+                  <ISDPicker
+                    value={form.phone_isd || DEFAULT_ISD}
+                    onChange={(dial) => setForm({ ...form, phone_isd: dial })}
+                    testId="contact-phone-isd"
+                  />
+                </div>
+                <div className="relative">
+                  <label className="absolute -top-2 left-3 px-1.5 bg-white text-[11px] font-medium text-gray-500 z-10 pointer-events-none">
+                    Mobile Number
+                  </label>
                   <Input
                     value={form.phone}
                     onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/[^0-9]/g, "") })}
                     inputMode="numeric"
-                    placeholder="Mobile Number"
-                    className="flex-1"
+                    className="h-11"
                     data-testid="contact-phone"
                   />
                 </div>
               </div>
-              <div>
-                <Label>Emp ID *</Label>
-                <Input required={!editing} value={form.emp_id} onChange={(e) => setForm({ ...form, emp_id: e.target.value })} placeholder="EMP-0001" data-testid="contact-emp-id"/>
+
+              {/* Emp ID */}
+              <div className="relative">
+                <label className="absolute -top-2 left-3 px-1.5 bg-white text-[11px] font-medium text-gray-500 z-10 pointer-events-none">
+                  Emp ID *
+                </label>
+                <Input
+                  required={!editing}
+                  value={form.emp_id}
+                  onChange={(e) => setForm({ ...form, emp_id: e.target.value })}
+                  placeholder="EMP-0001"
+                  data-testid="contact-emp-id"
+                  className="h-11"
+                />
               </div>
-              <div>
-                <Label>DOJ (Date of Joining) *</Label>
-                <Input required={!editing} type="date" value={form.doj || ""} onChange={(e) => setForm({ ...form, doj: e.target.value })} data-testid="contact-doj"/>
+
+              {/* DOJ */}
+              <div className="relative">
+                <label className="absolute -top-2 left-3 px-1.5 bg-white text-[11px] font-medium text-gray-500 z-10 pointer-events-none">
+                  DOJ (Date of Joining) *
+                </label>
+                <Input
+                  required={!editing}
+                  type="date"
+                  value={form.doj || ""}
+                  onChange={(e) => setForm({ ...form, doj: e.target.value })}
+                  data-testid="contact-doj"
+                  className="h-11"
+                />
               </div>
-              <div>
-                <Label>Role *</Label>
-                <div className="mt-1.5">
-                  <SingleSelect
-                    testId="contact-role"
-                    options={ROLE_OPTIONS.map((r) => ({ value: r, label: r }))}
-                    value={form.role}
-                    onChange={(v) => setForm({ ...form, role: v || form.role })}
-                    allowClear={false}
-                    placeholder="Select role"
-                  />
-                </div>
+
+              {/* Role */}
+              <div className="col-span-2 relative">
+                <label className="absolute -top-2 left-3 px-1.5 bg-white text-[11px] font-medium text-gray-500 z-10 pointer-events-none">
+                  Role *
+                </label>
+                <SingleSelect
+                  testId="contact-role"
+                  options={ROLE_OPTIONS.map((r) => ({ value: r, label: r }))}
+                  value={form.role}
+                  onChange={(v) => setForm({ ...form, role: v || form.role })}
+                  allowClear={false}
+                  placeholder="Select role"
+                />
               </div>
-              <div className="col-span-2">
-                <Label className="flex items-center gap-1.5">
-                  <ShieldCheck sx={{ fontSize: 14 }} className="text-gray-500"/> Permission Sets
-                </Label>
+
+              {/* Permission Sets */}
+              <div className="col-span-2 relative">
+                <label className="absolute -top-2 left-3 px-1.5 bg-white text-[11px] font-medium text-gray-500 z-10 pointer-events-none inline-flex items-center gap-1">
+                  <ShieldCheck sx={{ fontSize: 12 }} className="text-gray-500"/> Permission Sets
+                </label>
                 <MultiSelectFilter
                   label="Permission Sets"
                   options={permissionSets.map((p) => ({
@@ -1058,19 +1108,11 @@ export default function ContactListPage() {
                   hideLabelPrefix
                   fullWidth
                 />
-                <div className="text-xs text-gray-500 mt-1">
-                  Effective access = OR-union of all assigned sets (allow wins).
-                </div>
               </div>
             </div>
             {editing && (
               <div className="border-t pt-4">
                 <PasswordField contactId={editing.id} testIdPrefix="edit" />
-              </div>
-            )}
-            {!editing && (
-              <div className="text-xs text-gray-500 bg-blue-50 border border-blue-100 rounded-md p-2.5">
-                A secure password will be generated automatically and shown after the employee is created.
               </div>
             )}
             <DialogFooter>
