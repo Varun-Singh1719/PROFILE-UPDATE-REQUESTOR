@@ -140,8 +140,10 @@ export default function TicketListPage({
     });
   };
   useEffect(() => {
-    // v3 role model — fetch admin users (assignment candidates) for the picker.
-    api.get("/contacts", { params: { role: "Admin" }}).then(r => setMembers(r.data)).catch(() => {});
+    // Assign-To dropdown is populated from the ELIGIBLE-ASSIGNEE endpoint —
+    // users with `assign_to_self` OR `assign_to_others` enabled in their
+    // permission set(s). No implicit role bypass (not even Super Admin).
+    api.get("/contacts/assignable").then(r => setMembers(r.data || [])).catch(() => setMembers([]));
     // Creators = all admin users (both Super Admin and Admin).
     api.get("/contacts").then(r => {
       const list = (r.data?.items || r.data || []).filter(c => c.role === "Super Admin" || c.role === "Admin");
@@ -313,8 +315,14 @@ export default function TicketListPage({
                     Assign Selected ({selected.length})
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {members.map(m => <DropdownMenuItem key={m.id} onClick={() => bulkAssignTo(m.id)}>{m.name}</DropdownMenuItem>)}
+                <DropdownMenuContent align="end" data-testid="bulk-assign-menu">
+                  {members.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-gray-500 italic max-w-[240px]" data-testid="bulk-assign-empty">
+                      No eligible users available for assignment.
+                    </div>
+                  ) : (
+                    members.map(m => <DropdownMenuItem key={m.id} onClick={() => bulkAssignTo(m.id)}>{m.name}</DropdownMenuItem>)
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
               <DropdownMenu>

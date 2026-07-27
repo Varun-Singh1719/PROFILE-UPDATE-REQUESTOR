@@ -58,7 +58,7 @@ export default function TicketDetailPage() {
   useEffect(() => { load(); }, [id]);
   useEffect(() => {
     // v3 role model — Super Admin/Admin can fetch the assignee list.
-    if (user?.role === "Super Admin" || user?.role === "Admin") api.get("/contacts", { params: { role: "Admin" }}).then(r => setMembers(r.data));
+    if (user?.role === "Super Admin" || user?.role === "Admin") api.get("/contacts/assignable").then(r => setMembers(r.data || [])).catch(() => setMembers([]));
   }, [user]);
 
   if (!ticket) return <Layout><div className="text-gray-400">Loading...</div></Layout>;
@@ -152,10 +152,19 @@ export default function TicketDetailPage() {
                   {ticket.assigned_to_id ? "Reassign" : "Assign"}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {members.map(m => (
-                  <DropdownMenuItem key={m.id} onClick={() => update({ assigned_to: m.id })}>{m.name}</DropdownMenuItem>
-                ))}
+              <DropdownMenuContent align="end" data-testid="detail-assign-menu">
+                {members.length === 0 ? (
+                  <div
+                    className="px-3 py-2 text-xs text-gray-500 italic max-w-[240px]"
+                    data-testid="detail-assign-empty"
+                  >
+                    No eligible users available for assignment.
+                  </div>
+                ) : (
+                  members.map(m => (
+                    <DropdownMenuItem key={m.id} onClick={() => update({ assigned_to: m.id })}>{m.name}</DropdownMenuItem>
+                  ))
+                )}
                 {ticket.assigned_to_id && <DropdownMenuItem onClick={() => update({ assigned_to: "" })}>Unassign</DropdownMenuItem>}
               </DropdownMenuContent>
             </DropdownMenu>

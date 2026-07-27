@@ -564,6 +564,35 @@ async def get_ticket(ticket_id: str, user=Depends(get_current_user)):
     return t
 
 
+# ── Assign-To eligibility helper (Jul 2026) ────────────────────────────────
+# A ticket may only be assigned to a user whose effective permission set(s)
+# enable EITHER `profix.ticket_detail.assign_to_self` or `assign_to_others`.
+# Uses the same OR-of-flags rule as GET /api/contacts/assignable so the UI
+# and the backend guardrail stay in perfect sync.
+async def _user_is_assignable(target_user_id: str) -> bool:
+    """Return True iff the given contact is a valid Assign-To target."""
+    target = await db.contacts.find_one(
+        {"id": target_user_id, "status": "Active"},
+        {"_id": 0, "permission_set_ids": 1},
+    )
+    if not target:
+        return False
+    sids = target.get("permission_set_ids") or []
+    if not sids:
+        return False
+    sets = await db.permission_sets.find(
+        {"id": {"$in": sids}}, {"_id": 0, "modules": 1}
+    ).to_list(500)
+    for s in sets:
+        fns = ((((s.get("modules") or {}).get("profix") or {}).get("pages") or {}).get("ticket_detail") or {}).get("functions") or {}
+        if (fns.get("assign_to_self") or {}).get("enabled"):
+            return True
+        if (fns.get("assign_to_others") or {}).get("enabled"):
+            return True
+    return False
+
+
+
 @api_router.patch("/tickets/{ticket_id}")
 async def update_ticket(ticket_id: str, body: TicketUpdate, user=Depends(get_current_user)):
     t = await db.tickets.find_one({"id": ticket_id})
@@ -598,6 +627,15 @@ async def update_ticket(ticket_id: str, body: TicketUpdate, user=Depends(get_cur
                 assignee = await db.contacts.find_one({"id": body.assigned_to})
                 if not assignee:
                     raise HTTPException(400, "Assignee not found")
+                # Eligibility guardrail — the target must have
+                # profix.ticket_detail.assign_to_self OR assign_to_others
+                # enabled. This mirrors the /contacts/assignable rule.
+                if not await _user_is_assignable(assignee["id"]):
+                    raise HTTPException(
+                        400,
+                        "Selected user is not eligible for assignment. "
+                        "Grant Assign Requests to Self / Others via their Permission Set.",
+                    )
                 # If the Admin's assign scope is "respective" or "team", the assignee
                 # must be in their scoped id whitelist (else they could assign to anyone).
                 if role == "Admin":
@@ -615,6 +653,14 @@ async def update_ticket(ticket_id: str, body: TicketUpdate, user=Depends(get_cur
                 raise HTTPException(403, "DQ can only assign to themselves")
             if t.get("assigned_to_id"):
                 raise HTTPException(403, "Already assigned")
+            # DQ self-assign must still satisfy the eligibility rule — the DQ
+            # user themselves must have assign_to_self enabled.
+            if not await _user_is_assignable(user["id"]):
+                raise HTTPException(
+                    403,
+                    "You are not eligible for self-assignment. "
+                    "Ask an admin to grant Assign Requests to Self on your Permission Set.",
+                )
             update["assigned_to_id"] = user["id"]
             update["assigned_to_name"] = user["name"]
             activity.append(f"Self-assigned to {user['name']}")
@@ -747,6 +793,13 @@ async def bulk_assign(body: BulkAssign, user=Depends(get_current_user)):
     if role == "DQ Team":
         assignee_id = user["id"]
         assignee_name = user["name"]
+        # DQ self-assign must satisfy the eligibility rule as well.
+        if not await _user_is_assignable(user["id"]):
+            raise HTTPException(
+                403,
+                "You are not eligible for self-assignment. "
+                "Ask an admin to grant Assign Requests to Self on your Permission Set.",
+            )
     else:
         if not body.assigned_to:
             raise HTTPException(400, "assigned_to required")
@@ -754,6 +807,13 @@ async def bulk_assign(body: BulkAssign, user=Depends(get_current_user)):
         if not a:
             raise HTTPException(400, "Assignee not found")
         assignee_id = a["id"]; assignee_name = a["name"]
+        # Eligibility guardrail — same rule as /contacts/assignable.
+        if not await _user_is_assignable(assignee_id):
+            raise HTTPException(
+                400,
+                "Selected user is not eligible for assignment. "
+                "Grant Assign Requests to Self / Others via their Permission Set.",
+            )
         # Admin: assignee must fall inside the Admin's assign scope.
         if role == "Admin":
             a_scope = await get_effective_scope(user, "profix", "ticket", "assign")

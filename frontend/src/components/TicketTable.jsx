@@ -98,15 +98,27 @@ export default function TicketTable({
           </DropdownMenuSub>
         )}
 
-        {/* Assign — Admin can reassign to any DQ member; DQ can only self-assign when unassigned */}
-        {isAdmin && onReassign && members.length > 0 && (
+        {/* Assign — Admin can reassign to any eligible user; DQ can only
+            self-assign when unassigned. When no eligible users exist we
+            still surface the submenu with a helpful empty-state item so
+            admins understand WHY the list is empty. */}
+        {isAdmin && onReassign && (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger data-testid={`row-action-assign-${t.ticket_id}`}>Assign</DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="max-h-72 overflow-y-auto">
-              {members.map((m) => (
-                <DropdownMenuItem key={m.id} onClick={() => onReassign(t.id, m.id)}>{m.name}</DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
+              {members.length === 0 ? (
+                <div
+                  className="px-2 py-1.5 text-xs text-gray-500 italic max-w-[220px]"
+                  data-testid={`row-action-assign-empty-${t.ticket_id}`}
+                >
+                  No eligible users available for assignment.
+                </div>
+              ) : (
+                members.map((m) => (
+                  <DropdownMenuItem key={m.id} onClick={() => onReassign(t.id, m.id)}>{m.name}</DropdownMenuItem>
+                ))
+              )}
+              {members.length > 0 && <DropdownMenuSeparator />}
               <DropdownMenuItem onClick={() => onReassign(t.id, "")}>Unassign</DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>

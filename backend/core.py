@@ -349,7 +349,13 @@ PERMISSION_MODULES_V3 = [
                     {"key": "upload_attach", "label": "Upload Attachment","scoped": False},
                     {"key": "download_attach","label":"Download Attachment","scoped": False},
                     {"key": "change_status", "label": "Change Status",  "scoped": True},
-                    {"key": "receive_assignment", "label": "Show in Assign-To Dropdown", "scoped": False},
+                    # ── Assign-To dropdown eligibility (Jul 2026) ─────────────
+                    # A user appears in the "Assign To" dropdown iff EITHER of
+                    # the two flags below is enabled in ANY of the user's
+                    # assigned permission sets. Even Super Admins must have one
+                    # of these — no implicit role bypass.
+                    {"key": "assign_to_self",   "label": "Assign Requests to Self",   "scoped": False},
+                    {"key": "assign_to_others", "label": "Assign Requests to Others", "scoped": False},
                 ],
             },
         ],

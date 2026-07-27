@@ -177,12 +177,18 @@ async def list_contacts(
 async def list_assignable_contacts(user=Depends(get_current_user)):
     """Return Active users who are eligible to appear in the Assign-To dropdown.
 
-    Eligibility is derived from the caller's v3 permission model. A user is
-    "assignable" iff their effective permission set has
-    ``profix.ticket_detail.functions.receive_assignment.enabled == True``.
+    Eligibility rule (Jul 2026 — updated):
+      A user is eligible iff ANY of their assigned Permission Sets has
+      EITHER of the following functions enabled under
+      ``profix.ticket_detail.functions``:
+        • ``assign_to_self``   ("Assign Requests to Self")
+        • ``assign_to_others`` ("Assign Requests to Others")
 
-    Super Admin users are always included. Users with no permission sets are
-    excluded (safe default — must be explicitly opted in via a set).
+    There is NO implicit role bypass. Super Admin users are treated exactly
+    like any other user — they must have one of the two flags in their
+    assigned set to appear.
+
+    Users with NO assigned permission sets are excluded.
     """
     contacts = await db.contacts.find(
         {"status": "Active"},
@@ -202,20 +208,21 @@ async def list_assignable_contacts(user=Depends(get_current_user)):
         ).to_list(2000)
         sets_by_id = {d["id"]: d for d in docs}
 
-    def _set_grants_receive_assignment(pset: dict) -> bool:
-        """Check a single permission set for the receive_assignment flag."""
+    def _set_grants_assignability(pset: dict) -> bool:
+        """True iff the set enables assign_to_self OR assign_to_others."""
         modules = pset.get("modules") or {}
         pages = ((modules.get("profix") or {}).get("pages") or {})
-        fn = ((pages.get("ticket_detail") or {}).get("functions") or {}).get("receive_assignment")
-        return bool(fn and fn.get("enabled"))
+        fns = ((pages.get("ticket_detail") or {}).get("functions") or {})
+        self_fn = fns.get("assign_to_self") or {}
+        other_fn = fns.get("assign_to_others") or {}
+        return bool(self_fn.get("enabled")) or bool(other_fn.get("enabled"))
 
     eligible: List[dict] = []
     for c in contacts:
-        if c.get("role") == "Super Admin":
-            eligible.append(c)
-            continue
         sids = c.get("permission_set_ids") or []
-        if any(_set_grants_receive_assignment(sets_by_id.get(s, {})) for s in sids):
+        if not sids:
+            continue
+        if any(_set_grants_assignability(sets_by_id.get(s, {})) for s in sids):
             eligible.append(c)
 
     eligible = await _enrich_contacts_with_team(eligible)

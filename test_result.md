@@ -3086,15 +3086,254 @@ frontend:
         -comment: "Each template card has a Send Test button (orange outline). Top-right layout action has Send test for all. Both hit /api/notification-templates/{id}/send-test and /api/notification-templates/send-test-all respectively. The 'Send test for all' now clears prior test notifications first so re-runs stay tidy."
 
 metadata:
-  test_sequence: 7
+  test_sequence: 8
   run_ui: false
 
 test_plan:
   current_focus:
-    - "Profix — Field Edit (PATCH) + Reopen row action + Status Lock permission"
+    - "Profix — Assign-To eligibility rule (assign_to_self / assign_to_others)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+## Profix — Assign-To Permission Validation (Jul 27 2026)
+backend:
+  - task: "Profix — Assign-To dropdown eligibility (assign_to_self / assign_to_others) + backend guardrail on PATCH assign / bulk-assign"
+    implemented: true
+    working: true
+    file: "backend/core.py, backend/routers/contacts.py, backend/routers/tickets.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          NEW ELIGIBILITY RULE — Assign-To dropdown & backend guardrail.
+
+          Catalog changes (core.py):
+            • REMOVED  `profix.ticket_detail.receive_assignment`
+            • ADDED   `profix.ticket_detail.assign_to_self`
+                       (label "Assign Requests to Self", scoped: False)
+            • ADDED   `profix.ticket_detail.assign_to_others`
+                       (label "Assign Requests to Others", scoped: False)
+
+          Eligibility rule (used by every Assign-To surface):
+            A user is a valid assignee iff ANY of their assigned Permission
+            Sets enables EITHER `assign_to_self` OR `assign_to_others`.
+            There is NO implicit role bypass. Super Admins get the same
+            treatment as everyone else — must have one of the flags.
+            Users with NO assigned sets are excluded.
+
+          Endpoint changes (contacts.py):
+            • GET /api/contacts/assignable now uses the OR-of-two-flags
+              rule described above. Removed the "Super Admin ⇒ always
+              include" shortcut. Response shape unchanged (plain list),
+              so the frontend swap is drop-in.
+
+          Backend guardrail (tickets.py):
+            • New helper `_user_is_assignable(user_id)`.
+            • PATCH /api/tickets/{id} assign branch — validates the target
+              is assignable; else 400 with a clear message including how
+              to grant the permission.
+            • POST /api/tickets/bulk-assign — same validation, applied to
+              the shared assignee before touching any tickets.
+            • DQ self-assign paths — user must have `assign_to_self`
+              enabled on themselves; else 403 with a helpful message.
+
+          Verified via curl smoke:
+            • Catalog: schema/v3 exposes both new flags and does NOT
+              expose `receive_assignment`.
+            • /api/contacts/assignable returns [] on the fresh Atlas DB
+              (only Super Admin exists, no permission set assigned to
+              them yet — so nobody is eligible, matches the spec).
+            • PATCH assign to Super Admin id → 400 with the exact spec
+              message.
+            • POST bulk-assign to Super Admin id → 400 same message.
+
+          Please run the scenario matrix listed in agent_communication.
+        -working: true
+        -agent: "testing"
+        -comment: |
+          ✅ ALL TESTS PASSED (26/26) - Assign-To Eligibility Rule Verified Completely
+          
+          Comprehensive backend regression testing completed for the new Assign-To eligibility rule.
+          
+          **TEST RESULTS:**
+          
+          1. ✅ CATALOG CHECK (3/3 tests passed):
+             - assign_to_self exists with label "Assign Requests to Self", scoped=False ✅
+             - assign_to_others exists with label "Assign Requests to Others", scoped=False ✅
+             - receive_assignment removed from catalog ✅
+          
+          2. ✅ ASSIGNABLE ENDPOINT DEFAULT EMPTY (2/2 tests passed):
+             - GET /api/contacts/assignable returns 200 with empty array ✅
+             - Super Admin NOT in list (no implicit role bypass) ✅
+             - Correctly excludes users without permission sets ✅
+          
+          3. ✅ FULL ROUND-TRIP (8/8 tests passed):
+             a. Created permission set with assign_to_self enabled ✅
+                - Permission set ID: pset-d5110be7-bfae-4242-bf21-212a569a5043
+             b. Created new Admin user with permission set ✅
+                - User ID: 7269aff1-28e0-4508-b936-29742ea71039
+                - Required fields: emp_id, doj (date of joining)
+             c. User appears in /api/contacts/assignable ✅
+                - Verified user in assignable list with assign_to_self enabled
+             d. Toggle flags (assign_to_self OFF, assign_to_others ON) ✅
+                - User STILL appears in assignable list (OR rule working) ✅
+             e. Turn BOTH flags OFF ✅
+                - User NO LONGER appears in assignable list ✅
+          
+          4. ✅ PATCH SINGLE ASSIGN GUARDRAIL (4/4 tests passed):
+             a. Try to assign to Super Admin (ineligible) ✅
+                - Returns 400 with message: "Selected user is not eligible for assignment. Grant Assign Requests to Self / Others via their Permission Set."
+             b. Re-enable user eligibility (assign_to_others ON) ✅
+             c. Assign to eligible user ✅
+                - Returns 200 with assigned_to_id correctly set
+             d. Verify activity log ✅
+                - Activity log contains: "Assigned to QA Assign Test User"
+          
+          5. ✅ BULK ASSIGN GUARDRAIL (3/3 tests passed):
+             a. Try bulk-assign to Super Admin (ineligible) ✅
+                - Returns 400 with same "not eligible for assignment" message
+             b. Bulk-assign to eligible user ✅
+                - Returns 200 with {assigned: 1}
+          
+          6. ✅ CLEANUP (2/2 tests passed):
+             - Deleted permission set successfully ✅
+             - Set test user to Inactive (delete not supported, fallback worked) ✅
+          
+          7. ✅ REGRESSION SMOKE (3/3 tests passed):
+             - GET /api/tickets?scope=all&page_size=5 → 200 (returned 119 tickets) ✅
+             - GET /api/tickets/{id} → 200 ✅
+             - GET /api/tickets/export.csv?scope=all → 200 (16238 bytes) ✅
+          
+          **KEY FINDINGS:**
+          - No implicit role bypass: Super Admin correctly excluded without permission set
+          - OR rule working correctly: user eligible if EITHER flag is enabled
+          - Backend guardrails working: both PATCH and bulk-assign reject ineligible users with 400
+          - Error messages are clear and helpful (include how to grant permission)
+          - Activity log correctly records assignment actions
+          - All regression endpoints working correctly
+          - Cleanup successful (permission set deleted, user set to Inactive)
+          
+          **DATABASE STATE:**
+          - MongoDB Atlas: cluster0.vmgql1i.mongodb.net, DB: app_db
+          - 119 tickets in database
+          - Test data cleaned up successfully
+          
+          NO ISSUES FOUND. All scenarios from review request passed. Feature is working as specified.
+
+frontend:
+  - task: "Profix — Assign-To dropdown swapped to /contacts/assignable everywhere + empty-state placeholder"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/TicketListPage.jsx, frontend/src/pages/TicketDetailPage.jsx, frontend/src/components/TicketTable.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          Frontend swap — every "Assign To" dropdown is now driven by the
+          eligibility rule:
+            • TicketListPage: on mount, fetches `/contacts/assignable`
+              into `members` (used for both the row-level triple-dot
+              Assign submenu AND the top-of-page Bulk Assign menu on
+              All Requests / Open Requests / Unassigned Requests).
+            • TicketDetailPage: also switched to `/contacts/assignable`.
+            • TicketTable row triple-dot Assign submenu — when
+              `members.length === 0`, renders the placeholder
+              "No eligible users available for assignment." inside the
+              submenu; the "Unassign" item is still available so admins
+              can clear an existing assignment.
+            • Bulk Assign menu — same placeholder inside the dropdown.
+            • Detail-page Reassign dropdown — same placeholder.
+
+agent_communication:
+    -agent: "main"
+    -message: |
+      Please regress the new Assign-To eligibility feature on the backend
+      ONLY. Admin creds: admin@ticketing.com / Admin@123. Fresh Atlas DB.
+
+      Scenarios (each with HTTP status + PASS/FAIL):
+
+        1. **Catalog** — GET /api/permissions/schema/v3.
+           Under modules[key=profix].pages[key=ticket_detail].functions:
+             • MUST contain `assign_to_self` (scoped=false, label "Assign Requests to Self")
+             • MUST contain `assign_to_others` (scoped=false, label "Assign Requests to Others")
+             • MUST NOT contain `receive_assignment`
+
+        2. **/api/contacts/assignable — empty by default** on this fresh DB.
+           Assert 200 + list. Assert Super Admin is NOT in the list.
+           Assert every returned user has permission_set_ids AND at least
+           one referenced set with `profix.ticket_detail.functions.assign_to_self.enabled`
+           OR `.assign_to_others.enabled` = true.
+
+        3. **Round-trip permission set** —
+             a. POST /api/permission-sets/v3 with a set that enables
+                `assign_to_self` on ticket_detail. Grab its id.
+             b. Create a NEW Admin-role user via POST /api/contacts,
+                assign this permission_set_id to them (either at creation
+                or via PATCH /contacts/{id}).
+             c. GET /api/contacts/assignable — the new user MUST appear.
+             d. Toggle the set: PATCH the set turning `assign_to_self.enabled`
+                to false AND `assign_to_others.enabled` to true. Re-fetch
+                /assignable — the user MUST still appear (OR rule).
+             e. Turn BOTH flags false. Re-fetch /assignable — the user
+                MUST no longer appear.
+
+        4. **PATCH /api/tickets/{id} assign guardrail**
+             a. Pick any ticket. PATCH assigned_to = Super Admin id (who
+                has no permission set) — expect 400 with a message that
+                includes "not eligible for assignment".
+             b. Add the assignable user from #3 back (flip either flag
+                back to true), then PATCH assigned_to = that user's id
+                on a ticket. Expect 200. Confirm ticket.assigned_to_id
+                is now that user and an "Assigned to <name>" activity
+                row exists.
+
+        5. **POST /api/tickets/bulk-assign guardrail**
+             a. bulk-assign to the ineligible Super Admin id — expect 400
+                (same message).
+             b. bulk-assign to the eligible user from #3 → expect 200
+                with `{assigned: N}` = count of tickets sent.
+
+        6. **Regression** — GET /api/tickets?scope=all&page_size=5 → 200,
+           GET /api/tickets/{id} → 200, GET /api/tickets/export.csv → 200.
+
+      Do NOT test the frontend UI — main agent will do that manually or
+      via a separate frontend agent.
+    -agent: "testing"
+    -message: |
+      ✅ ASSIGN-TO ELIGIBILITY RULE BACKEND TESTING COMPLETE — ALL TESTS PASSED (26/26)
+      
+      Completed comprehensive backend regression testing of the new Assign-To eligibility rule as specified in the review request.
+      
+      **SUMMARY:**
+      
+      ✅ Catalog check (3 tests) - assign_to_self and assign_to_others exist with correct labels, receive_assignment removed
+      ✅ Assignable endpoint default empty (2 tests) - Super Admin correctly excluded without permission set
+      ✅ Full round-trip (8 tests) - permission set creation, user creation, eligibility verification, OR rule, both flags off
+      ✅ PATCH assign guardrail (4 tests) - rejects ineligible users with 400, accepts eligible users with 200 and activity log
+      ✅ Bulk assign guardrail (3 tests) - same validation as PATCH
+      ✅ Cleanup (2 tests) - test data cleaned up successfully
+      ✅ Regression smoke (3 tests) - all ticket endpoints working correctly
+      
+      **KEY VERIFICATIONS:**
+      - No implicit role bypass: Super Admin must have permission set to be assignable
+      - OR rule working: user eligible if EITHER assign_to_self OR assign_to_others is enabled
+      - Backend guardrails working: both PATCH and bulk-assign reject ineligible users
+      - Error messages are clear: "Selected user is not eligible for assignment. Grant Assign Requests to Self / Others via their Permission Set."
+      - Activity log correctly records assignments
+      - All regression endpoints (list, detail, export) working correctly
+      
+      **DATABASE STATE:**
+      - 119 tickets in database
+      - Test permission set and user cleaned up successfully
+      
+      NO ISSUES FOUND. All scenarios from review request passed. Feature is working as specified.
 
 ## Profix — Field Edit + Row-level Reopen + Status Lock (Jul 27 2026)
 backend:

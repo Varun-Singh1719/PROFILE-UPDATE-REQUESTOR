@@ -1,292 +1,234 @@
 #!/usr/bin/env python3
 """
-Backend regression test for Profix Edit + Reopen + Status-Lock work.
-Tests the new backend behavior without touching frontend.
+Backend Test Script for Profix Assign-To Eligibility Rule
+Tests the new assign_to_self / assign_to_others permission flags
 """
+
 import requests
 import json
 import sys
 from datetime import datetime
 
-# Environment
+# Configuration
 BASE_URL = "https://45a791e5-04ad-496c-960e-53a2e2bbd58e.preview.emergentagent.com/api"
 ADMIN_EMAIL = "admin@ticketing.com"
 ADMIN_PASSWORD = "Admin@123"
 
 # Test state
 session = requests.Session()
-admin_token = None
-test_ticket_id = None
+test_results = []
 test_pset_id = None
+test_user_id = None
+test_user_email = None
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
 
-def fail(msg):
-    print(f"❌ FAIL: {msg}")
-    sys.exit(1)
+def log_test(scenario, status, details=""):
+    """Log test result"""
+    result = {
+        "scenario": scenario,
+        "status": status,
+        "details": details,
+        "timestamp": datetime.now().isoformat()
+    }
+    test_results.append(result)
+    status_icon = "✅" if status == "PASS" else "❌"
+    print(f"{status_icon} {scenario}: {status}")
+    if details:
+        print(f"   {details}")
+
 
 def login():
-    global admin_token
-    log("Logging in as Super Admin...")
+    """Login as Super Admin"""
+    print("\n=== LOGIN ===")
     resp = session.post(f"{BASE_URL}/auth/login", json={
         "email": ADMIN_EMAIL,
         "password": ADMIN_PASSWORD
     })
-    if resp.status_code != 200:
-        fail(f"Login failed: {resp.status_code} {resp.text}")
-    data = resp.json()
-    admin_token = data.get("access_token")
-    if not admin_token:
-        fail("No access_token in login response")
-    session.headers.update({"Authorization": f"Bearer {admin_token}"})
-    log(f"✅ Logged in successfully")
+    
+    if resp.status_code == 200:
+        log_test("Login", "PASS", f"Logged in as {ADMIN_EMAIL}")
+        return True
+    else:
+        log_test("Login", "FAIL", f"Status {resp.status_code}: {resp.text}")
+        return False
 
-def test_1_catalog_check():
-    """Test 1: Catalog check - GET /api/permissions/schema/v3"""
-    log("\n=== TEST 1: Catalog Check ===")
+
+def test_catalog():
+    """Test 1: Catalog check - verify assign_to_self and assign_to_others exist, receive_assignment removed"""
+    print("\n=== TEST 1: CATALOG CHECK ===")
+    
     resp = session.get(f"{BASE_URL}/permissions/schema/v3")
+    
     if resp.status_code != 200:
-        fail(f"Catalog fetch failed: {resp.status_code}")
+        log_test("Catalog - GET /api/permissions/schema/v3", "FAIL", 
+                f"Status {resp.status_code}: {resp.text}")
+        return False
     
     data = resp.json()
-    modules = data.get("modules", [])
     
     # Find profix module
-    profix = None
-    for m in modules:
-        if m.get("key") == "profix":
-            profix = m
+    profix_module = None
+    for module in data.get("modules", []):
+        if module.get("key") == "profix":
+            profix_module = module
             break
     
-    if not profix:
-        fail("profix module not found in catalog")
+    if not profix_module:
+        log_test("Catalog - Find profix module", "FAIL", "profix module not found")
+        return False
     
     # Find ticket_detail page
-    ticket_detail = None
-    for page in profix.get("pages", []):
+    ticket_detail_page = None
+    for page in profix_module.get("pages", []):
         if page.get("key") == "ticket_detail":
-            ticket_detail = page
+            ticket_detail_page = page
             break
     
-    if not ticket_detail:
-        fail("ticket_detail page not found in profix module")
+    if not ticket_detail_page:
+        log_test("Catalog - Find ticket_detail page", "FAIL", "ticket_detail page not found")
+        return False
     
-    functions = ticket_detail.get("functions", [])
+    functions = ticket_detail_page.get("functions", [])
+    function_keys = {f.get("key"): f for f in functions}
     
-    # Check for reopen function
-    reopen_fn = None
-    edit_fn = None
-    for fn in functions:
-        if fn.get("key") == "reopen":
-            reopen_fn = fn
-        if fn.get("key") == "edit":
-            edit_fn = fn
+    # Check assign_to_self exists
+    if "assign_to_self" not in function_keys:
+        log_test("Catalog - assign_to_self exists", "FAIL", "assign_to_self not found in functions")
+        return False
     
-    if not reopen_fn:
-        fail("reopen function not found in ticket_detail.functions")
+    assign_to_self = function_keys["assign_to_self"]
+    if assign_to_self.get("label") != "Assign Requests to Self":
+        log_test("Catalog - assign_to_self label", "FAIL", 
+                f"Expected 'Assign Requests to Self', got '{assign_to_self.get('label')}'")
+        return False
     
-    if not reopen_fn.get("scoped"):
-        fail("reopen function should have scoped=true")
+    if assign_to_self.get("scoped") != False:
+        log_test("Catalog - assign_to_self scoped", "FAIL", 
+                f"Expected scoped=False, got {assign_to_self.get('scoped')}")
+        return False
     
-    log(f"✅ reopen function found with scoped={reopen_fn.get('scoped')}")
+    log_test("Catalog - assign_to_self", "PASS", 
+            f"Found with label '{assign_to_self.get('label')}', scoped=False")
     
-    # Check edit function
-    if not edit_fn:
-        fail("edit function not found in ticket_detail.functions")
+    # Check assign_to_others exists
+    if "assign_to_others" not in function_keys:
+        log_test("Catalog - assign_to_others exists", "FAIL", "assign_to_others not found in functions")
+        return False
     
-    if not edit_fn.get("has_status_lock"):
-        fail("edit function should have has_status_lock=true")
+    assign_to_others = function_keys["assign_to_others"]
+    if assign_to_others.get("label") != "Assign Requests to Others":
+        log_test("Catalog - assign_to_others label", "FAIL", 
+                f"Expected 'Assign Requests to Others', got '{assign_to_others.get('label')}'")
+        return False
     
-    status_lock_options = edit_fn.get("status_lock_options", [])
-    if len(status_lock_options) != 3:
-        fail(f"edit function should have exactly 3 status_lock_options, got {len(status_lock_options)}")
+    if assign_to_others.get("scoped") != False:
+        log_test("Catalog - assign_to_others scoped", "FAIL", 
+                f"Expected scoped=False, got {assign_to_others.get('scoped')}")
+        return False
     
-    values = [opt.get("value") for opt in status_lock_options]
-    expected_values = {"open", "in_progress", "closed"}
-    if set(values) != expected_values:
-        fail(f"status_lock_options values should be {expected_values}, got {set(values)}")
+    log_test("Catalog - assign_to_others", "PASS", 
+            f"Found with label '{assign_to_others.get('label')}', scoped=False")
     
-    default = edit_fn.get("status_lock_default")
-    if default != "in_progress":
-        fail(f"status_lock_default should be 'in_progress', got '{default}'")
+    # Check receive_assignment does NOT exist
+    if "receive_assignment" in function_keys:
+        log_test("Catalog - receive_assignment removed", "FAIL", 
+                "receive_assignment still exists in catalog (should be removed)")
+        return False
     
-    log(f"✅ edit function has has_status_lock=true, 3 status_lock_options (open, in_progress, closed), default='in_progress'")
-    log("✅ TEST 1 PASSED: Catalog check complete")
+    log_test("Catalog - receive_assignment removed", "PASS", "receive_assignment not in catalog")
+    
+    return True
 
-def test_2_field_edit_super_admin():
-    """Test 2: Field edit as Super Admin (bypasses lock)"""
-    global test_ticket_id
-    log("\n=== TEST 2: Field Edit as Super Admin (bypasses lock) ===")
-    
-    # a) Create ticket
-    log("Creating test ticket...")
-    resp = session.post(f"{BASE_URL}/tickets", json={
-        "description": "lock test",
-        "priority": "Medium",
-        "number_of_profiles": 1
-    })
-    if resp.status_code != 200:
-        fail(f"Ticket creation failed: {resp.status_code} {resp.text}")
-    
-    ticket = resp.json()
-    test_ticket_id = ticket.get("id")
-    log(f"✅ Created ticket {ticket.get('ticket_id')} (id={test_ticket_id})")
-    
-    # b) PATCH status to Closed
-    log("Closing ticket...")
-    resp = session.patch(f"{BASE_URL}/tickets/{test_ticket_id}", json={
-        "status": "Closed"
-    })
-    if resp.status_code != 200:
-        fail(f"Status update failed: {resp.status_code} {resp.text}")
-    log("✅ Ticket closed")
-    
-    # c) PATCH fields after close (Super Admin bypasses lock)
-    log("Editing fields on closed ticket (Super Admin bypass)...")
-    resp = session.patch(f"{BASE_URL}/tickets/{test_ticket_id}", json={
-        "description": "edited after close",
-        "priority": "High",
-        "due_date": "2026-12-31",
-        "number_of_profiles": 7
-    })
-    if resp.status_code != 200:
-        fail(f"Field edit failed: {resp.status_code} {resp.text}")
-    
-    updated = resp.json()
-    log("✅ Field edit succeeded (200)")
-    
-    # d) GET ticket and verify fields
-    log("Verifying updated fields...")
-    resp = session.get(f"{BASE_URL}/tickets/{test_ticket_id}")
-    if resp.status_code != 200:
-        fail(f"Ticket fetch failed: {resp.status_code}")
-    
-    ticket = resp.json()
-    if ticket.get("description") != "edited after close":
-        fail(f"description not updated: {ticket.get('description')}")
-    if ticket.get("priority") != "High":
-        fail(f"priority not updated: {ticket.get('priority')}")
-    if ticket.get("due_date") != "2026-12-31":
-        fail(f"due_date not updated: {ticket.get('due_date')}")
-    if ticket.get("number_of_profiles") != 7:
-        fail(f"number_of_profiles not updated: {ticket.get('number_of_profiles')}")
-    
-    log("✅ All 4 fields updated correctly")
-    
-    # e) GET activity and verify 4 activity rows
-    log("Verifying activity log...")
-    resp = session.get(f"{BASE_URL}/tickets/{test_ticket_id}/activity")
-    if resp.status_code != 200:
-        fail(f"Activity fetch failed: {resp.status_code}")
-    
-    activities = resp.json()
-    # Look for the 4 field-edit activities (newest first)
-    expected_details = [
-        "Description updated",
-        "Priority changed from",
-        "Due Date changed from",
-        "No. of Records changed from"
-    ]
-    
-    found = []
-    for act in activities[:10]:  # Check recent activities
-        detail = act.get("detail", "")
-        for exp in expected_details:
-            if exp in detail and exp not in found:
-                found.append(exp)
-                break
-    
-    if len(found) != 4:
-        fail(f"Expected 4 activity rows, found {len(found)}: {found}")
-    
-    log(f"✅ Found all 4 activity rows: {found}")
-    log("✅ TEST 2 PASSED: Field edit as Super Admin (bypasses lock)")
 
-def test_3_field_edit_validation():
-    """Test 3: Field-edit validation"""
-    log("\n=== TEST 3: Field-edit Validation ===")
+def test_assignable_default_empty():
+    """Test 2: /api/contacts/assignable should be empty by default (Super Admin not included)"""
+    print("\n=== TEST 2: ASSIGNABLE ENDPOINT DEFAULT EMPTY ===")
     
-    # a) number_of_profiles = 0
-    log("Testing number_of_profiles = 0...")
-    resp = session.patch(f"{BASE_URL}/tickets/{test_ticket_id}", json={
-        "number_of_profiles": 0
-    })
-    if resp.status_code != 400:
-        fail(f"Expected 400 for number_of_profiles=0, got {resp.status_code}")
-    log("✅ number_of_profiles=0 rejected with 400")
+    resp = session.get(f"{BASE_URL}/contacts/assignable")
     
-    # b) number_of_profiles = -3
-    log("Testing number_of_profiles = -3...")
-    resp = session.patch(f"{BASE_URL}/tickets/{test_ticket_id}", json={
-        "number_of_profiles": -3
-    })
-    if resp.status_code != 400:
-        fail(f"Expected 400 for number_of_profiles=-3, got {resp.status_code}")
-    log("✅ number_of_profiles=-3 rejected with 400")
-    
-    # c) Unchanged description (optional test - either 200 or 400 acceptable)
-    log("Testing unchanged description...")
-    current_desc = "edited after close"
-    resp = session.patch(f"{BASE_URL}/tickets/{test_ticket_id}", json={
-        "description": current_desc
-    })
-    if resp.status_code == 200:
-        log("✅ Unchanged description returned 200 (no activity added)")
-    elif resp.status_code == 400:
-        log("✅ Unchanged description returned 400 (Nothing to update)")
-    else:
-        fail(f"Unexpected status {resp.status_code} for unchanged description")
-    
-    log("✅ TEST 3 PASSED: Field-edit validation")
-
-def test_4_attachments_edit():
-    """Test 4: Attachments edit"""
-    log("\n=== TEST 4: Attachments Edit ===")
-    
-    log("Editing attachments...")
-    resp = session.patch(f"{BASE_URL}/tickets/{test_ticket_id}", json={
-        "attachments": [{"path": "x/y", "filename": "foo.pdf"}]
-    })
     if resp.status_code != 200:
-        fail(f"Attachments edit failed: {resp.status_code} {resp.text}")
+        log_test("Assignable - GET /api/contacts/assignable", "FAIL", 
+                f"Status {resp.status_code}: {resp.text}")
+        return False
     
-    ticket = resp.json()
-    if ticket.get("attachment_path") != "x/y":
-        fail(f"attachment_path not synced: {ticket.get('attachment_path')}")
-    if ticket.get("attachment_name") != "foo.pdf":
-        fail(f"attachment_name not synced: {ticket.get('attachment_name')}")
+    data = resp.json()
     
-    log("✅ attachment_path and attachment_name synced correctly")
+    if not isinstance(data, list):
+        log_test("Assignable - Response is array", "FAIL", 
+                f"Expected array, got {type(data)}")
+        return False
     
-    # Check activity
-    resp = session.get(f"{BASE_URL}/tickets/{test_ticket_id}/activity")
-    if resp.status_code != 200:
-        fail(f"Activity fetch failed: {resp.status_code}")
+    log_test("Assignable - Response is array", "PASS", f"Returned {len(data)} users")
     
-    activities = resp.json()
-    found = False
-    for act in activities[:5]:
-        if "Attachments updated (1 file(s))" in act.get("detail", ""):
-            found = True
-            break
+    # Check if Super Admin is in the list
+    super_admin_in_list = any(u.get("email") == ADMIN_EMAIL for u in data)
     
-    if not found:
-        fail("Activity 'Attachments updated (1 file(s))' not found")
+    if super_admin_in_list:
+        log_test("Assignable - Super Admin NOT in list", "FAIL", 
+                "Super Admin appears in assignable list (should not be there without permission set)")
+        return False
     
-    log("✅ Activity contains 'Attachments updated (1 file(s))'")
-    log("✅ TEST 4 PASSED: Attachments edit")
+    log_test("Assignable - Super Admin NOT in list", "PASS", 
+            "Super Admin correctly excluded (no permission set assigned)")
+    
+    # For each user in the list, verify they have permission sets with the required flags
+    if len(data) > 0:
+        # Get all permission sets
+        psets_resp = session.get(f"{BASE_URL}/permission-sets-v3")
+        if psets_resp.status_code != 200:
+            log_test("Assignable - Verify user permissions", "FAIL", 
+                    f"Could not fetch permission sets: {psets_resp.status_code}")
+            return False
+        
+        psets_data = psets_resp.json()
+        psets = {p["id"]: p for p in psets_data.get("items", [])}
+        
+        for user in data:
+            user_pset_ids = user.get("permission_set_ids", [])
+            has_required_flag = False
+            
+            for pset_id in user_pset_ids:
+                pset = psets.get(pset_id)
+                if not pset:
+                    continue
+                
+                # Check if this pset has either flag enabled
+                modules = pset.get("modules", {})
+                profix = modules.get("profix", {})
+                pages = profix.get("pages", {})
+                ticket_detail = pages.get("ticket_detail", {})
+                functions = ticket_detail.get("functions", {})
+                
+                assign_to_self = functions.get("assign_to_self", {})
+                assign_to_others = functions.get("assign_to_others", {})
+                
+                if assign_to_self.get("enabled") or assign_to_others.get("enabled"):
+                    has_required_flag = True
+                    break
+            
+            if not has_required_flag:
+                log_test("Assignable - User has required permission", "FAIL", 
+                        f"User {user.get('email')} in list but has no assign_to_self or assign_to_others enabled")
+                return False
+        
+        log_test("Assignable - All users have required permissions", "PASS", 
+                f"Verified {len(data)} users have assign_to_self or assign_to_others enabled")
+    
+    return True
 
-def test_5_permission_set_round_trip():
-    """Test 5: Permission-set round-trip (max_editable_status)"""
-    global test_pset_id
-    log("\n=== TEST 5: Permission-set Round-trip (max_editable_status) ===")
+
+def test_round_trip():
+    """Test 3: Full round-trip - create permission set, create user, test eligibility with flag toggles"""
+    global test_pset_id, test_user_id, test_user_email
     
-    # a) Create v3 permission set
-    log("Creating v3 permission set with max_editable_status='open'...")
-    resp = session.post(f"{BASE_URL}/permission-sets-v3", json={
-        "title": "QA MaxEditable Test",
-        "description": "tmp",
+    print("\n=== TEST 3: FULL ROUND-TRIP ===")
+    
+    # 3a. Create permission set with assign_to_self enabled
+    print("\n--- 3a. Create permission set with assign_to_self enabled ---")
+    
+    pset_payload = {
+        "title": "QA Assign-Self",
+        "description": "Test permission set for assign-to eligibility testing",
         "modules": {
             "profix": {
                 "pages": {
@@ -294,183 +236,543 @@ def test_5_permission_set_round_trip():
                         "view": {"enabled": True, "visible": True, "scope": "team"},
                         "edit": {"enabled": True, "visible": True, "scope": "team"},
                         "functions": {
-                            "edit": {
-                                "enabled": True,
-                                "visible": True,
-                                "scope": "team",
-                                "max_editable_status": "open"
-                            },
-                            "reopen": {
-                                "enabled": True,
-                                "visible": True,
-                                "scope": "team"
-                            }
+                            "assign_to_self": {"enabled": True, "visible": True},
+                            "assign_to_others": {"enabled": False, "visible": True}
                         }
                     }
                 }
             }
         }
-    })
+    }
+    
+    resp = session.post(f"{BASE_URL}/permission-sets-v3", json=pset_payload)
+    
     if resp.status_code != 200:
-        fail(f"Permission set creation failed: {resp.status_code} {resp.text}")
+        log_test("Round-trip 3a - Create permission set", "FAIL", 
+                f"Status {resp.status_code}: {resp.text}")
+        return False
     
-    pset = resp.json()
-    test_pset_id = pset.get("id")
-    log(f"✅ Created permission set {test_pset_id}")
+    pset_data = resp.json()
+    test_pset_id = pset_data.get("id")
     
-    # b) GET the set back
-    log("Fetching permission set...")
-    resp = session.get(f"{BASE_URL}/permission-sets-v3/{test_pset_id}")
+    log_test("Round-trip 3a - Create permission set", "PASS", 
+            f"Created permission set ID: {test_pset_id}")
+    
+    # 3b. Create new Admin user with this permission set
+    print("\n--- 3b. Create new Admin user with permission set ---")
+    
+    test_user_email = f"qa_assign_test_{datetime.now().timestamp()}@ticketing.com"
+    
+    user_payload = {
+        "name": "QA Assign Test User",
+        "email": test_user_email,
+        "emp_id": f"QA{int(datetime.now().timestamp())}",
+        "role": "Admin",
+        "status": "Active",
+        "doj": "2026-01-01",
+        "permission_set_ids": [test_pset_id]
+    }
+    
+    resp = session.post(f"{BASE_URL}/contacts", json=user_payload)
+    
     if resp.status_code != 200:
-        fail(f"Permission set fetch failed: {resp.status_code}")
+        log_test("Round-trip 3b - Create user", "FAIL", 
+                f"Status {resp.status_code}: {resp.text}")
+        return False
     
-    pset = resp.json()
+    user_data = resp.json()
+    test_user_id = user_data.get("id")
     
-    # c) Assert max_editable_status === "open"
-    try:
-        max_editable = pset["modules"]["profix"]["pages"]["ticket_detail"]["functions"]["edit"]["max_editable_status"]
-    except KeyError as e:
-        fail(f"max_editable_status not found in response: {e}")
+    # If permission_set_ids not accepted at creation, PATCH it
+    if not user_data.get("permission_set_ids") or test_pset_id not in user_data.get("permission_set_ids", []):
+        print("   Permission set not assigned at creation, patching...")
+        patch_resp = session.patch(f"{BASE_URL}/contacts/{test_user_id}", json={
+            "permission_set_ids": [test_pset_id]
+        })
+        
+        if patch_resp.status_code != 200:
+            log_test("Round-trip 3b - Assign permission set via PATCH", "FAIL", 
+                    f"Status {patch_resp.status_code}: {patch_resp.text}")
+            return False
+        
+        log_test("Round-trip 3b - Assign permission set via PATCH", "PASS", 
+                f"Assigned permission set {test_pset_id} to user {test_user_id}")
     
-    if max_editable != "open":
-        fail(f"max_editable_status should be 'open', got '{max_editable}'")
+    log_test("Round-trip 3b - Create user", "PASS", 
+            f"Created user ID: {test_user_id}, email: {test_user_email}")
     
-    log("✅ max_editable_status='open' survived round-trip")
+    # 3c. Verify user appears in /assignable
+    print("\n--- 3c. Verify user appears in /assignable ---")
     
-    # d) Assign to user and check /api/me/permissions (optional - skip if too heavy)
-    log("⏭️  Skipping step (d) - assigning to user and checking /api/me/permissions (setup too heavy)")
+    resp = session.get(f"{BASE_URL}/contacts/assignable")
     
-    log("✅ TEST 5 PASSED: Permission-set round-trip")
+    if resp.status_code != 200:
+        log_test("Round-trip 3c - GET /assignable", "FAIL", 
+                f"Status {resp.status_code}: {resp.text}")
+        return False
+    
+    assignable_users = resp.json()
+    user_in_list = any(u.get("id") == test_user_id for u in assignable_users)
+    
+    if not user_in_list:
+        log_test("Round-trip 3c - User appears in assignable", "FAIL", 
+                f"User {test_user_id} not found in assignable list")
+        return False
+    
+    log_test("Round-trip 3c - User appears in assignable", "PASS", 
+            f"User {test_user_email} found in assignable list")
+    
+    # 3d. Toggle flags: turn off assign_to_self, turn on assign_to_others
+    print("\n--- 3d. Toggle flags (assign_to_self OFF, assign_to_others ON) ---")
+    
+    pset_payload["modules"]["profix"]["pages"]["ticket_detail"]["functions"]["assign_to_self"]["enabled"] = False
+    pset_payload["modules"]["profix"]["pages"]["ticket_detail"]["functions"]["assign_to_others"]["enabled"] = True
+    
+    resp = session.put(f"{BASE_URL}/permission-sets-v3/{test_pset_id}", json=pset_payload)
+    
+    if resp.status_code != 200:
+        log_test("Round-trip 3d - Update permission set", "FAIL", 
+                f"Status {resp.status_code}: {resp.text}")
+        return False
+    
+    log_test("Round-trip 3d - Update permission set", "PASS", 
+            "Toggled assign_to_self OFF, assign_to_others ON")
+    
+    # Re-fetch /assignable - user should STILL appear (OR rule)
+    resp = session.get(f"{BASE_URL}/contacts/assignable")
+    
+    if resp.status_code != 200:
+        log_test("Round-trip 3d - GET /assignable after toggle", "FAIL", 
+                f"Status {resp.status_code}: {resp.text}")
+        return False
+    
+    assignable_users = resp.json()
+    user_in_list = any(u.get("id") == test_user_id for u in assignable_users)
+    
+    if not user_in_list:
+        log_test("Round-trip 3d - User STILL appears (OR rule)", "FAIL", 
+                f"User {test_user_id} not found after toggle (should still be there due to OR rule)")
+        return False
+    
+    log_test("Round-trip 3d - User STILL appears (OR rule)", "PASS", 
+            f"User {test_user_email} still in assignable list (assign_to_others enabled)")
+    
+    # 3e. Turn BOTH flags off
+    print("\n--- 3e. Turn BOTH flags OFF ---")
+    
+    pset_payload["modules"]["profix"]["pages"]["ticket_detail"]["functions"]["assign_to_self"]["enabled"] = False
+    pset_payload["modules"]["profix"]["pages"]["ticket_detail"]["functions"]["assign_to_others"]["enabled"] = False
+    
+    resp = session.put(f"{BASE_URL}/permission-sets-v3/{test_pset_id}", json=pset_payload)
+    
+    if resp.status_code != 200:
+        log_test("Round-trip 3e - Update permission set (both OFF)", "FAIL", 
+                f"Status {resp.status_code}: {resp.text}")
+        return False
+    
+    log_test("Round-trip 3e - Update permission set (both OFF)", "PASS", 
+            "Turned both assign_to_self and assign_to_others OFF")
+    
+    # Re-fetch /assignable - user should NO LONGER appear
+    resp = session.get(f"{BASE_URL}/contacts/assignable")
+    
+    if resp.status_code != 200:
+        log_test("Round-trip 3e - GET /assignable after both OFF", "FAIL", 
+                f"Status {resp.status_code}: {resp.text}")
+        return False
+    
+    assignable_users = resp.json()
+    user_in_list = any(u.get("id") == test_user_id for u in assignable_users)
+    
+    if user_in_list:
+        log_test("Round-trip 3e - User NO LONGER appears", "FAIL", 
+                f"User {test_user_id} still in list (should be removed when both flags OFF)")
+        return False
+    
+    log_test("Round-trip 3e - User NO LONGER appears", "PASS", 
+            f"User {test_user_email} correctly removed from assignable list")
+    
+    return True
 
-def test_6_reopen_permission_gate():
-    """Test 6: Reopen permission gate"""
-    log("\n=== TEST 6: Reopen Permission Gate ===")
-    
-    # Create a closed ticket for reopen test
-    log("Creating and closing a ticket for reopen test...")
-    resp = session.post(f"{BASE_URL}/tickets", json={
-        "description": "reopen test",
-        "priority": "Low",
-        "number_of_profiles": 1
-    })
-    if resp.status_code != 200:
-        fail(f"Ticket creation failed: {resp.status_code}")
-    
-    ticket = resp.json()
-    closed_id = ticket.get("id")
-    
-    # Close it
-    resp = session.patch(f"{BASE_URL}/tickets/{closed_id}", json={
-        "status": "Closed"
-    })
-    if resp.status_code != 200:
-        fail(f"Status update failed: {resp.status_code}")
-    
-    log(f"✅ Created and closed ticket {ticket.get('ticket_id')}")
-    
-    # As Super Admin: reopen should work
-    log("Testing reopen as Super Admin...")
-    resp = session.post(f"{BASE_URL}/tickets/{closed_id}/reopen", json={
-        "reason": "Testing reopen as Super Admin"
-    })
-    if resp.status_code != 200:
-        fail(f"Reopen as Super Admin failed: {resp.status_code} {resp.text}")
-    
-    log("✅ Reopen as Super Admin succeeded (200)")
-    
-    # Skip second-user path as per review request
-    log("⏭️  Skipping second-user reopen test (setup too heavy)")
-    
-    log("✅ TEST 6 PASSED: Reopen permission gate")
 
-def test_7_regression_smoke():
-    """Test 7: Regression smoke tests"""
-    log("\n=== TEST 7: Regression Smoke Tests ===")
+def test_patch_assign_guardrail():
+    """Test 4: PATCH /api/tickets/{id} assign guardrail"""
+    global test_pset_id, test_user_id
     
-    # GET /api/tickets?scope=all&page=1&page_size=5
-    log("Testing GET /api/tickets (paged)...")
-    resp = session.get(f"{BASE_URL}/tickets", params={
-        "scope": "all",
-        "page": 1,
-        "page_size": 5
-    })
+    print("\n=== TEST 4: PATCH SINGLE ASSIGN GUARDRAIL ===")
+    
+    # Get a ticket to test with
+    resp = session.get(f"{BASE_URL}/tickets?scope=all&page_size=1")
+    
     if resp.status_code != 200:
-        fail(f"GET /api/tickets failed: {resp.status_code}")
-    log("✅ GET /api/tickets (paged) - 200")
+        log_test("PATCH assign 4 - Get test ticket", "FAIL", 
+                f"Status {resp.status_code}: {resp.text}")
+        return False
     
-    # GET /api/tickets/{id}
-    log("Testing GET /api/tickets/{id}...")
-    resp = session.get(f"{BASE_URL}/tickets/{test_ticket_id}")
+    tickets_data = resp.json()
+    # Handle both list and dict response formats
+    if isinstance(tickets_data, list):
+        tickets = tickets_data
+    else:
+        tickets = tickets_data.get("tickets", [])
+    
+    if len(tickets) == 0:
+        log_test("PATCH assign 4 - Get test ticket", "FAIL", "No tickets found in database")
+        return False
+    
+    test_ticket_id = tickets[0].get("id")
+    log_test("PATCH assign 4 - Get test ticket", "PASS", f"Using ticket ID: {test_ticket_id}")
+    
+    # Get Super Admin ID
+    resp = session.get(f"{BASE_URL}/profile/me")
     if resp.status_code != 200:
-        fail(f"GET /api/tickets/{{id}} failed: {resp.status_code}")
-    log("✅ GET /api/tickets/{id} - 200")
+        log_test("PATCH assign 4a - Get Super Admin ID", "FAIL", 
+                f"Status {resp.status_code}: {resp.text}")
+        return False
     
-    # PATCH status change
-    log("Testing PATCH status change...")
+    super_admin_id = resp.json().get("id")
+    
+    # 4a. Try to assign to Super Admin (ineligible)
+    print("\n--- 4a. Try to assign to Super Admin (ineligible) ---")
+    
     resp = session.patch(f"{BASE_URL}/tickets/{test_ticket_id}", json={
-        "status": "Open"
+        "assigned_to": super_admin_id
     })
-    if resp.status_code != 200:
-        fail(f"PATCH status failed: {resp.status_code}")
-    log("✅ PATCH status change - 200")
     
-    # POST bulk-status
-    log("Testing POST /api/tickets/bulk-status...")
-    resp = session.post(f"{BASE_URL}/tickets/bulk-status", json={
-        "ticket_ids": [test_ticket_id],
-        "status": "In Progress"
+    if resp.status_code != 400:
+        log_test("PATCH assign 4a - Reject ineligible Super Admin", "FAIL", 
+                f"Expected 400, got {resp.status_code}: {resp.text}")
+        return False
+    
+    error_detail = resp.json().get("detail", "")
+    if "not eligible for assignment" not in error_detail.lower():
+        log_test("PATCH assign 4a - Error message contains 'not eligible'", "FAIL", 
+                f"Expected 'not eligible for assignment' in error, got: {error_detail}")
+        return False
+    
+    log_test("PATCH assign 4a - Reject ineligible Super Admin", "PASS", 
+            f"Correctly rejected with 400: {error_detail}")
+    
+    # 4b. Make test user eligible again and assign
+    print("\n--- 4b. Make test user eligible and assign ---")
+    
+    # Turn on assign_to_others flag
+    pset_payload = {
+        "title": "QA Assign-Self",
+        "description": "Test permission set for assign-to eligibility testing",
+        "modules": {
+            "profix": {
+                "pages": {
+                    "ticket_detail": {
+                        "view": {"enabled": True, "visible": True, "scope": "team"},
+                        "edit": {"enabled": True, "visible": True, "scope": "team"},
+                        "functions": {
+                            "assign_to_self": {"enabled": False, "visible": True},
+                            "assign_to_others": {"enabled": True, "visible": True}
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    resp = session.put(f"{BASE_URL}/permission-sets-v3/{test_pset_id}", json=pset_payload)
+    
+    if resp.status_code != 200:
+        log_test("PATCH assign 4b - Re-enable user eligibility", "FAIL", 
+                f"Status {resp.status_code}: {resp.text}")
+        return False
+    
+    log_test("PATCH assign 4b - Re-enable user eligibility", "PASS", 
+            "Enabled assign_to_others flag")
+    
+    # Now assign to the eligible user
+    resp = session.patch(f"{BASE_URL}/tickets/{test_ticket_id}", json={
+        "assigned_to": test_user_id
     })
-    if resp.status_code != 200:
-        fail(f"POST bulk-status failed: {resp.status_code}")
-    log("✅ POST /api/tickets/bulk-status - 200")
     
-    # POST bulk-assign (get admin user ID first)
-    log("Testing POST /api/tickets/bulk-assign...")
-    # Get admin user ID
-    me_resp = session.get(f"{BASE_URL}/profile/me")
-    if me_resp.status_code != 200:
-        fail(f"GET /api/profile/me failed: {me_resp.status_code}")
-    admin_id = me_resp.json().get("id")
+    if resp.status_code != 200:
+        log_test("PATCH assign 4b - Assign to eligible user", "FAIL", 
+                f"Status {resp.status_code}: {resp.text}")
+        return False
+    
+    ticket_data = resp.json()
+    assigned_to_id = ticket_data.get("assigned_to_id")
+    
+    if assigned_to_id != test_user_id:
+        log_test("PATCH assign 4b - Verify assigned_to_id", "FAIL", 
+                f"Expected assigned_to_id={test_user_id}, got {assigned_to_id}")
+        return False
+    
+    log_test("PATCH assign 4b - Assign to eligible user", "PASS", 
+            f"Successfully assigned ticket to user {test_user_id}")
+    
+    # Verify activity log
+    resp = session.get(f"{BASE_URL}/tickets/{test_ticket_id}/activity")
+    
+    if resp.status_code != 200:
+        log_test("PATCH assign 4b - Get activity log", "FAIL", 
+                f"Status {resp.status_code}: {resp.text}")
+        return False
+    
+    activity_data = resp.json()
+    
+    # Look for "Assigned to" activity
+    assigned_activity = None
+    for activity in activity_data:
+        if "assigned to" in activity.get("detail", "").lower():
+            assigned_activity = activity
+            break
+    
+    if not assigned_activity:
+        log_test("PATCH assign 4b - Verify activity log", "FAIL", 
+                "No 'Assigned to' activity found in log")
+        return False
+    
+    log_test("PATCH assign 4b - Verify activity log", "PASS", 
+            f"Activity log contains: {assigned_activity.get('detail')}")
+    
+    return True
+
+
+def test_bulk_assign_guardrail():
+    """Test 5: POST /api/tickets/bulk-assign guardrail"""
+    global test_user_id
+    
+    print("\n=== TEST 5: BULK ASSIGN GUARDRAIL ===")
+    
+    # Get a ticket to test with
+    resp = session.get(f"{BASE_URL}/tickets?scope=all&page_size=1")
+    
+    if resp.status_code != 200:
+        log_test("Bulk assign 5 - Get test ticket", "FAIL", 
+                f"Status {resp.status_code}: {resp.text}")
+        return False
+    
+    tickets_data = resp.json()
+    # Handle both list and dict response formats
+    if isinstance(tickets_data, list):
+        tickets = tickets_data
+    else:
+        tickets = tickets_data.get("tickets", [])
+    
+    if len(tickets) == 0:
+        log_test("Bulk assign 5 - Get test ticket", "FAIL", "No tickets found in database")
+        return False
+    
+    test_ticket_id = tickets[0].get("id")
+    log_test("Bulk assign 5 - Get test ticket", "PASS", f"Using ticket ID: {test_ticket_id}")
+    
+    # Get Super Admin ID
+    resp = session.get(f"{BASE_URL}/profile/me")
+    if resp.status_code != 200:
+        log_test("Bulk assign 5a - Get Super Admin ID", "FAIL", 
+                f"Status {resp.status_code}: {resp.text}")
+        return False
+    
+    super_admin_id = resp.json().get("id")
+    
+    # 5a. Try bulk-assign to Super Admin (ineligible)
+    print("\n--- 5a. Try bulk-assign to Super Admin (ineligible) ---")
     
     resp = session.post(f"{BASE_URL}/tickets/bulk-assign", json={
         "ticket_ids": [test_ticket_id],
-        "assigned_to": admin_id
+        "assigned_to": super_admin_id
     })
-    if resp.status_code != 200:
-        fail(f"POST bulk-assign failed: {resp.status_code}")
-    log("✅ POST /api/tickets/bulk-assign - 200")
     
-    # GET /api/tickets/export.csv
-    log("Testing GET /api/tickets/export.csv...")
-    resp = session.get(f"{BASE_URL}/tickets/export.csv", params={
-        "scope": "all"
+    if resp.status_code != 400:
+        log_test("Bulk assign 5a - Reject ineligible Super Admin", "FAIL", 
+                f"Expected 400, got {resp.status_code}: {resp.text}")
+        return False
+    
+    error_detail = resp.json().get("detail", "")
+    if "not eligible for assignment" not in error_detail.lower():
+        log_test("Bulk assign 5a - Error message contains 'not eligible'", "FAIL", 
+                f"Expected 'not eligible for assignment' in error, got: {error_detail}")
+        return False
+    
+    log_test("Bulk assign 5a - Reject ineligible Super Admin", "PASS", 
+            f"Correctly rejected with 400: {error_detail}")
+    
+    # 5b. Bulk-assign to eligible user
+    print("\n--- 5b. Bulk-assign to eligible user ---")
+    
+    resp = session.post(f"{BASE_URL}/tickets/bulk-assign", json={
+        "ticket_ids": [test_ticket_id],
+        "assigned_to": test_user_id
     })
-    if resp.status_code != 200:
-        fail(f"GET /api/tickets/export.csv failed: {resp.status_code}")
-    log("✅ GET /api/tickets/export.csv - 200")
     
-    log("✅ TEST 7 PASSED: Regression smoke tests")
+    if resp.status_code != 200:
+        log_test("Bulk assign 5b - Assign to eligible user", "FAIL", 
+                f"Status {resp.status_code}: {resp.text}")
+        return False
+    
+    result_data = resp.json()
+    assigned_count = result_data.get("assigned", 0)
+    
+    if assigned_count != 1:
+        log_test("Bulk assign 5b - Verify assigned count", "FAIL", 
+                f"Expected assigned=1, got {assigned_count}")
+        return False
+    
+    log_test("Bulk assign 5b - Assign to eligible user", "PASS", 
+            f"Successfully bulk-assigned {assigned_count} ticket(s)")
+    
+    return True
+
+
+def test_cleanup():
+    """Test 6: Cleanup - delete test permission set and user"""
+    global test_pset_id, test_user_id
+    
+    print("\n=== TEST 6: CLEANUP ===")
+    
+    # Delete permission set
+    if test_pset_id:
+        resp = session.delete(f"{BASE_URL}/permission-sets-v3/{test_pset_id}")
+        
+        if resp.status_code in [200, 204]:
+            log_test("Cleanup - Delete permission set", "PASS", 
+                    f"Deleted permission set {test_pset_id}")
+        else:
+            log_test("Cleanup - Delete permission set", "FAIL", 
+                    f"Status {resp.status_code}: {resp.text}")
+    
+    # Delete user (or set to Inactive)
+    if test_user_id:
+        # Try to delete first
+        resp = session.delete(f"{BASE_URL}/contacts/{test_user_id}")
+        
+        if resp.status_code in [200, 204]:
+            log_test("Cleanup - Delete user", "PASS", 
+                    f"Deleted user {test_user_id}")
+        else:
+            # If delete not supported, set to Inactive
+            resp = session.patch(f"{BASE_URL}/contacts/{test_user_id}", json={
+                "status": "Inactive"
+            })
+            
+            if resp.status_code == 200:
+                log_test("Cleanup - Set user Inactive", "PASS", 
+                        f"Set user {test_user_id} to Inactive")
+            else:
+                log_test("Cleanup - Delete/Inactivate user", "FAIL", 
+                        f"Status {resp.status_code}: {resp.text}")
+    
+    return True
+
+
+def test_regression_smoke():
+    """Test 7: Regression smoke - verify basic ticket endpoints still work"""
+    print("\n=== TEST 7: REGRESSION SMOKE ===")
+    
+    # GET /api/tickets?scope=all&page_size=5
+    resp = session.get(f"{BASE_URL}/tickets?scope=all&page_size=5")
+    
+    if resp.status_code != 200:
+        log_test("Regression - GET /api/tickets?scope=all", "FAIL", 
+                f"Status {resp.status_code}: {resp.text}")
+        return False
+    
+    tickets_data = resp.json()
+    # Handle both list and dict response formats
+    if isinstance(tickets_data, list):
+        tickets = tickets_data
+    else:
+        tickets = tickets_data.get("tickets", [])
+    
+    log_test("Regression - GET /api/tickets?scope=all", "PASS", 
+            f"Returned {len(tickets)} tickets")
+    
+    # GET /api/tickets/{id}
+    if len(tickets) > 0:
+        ticket_id = tickets[0].get("id")
+        resp = session.get(f"{BASE_URL}/tickets/{ticket_id}")
+        
+        if resp.status_code != 200:
+            log_test("Regression - GET /api/tickets/{id}", "FAIL", 
+                    f"Status {resp.status_code}: {resp.text}")
+            return False
+        
+        log_test("Regression - GET /api/tickets/{id}", "PASS", 
+                f"Retrieved ticket {ticket_id}")
+    
+    # GET /api/tickets/export.csv?scope=all
+    resp = session.get(f"{BASE_URL}/tickets/export.csv?scope=all")
+    
+    if resp.status_code != 200:
+        log_test("Regression - GET /api/tickets/export.csv", "FAIL", 
+                f"Status {resp.status_code}")
+        return False
+    
+    log_test("Regression - GET /api/tickets/export.csv", "PASS", 
+            f"CSV export successful ({len(resp.content)} bytes)")
+    
+    return True
+
+
+def print_summary():
+    """Print test summary"""
+    print("\n" + "="*80)
+    print("TEST SUMMARY")
+    print("="*80)
+    
+    passed = sum(1 for r in test_results if r["status"] == "PASS")
+    failed = sum(1 for r in test_results if r["status"] == "FAIL")
+    total = len(test_results)
+    
+    print(f"\nTotal Tests: {total}")
+    print(f"Passed: {passed} ✅")
+    print(f"Failed: {failed} ❌")
+    print(f"Success Rate: {(passed/total*100):.1f}%\n")
+    
+    if failed > 0:
+        print("FAILED TESTS:")
+        for r in test_results:
+            if r["status"] == "FAIL":
+                print(f"  ❌ {r['scenario']}")
+                if r["details"]:
+                    print(f"     {r['details']}")
+        print()
+    
+    return failed == 0
+
 
 def main():
-    try:
-        login()
-        test_1_catalog_check()
-        test_2_field_edit_super_admin()
-        test_3_field_edit_validation()
-        test_4_attachments_edit()
-        test_5_permission_set_round_trip()
-        test_6_reopen_permission_gate()
-        test_7_regression_smoke()
-        
-        log("\n" + "="*60)
-        log("✅ ALL TESTS PASSED (7/7)")
-        log("="*60)
-        
-    except Exception as e:
-        log(f"\n❌ UNEXPECTED ERROR: {e}")
-        import traceback
-        traceback.print_exc()
+    """Main test execution"""
+    print("="*80)
+    print("PROFIX ASSIGN-TO ELIGIBILITY RULE - BACKEND REGRESSION TEST")
+    print("="*80)
+    print(f"Base URL: {BASE_URL}")
+    print(f"Admin: {ADMIN_EMAIL}")
+    print("="*80)
+    
+    # Login
+    if not login():
+        print("\n❌ Login failed. Aborting tests.")
         sys.exit(1)
+    
+    # Run tests
+    all_passed = True
+    
+    all_passed &= test_catalog()
+    all_passed &= test_assignable_default_empty()
+    all_passed &= test_round_trip()
+    all_passed &= test_patch_assign_guardrail()
+    all_passed &= test_bulk_assign_guardrail()
+    all_passed &= test_cleanup()
+    all_passed &= test_regression_smoke()
+    
+    # Print summary
+    success = print_summary()
+    
+    if success:
+        print("✅ ALL TESTS PASSED")
+        sys.exit(0)
+    else:
+        print("❌ SOME TESTS FAILED")
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
