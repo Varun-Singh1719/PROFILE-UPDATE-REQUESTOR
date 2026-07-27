@@ -218,6 +218,7 @@ async def list_assignable_contacts(user=Depends(get_current_user)):
 
 
 
+@api_router.get("/contacts/export.csv")
 async def export_contacts_csv(
     user=Depends(require_role("Super Admin")),
     q: Optional[str] = None,
@@ -248,21 +249,142 @@ async def export_contacts_csv(
         query["$or"] = chip_ors
     items = await db.contacts.find(query, {"_id": 0, "password_hash": 0, "password_encrypted": 0}).to_list(10000)
     items = await _enrich_contacts_with_team(items)
+    # Resolve permission set names once so exports are human-readable.
+    pset_ids: set = set()
+    for c in items:
+        for sid in (c.get("permission_set_ids") or []):
+            pset_ids.add(sid)
+    pset_label_by_id: Dict[str, str] = {}
+    if pset_ids:
+        docs = await db.permission_sets.find(
+            {"id": {"$in": list(pset_ids)}},
+            {"_id": 0, "id": 1, "name": 1, "title": 1, "numeric_id": 1, "seq_no": 1},
+        ).to_list(len(pset_ids))
+        for p in docs:
+            num = p.get("numeric_id") or p.get("seq_no")
+            nm = p.get("name") or p.get("title") or "Untitled"
+            pset_label_by_id[p["id"]] = f"#{num} {nm}" if num is not None else nm
+
+    def _pset_label(c):
+        return ", ".join(
+            pset_label_by_id.get(sid, sid) for sid in (c.get("permission_set_ids") or [])
+        )
+
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["Name", "Emp ID", "Email", "Phone", "Role", "Team", "Manager(s)", "DOJ", "Status", "Created On", "Last Login"])
+    w.writerow([
+        "Name", "Emp ID", "Email", "Phone ISD", "Phone", "Role", "Team",
+        "Manager(s)", "DOJ", "Permission Sets", "Status", "Created On", "Last Login",
+    ])
     for c in items:
         w.writerow([
-            c.get("name", ""), c.get("emp_id", ""), c.get("email", ""), c.get("phone", ""),
+            c.get("name", ""), c.get("emp_id", ""), c.get("email", ""),
+            c.get("phone_isd", ""), c.get("phone", ""),
             c.get("role", ""), c.get("team_name") or "",
             ", ".join(c.get("manager_names") or []),
-            c.get("doj") or "", c.get("status", ""),
+            c.get("doj") or "", _pset_label(c), c.get("status", ""),
             c.get("created_on", ""), c.get("last_login") or "",
         ])
     filename = f"employees_{datetime.now(timezone.utc).date().isoformat()}.csv"
     return StreamingResponse(
         iter([buf.getvalue()]),
         media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@api_router.get("/contacts/export.xlsx")
+async def export_contacts_xlsx(
+    user=Depends(require_role("Super Admin")),
+    q: Optional[str] = None,
+    role: Optional[str] = None,
+    status: Optional[str] = None,
+    emp_ids: Optional[str] = None,
+    emails: Optional[str] = None,
+):
+    """XLSX twin of /contacts/export.csv — same columns, same filters."""
+    from openpyxl.utils import get_column_letter
+
+    query = {}
+    role_list = _csv_list(role)
+    if role_list:
+        query["role"] = {"$in": role_list} if len(role_list) > 1 else role_list[0]
+    status_list = _csv_list(status)
+    if status_list:
+        query["status"] = {"$in": status_list} if len(status_list) > 1 else status_list[0]
+    emp_id_list = _csv_list(emp_ids)
+    email_list = _csv_list(emails)
+    chip_ors: List[Dict] = []
+    if emp_id_list:
+        chip_ors.append({"emp_id": {"$in": emp_id_list}})
+    if email_list:
+        email_regexes = [re.compile(f"^{re.escape(e)}$", re.IGNORECASE) for e in email_list]
+        chip_ors.append({"email": {"$in": email_regexes}})
+    if q:
+        chip_ors.append({"name": {"$regex": q, "$options": "i"}})
+        chip_ors.append({"email": {"$regex": q, "$options": "i"}})
+    if chip_ors:
+        query["$or"] = chip_ors
+    items = await db.contacts.find(query, {"_id": 0, "password_hash": 0, "password_encrypted": 0}).to_list(10000)
+    items = await _enrich_contacts_with_team(items)
+
+    # Resolve permission set names once
+    pset_ids: set = set()
+    for c in items:
+        for sid in (c.get("permission_set_ids") or []):
+            pset_ids.add(sid)
+    pset_label_by_id: Dict[str, str] = {}
+    if pset_ids:
+        docs = await db.permission_sets.find(
+            {"id": {"$in": list(pset_ids)}},
+            {"_id": 0, "id": 1, "name": 1, "title": 1, "numeric_id": 1, "seq_no": 1},
+        ).to_list(len(pset_ids))
+        for p in docs:
+            num = p.get("numeric_id") or p.get("seq_no")
+            nm = p.get("name") or p.get("title") or "Untitled"
+            pset_label_by_id[p["id"]] = f"#{num} {nm}" if num is not None else nm
+
+    def _pset_label(c):
+        return ", ".join(
+            pset_label_by_id.get(sid, sid) for sid in (c.get("permission_set_ids") or [])
+        )
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Employees"
+    headers = [
+        "Name", "Emp ID", "Email", "Phone ISD", "Phone", "Role", "Team",
+        "Manager(s)", "DOJ", "Permission Sets", "Status", "Created On", "Last Login",
+    ]
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill("solid", fgColor="EC9324")
+    for i, h in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=i, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+    for r_idx, c in enumerate(items, start=2):
+        vals = [
+            c.get("name", ""), c.get("emp_id", ""), c.get("email", ""),
+            c.get("phone_isd", ""), c.get("phone", ""),
+            c.get("role", ""), c.get("team_name") or "",
+            ", ".join(c.get("manager_names") or []),
+            c.get("doj") or "", _pset_label(c), c.get("status", ""),
+            c.get("created_on", ""), c.get("last_login") or "",
+        ]
+        for c_idx, val in enumerate(vals, start=1):
+            ws.cell(row=r_idx, column=c_idx, value=val)
+    widths = [24, 12, 30, 10, 16, 14, 20, 28, 12, 28, 10, 22, 22]
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    ws.freeze_panes = "A2"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    filename = f"employees_{datetime.now(timezone.utc).date().isoformat()}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 

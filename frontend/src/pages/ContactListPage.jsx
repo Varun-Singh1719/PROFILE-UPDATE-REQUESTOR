@@ -296,8 +296,9 @@ function BulkUploadModal({ open, onClose, onComplete }) {
 
   const pickFile = (f) => {
     if (!f) return;
-    if (!f.name.toLowerCase().endsWith(".xlsx")) {
-      notify.error("Only .xlsx files are supported");
+    const lower = f.name.toLowerCase();
+    if (!lower.endsWith(".xlsx") && !lower.endsWith(".csv")) {
+      notify.error("Only .xlsx or .csv files are supported");
       return;
     }
     setFile(f);
@@ -311,10 +312,10 @@ function BulkUploadModal({ open, onClose, onComplete }) {
     pickFile(f);
   };
 
-  const downloadTemplate = async () => {
+  const downloadTemplate = async (fmt = "xlsx") => {
     const busyToken = __busyBridge.start("Downloading template…");
     try {
-      const r = await authedFetch("/contacts/sample-template");
+      const r = await authedFetch(`/contacts/sample-template?format=${fmt}`);
       if (!r.ok) {
         let detail = `HTTP ${r.status}`;
         try { const j = await r.json(); if (j?.detail) detail = j.detail; } catch (e) { /* not JSON */ }
@@ -322,7 +323,7 @@ function BulkUploadModal({ open, onClose, onComplete }) {
         return;
       }
       const blob = await r.blob();
-      downloadBlob(blob, "employees_upload_template.xlsx");
+      downloadBlob(blob, `employees_upload_template.${fmt}`);
     } catch (e) {
       notify.error(`Could not download template: ${e?.message || "network error"}`);
     } finally {
@@ -382,24 +383,82 @@ function BulkUploadModal({ open, onClose, onComplete }) {
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Upload sx={{ fontSize: 18 }} className="text-[#ec9324]"/> Upload Employees (.xlsx)
+            <Upload sx={{ fontSize: 18 }} className="text-[#ec9324]"/> Upload Employees (.csv or .xlsx)
           </DialogTitle>
           <DialogDescription>
-            Bulk-add employees from an Excel file. Download the sample template to see the required columns.
+            Bulk-add employees from a CSV or Excel file. Download the sample template to see the required columns.
           </DialogDescription>
         </DialogHeader>
 
         {!result && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Button
-                type="button" variant="outline" onClick={downloadTemplate}
-                className="border-[#ec9324] text-[#ec9324] hover:bg-[#ec9324]/10"
-                data-testid="download-sample-template-btn"
-              >
-                <FileSpreadsheet sx={{ fontSize: 14 }} className="mr-2"/> Download Sample Template
-              </Button>
-              <span className="text-xs text-gray-500">Only <b>.xlsx</b> files · Max ~5000 rows recommended</span>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button" variant="outline" onClick={() => downloadTemplate("csv")}
+                  className="border-[#ec9324] text-[#ec9324] hover:bg-[#ec9324]/10"
+                  data-testid="download-sample-template-csv-btn"
+                >
+                  <FileDown sx={{ fontSize: 14 }} className="mr-2"/> CSV Template
+                </Button>
+                <Button
+                  type="button" variant="outline" onClick={() => downloadTemplate("xlsx")}
+                  className="border-[#ec9324] text-[#ec9324] hover:bg-[#ec9324]/10"
+                  data-testid="download-sample-template-btn"
+                >
+                  <FileSpreadsheet sx={{ fontSize: 14 }} className="mr-2"/> XLSX Template
+                </Button>
+              </div>
+              <span className="text-xs text-gray-500"><b>.csv</b> or <b>.xlsx</b> · Max ~5000 rows recommended</span>
+            </div>
+
+            {/* Example preview — mirrors the Add Employee form fields */}
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <div className="bg-gray-50 px-3 py-2 text-[11px] font-semibold text-gray-600 uppercase tracking-wide">
+                Example rows (matches the Add Employee form)
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[11px]">
+                  <thead className="bg-gray-100 text-gray-700">
+                    <tr>
+                      <th className="px-2 py-1.5 text-left font-semibold">Name</th>
+                      <th className="px-2 py-1.5 text-left font-semibold">Email</th>
+                      <th className="px-2 py-1.5 text-left font-semibold">Phone ISD</th>
+                      <th className="px-2 py-1.5 text-left font-semibold">Phone</th>
+                      <th className="px-2 py-1.5 text-left font-semibold">DOJ</th>
+                      <th className="px-2 py-1.5 text-left font-semibold">Employee ID</th>
+                      <th className="px-2 py-1.5 text-left font-semibold">Role</th>
+                      <th className="px-2 py-1.5 text-left font-semibold">Permission Sets</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-gray-700">
+                    <tr className="border-t border-gray-100">
+                      <td className="px-2 py-1.5">John Smith</td>
+                      <td className="px-2 py-1.5">john.smith@company.com</td>
+                      <td className="px-2 py-1.5">+91</td>
+                      <td className="px-2 py-1.5">9876543210</td>
+                      <td className="px-2 py-1.5">01-15-2026</td>
+                      <td className="px-2 py-1.5">EMP001</td>
+                      <td className="px-2 py-1.5">Admin</td>
+                      <td className="px-2 py-1.5">Request Manager</td>
+                    </tr>
+                    <tr className="border-t border-gray-100">
+                      <td className="px-2 py-1.5">Sarah Johnson</td>
+                      <td className="px-2 py-1.5">sarah.johnson@company.com</td>
+                      <td className="px-2 py-1.5">+1</td>
+                      <td className="px-2 py-1.5">5551234567</td>
+                      <td className="px-2 py-1.5">02-01-2026</td>
+                      <td className="px-2 py-1.5">EMP002</td>
+                      <td className="px-2 py-1.5">Super Admin</td>
+                      <td className="px-2 py-1.5">Request Manager, #8</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div className="bg-amber-50 border-t border-amber-100 px-3 py-1.5 text-[10.5px] text-amber-800 leading-snug">
+                <b>Required:</b> Name, Email, DOJ (MM-DD-YYYY), Employee ID, Role.
+                &nbsp;<b>Optional:</b> Phone ISD (e.g. +91), Phone, Permission Sets (comma-separated names or #ids).
+              </div>
             </div>
 
             <div
@@ -414,13 +473,14 @@ function BulkUploadModal({ open, onClose, onComplete }) {
             >
               <Upload sx={{ fontSize: 32 }} className="mx-auto text-gray-400 mb-2"/>
               <div className="text-sm font-medium text-gray-700">
-                {file ? file.name : "Drag & drop your .xlsx file here"}
+                {file ? file.name : "Drag & drop your .csv or .xlsx file here"}
               </div>
               <div className="text-xs text-gray-500 mt-1">
                 {file ? `${(file.size / 1024).toFixed(1)} KB` : "or click to browse"}
               </div>
               <input
-                id="bulk-upload-input" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                id="bulk-upload-input" type="file"
+                accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
                 className="hidden" onChange={(e) => pickFile(e.target.files?.[0])}
                 data-testid="upload-file-input"
               />
@@ -815,14 +875,16 @@ export default function ContactListPage() {
     } catch (e) { notify.error(e?.response?.data?.detail || "Failed"); }
   };
 
-  const exportCsv = () => {
+  const exportEmployees = (fmt = "csv") => {
     const token = localStorage.getItem("access_token") || "";
     const params = new URLSearchParams();
     if (q) params.set("q", q);
+    if (empIds.length) params.set("emp_ids", empIds.join(","));
+    if (emails.length) params.set("emails", emails.join(","));
     if (role.length) params.set("role", role.join(","));
     if (status.length) params.set("status", status.join(","));
-    const busyToken = __busyBridge.start("Exporting CSV…");
-    fetch(`${API}/contacts/export.csv?${params.toString()}`, {
+    const busyToken = __busyBridge.start(`Exporting ${fmt.toUpperCase()}…`);
+    fetch(`${API}/contacts/export.${fmt}?${params.toString()}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     }).then(async (resp) => {
       if (!resp.ok) { notify.error("Export failed"); return; }
@@ -830,12 +892,14 @@ export default function ContactListPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `employees_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `employees_${new Date().toISOString().slice(0, 10)}.${fmt}`;
       a.click();
       URL.revokeObjectURL(url);
     }).catch(() => notify.error("Export failed"))
       .finally(() => __busyBridge.stop(busyToken));
   };
+  // Legacy alias kept so nothing else in this file breaks.
+  const exportCsv = () => exportEmployees("csv");
 
   const toggleStatus = async (c) => {
     const next = c.status === "Active" ? "Inactive" : "Active";
@@ -935,21 +999,32 @@ export default function ContactListPage() {
             </DropdownMenu>
           )}
           {permExport.isVisible && (
-            <div className="relative group">
-              <button
-                type="button"
-                onClick={exportCsv}
-                data-testid="export-csv-btn"
-                aria-label="Export CSV"
-                disabled={!permExport.canUse}
-                className="relative inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-100 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                <Download sx={{ fontSize: 20 }}/>
-              </button>
-              <span className="pointer-events-none absolute top-full mt-1.5 right-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
-                Export CSV
-              </span>
-            </div>
+            <DropdownMenu>
+              <div className="relative group">
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    data-testid="export-csv-btn"
+                    aria-label="Export"
+                    disabled={!permExport.canUse}
+                    className="relative inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-100 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <Download sx={{ fontSize: 20 }}/>
+                  </button>
+                </DropdownMenuTrigger>
+                <span className="pointer-events-none absolute top-full mt-1.5 right-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+                  Export Employees
+                </span>
+              </div>
+              <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuItem onClick={() => exportEmployees("csv")} data-testid="export-csv-menu">
+                  <FileDown sx={{ fontSize: 14 }} className="mr-2 text-gray-600"/> Export as CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => exportEmployees("xlsx")} data-testid="export-xlsx-menu">
+                  <FileSpreadsheet sx={{ fontSize: 14 }} className="mr-2 text-gray-600"/> Export as XLSX
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
           {permImport.isVisible && (
             <div className="relative group">

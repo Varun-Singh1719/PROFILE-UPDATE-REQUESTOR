@@ -1,27 +1,28 @@
-"""Bulk upload (Excel .xlsx) for Employees / Contacts.
+"""Bulk upload (Excel .xlsx / CSV) for Employees / Contacts.
 
 Endpoints:
-  GET  /api/contacts/sample-template                — download .xlsx template (6 cols + 2 sample rows)
-  POST /api/contacts/bulk-upload                    — accept .xlsx, validate, partial-insert, return summary
+  GET  /api/contacts/sample-template?format=csv|xlsx — download blank template
+  POST /api/contacts/bulk-upload                    — accept .xlsx or .csv, validate, partial-insert, return summary
   GET  /api/contacts/upload-history                 — list past upload sessions (paginated)
   GET  /api/contacts/upload-history/{id}            — full upload session (with embedded errors)
   GET  /api/contacts/upload-history/{id}/error-report.xlsx — download per-row error report
 
-Schema (6 columns; all required except Phone):
-  Name, Email, Phone, DOJ (MM-DD-YYYY), Employee ID, Role
+Schema (8 columns; only Phone, Phone ISD and Permission Sets are optional):
+  Name, Email, Phone ISD, Phone, DOJ (MM-DD-YYYY), Employee ID, Role, Permission Sets
 """
 from __future__ import annotations
 
 import io
 import os
 import re
+import csv
 import uuid
 import logging
 from datetime import datetime, timezone, date
 from typing import Optional, Dict, Any, List
 
 from fastapi import Depends, HTTPException, UploadFile, File
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -34,8 +35,18 @@ from notifications import send_email, render_new_employee_email
 
 logger = logging.getLogger(__name__)
 
-# Canonical template column order. Phone is the only optional column.
-TEMPLATE_HEADERS = ["Name", "Email", "Phone", "DOJ", "Employee ID", "Role"]
+# Canonical template column order — matches the Add Employee form.
+# Only Phone, Phone ISD and Permission Sets are optional.
+TEMPLATE_HEADERS = [
+    "Name",
+    "Email",
+    "Phone ISD",
+    "Phone",
+    "DOJ",
+    "Employee ID",
+    "Role",
+    "Permission Sets",
+]
 REQUIRED_HEADERS = {"Name", "Email", "DOJ", "Employee ID", "Role"}
 VALID_ROLES = {"Super Admin", "Admin"}
 
@@ -43,8 +54,8 @@ VALID_ROLES = {"Super Admin", "Admin"}
 EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 
 SAMPLE_ROWS = [
-    ["John Smith",    "john.smith@company.com",    "9876543210", "01-15-2026", "EMP001", "Admin"],
-    ["Sarah Johnson", "sarah.johnson@company.com", "9876543211", "02-01-2026", "EMP002", "Admin"],
+    ["John Smith",    "john.smith@company.com",    "+91", "9876543210", "01-15-2026", "EMP001", "Admin",       "Request Manager"],
+    ["Sarah Johnson", "sarah.johnson@company.com", "+1",  "5551234567", "02-01-2026", "EMP002", "Super Admin", "Request Manager, Team Manager"],
 ]
 
 
@@ -81,8 +92,93 @@ def _cell_text(v) -> str:
 
 # ---------- Sample template ----------
 
+def _normalize_isd(raw) -> str:
+    """Coerce '+91', '91', or '+91  ' → '+91'. Blank → ''."""
+    s = str(raw or "").strip()
+    if not s:
+        return ""
+    if not s.startswith("+"):
+        s = "+" + s.lstrip("+")
+    # Strip any non-digit after the leading +
+    return "+" + re.sub(r"\D", "", s)
+
+
+async def _resolve_permission_sets(raw) -> tuple[List[str], List[str]]:
+    """Parse a Permission Sets cell → (resolved_ids, unknown_tokens).
+
+    Accepts a comma / semicolon / pipe delimited list of either:
+      • permission set names (e.g. "Request Manager")
+      • numeric ids (e.g. "8" or "#8")
+      • internal uuid ids (e.g. "pset-abc123…")
+    """
+    if raw is None:
+        return [], []
+    s = str(raw).strip()
+    if not s:
+        return [], []
+    tokens = [t.strip() for t in re.split(r"[,;|]", s) if t and t.strip()]
+    if not tokens:
+        return [], []
+
+    # Load all sets once — small collection.
+    sets = await db.permission_sets.find(
+        {}, {"_id": 0, "id": 1, "name": 1, "title": 1, "numeric_id": 1, "seq_no": 1},
+    ).to_list(500)
+    by_id = {p["id"]: p for p in sets}
+    by_name = {(p.get("name") or p.get("title") or "").lower(): p for p in sets if (p.get("name") or p.get("title"))}
+    by_numeric = {}
+    for p in sets:
+        n = p.get("numeric_id") or p.get("seq_no")
+        if n is not None:
+            by_numeric[str(n)] = p
+
+    resolved: List[str] = []
+    unknown: List[str] = []
+    for t in tokens:
+        # Try uuid-style id first
+        if t in by_id:
+            pid = by_id[t]["id"]
+        else:
+            # numeric with or without leading #
+            num = t.lstrip("#").strip()
+            hit = by_numeric.get(num) if num.isdigit() else None
+            if not hit:
+                hit = by_name.get(t.lower())
+            pid = hit["id"] if hit else None
+        if pid:
+            if pid not in resolved:
+                resolved.append(pid)
+        else:
+            unknown.append(t)
+    return resolved, unknown
+
+
 @api_router.get("/contacts/sample-template")
-async def download_sample_template(user=Depends(require_role("Super Admin"))):
+async def download_sample_template(format: str = "xlsx", user=Depends(require_role("Super Admin"))):
+    fmt = (format or "xlsx").lower()
+    if fmt not in ("csv", "xlsx"):
+        raise HTTPException(400, "format must be 'csv' or 'xlsx'")
+
+    # ---------- CSV branch ----------
+    if fmt == "csv":
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(TEMPLATE_HEADERS)
+        for row in SAMPLE_ROWS:
+            w.writerow(row)
+        # Trailing instructions row (commented out via a first column marker)
+        w.writerow([])
+        w.writerow(["# Instructions:"])
+        w.writerow(["# Required: Name, Email, DOJ (MM-DD-YYYY), Employee ID, Role (Super Admin | Admin)."])
+        w.writerow(["# Optional: Phone ISD (e.g. +91), Phone, Permission Sets (comma-separated names or #ids, e.g. \"Request Manager, #8\")."])
+        filename = "employees_upload_template.csv"
+        return Response(
+            content=buf.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    # ---------- XLSX branch ----------
     wb = Workbook()
     ws = wb.active
     ws.title = "Employees"
@@ -103,23 +199,26 @@ async def download_sample_template(user=Depends(require_role("Super Admin"))):
         for col_idx, val in enumerate(row, start=1):
             ws.cell(row=row_idx, column=col_idx, value=val)
 
-    widths = [22, 32, 14, 14, 14, 12]
+    # Widths — one per header, tuned so the file opens without truncation.
+    widths = [22, 32, 10, 14, 14, 14, 12, 28]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
     ws.freeze_panes = "A2"
 
-    # Instructions sheet — explains required vs optional + role/doj formats.
+    # Instructions sheet — explains required vs optional + role / doj / permission set formats.
     notes = wb.create_sheet("Instructions")
     notes_lines = [
         ("Field", "Required?", "Notes"),
         ("Name", "Yes", "Full name of the employee."),
         ("Email", "Yes", "Unique. Will be the login email. Standard email format."),
-        ("Phone", "No", "Contact number — digits only."),
+        ("Phone ISD", "No", "Country code with the leading +, e.g. +91 for India, +1 for US. May be left blank."),
+        ("Phone", "No", "Local mobile number — digits only."),
         ("DOJ", "Yes", "Date of Joining. Format: MM-DD-YYYY (e.g. 01-15-2026). Excel date cells are also accepted."),
         ("Employee ID", "Yes", "Unique. Internal HR / payroll code (e.g. EMP001)."),
         ("Role", "Yes", "One of: Super Admin, Admin."),
+        ("Permission Sets", "No", "Comma-, semicolon- or pipe-separated list. Each item can be a permission-set NAME (e.g. \"Request Manager\") or a numeric id with or without # (e.g. \"8\" or \"#8\"). Unknown names are reported per-row so the rest of the upload still goes through."),
         ("", "", ""),
-        ("System-generated fields", "", "Do NOT include — handled automatically: Internal Record ID, Created Date, Created By, Last Updated Date, Password. Permission Set is assigned later via the Edit Employee screen."),
+        ("System-generated fields", "", "Do NOT include — handled automatically: Internal Record ID, Created Date, Created By, Last Updated Date, Password."),
     ]
     for r_idx, row in enumerate(notes_lines, start=1):
         for c_idx, val in enumerate(row, start=1):
@@ -152,33 +251,76 @@ def _row_to_dict(headers: List[str], row: tuple) -> Dict[str, Any]:
     return out
 
 
+def _read_rows_any(file_bytes: bytes, filename: str) -> tuple[List[str], List[tuple]]:
+    """Return (headers, list_of_rows) from either a .xlsx or .csv payload.
+
+    Rows are returned as tuples so the downstream `_row_to_dict` helper works
+    unchanged for both formats.
+    """
+    fname = (filename or "").lower()
+    if fname.endswith(".xlsx"):
+        try:
+            wb = load_workbook(io.BytesIO(file_bytes), data_only=True, read_only=True)
+        except Exception as e:
+            raise HTTPException(400, f"Could not read .xlsx file: {e}")
+        ws = wb.active
+        rows_iter = ws.iter_rows(values_only=True)
+        try:
+            header_row = next(rows_iter)
+        except StopIteration:
+            raise HTTPException(400, "File is empty")
+        headers = [(_cell_text(h)) for h in header_row]
+        while headers and not headers[-1]:
+            headers.pop()
+        rows = [tuple(r) for r in rows_iter]
+        return headers, rows
+
+    if fname.endswith(".csv"):
+        # Decode with a tolerant encoding chain — HR files often come from
+        # Excel export which can be utf-8-sig or cp1252.
+        text = None
+        for enc in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
+            try:
+                text = file_bytes.decode(enc)
+                break
+            except UnicodeDecodeError:
+                continue
+        if text is None:
+            raise HTTPException(400, "Could not decode CSV file (unknown encoding)")
+        reader = csv.reader(io.StringIO(text))
+        rows_all = list(reader)
+        # Skip blank leading rows
+        rows_all = [r for r in rows_all if any((c or "").strip() for c in r)]
+        # Skip comment-only rows (first cell begins with '#') — the CSV
+        # template embeds trailing instruction lines starting with '#'.
+        rows_all = [r for r in rows_all if not (r and str(r[0]).strip().startswith("#"))]
+        if not rows_all:
+            raise HTTPException(400, "File is empty")
+        header_row = rows_all[0]
+        headers = [(_cell_text(h)) for h in header_row]
+        while headers and not headers[-1]:
+            headers.pop()
+        rows = [tuple(r) for r in rows_all[1:]]
+        return headers, rows
+
+    raise HTTPException(400, "Only .xlsx or .csv files are supported")
+
+
 @api_router.post("/contacts/bulk-upload")
 async def bulk_upload_contacts(
     file: UploadFile = File(...),
     user=Depends(require_role("Super Admin")),
 ):
-    if not file.filename or not file.filename.lower().endswith(".xlsx"):
-        raise HTTPException(400, "Only .xlsx files are supported")
+    if not file.filename or not (
+        file.filename.lower().endswith(".xlsx") or file.filename.lower().endswith(".csv")
+    ):
+        raise HTTPException(400, "Only .xlsx or .csv files are supported")
 
     raw = await file.read()
     if not raw:
         raise HTTPException(400, "Empty file")
 
-    try:
-        wb = load_workbook(io.BytesIO(raw), data_only=True, read_only=True)
-        ws = wb.active
-    except Exception as e:
-        raise HTTPException(400, f"Could not read .xlsx file: {e}")
-
-    rows_iter = ws.iter_rows(values_only=True)
-    try:
-        header_row = next(rows_iter)
-    except StopIteration:
-        raise HTTPException(400, "File is empty")
-
-    headers = [(_cell_text(h)) for h in header_row]
-    while headers and not headers[-1]:
-        headers.pop()
+    headers, data_rows = _read_rows_any(raw, file.filename)
     header_set = set(headers)
     missing = REQUIRED_HEADERS - header_set
     if missing:
@@ -200,7 +342,8 @@ async def bulk_upload_contacts(
     errors: List[Dict[str, Any]] = []
     total = 0
 
-    for excel_row_num, row in enumerate(rows_iter, start=2):  # row 1 = header
+    for row_offset, row in enumerate(data_rows, start=2):  # row 1 = header
+        excel_row_num = row_offset
         # Skip fully empty rows
         if not row or all((v is None or _cell_text(v) == "") for v in row):
             continue
@@ -209,10 +352,12 @@ async def bulk_upload_contacts(
 
         name = _cell_text(d.get("Name"))
         email = _cell_text(d.get("Email")).lower()
+        phone_isd = _normalize_isd(d.get("Phone ISD"))
         phone = _cell_text(d.get("Phone"))
         doj_raw = d.get("DOJ")
         emp_id = _cell_text(d.get("Employee ID"))
         role = _cell_text(d.get("Role"))
+        psets_raw = d.get("Permission Sets")
 
         row_errors: List[str] = []
         # Mandatory field validation
@@ -234,6 +379,14 @@ async def bulk_upload_contacts(
             row_errors.append("DOJ is required")
         elif not doj_iso:
             row_errors.append("DOJ must be in MM-DD-YYYY format")
+
+        # Permission sets — resolve to internal ids, unknown values become
+        # per-row errors so users know exactly which names to fix.
+        resolved_pset_ids, unknown_psets = await _resolve_permission_sets(psets_raw)
+        if unknown_psets:
+            row_errors.append(
+                f"Unknown Permission Set(s): {', '.join(unknown_psets)}"
+            )
 
         # Uniqueness — check in-file dup BEFORE system-exists so users see the
         # more accurate reason when two rows in the same file collide.
@@ -268,10 +421,11 @@ async def bulk_upload_contacts(
             "email": email,
             "name": name,
             "phone": phone or "",
+            "phone_isd": phone_isd or "",
             "role": role,
             "emp_id": emp_id,
             "doj": doj_iso,
-            "permission_set_ids": [],
+            "permission_set_ids": resolved_pset_ids,
             "status": "Active",
             "created_on": now_iso(),
             "last_login": None,

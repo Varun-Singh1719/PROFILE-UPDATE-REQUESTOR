@@ -417,10 +417,15 @@ export default function TeamsPage() {
           <DialogHeader>
             <DialogTitle>{editing ? "Edit Team" : "Add New Team"}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={submit} className="space-y-4">
+          <form onSubmit={submit} className="space-y-5 pt-2">
             <div className="grid grid-cols-[1fr_96px] gap-3 items-start">
-              <div>
-                <Label htmlFor="team-name-input">Team Name *</Label>
+              <div className="relative">
+                <label
+                  htmlFor="team-name-input"
+                  className="absolute -top-2 left-3 px-1.5 bg-white text-[11px] font-medium text-gray-500 z-10 pointer-events-none"
+                >
+                  Team Name *
+                </label>
                 <Input
                   id="team-name-input"
                   required
@@ -428,25 +433,36 @@ export default function TeamsPage() {
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   placeholder="e.g. ProfiX North"
                   data-testid="team-name"
+                  className="h-11"
                 />
               </div>
-              <div>
-                <Label htmlFor="team-initials-input">Initials</Label>
+              <div className="relative">
+                <label
+                  htmlFor="team-initials-input"
+                  className="absolute -top-2 left-3 px-1.5 bg-white text-[11px] font-medium text-gray-500 z-10 pointer-events-none"
+                >
+                  Initials
+                </label>
                 <Input
                   id="team-initials-input"
                   value={form.initials}
                   onChange={(e) => setForm({ ...form, initials: sanitizeInitials(e.target.value) })}
                   placeholder={teamInitials(form.name)}
                   maxLength={2}
-                  className="uppercase"
+                  className="uppercase h-11"
                   data-testid="team-initials"
                   aria-label="Team initials override"
                 />
               </div>
             </div>
 
-            <div>
-              <Label htmlFor="team-description-input">Description</Label>
+            <div className="relative">
+              <label
+                htmlFor="team-description-input"
+                className="absolute -top-2 left-3 px-1.5 bg-white text-[11px] font-medium text-gray-500 z-10 pointer-events-none"
+              >
+                Description
+              </label>
               <Textarea
                 id="team-description-input"
                 value={form.description}
@@ -454,11 +470,14 @@ export default function TeamsPage() {
                 placeholder="What does this team do?"
                 rows={3}
                 data-testid="team-description"
+                className="pt-3"
               />
             </div>
 
-            <div>
-              <Label>Manager(s)</Label>
+            <div className="relative">
+              <label className="absolute -top-2 left-3 px-1.5 bg-white text-[11px] font-medium text-gray-500 z-10 pointer-events-none">
+                Manager(s)
+              </label>
               <MultiSelectFilter
                 label="Managers"
                 options={managerOptions}
@@ -495,8 +514,10 @@ export default function TeamsPage() {
               )}
             </div>
 
-            <div>
-              <Label>Team Members</Label>
+            <div className="relative">
+              <label className="absolute -top-2 left-3 px-1.5 bg-white text-[11px] font-medium text-gray-500 z-10 pointer-events-none">
+                Team Members
+              </label>
               <MultiSelectFilter
                 label="Members"
                 options={memberOptions}
