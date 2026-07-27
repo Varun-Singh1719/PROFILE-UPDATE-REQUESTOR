@@ -247,9 +247,13 @@ export default function MultiSelectFilter({
           // Dialog's DismissableLayer (which listens at document level) never
           // sees them as "outside" the dialog. Fixes the popup collapsing on
           // option click when the MultiSelectFilter is used inside a modal.
+          //
+          // NOTE: we intentionally do NOT capture the `click` event — capturing
+          // it would stop it from reaching the option button's own onClick and
+          // the row would never toggle. pointerdown/mousedown are enough to
+          // shield Radix's dismiss layer.
           onPointerDownCapture={(e) => e.stopPropagation()}
           onMouseDownCapture={(e) => e.stopPropagation()}
-          onClickCapture={(e) => e.stopPropagation()}
           style={{
             position: "fixed",
             top: popupPos.direction === "down" ? popupPos.top : undefined,
