@@ -8101,3 +8101,31 @@ agent_communication:
         bookings, workstation bookings, my-workspace dashboard, meeting
         rooms, floor plans) and confirm timestamps written after this
         change carry the `+05:30` offset.
+    - agent: "testing"
+      message: |
+        ✅ EMPLOYEE LIST PERMISSION-SET FILTER BUG FIXES VERIFIED (Jul 29 2026)
+        
+        Tested two bug fixes on the Employee List page (/admin/contacts):
+        
+        **BUG 1 — Deep-link permission-set filter kept resetting: ✅ PASS**
+        - Direct URL navigation to /admin/contacts?permission_set=pset-f63e9bc4-a8f6-4541-a0e8-d38bb92a3cd6
+        - Row count STABLE at 5 rows (no flicker detected)
+        - Verified at 500ms, 3s, and 6s after navigation
+        - Footer consistently shows "Showing 1-5 of 5 Employees"
+        - NO race condition between overlapping API requests
+        - Fix: psetFilter state initialized synchronously from window.location.search
+        
+        **BUG 2 — Filter chip label was ambiguous: ✅ PASS**
+        - Chip now shows: "HR - Workspace Manager" + separate "ID 2" pill + × close button
+        - NO occurrence of ambiguous "2 - HR - Workspace Manager" format
+        - ID pill has correct styling (white background, orange border)
+        - Close button removes filter and URL parameter correctly
+        - Re-applying filter via dropdown maintains new chip format
+        
+        **REGRESSION TESTS: ✅ ALL PASS**
+        - Chip close button removes URL parameter and clears filter
+        - Re-applying filter via Permission Set dropdown works correctly
+        - Chip format remains consistent after re-application
+        - List correctly narrows to 5 rows when filter is re-applied
+        
+        Both bug fixes are working as specified. No issues found.
