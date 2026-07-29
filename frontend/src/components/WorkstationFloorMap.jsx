@@ -51,6 +51,12 @@ const WorkstationFloorMap = ({
   highlightRoomId = null,
   rooms = [],
   roomBookingsByRoom = {},
+  // Optional map of room_id → currently-active booking (a booking whose
+  // [start_at, end_at] spans "now"). When provided, room boxes are colored
+  // RED only for rooms currently occupied at the present moment (rather than
+  // "has any booking today"). Rooms with no active booking right now render
+  // GREEN, even if they have earlier/later bookings on the same date.
+  roomOccupiedNowByRoom = null,
   // Optional callback fired when the user clicks a meeting-room box on the
   // floor. Signature: `(room, bookingsForThatRoom) => void`. When provided,
   // room boxes render with a pointer cursor so their affordance is clear.
@@ -371,20 +377,36 @@ const WorkstationFloorMap = ({
                     {rooms.map((r) => {
                       const bookings = roomBookingsByRoom[r.id] || [];
                       const hasBookings = bookings.length > 0;
+                      // When a `roomOccupiedNowByRoom` map is provided, use
+                      // current-time occupancy (RED only if a booking is
+                      // running RIGHT NOW). Otherwise fall back to the legacy
+                      // "has any booking on this date" behavior so callers
+                      // that don't opt-in remain unchanged.
+                      const activeNowBooking = roomOccupiedNowByRoom
+                        ? (roomOccupiedNowByRoom[r.id] || null)
+                        : null;
+                      const isOccupiedNow = roomOccupiedNowByRoom
+                        ? Boolean(activeNowBooking)
+                        : hasBookings;
                       const isHighlighted = highlightRoomId && r.id === highlightRoomId;
                       // Highlighted (currently-focused via approval card) wins
                       // over booking/available colours to make the focus obvious.
-                      const borderColor = isHighlighted ? '#ec9324' : (hasBookings ? '#dc2626' : '#10b981');
+                      const borderColor = isHighlighted ? '#ec9324' : (isOccupiedNow ? '#dc2626' : '#10b981');
                       const bg = isHighlighted
                         ? 'rgba(236,147,36,0.28)'
-                        : (hasBookings ? 'rgba(220,38,38,0.10)' : 'rgba(16,185,129,0.06)');
+                        : (isOccupiedNow ? 'rgba(220,38,38,0.10)' : 'rgba(16,185,129,0.06)');
                       const labelBg = isHighlighted
                         ? 'rgba(236,147,36,0.95)'
-                        : (hasBookings ? 'rgba(220,38,38,0.95)' : 'rgba(16,185,129,0.95)');
+                        : (isOccupiedNow ? 'rgba(220,38,38,0.95)' : 'rgba(16,185,129,0.95)');
                       // Shape the room object for RoomBoxLabel — it expects
                       // `{ room_id, name, capacity }` (label uses name + seats
                       // and the tooltip uses `room.name`).
                       const roomForLabel = { room_id: r.id, name: r.name, capacity: r.capacity };
+                      // Prefer the currently-running booking for the hover
+                      // tooltip (so users see WHY it is red right now); fall
+                      // back to the first upcoming booking for context.
+                      const hoverBooking = activeNowBooking
+                        || (hasBookings ? bookings[0] : null);
                       return (
                         <div
                           key={r.id}
@@ -412,9 +434,9 @@ const WorkstationFloorMap = ({
                             room={roomForLabel}
                             scale={scale}
                             labelBg={labelBg}
-                            occupiedNow={false}
-                            blocked={hasBookings}
-                            hoverBooking={hasBookings ? bookings[0] : null}
+                            occupiedNow={isOccupiedNow}
+                            blocked={false}
+                            hoverBooking={hoverBooking}
                           />
                         </div>
                       );

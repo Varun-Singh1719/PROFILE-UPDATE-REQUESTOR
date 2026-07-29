@@ -2,7 +2,7 @@
 """Quick verification of reopen count behavior"""
 import requests
 
-BASE_URL = "https://45a791e5-04ad-496c-960e-53a2e2bbd58e.preview.emergentagent.com/api"
+BASE_URL = "https://workspace-tracker-9.preview.emergentagent.com/api"
 ADMIN_EMAIL = "admin@ticketing.com"
 ADMIN_PASSWORD = "Admin@123"
 

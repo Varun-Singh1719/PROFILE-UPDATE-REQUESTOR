@@ -28,7 +28,7 @@ import requests
 from typing import Optional
 
 # Backend URL from frontend/.env
-BACKEND_URL = "https://45a791e5-04ad-496c-960e-53a2e2bbd58e.preview.emergentagent.com"
+BACKEND_URL = "https://workspace-tracker-9.preview.emergentagent.com"
 API_BASE = f"{BACKEND_URL}/api"
 
 # Test credentials from /app/memory/test_credentials.md

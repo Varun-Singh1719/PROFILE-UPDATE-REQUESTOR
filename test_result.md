@@ -103,6 +103,16 @@
 #====================================================================================================
 
 user_problem_statement: |
+  Workspace Manager >> Floor Layout — Meeting room availability by CURRENT TIME (Jul 29 2026):
+  Previously the meeting-room boxes on the Floor Layout view were coloured
+  purely by "has any booking on the selected date" (RED if any booking existed
+  for the day, GREEN otherwise). User wants time-aware availability:
+    • If a meeting is running RIGHT NOW (start_at <= now < end_at) → RED
+    • If nothing is currently in progress → GREEN, even if there are earlier
+      or later bookings on the same day
+  Auto-refresh so the room flips back to GREEN when the meeting ends.
+  Workstation coloring is unchanged.
+
   Dashboard responsiveness bug (Jul 24 2026):
   User reported that the Dashboard screen (organisation-wide Workspace Manager
   dashboard + personal My Workspace dashboard) doesn't fit well across
@@ -371,7 +381,51 @@ backend:
             the new Date rule is evaluated against the request's booking date.
 
 frontend:
-  - task: "MultiSelectFilter — portal-based popup (fix dropdown clipped inside filter bar)"
+  - task: "Floor Layout — Meeting room availability by CURRENT TIME (Jul 29 2026)"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/FloorLayoutPage.jsx, frontend/src/components/WorkstationFloorMap.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            BUG: On Workspace Manager > Floor Layout the meeting-room boxes
+            were coloured based on the selected DATE only: any booking that
+            fell on the date made the room RED all day. Users expected the
+            colour to reflect the CURRENT time — a room should stay GREEN
+            until a meeting actually starts, turn RED while the meeting is
+            in progress, and flip back to GREEN as soon as the meeting ends
+            (even if more meetings are scheduled later in the day).
+
+            FIX:
+            1. FloorLayoutPage.jsx (PlanInteractiveView)
+               - Reused the existing `nowTick` (1-minute interval) to derive
+                 a new `roomOccupiedNowByRoom` map that keeps only bookings
+                 whose [start_at, end_at] window spans "now". Cancelled
+                 bookings are excluded. The earliest-starting active booking
+                 wins in the (unlikely) overlap case for deterministic
+                 tooltip content.
+               - Passed the new map to WorkstationFloorMap via a new
+                 `roomOccupiedNowByRoom` prop.
+            2. WorkstationFloorMap.jsx
+               - Added `roomOccupiedNowByRoom` prop (defaults to null →
+                 legacy "has any booking" behaviour is preserved for other
+                 callers).
+               - When the map is provided, colours the room RED only when
+                 a booking is running RIGHT NOW; the RoomBoxLabel tooltip
+                 now surfaces the running meeting details (or falls back to
+                 the first upcoming meeting when nothing is running).
+               - Passed `occupiedNow={isOccupiedNow}` (was hard-coded false)
+                 and `blocked={false}` (was `hasBookings`) so the label
+                 badge matches the room state.
+
+            IMPACT: Workstation seats and every other page using
+            WorkstationFloorMap are UNAFFECTED — the new prop is opt-in and
+            defaults to null, preserving prior behaviour.
+
     implemented: true
     working: "NA"
     file: "frontend/src/components/ui/MultiSelectFilter.jsx"
@@ -637,8 +691,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Email Template View modal — Edit button + X close overlap fix"
-    - "Dashboard responsiveness fix — WorkspaceOverallDashboard + MyWorkspaceDashboard"
+    - "Floor Layout — Meeting room availability by CURRENT TIME (Jul 29 2026)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -1882,7 +1935,7 @@ frontend:
             - "View Booking" button navigates to /workspace-manager/bookings but without ?bookingId= parameter in URL (navigation works but query param missing). This is a minor issue that doesn't affect the core bug fix verification.
             
             **CONSOLE ERRORS:**
-            - 401 errors detected for PDF loading (https://profix-qa-run.preview.emergentagent.com/api/floor-plans/pdf/...) - this is a backend PDF authentication issue, not related to the bug fixes
+            - 401 errors detected for PDF loading (https://workspace-tracker-9.preview.emergentagent.com/api/floor-plans/pdf/...) - this is a backend PDF authentication issue, not related to the bug fixes
             - No critical JavaScript errors detected
             
             Test date used: 2026-07-03 (date with existing workstation bookings)

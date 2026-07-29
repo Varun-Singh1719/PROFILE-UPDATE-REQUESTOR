@@ -342,6 +342,31 @@ function PlanInteractiveView({ plan, onBack, hideBack = false, embedded = false 
     const t = setInterval(() => setNowTick(Date.now()), 60_000);
     return () => clearInterval(t);
   }, []);
+
+  // Map<room_id, activeBooking> for rooms currently mid-meeting. Drives the
+  // meeting-room colour on the floor: RED when a booking's [start_at, end_at]
+  // window spans "now", GREEN otherwise. Recomputes every minute via nowTick
+  // so rooms auto-flip back to green when a meeting ends.
+  const roomOccupiedNowByRoom = useMemo(() => {
+    const now = nowTick;
+    const map = {};
+    for (const rb of (roomBookings || [])) {
+      if (rb.cancelled) continue;
+      if (!rb.start_at || !rb.end_at) continue;
+      const s = new Date(rb.start_at).getTime();
+      const e = new Date(rb.end_at).getTime();
+      if (isNaN(s) || isNaN(e)) continue;
+      if (s <= now && now < e) {
+        const existing = map[rb.room_id];
+        // Prefer the earliest-starting active booking (deterministic display).
+        if (!existing || new Date(existing.start_at).getTime() > s) {
+          map[rb.room_id] = rb;
+        }
+      }
+    }
+    return map;
+  }, [roomBookings, nowTick]);
+
   const filteredMeetings = useMemo(() => {
     const now = new Date(nowTick);
     const upcoming = (roomBookings || []).filter((rb) => {
@@ -388,6 +413,7 @@ function PlanInteractiveView({ plan, onBack, hideBack = false, embedded = false 
               disabled={false}
               rooms={availability.rooms || []}
               roomBookingsByRoom={roomBookingsByRoom}
+              roomOccupiedNowByRoom={roomOccupiedNowByRoom}
               onRoomClick={openRoomDetail}
               legendPreset="floor-layout"
               zoomToSeatIds={zoomTargetSeatIds}
