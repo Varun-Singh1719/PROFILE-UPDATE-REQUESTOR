@@ -70,8 +70,13 @@ export default function MultiSelectFilter({
   searchInTrigger = false,
   // In `searchInTrigger` mode, controls whether removable chips are rendered
   // below the trigger. Set to `false` when the caller wants to render its
-  // own chip strip (e.g. to use a different colour tone).
+  // own chip strip (e.g. to use a different colour tone) or wants a plain
+  // filter-style trigger with no chips at all.
   renderChipsBelow = true,
+  // In `searchInTrigger` mode, controls whether the small "N unit(s) selected"
+  // pill is shown inside the trigger. Set to `false` for classic filter
+  // triggers where the summary of picked options is preferred.
+  showCountBadge = true,
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -325,13 +330,13 @@ export default function MultiSelectFilter({
                        ${open ? "border-[#ec9324] ring-2 ring-[#ec9324]/30" : "border-gray-200 hover:border-gray-300"}
                        ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
           >
-            <span className="flex-1 min-w-0 flex items-center">
+            <span className="relative flex-1 min-w-0 flex items-center">
               <input
                 ref={searchInputRef}
                 type="text"
                 value={query}
                 disabled={disabled}
-                placeholder={placeholder}
+                placeholder={selectedOptions.length === 0 || (!showCountBadge && !renderChipsBelow) ? placeholder : ""}
                 onChange={(e) => { setQuery(e.target.value); if (!open) setOpen(true); }}
                 onFocus={() => { if (!disabled) setOpen(true); }}
                 onKeyDown={handleKeyDown}
@@ -344,9 +349,24 @@ export default function MultiSelectFilter({
                 className="w-full h-full bg-transparent outline-none text-gray-900 placeholder-gray-400
                            disabled:cursor-not-allowed"
               />
+              {/* Ghost overlay — shows a summary of the selection when the
+                  caller has opted out of BOTH the count badge and the chip
+                  strip (classic filter-style trigger). Hidden the moment the
+                  user starts typing so it never fights the input value. */}
+              {!showCountBadge && !renderChipsBelow && query === "" && selectedOptions.length > 0 && (
+                <span
+                  className="pointer-events-none absolute inset-0 flex items-center truncate text-gray-900 font-medium"
+                  title={selectedOptions.map((o) => o.label).join(", ")}
+                  aria-hidden="true"
+                >
+                  {selectedOptions.length <= maxSelectedLabels
+                    ? selectedOptions.map((o) => o.label).join(", ")
+                    : `${selectedOptions.slice(0, maxSelectedLabels).map((o) => o.label).join(", ")} +${selectedOptions.length - maxSelectedLabels}`}
+                </span>
+              )}
             </span>
             {/* Selected-count badge — sits inside the input, before the icons. */}
-            {selectedOptions.length > 0 && (
+            {showCountBadge && selectedOptions.length > 0 && (
               <span
                 className="shrink-0 inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold
                            bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/30 tabular-nums whitespace-nowrap"
