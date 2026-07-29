@@ -1,0 +1,266 @@
+[
+  {
+    "scenario": "Scenario D",
+    "endpoint": "/tickets?scope=all",
+    "expected": "200 - Team-scoped tickets",
+    "actual": "200 - Returned 0 rows",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "Scenario D",
+    "endpoint": "/contacts",
+    "expected": "403 - No manage.employees",
+    "actual": "403 - ",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "Scenario D",
+    "endpoint": "/permission-sets-v3",
+    "expected": "403 - No manage.permissions",
+    "actual": "403 - ",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "Scenario D",
+    "endpoint": "/floor-plans",
+    "expected": "403 - No desk_booking",
+    "actual": "403 - ",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "Scenario E",
+    "endpoint": "/floor-plans",
+    "expected": "200 - Has floor_layout.view",
+    "actual": "200 - Returned 1 rows",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "Scenario E",
+    "endpoint": "/workstation-requests?status=pending",
+    "expected": "200 - Pending workstation requests",
+    "actual": "200 - Returned 0 rows",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "Scenario E",
+    "endpoint": "/meeting-room-requests?status=pending",
+    "expected": "200 - Pending meeting room requests",
+    "actual": "200 - Returned 0 rows",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "Scenario E",
+    "endpoint": "/tickets?scope=all",
+    "expected": "403 - No profix.all_requests",
+    "actual": "200 - Returned 0 rows",
+    "status": "FAIL",
+    "details": "[]"
+  },
+  {
+    "scenario": "Scenario E",
+    "endpoint": "/contacts",
+    "expected": "403 - No manage.employees",
+    "actual": "403 - ",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "Scenario E",
+    "endpoint": "/permission-sets-v3",
+    "expected": "403 - No manage.permissions",
+    "actual": "403 - ",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "Scenario E",
+    "endpoint": "/email-templates",
+    "expected": "403 - No manage.email_templates",
+    "actual": "403 - ",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "Scenario H",
+    "endpoint": "/tickets?scope=all",
+    "expected": "200 - all_requests granted",
+    "actual": "200 - Returned 0 rows",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "Scenario J",
+    "endpoint": "/tickets?scope=all",
+    "expected": "200 - Union of both teams' tickets",
+    "actual": "200 - Returned 0 rows",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "Scenario K",
+    "endpoint": "/tickets?scope=all",
+    "expected": "200 - 0 or only own tickets",
+    "actual": "200 - Returned 0 rows",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "Scenario L (before delete)",
+    "endpoint": "/contacts",
+    "expected": "200 - Has manage.employees",
+    "actual": "200 - Returned 291 rows",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "Scenario L (after delete, fresh token)",
+    "endpoint": "/contacts",
+    "expected": "403 - Set deleted, should be 403",
+    "actual": "200 - Returned 291 rows",
+    "status": "FAIL",
+    "details": "[{\"id\":\"ab8c25e6-5823-46fe-937d-4dfe05924cec\",\"email\":\"admin@ticketing.com\",\"name\":\"Admin User\",\"phone\":\"9717377449\",\"role\":\"Super Admin\",\"status\":\"Active\",\"emp_id\":\"EMP-0001\",\"doj\":\"2024-01-01\",\"crea"
+  },
+  {
+    "scenario": "Scenario L (after delete, stale token)",
+    "endpoint": "/contacts",
+    "expected": "403 - Stale token should also be 403",
+    "actual": "200 - Returned 291 rows",
+    "status": "FAIL",
+    "details": "[{\"id\":\"ab8c25e6-5823-46fe-937d-4dfe05924cec\",\"email\":\"admin@ticketing.com\",\"name\":\"Admin User\",\"phone\":\"9717377449\",\"role\":\"Super Admin\",\"status\":\"Active\",\"emp_id\":\"EMP-0001\",\"doj\":\"2024-01-01\",\"crea"
+  },
+  {
+    "scenario": "Scenario M (before update)",
+    "endpoint": "/contacts",
+    "expected": "200 - Has manage.employees",
+    "actual": "200 - Returned 292 rows",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "Scenario M (after update, same token)",
+    "endpoint": "/contacts",
+    "expected": "403 - Should re-evaluate and return 403",
+    "actual": "403 - ",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "Scenario N (individual)",
+    "endpoint": "/me/permissions",
+    "expected": "access_level=individual",
+    "actual": "access_level=individual",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "Scenario N (team)",
+    "endpoint": "/me/permissions",
+    "expected": "access_level=team",
+    "actual": "access_level=None",
+    "status": "FAIL",
+    "details": ""
+  },
+  {
+    "scenario": "Scenario N (overall)",
+    "endpoint": "/me/permissions",
+    "expected": "access_level=overall",
+    "actual": "access_level=overall",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "Scenario O",
+    "endpoint": "/notifications/outbox",
+    "expected": "403 - Still gated by role='Super Admin' - MISMATCH",
+    "actual": "403 - ",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "URL Bypass",
+    "endpoint": "/floor-plans",
+    "expected": "403 - Profix-only user should not access /floor-plans",
+    "actual": "403 - ",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "URL Bypass",
+    "endpoint": "/workstations",
+    "expected": "403 - Profix-only user should not access /workstations",
+    "actual": "404 - ",
+    "status": "FAIL",
+    "details": "{\"detail\":\"Not Found\"}"
+  },
+  {
+    "scenario": "URL Bypass",
+    "endpoint": "/meeting-rooms",
+    "expected": "403 - Profix-only user should not access /meeting-rooms",
+    "actual": "404 - ",
+    "status": "FAIL",
+    "details": "{\"detail\":\"Not Found\"}"
+  },
+  {
+    "scenario": "URL Bypass",
+    "endpoint": "/workstation-bookings",
+    "expected": "403 - Profix-only user should not access /workstation-bookings",
+    "actual": "200 - Returned 222 rows",
+    "status": "FAIL",
+    "details": "[{\"id\":\"016fb039-6cc4-4910-a1d6-76ea2baabfab\",\"seq_no\":20001,\"plan_id\":\"dd9ea314-e698-4f5d-bf85-16c00724c5ad\",\"plan_name\":\"Tower C - 5th Floor\",\"seat_id\":\"G1\",\"seat_label\":\"G1\",\"date\":\"2026-07-03\",\"em"
+  },
+  {
+    "scenario": "URL Bypass",
+    "endpoint": "/room-bookings",
+    "expected": "403 - Profix-only user should not access /room-bookings",
+    "actual": "200 - Returned 0 rows",
+    "status": "FAIL",
+    "details": "[]"
+  },
+  {
+    "scenario": "URL Bypass",
+    "endpoint": "/workstation-requests",
+    "expected": "403 - Profix-only user should not access /workstation-requests",
+    "actual": "200 - Returned 11 rows",
+    "status": "FAIL",
+    "details": "[{\"id\":\"2f777188-eec2-4675-8aea-3bc7d9f61be5\",\"seq_no\":30003,\"plan_id\":\"dd9ea314-e698-4f5d-bf85-16c00724c5ad\",\"plan_name\":\"Tower C - 5th Floor\",\"seat_id\":\"B2\",\"seat_label\":\"B2\",\"date\":\"2026-07-10\",\"em"
+  },
+  {
+    "scenario": "URL Bypass",
+    "endpoint": "/meeting-room-requests",
+    "expected": "403 - Profix-only user should not access /meeting-room-requests",
+    "actual": "200 - Returned 21 rows",
+    "status": "FAIL",
+    "details": "[{\"id\":\"ed477f3a-5e81-4106-8cc5-269a6dee889e\",\"seq_no\":40020,\"plan_id\":\"dd9ea314-e698-4f5d-bf85-16c00724c5ad\",\"plan_name\":\"Tower C - 5th Floor\",\"room_id\":\"room-rvmbce1-mrvtywb1\",\"room_name\":\"Alpha\",\"r"
+  },
+  {
+    "scenario": "URL Bypass",
+    "endpoint": "/bookings",
+    "expected": "403 - Profix-only user should not access /bookings",
+    "actual": "200 - Total: 261",
+    "status": "FAIL",
+    "details": "{\"items\":[{\"id\":\"0b866ce8-9034-439f-a96d-12162245e939\",\"seq_no\":20184,\"type\":\"Workstation\",\"title\":\"Workstation AA2\",\"room_id\":\"AA2\",\"room_name\":\"AA2\",\"room_capacity\":1,\"plan_id\":\"dd9ea314-e698-4f5d-b"
+  },
+  {
+    "scenario": "URL Bypass",
+    "endpoint": "/dashboard",
+    "expected": "403 - Profix-only user should not access /dashboard",
+    "actual": "404 - ",
+    "status": "FAIL",
+    "details": "{\"detail\":\"Not Found\"}"
+  },
+  {
+    "scenario": "URL Bypass",
+    "endpoint": "/my-workspace/dashboard",
+    "expected": "403 - Profix-only user should not access /my-workspace/dashboard",
+    "actual": "200 - ",
+    "status": "FAIL",
+    "details": "{\"date\":\"2026-07-29\",\"my_seat\":null,\"upcoming_meetings\":[],\"team_on_floor\":[],\"recent_activity\":[],\"is_manager\":false,\"managed_teams\":[],\"my_team_today\":[]}"
+  }
+]
