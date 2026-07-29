@@ -12,21 +12,36 @@
  *   • The impersonated tab uses its own session token.
  *   • Closing the impersonated tab ends the impersonation session.
  */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Loader2 from "@mui/icons-material/Autorenew";
 import ShieldAlert from "@mui/icons-material/GppMaybeOutlined";
 
 export default function ImpersonateCallback() {
   const [err, setErr] = useState(null);
+  // React 18 StrictMode double-invokes effects in dev. Without this guard,
+  // the second run would see an empty hash (because the first run called
+  // `history.replaceState({}, "", "/")`), fall into the "No impersonation
+  // token found" branch and flash "Impersonation failed" briefly on screen
+  // just before the hard navigation completes.
+  const ranRef = useRef(false);
 
   useEffect(() => {
+    if (ranRef.current) return;
+    ranRef.current = true;
     try {
       // Prefer hash for the token (kept out of server logs). Fall back to
       // querystring so bookmarking works, then remove it from the URL.
       const hash = new URLSearchParams((window.location.hash || "").replace(/^#/, ""));
       const query = new URLSearchParams(window.location.search || "");
       const token = hash.get("token") || query.get("token");
+      // If we already stashed a token (e.g. on a hot-reload), just navigate
+      // — the AuthProvider will pick it up from sessionStorage.
       if (!token) {
+        const existing = window.sessionStorage.getItem("access_token");
+        if (existing) {
+          window.location.replace("/");
+          return;
+        }
         setErr("No impersonation token found in the URL.");
         return;
       }

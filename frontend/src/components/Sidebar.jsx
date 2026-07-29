@@ -111,8 +111,17 @@ function Tip({ label, children, show }) {
 function NavGroup({ item, collapsed, currentPath, can, isSuperAdmin, isPageViewVisible, onNavigate }) {
   const allowed = item.children.filter(c => {
     if (item.superAdminOnly && !isSuperAdmin) return false;
-    if (c.perm && !isSuperAdmin && !can(c.perm.module, c.perm.feature, c.perm.action)) return false;
-    if (c.v3 && !isPageViewVisible(c.v3.module, c.v3.page)) return false;
+    // When a v3 gate exists, it is authoritative. The legacy `perm` check
+    // relies on `/permissions/me/effective`, which does NOT translate v3
+    // page-level `view.enabled` into the old {module, feature, action}
+    // structure — so a v3-only set (like "HR - Workspace Manager") would
+    // incorrectly be filtered out here even though v3 says the page is
+    // visible. Skip the legacy `perm` gate when v3 is present.
+    if (c.v3) {
+      if (!isPageViewVisible(c.v3.module, c.v3.page)) return false;
+    } else if (c.perm && !isSuperAdmin && !can(c.perm.module, c.perm.feature, c.perm.action)) {
+      return false;
+    }
     return true;
   });
   const isChildActive = allowed.some(c => currentPath.startsWith(c.to));
@@ -268,7 +277,7 @@ function SearchPalette({ open, onClose, items }) {
 export default function Sidebar() {
   const { user } = useAuth();
   const { can } = usePermissions();
-  const { isPageViewVisible, hasAnySet, ready: permsReady } = useEffectivePermissionsState();
+  const { isPageViewVisible, hasAnySet, ready: permsReady, getDashboardAccess } = useEffectivePermissionsState();
   const navigate = useNavigate();
   const location = useLocation();
   const isSuperAdmin = user?.role === "Super Admin";
@@ -277,6 +286,16 @@ export default function Sidebar() {
   // `permsReady` so we don't flash the empty state during the initial
   // /api/me/permissions load.
   const noAccess = permsReady && !isSuperAdmin && !hasAnySet;
+
+  // Dashboard link visibility — driven by the assigned Permission Sets.
+  // Super Admin → always visible. Otherwise the link is only shown when the
+  // user has dashboard access for at least ONE product (Workspace Manager
+  // OR Profix). If both `access_level` values are null (as is the case with
+  // "HR - Workspace Manager"), the Dashboard entry is hidden entirely.
+  const hasAnyDashboardAccess =
+    isSuperAdmin ||
+    !!getDashboardAccess("workspace_manager") ||
+    !!getDashboardAccess("profix");
 
   // ---- Width / collapse state
   const initialPref = (typeof window !== "undefined") ? window.localStorage.getItem(STORAGE_KEY) : null;
@@ -331,11 +350,19 @@ export default function Sidebar() {
     if (noAccess) return [];
     return flattenForSearch(NAV_CONFIG).filter(it => {
       if (it.superAdminOnly && !isSuperAdmin) return false;
-      if (it.perm && !isSuperAdmin && !can(it.perm.module, it.perm.feature, it.perm.action)) return false;
-      if (it.v3 && !isPageViewVisible(it.v3.module, it.v3.page)) return false;
+      // Special-case the Dashboard link — hide when the user has no
+      // dashboard access for any product.
+      if (it.to === "/admin" && !hasAnyDashboardAccess) return false;
+      // v3 gate takes precedence over legacy `perm` gate (see NavGroup for
+      // full explanation).
+      if (it.v3) {
+        if (!isPageViewVisible(it.v3.module, it.v3.page)) return false;
+      } else if (it.perm && !isSuperAdmin && !can(it.perm.module, it.perm.feature, it.perm.action)) {
+        return false;
+      }
       return true;
     });
-  }, [isSuperAdmin, can, isPageViewVisible, noAccess]);
+  }, [isSuperAdmin, can, isPageViewVisible, noAccess, hasAnyDashboardAccess]);
 
   // Mobile: hamburger button + drawer
   if (isMobile) {
@@ -353,7 +380,7 @@ export default function Sidebar() {
             <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)}/>
             <aside className="relative w-64 bg-white h-full flex flex-col shadow-2xl">
               <SidebarHeader collapsed={false} user={user} onToggle={() => setMobileOpen(false)} mobile onSearch={() => setSearchOpen(true)}/>
-              <SidebarNav collapsed={false} currentPath={location.pathname} can={can} isSuperAdmin={isSuperAdmin} isPageViewVisible={isPageViewVisible} onNavigate={onNavigateMobile} noAccess={noAccess}/>
+              <SidebarNav collapsed={false} currentPath={location.pathname} can={can} isSuperAdmin={isSuperAdmin} isPageViewVisible={isPageViewVisible} onNavigate={onNavigateMobile} noAccess={noAccess} hasAnyDashboardAccess={hasAnyDashboardAccess}/>
             </aside>
           </div>
         )}
@@ -370,7 +397,7 @@ export default function Sidebar() {
         className={`bg-white border-r border-gray-200 flex flex-col fixed top-0 left-0 h-screen z-30 transition-all duration-200 ${collapsed ? "w-16" : "w-64"}`}
       >
         <SidebarHeader collapsed={collapsed} user={user} onToggle={toggle} onSearch={() => setSearchOpen(true)}/>
-        <SidebarNav collapsed={collapsed} currentPath={location.pathname} can={can} isSuperAdmin={isSuperAdmin} isPageViewVisible={isPageViewVisible} noAccess={noAccess}/>
+        <SidebarNav collapsed={collapsed} currentPath={location.pathname} can={can} isSuperAdmin={isSuperAdmin} isPageViewVisible={isPageViewVisible} noAccess={noAccess} hasAnyDashboardAccess={hasAnyDashboardAccess}/>
       </aside>
       <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} items={flatItems}/>
     </>
@@ -427,7 +454,7 @@ function SidebarHeader({ collapsed, user, onToggle, mobile, onSearch }) {
 // --------------------------------------------------------------------------
 // Nav list
 // --------------------------------------------------------------------------
-function SidebarNav({ collapsed, currentPath, can, isSuperAdmin, isPageViewVisible, onNavigate, noAccess = false }) {
+function SidebarNav({ collapsed, currentPath, can, isSuperAdmin, isPageViewVisible, onNavigate, noAccess = false, hasAnyDashboardAccess = true }) {
   // CSS quirk: setting overflow-y on one axis coerces the other to non-visible too.
   // For the collapsed icon-only view we keep `overflow-visible` so hover tooltips
   // (which extend to the right of the sidebar) are not clipped.
@@ -471,8 +498,14 @@ function SidebarNav({ collapsed, currentPath, can, isSuperAdmin, isPageViewVisib
     <nav className={`flex-1 py-3 space-y-1 ${collapsed ? "px-1.5 overflow-visible" : "px-3 overflow-y-auto overflow-x-hidden"}`}>
       {NAV_CONFIG.map(item => {
         if (item.kind === "link") {
-          if (item.perm && !isSuperAdmin && !can(item.perm.module, item.perm.feature, item.perm.action)) return null;
-          if (item.v3 && !isPageViewVisible(item.v3.module, item.v3.page)) return null;
+          // Dashboard link is only shown when the user has any dashboard access.
+          if (item.to === "/admin" && !hasAnyDashboardAccess) return null;
+          // v3 gate takes precedence over legacy `perm` (same rule as NavGroup).
+          if (item.v3) {
+            if (!isPageViewVisible(item.v3.module, item.v3.page)) return null;
+          } else if (item.perm && !isSuperAdmin && !can(item.perm.module, item.perm.feature, item.perm.action)) {
+            return null;
+          }
           const { to, label, icon: Icon, end } = item;
           const testid = `sidebar-link-${label.toLowerCase().replace(/\s+/g, "-")}`;
           if (collapsed) {

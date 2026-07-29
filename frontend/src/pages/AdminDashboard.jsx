@@ -65,6 +65,24 @@ export default function AdminDashboard() {
   const wmAccess     = getDashboardAccess("workspace_manager");
   const profixAccess = getDashboardAccess("profix");
 
+  // Filter the tab list to ONLY show tabs the user actually has access to.
+  // A user with dashboard access to just one product should not see a dead
+  // tab for the other product.
+  const visibleTabs = useMemo(() => TABS.filter((t) => {
+    if (t.key === "workspace_manager") return !!wmAccess;
+    if (t.key === "profix")            return !!profixAccess;
+    return true;
+  }), [wmAccess, profixAccess]);
+
+  // If the active tab is no longer visible, snap to the first visible tab.
+  useEffect(() => {
+    if (!permsReady) return;
+    if (visibleTabs.length === 0) return;
+    if (!visibleTabs.some((t) => t.key === activeTab)) {
+      setActiveTab(visibleTabs[0].key);
+    }
+  }, [permsReady, visibleTabs, activeTab]);
+
   // Load user preference on mount
   useEffect(() => {
     let cancelled = false;
@@ -101,10 +119,11 @@ export default function AdminDashboard() {
   // Tab bar — each tab has an inline, clickable star that toggles the "default"
   // dashboard for the current user. Star + tab-label share the same button-row
   // but are separate clickable regions (nested buttons are avoided by using two
-  // adjacent buttons inside the tab container).
-  const tabBar = (
+  // adjacent buttons inside the tab container). Tabs without dashboard access
+  // are hidden entirely (see `visibleTabs`).
+  const tabBar = visibleTabs.length <= 1 ? null : (
     <div className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-0.5" data-testid="dashboard-tabs">
-      {TABS.map((t) => {
+      {visibleTabs.map((t) => {
         const Icon = t.icon;
         const active = activeTab === t.key;
         const isDefault = defaultTab === t.key;
@@ -170,6 +189,18 @@ export default function AdminDashboard() {
         <div className="flex items-center justify-center py-20 text-gray-400 text-sm">
           <Loader className="animate-spin mr-2" sx={{ fontSize: 16 }}/> Loading…
         </div>
+      </Layout>
+    );
+  }
+
+  // No dashboard access at all → show the empty state without any tabs.
+  if (visibleTabs.length === 0) {
+    return (
+      <Layout
+        title="Dashboard"
+        contentClassName="w-full px-9 sm:px-12 pt-2 pb-4 flex flex-col min-h-[calc(100vh-56px)]"
+      >
+        <NoDashboardShared />
       </Layout>
     );
   }

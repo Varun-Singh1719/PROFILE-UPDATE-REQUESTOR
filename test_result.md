@@ -825,10 +825,127 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Employee Edit — Permission Sets dropdown label fix (undefined → title)"
-    - "Permission enforcement end-to-end audit"
+    - "Sidebar Dashboard link hidden when user has no dashboard access"
+    - "Sidebar v3 gate takes precedence over legacy perm gate"
+    - "AdminDashboard tabs filter by dashboard access_level; zero-access shows empty state without tabs"
+    - "ImpersonateCallback — StrictMode double-effect guard (no 'Impersonation Failed' flash)"
   stuck_tasks: []
   test_all: false
+
+frontend_bug_fixes_permissions_jul29:
+  - task: "Sidebar Dashboard link gating by dashboard.access_level"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/Sidebar.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            BUG (Jul 29 2026, reported via video): Aarushi Bhatia is assigned
+            "HR - Workspace Manager" set. That set has
+            modules.dashboard.workspace_manager.access_level = null AND
+            modules.dashboard.profix.access_level = null (no dashboard access).
+            Yet the sidebar still showed a "Dashboard" link and the AdminDashboard
+            top bar still rendered both "Workspace Manager" and "Profix" tabs.
+            ROOT CAUSE: The Dashboard entry in NAV_CONFIG had no gate — it just
+            always rendered. It has no v3.page mapping because dashboards use
+            `access_level` (semantic) instead of `view.visible`.
+            FIX: Added `hasAnyDashboardAccess` (isSuperAdmin OR wm-access OR
+            profix-access) using getDashboardAccess(); Dashboard link is hidden
+            when this is false — applied in both flat-search filter and the
+            NAV_CONFIG.map render path. Prop threaded through SidebarNav.
+
+  - task: "Sidebar v3 gate takes precedence over legacy perm gate"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/Sidebar.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            BUG: With Aarushi's HR-WM set (v3-only), the "Workspace Manager"
+            sidebar group and all its child pages (Floor Layout, Workstation
+            Booking, Meeting Room Booking, Pending Approvals) were completely
+            hidden even though the v3 set has view.enabled=true / visible=true
+            for those pages.
+            ROOT CAUSE: Sidebar had TWO gates on each child: legacy
+            `can(perm.module, perm.feature, perm.action)` AND v3
+            `isPageViewVisible(v3.module, v3.page)`. The legacy `can()` reads
+            from /permissions/me/effective which does NOT translate v3 page
+            `view.enabled` into the old {module, feature, action} shape — so
+            can("desk_booking","seat_request","view") returned FALSE and the
+            child was filtered out before the v3 gate could allow it.
+            FIX: When a `v3` gate is present on an item/child, use IT
+            exclusively (skip the legacy `perm` gate). Applied consistently in
+            NavGroup.allowed filter, top-level NAV_CONFIG.map, and flatItems
+            (Cmd+K search list).
+            Verified end-to-end via impersonated Aarushi session — Workspace
+            Manager group now expands and shows Floor Layout, Workstation
+            Booking, Request Workstation, Meeting Room Booking, Pending
+            Approvals, Floor Calibration.
+
+  - task: "AdminDashboard tabs filter by dashboard access_level"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/AdminDashboard.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            BUG: The Dashboard top-bar tab strip always rendered BOTH Workspace
+            Manager and Profix tabs regardless of whether the user actually had
+            access to either. Users with zero dashboard access saw dead tabs
+            that both landed on "No Dashboard Shared".
+            FIX:
+              • Added `visibleTabs` — TABS filtered by whichever of
+                wmAccess/profixAccess is truthy.
+              • `tabBar` is only rendered when visibleTabs.length > 1 (single
+                accessible dashboard → no tab strip needed).
+              • If visibleTabs.length === 0 → render the NoDashboardShared
+                empty state directly (no tab bar).
+              • activeTab auto-snaps to the first visible tab if the persisted
+                preference points at an inaccessible tab.
+            Verified impersonated Aarushi lands on /admin and sees ONLY the
+            "No Dashboard Shared" panel — no tab strip at all.
+
+  - task: "ImpersonateCallback — no 'Impersonation Failed' flash"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/ImpersonateCallback.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            BUG (reported via video): "When I click Submit in Login As, it
+            opens a new page which first says 'Impersonation Failed' and then
+            reloads. Why the message?"
+            ROOT CAUSE: React 18 StrictMode double-invokes useEffect in dev.
+            First run: reads hash `#token=...`, stashes into sessionStorage,
+            calls history.replaceState({}, "", "/") (which WIPES the hash from
+            the URL) and window.location.replace("/"). React then re-runs the
+            effect BEFORE the navigation completes — second run reads the now-
+            empty hash → setErr("No impersonation token found in the URL.")
+            → the red "Impersonation failed" panel flashes briefly before
+            replace() fires.
+            FIX: Guard the effect body with `const ranRef = useRef(false);`
+            so the second run bails out immediately. Also handle the edge
+            case where the token is already in sessionStorage (hot-reload):
+            just navigate straight to "/".
+            Verified in Playwright — no "Impersonation failed" text at any
+            point during the callback.
+
 
 frontend_bug_fixes_recent:
   - task: "Employee Edit — Permission Sets dropdown label fix (undefined → title)"
