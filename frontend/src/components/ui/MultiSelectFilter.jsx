@@ -270,16 +270,11 @@ export default function MultiSelectFilter({
     }
   };
 
-  // Compute a summary string for the searchInTrigger mode: shown as a
-  // "ghost" overlay when the input is empty and there are selections.
-  const selectedSummary = useMemo(() => {
-    if (selectedOptions.length === 0) return "";
-    if (selectedOptions.length <= maxSelectedLabels) {
-      return selectedOptions.map((o) => o.label).join(", ");
-    }
-    const shown = selectedOptions.slice(0, maxSelectedLabels).map((o) => o.label).join(", ");
-    return `${shown} +${selectedOptions.length - maxSelectedLabels}`;
-  }, [selectedOptions, maxSelectedLabels]);
+  // Remove a single value from the selection (used by chip × buttons).
+  const removeValue = (val) => {
+    if (single) { onChange([]); return; }
+    onChange((value || []).filter((v) => v !== val));
+  };
 
   // Common right-side icons (clear + chevron), used by both trigger variants.
   const rightIcons = (
@@ -306,57 +301,103 @@ export default function MultiSelectFilter({
     <div ref={rootRef} className={`relative ${fullWidth ? "block w-full" : "inline-block"} ${className}`} data-testid={tid}>
       {searchInTrigger ? (
         // -----------------------------------------------------------------
-        // Search-in-trigger variant — the input IS the filter box.
-        // Selected summary shown as a soft overlay when input is empty; the
-        // instant the user starts typing, `query` fills the input and the
-        // popup opens (if it wasn't already).
+        // Search-in-trigger variant — the input IS the filter box. Selected
+        // items are surfaced as removable chips BELOW the input (each with
+        // a per-chip × button) so nothing is hidden from view, and a small
+        // count badge sits inside the input on the right for at-a-glance
+        // "how many did I pick?" feedback.
         // -----------------------------------------------------------------
-        <div
-          ref={triggerRef}
-          data-testid={tid ? `${tid}-trigger` : undefined}
-          onClick={() => {
-            if (disabled) return;
-            setOpen(true);
-            searchInputRef.current?.focus();
-          }}
-          className={`relative w-full h-9 px-3 py-1.5 text-xs bg-white border rounded-md
-                     inline-flex items-center gap-2 cursor-text
-                     ${open ? "border-[#ec9324] ring-2 ring-[#ec9324]/30" : "border-gray-200 hover:border-gray-300"}
-                     ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
-        >
-          <span className="relative flex-1 min-w-0">
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={query}
-              disabled={disabled}
-              placeholder={selectedOptions.length === 0 ? placeholder : ""}
-              onChange={(e) => { setQuery(e.target.value); if (!open) setOpen(true); }}
-              onFocus={() => { if (!disabled) setOpen(true); }}
-              onKeyDown={handleKeyDown}
-              aria-label={label}
-              aria-haspopup="listbox"
-              aria-expanded={open}
-              aria-autocomplete="list"
-              role="combobox"
-              data-testid={tid ? `${tid}-search` : undefined}
-              className="w-full h-full bg-transparent outline-none text-gray-900 placeholder-gray-400
-                         disabled:cursor-not-allowed"
-            />
-            {/* Ghost overlay — the selected summary. Hidden as soon as the
-                user starts typing so it never fights the input value. */}
-            {query === "" && selectedSummary && (
+        <>
+          <div
+            ref={triggerRef}
+            data-testid={tid ? `${tid}-trigger` : undefined}
+            onClick={() => {
+              if (disabled) return;
+              setOpen(true);
+              searchInputRef.current?.focus();
+            }}
+            className={`relative w-full h-9 px-3 py-1.5 text-xs bg-white border rounded-md
+                       inline-flex items-center gap-2 cursor-text
+                       ${open ? "border-[#ec9324] ring-2 ring-[#ec9324]/30" : "border-gray-200 hover:border-gray-300"}
+                       ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+          >
+            <span className="flex-1 min-w-0 flex items-center">
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={query}
+                disabled={disabled}
+                placeholder={placeholder}
+                onChange={(e) => { setQuery(e.target.value); if (!open) setOpen(true); }}
+                onFocus={() => { if (!disabled) setOpen(true); }}
+                onKeyDown={handleKeyDown}
+                aria-label={label}
+                aria-haspopup="listbox"
+                aria-expanded={open}
+                aria-autocomplete="list"
+                role="combobox"
+                data-testid={tid ? `${tid}-search` : undefined}
+                className="w-full h-full bg-transparent outline-none text-gray-900 placeholder-gray-400
+                           disabled:cursor-not-allowed"
+              />
+            </span>
+            {/* Selected-count badge — sits inside the input, before the icons. */}
+            {selectedOptions.length > 0 && (
               <span
-                className="pointer-events-none absolute inset-0 flex items-center truncate text-gray-900 font-medium"
-                title={selectedSummary}
-                aria-hidden="true"
+                className="shrink-0 inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold
+                           bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/30 tabular-nums whitespace-nowrap"
+                aria-label={`${selectedOptions.length} selected`}
+                title={`${selectedOptions.length} selected`}
+                data-testid={tid ? `${tid}-count` : undefined}
               >
-                {selectedSummary}
+                {selectedOptions.length} selected
               </span>
             )}
-          </span>
-          {rightIcons}
-        </div>
+            {rightIcons}
+          </div>
+
+          {/* Chip strip — one removable pill per selected option. */}
+          {selectedOptions.length > 0 && (
+            <div
+              className="mt-2 flex flex-wrap gap-1.5"
+              data-testid={tid ? `${tid}-chips` : undefined}
+            >
+              {selectedOptions.map((o) => {
+                // Sub-label — if the caller provided a `chipMeta` string,
+                // append it after a middle dot. Otherwise, if `meta` looks
+                // like plain text, use it (we only try `.toString()` on
+                // string-like meta so JSX meta is skipped safely).
+                const chipMeta = typeof o.chipMeta === "string" ? o.chipMeta : null;
+                return (
+                  <span
+                    key={o.value}
+                    className="inline-flex items-center gap-1 h-7 pl-2.5 pr-1 rounded-full
+                               border-2 border-[#ec9324] bg-white text-[11px] font-semibold text-[#ec9324]
+                               whitespace-nowrap max-w-full"
+                    data-testid={tid ? `${tid}-chip-${o.value}` : undefined}
+                    title={o.label}
+                  >
+                    <span className="truncate max-w-[220px]">{o.label}</span>
+                    {chipMeta && (
+                      <span className="text-gray-500 font-normal">· {chipMeta}</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); removeValue(o.value); }}
+                      onMouseDown={(e) => e.preventDefault()}
+                      aria-label={`Remove ${o.label}`}
+                      data-testid={tid ? `${tid}-chip-remove-${o.value}` : undefined}
+                      className="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full
+                                 hover:bg-[#ec9324]/10 transition-colors"
+                    >
+                      <X sx={{ fontSize: 12 }} className="text-[#ec9324]"/>
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+          )}
+        </>
       ) : (
         <button
           ref={triggerRef}
