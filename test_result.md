@@ -832,11 +832,58 @@ test_plan:
 comprehensive_permissions_qa_aug2026:
   - task: "Permissions Module — end-to-end exhaustive QA sweep"
     implemented: true
-    working: "NA"
-    file: "frontend/src/pages/PermissionsPage.jsx, frontend/src/components/Sidebar.jsx, frontend/src/context/EffectivePermissionsContext.jsx, backend/routers/permissions_v3.py"
+    working: false
+    file: "frontend/src/pages/PermissionsPage.jsx, frontend/src/components/Sidebar.jsx, frontend/src/context/EffectivePermissionsContext.jsx, backend/routers/permissions_v3.py, backend/routers/contacts.py, backend/routers/teams.py, backend/routers/email_templates.py, backend/routers/floor_plans.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
+    status_history:
+        - working: false
+          agent: "testing"
+          comment: |
+            QA SWEEP COMPLETE (7/16 scenarios, Take 3, Jul 29 2026 16:35).
+            Passed: B (FullAccess), C (ProfixReadOnly-Individual), F (ManageEmployees
+            edit-no-delete via URL), G (HiddenWithView), I (ViewWithoutEdit),
+            P (ContextMenuFineGrained). Failed: A (Empty).
+            Not tested: D, E, H, J, K, L, M, N, O.
+
+            DEFECTS FOUND:
+            🔴 CRITICAL — Backend API endpoints do NOT enforce v3 permissions.
+               A restricted admin (only profix.all_requests) can hit backend API
+               directly and receive:
+                 GET /api/contacts             → 200 with 283 rows
+                 GET /api/teams                → 200 with 11 rows
+                 GET /api/permission-sets-v3   → 200 with 14 sets (incl full
+                                                  v3 modules tree)
+                 GET /api/email-templates      → 200 with 10 rows
+                 GET /api/floor-plans          → 200 with 1 row
+               (GET /api/tickets?scope=all correctly returns [] — tickets router
+               DOES enforce v3 scope, so the pattern is known — it just hasn't
+               been applied to the other routers.)
+               Main agent independently reproduced this via curl on Jul 29 16:37.
+
+            🟡 MEDIUM — Users assigned a permission set whose `modules: {}` is
+               empty see a completely blank sidebar. The "No Module Assigned"
+               banner only shows when `has_any_set=false` (no set assigned at
+               all). Fix: gate on `Object.keys(modules).length === 0` (frontend)
+               or set has_any_set based on modules content (backend).
+
+            🟢 LOW — Direct-URL bypass on /workspace-manager/floor-layout and
+               /workspace-manager/pending-approvals for a Profix-only user
+               reportedly loaded the pages (agent didn't confirm whether they
+               rendered an empty/no-access state vs. showed real data — needs
+               follow-up).
+
+            All 14 dummy admins + 14 QA-* permission sets have been cleaned
+            up (users → Inactive, permission sets → deleted).
+
+  - task: "Permissions Module — end-to-end exhaustive QA sweep (task info)"
+    implemented: true
+    working: "NA"
+    file: "misc"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
