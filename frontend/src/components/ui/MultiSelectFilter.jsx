@@ -193,6 +193,14 @@ export default function MultiSelectFilter({
     }
   }, [highlight]);
 
+  // Are ANY option using the middle column (team pill / disabled reason)?
+  // When none do, we drop that column entirely so the name column gets the
+  // extra width and stops truncating aggressively for narrow triggers.
+  const anyMiddle = useMemo(
+    () => options.some((o) => !!o.middle || (o.disabled && o.disabledReason)),
+    [options],
+  );
+
   const toggle = (val) => {
     if (single) {
       // Single-choice: clicking the currently-selected row clears; otherwise replaces
@@ -482,7 +490,7 @@ export default function MultiSelectFilter({
             // never overflow the screen. Same rule everywhere the component
             // is used → uniform behaviour across every screen.
             width: "max-content",
-            minWidth: popupPos.width,
+            minWidth: Math.max(popupPos.width, 280),
             maxWidth: Math.min(
               480,
               (typeof window !== "undefined" ? window.innerWidth : 1440) -
@@ -552,7 +560,9 @@ export default function MultiSelectFilter({
                   data-idx={idx}
                   title={optDisabled ? (o.disabledReason || "Not available") : undefined}
                   data-testid={tid ? `${tid}-opt-${o.value}` : undefined}
-                  className={`w-full text-left grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto]
+                  className={`w-full text-left grid ${anyMiddle
+                              ? "grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto]"
+                              : "grid-cols-[auto_minmax(0,1fr)_auto]"}
                               items-center gap-4 px-3 py-2 text-xs transition-colors
                               ${checked ? "bg-orange-50" : (isHighlighted ? "bg-gray-100" : "hover:bg-gray-50")}
                               ${isHighlighted && checked ? "bg-orange-100" : ""}
@@ -578,20 +588,24 @@ export default function MultiSelectFilter({
                     {o.label}
                   </span>
 
-                  {/* Column 2 — Middle: team / info pill (centered) */}
-                  <span className="justify-self-center min-w-0 max-w-full">
-                    {middleText ? (
-                      <span
-                        className={`inline-block truncate max-w-full text-[10px] font-medium rounded-full px-2 py-0.5
-                                    ${optDisabled
-                                      ? "bg-gray-100 text-gray-500 border border-gray-200"
-                                      : "bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/20"}`}
-                        title={middleText}
-                      >
-                        {middleText}
-                      </span>
-                    ) : null}
-                  </span>
+                  {/* Column 2 — Middle: team / info pill (centered). Rendered
+                      only when at least one option in the list uses it, so a
+                      list of pure name+ID rows doesn't waste half the width. */}
+                  {anyMiddle && (
+                    <span className="justify-self-center min-w-0 max-w-full">
+                      {middleText ? (
+                        <span
+                          className={`inline-block truncate max-w-full text-[10px] font-medium rounded-full px-2 py-0.5
+                                      ${optDisabled
+                                        ? "bg-gray-100 text-gray-500 border border-gray-200"
+                                        : "bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/20"}`}
+                          title={middleText}
+                        >
+                          {middleText}
+                        </span>
+                      ) : null}
+                    </span>
+                  )}
 
                   {/* Column 3 — Meta / emp id (right aligned) */}
                   {o.meta ? (

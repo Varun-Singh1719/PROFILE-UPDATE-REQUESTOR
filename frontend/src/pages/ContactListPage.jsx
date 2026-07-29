@@ -1676,6 +1676,7 @@ export default function ContactListPage() {
               searchInTrigger
               showCountBadge={false}
               renderChipsBelow={false}
+              align="right"
             />
             {(q || empIds.length > 0 || emails.length > 0 || role.length > 0 || status.length > 0 || psetFilter.length > 0) && (
               <button
