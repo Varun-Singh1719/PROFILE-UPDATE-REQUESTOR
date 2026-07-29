@@ -485,7 +485,6 @@ async def list_workstation_requests(
     user=Depends(require_any_v3_page_view(
         ("desk_booking", "workstation_requests"),
         ("desk_booking", "pending_approvals"),
-        ("desk_booking", "workstation_bookings"),
     )),
     status: Optional[str] = Query(None, description="Pending Approval | Approved | Declined | Cancelled"),
     plan_id: Optional[str] = Query(None),

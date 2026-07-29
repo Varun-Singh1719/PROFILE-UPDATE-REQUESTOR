@@ -1,0 +1,584 @@
+{
+  "d1_matrix": [
+    {
+      "scenario": "User-A",
+      "user_email": "qa-d1-user-a+929874@ticketing.com",
+      "permission_modules": {
+        "desk_booking": {
+          "pages": {
+            "workstation_bookings": {
+              "view": {
+                "enabled": true,
+                "visible": true,
+                "scope": "overall"
+              }
+            }
+          }
+        }
+      },
+      "tests": [
+        {
+          "endpoint": "/workstation-bookings",
+          "expected": 200,
+          "actual": 200,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/room-bookings",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/workstation-requests",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/meeting-room-requests",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/bookings",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/my-workspace/dashboard",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/my-workspace/week",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/my-workspace/floor",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        }
+      ],
+      "pass_rate": "8/8",
+      "all_passed": true
+    },
+    {
+      "scenario": "User-B",
+      "user_email": "qa-d1-user-b+944161@ticketing.com",
+      "permission_modules": {
+        "desk_booking": {
+          "pages": {
+            "floor_layout": {
+              "view": {
+                "enabled": true,
+                "visible": true,
+                "scope": "overall"
+              }
+            }
+          }
+        }
+      },
+      "tests": [
+        {
+          "endpoint": "/workstation-bookings",
+          "expected": 200,
+          "actual": 200,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/room-bookings",
+          "expected": 200,
+          "actual": 200,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/workstation-requests",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/meeting-room-requests",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/bookings",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/my-workspace/dashboard",
+          "expected": 200,
+          "actual": 200,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/my-workspace/week",
+          "expected": 200,
+          "actual": 200,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/my-workspace/floor",
+          "expected": 200,
+          "actual": 200,
+          "passed": true,
+          "details": ""
+        }
+      ],
+      "pass_rate": "8/8",
+      "all_passed": true
+    },
+    {
+      "scenario": "User-C",
+      "user_email": "qa-d1-user-c+960996@ticketing.com",
+      "permission_modules": {
+        "desk_booking": {
+          "pages": {
+            "bookings_history": {
+              "view": {
+                "enabled": true,
+                "visible": true,
+                "scope": "overall"
+              }
+            }
+          }
+        }
+      },
+      "tests": [
+        {
+          "endpoint": "/workstation-bookings",
+          "expected": 200,
+          "actual": 200,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/room-bookings",
+          "expected": 200,
+          "actual": 200,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/workstation-requests",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/meeting-room-requests",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/bookings",
+          "expected": 200,
+          "actual": 200,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/my-workspace/dashboard",
+          "expected": 200,
+          "actual": 200,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/my-workspace/week",
+          "expected": 200,
+          "actual": 200,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/my-workspace/floor",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        }
+      ],
+      "pass_rate": "8/8",
+      "all_passed": true
+    },
+    {
+      "scenario": "User-D",
+      "user_email": "qa-d1-user-d+978428@ticketing.com",
+      "permission_modules": {},
+      "tests": [
+        {
+          "endpoint": "/workstation-bookings",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/room-bookings",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/workstation-requests",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/meeting-room-requests",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/bookings",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/my-workspace/dashboard",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/my-workspace/week",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/my-workspace/floor",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        }
+      ],
+      "pass_rate": "8/8",
+      "all_passed": true
+    },
+    {
+      "scenario": "User-E",
+      "user_email": "qa-d1-user-e+992145@ticketing.com",
+      "permission_modules": {
+        "profix": {
+          "pages": {
+            "all_requests": {
+              "view": {
+                "enabled": true,
+                "visible": true,
+                "scope": "overall"
+              }
+            }
+          }
+        }
+      },
+      "tests": [
+        {
+          "endpoint": "/workstation-bookings",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/room-bookings",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/workstation-requests",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/meeting-room-requests",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/bookings",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/my-workspace/dashboard",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/my-workspace/week",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/my-workspace/floor",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        }
+      ],
+      "pass_rate": "8/8",
+      "all_passed": true
+    }
+  ],
+  "d2_before_after": {
+    "before_delete": {
+      "results": [
+        {
+          "endpoint": "/tickets",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "endpoint": "/contacts",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "endpoint": "/me/permissions",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        }
+      ],
+      "pass_rate": "3/3"
+    },
+    "after_delete": {
+      "results": [
+        {
+          "endpoint": "/tickets",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/contacts",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/workstation-bookings",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/bookings",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/permission-sets-v3",
+          "expected": 403,
+          "actual": 403,
+          "passed": true,
+          "details": ""
+        },
+        {
+          "endpoint": "/me/permissions",
+          "expected": 200,
+          "actual": 200,
+          "passed": true,
+          "details": ""
+        }
+      ],
+      "pass_rate": "6/6"
+    },
+    "all_passed": true
+  },
+  "super_admin_regression": {
+    "results": [
+      {
+        "endpoint": "/tickets",
+        "expected": 200,
+        "actual": 200,
+        "passed": true,
+        "details": ""
+      },
+      {
+        "endpoint": "/teams",
+        "expected": 200,
+        "actual": 200,
+        "passed": true,
+        "details": ""
+      },
+      {
+        "endpoint": "/contacts",
+        "expected": 200,
+        "actual": 200,
+        "passed": true,
+        "details": ""
+      },
+      {
+        "endpoint": "/permission-sets-v3",
+        "expected": 200,
+        "actual": 200,
+        "passed": true,
+        "details": ""
+      },
+      {
+        "endpoint": "/email-templates",
+        "expected": 200,
+        "actual": 200,
+        "passed": true,
+        "details": ""
+      },
+      {
+        "endpoint": "/floor-plans",
+        "expected": 200,
+        "actual": 200,
+        "passed": true,
+        "details": ""
+      },
+      {
+        "endpoint": "/workstation-bookings",
+        "expected": 200,
+        "actual": 200,
+        "passed": true,
+        "details": ""
+      },
+      {
+        "endpoint": "/room-bookings",
+        "expected": 200,
+        "actual": 200,
+        "passed": true,
+        "details": ""
+      },
+      {
+        "endpoint": "/workstation-requests",
+        "expected": 200,
+        "actual": 200,
+        "passed": true,
+        "details": ""
+      },
+      {
+        "endpoint": "/meeting-room-requests",
+        "expected": 200,
+        "actual": 200,
+        "passed": true,
+        "details": ""
+      },
+      {
+        "endpoint": "/bookings",
+        "expected": 200,
+        "actual": 200,
+        "passed": true,
+        "details": ""
+      },
+      {
+        "endpoint": "/my-workspace/dashboard",
+        "expected": 200,
+        "actual": 200,
+        "passed": true,
+        "details": ""
+      },
+      {
+        "endpoint": "/my-workspace/week",
+        "expected": 200,
+        "actual": 200,
+        "passed": true,
+        "details": ""
+      },
+      {
+        "endpoint": "/my-workspace/floor",
+        "expected": 200,
+        "actual": 200,
+        "passed": true,
+        "details": ""
+      },
+      {
+        "endpoint": "/approval-settings",
+        "expected": 200,
+        "actual": 200,
+        "passed": true,
+        "details": ""
+      },
+      {
+        "endpoint": "/audit",
+        "expected": 200,
+        "actual": 404,
+        "passed": false,
+        "details": "{\"detail\":\"Not Found\"}"
+      },
+      {
+        "endpoint": "/notifications/outbox",
+        "expected": 200,
+        "actual": 200,
+        "passed": true,
+        "details": ""
+      },
+      {
+        "endpoint": "/me/permissions",
+        "expected": 200,
+        "actual": 200,
+        "passed": true,
+        "details": ""
+      }
+    ],
+    "pass_rate": "17/18",
+    "all_passed": false
+  },
+  "cleanup": [],
+  "summary": {}
+}

@@ -28,7 +28,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import Depends, Query, HTTPException
 
 from core import api_router, db, get_current_user
-from routers.permissions_v3 import require_any_v3_page_view
+from routers.permissions_v3 import require_any_v3_page_view, require_v3_page_view
 
 
 # --------------------------------------------------------------------------- #
@@ -79,11 +79,7 @@ async def my_workspace_dashboard(
     date: Optional[str] = Query(None, description="YYYY-MM-DD (default: today)"),
     user=Depends(require_any_v3_page_view(
         ("desk_booking", "floor_layout"),
-        ("desk_booking", "workstation_bookings"),
-        ("desk_booking", "meeting_room_bookings"),
-        ("desk_booking", "workstation_requests"),
         ("desk_booking", "bookings_history"),
-        ("desk_booking", "pending_approvals"),
     )),
 ):
     the_date = date or _today_iso()
@@ -293,10 +289,7 @@ async def my_workspace_week(
     start: Optional[str] = Query(None, description="Any date within the desired ISO week (default: today)"),
     user=Depends(require_any_v3_page_view(
         ("desk_booking", "floor_layout"),
-        ("desk_booking", "workstation_bookings"),
-        ("desk_booking", "workstation_requests"),
         ("desk_booking", "bookings_history"),
-        ("desk_booking", "pending_approvals"),
     )),
 ):
     """Return 7 entries (Mon..Sun) of {date, status, seat_label}.
@@ -351,12 +344,7 @@ async def my_workspace_week(
 async def my_workspace_floor(
     date: Optional[str] = Query(None, description="YYYY-MM-DD (default: today)"),
     plan_id: Optional[str] = Query(None, description="If omitted, inferred from user's current seat/request"),
-    user=Depends(require_any_v3_page_view(
-        ("desk_booking", "floor_layout"),
-        ("desk_booking", "workstation_bookings"),
-        ("desk_booking", "workstation_requests"),
-        ("desk_booking", "bookings_history"),
-    )),
+    user=Depends(require_v3_page_view("desk_booking", "floor_layout")),
 ):
     """Return the floor plan + coloured seats for the popup view.
 

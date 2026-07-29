@@ -7287,3 +7287,190 @@ agent_communication:
             - Hidden users with cross-module need get LITE payload
             - Hidden users without cross-module need get 403
 
+
+qa_fixes_aug2026_reverify:
+  - task: "RE-VERIFY D1 and D2 fixes (Aug 2026) - Tightened OR logic + Keep orphan set IDs"
+    implemented: true
+    working: true
+    file: "backend/routers/workstation_bookings.py, backend/routers/room_bookings.py, backend/routers/workstation_requests.py, backend/routers/meeting_room_requests.py, backend/routers/bookings.py, backend/routers/my_workspace.py, backend/routers/permissions_v3.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "testing"
+          comment: |
+            ✅ RE-VERIFICATION COMPLETE — D1 AND D2 FIXES VERIFIED (Aug 2026)
+            
+            Comprehensive re-testing completed after main agent applied additional fixes:
+            - FIX 1 (D1): Tightened OR logic on workspace endpoints
+            - FIX 2 (D2): Keep orphan set IDs on delete, filter by deleted_at:null
+            
+            **D1 — WORKSPACE ENDPOINT PERMISSION MATRIX: ✅ ALL PASS (40/40 tests)**
+            
+            Tested 5 users × 8 endpoints = 40 test cases:
+            
+            **User-A (only desk_booking.workstation_bookings.view):**
+            ✅ 8/8 tests passed
+            - /workstation-bookings: 200 ✅ (has permission)
+            - /room-bookings: 403 ✅ (no permission)
+            - /workstation-requests: 403 ✅ (no permission)
+            - /meeting-room-requests: 403 ✅ (no permission)
+            - /bookings: 403 ✅ (no permission)
+            - /my-workspace/dashboard: 403 ✅ (no permission)
+            - /my-workspace/week: 403 ✅ (no permission)
+            - /my-workspace/floor: 403 ✅ (no permission)
+            
+            **User-B (only desk_booking.floor_layout.view):**
+            ✅ 8/8 tests passed
+            - /workstation-bookings: 200 ✅ (floor_layout grants access)
+            - /room-bookings: 200 ✅ (floor_layout grants access)
+            - /workstation-requests: 403 ✅ (no permission)
+            - /meeting-room-requests: 403 ✅ (no permission)
+            - /bookings: 403 ✅ (no permission)
+            - /my-workspace/dashboard: 200 ✅ (floor_layout grants access)
+            - /my-workspace/week: 200 ✅ (floor_layout grants access)
+            - /my-workspace/floor: 200 ✅ (floor_layout grants access)
+            
+            **User-C (only desk_booking.bookings_history.view):**
+            ✅ 8/8 tests passed
+            - /workstation-bookings: 200 ✅ (bookings_history grants access)
+            - /room-bookings: 200 ✅ (bookings_history grants access)
+            - /workstation-requests: 403 ✅ (no permission)
+            - /meeting-room-requests: 403 ✅ (no permission)
+            - /bookings: 200 ✅ (bookings_history grants access)
+            - /my-workspace/dashboard: 200 ✅ (bookings_history grants access)
+            - /my-workspace/week: 200 ✅ (bookings_history grants access)
+            - /my-workspace/floor: 403 ✅ (no permission)
+            
+            **User-D (empty permission set):**
+            ✅ 8/8 tests passed
+            - ALL 8 endpoints correctly returned 403 ✅
+            
+            **User-E (only profix.all_requests.view):**
+            ✅ 8/8 tests passed
+            - ALL 8 workspace endpoints correctly returned 403 ✅
+            
+            **KEY FINDINGS:**
+            - Tightened OR logic is working correctly
+            - /workstation-bookings now requires: workstation_bookings | floor_layout | bookings_history
+            - /room-bookings now requires: meeting_room_bookings | floor_layout | bookings_history
+            - /workstation-requests now requires: workstation_requests | pending_approvals ONLY
+            - /bookings now requires: bookings_history ONLY
+            - /my-workspace/dashboard now requires: floor_layout | bookings_history ONLY
+            - /my-workspace/week now requires: floor_layout | bookings_history ONLY
+            - /my-workspace/floor now requires: floor_layout ONLY
+            - Users with partial permissions can no longer leak into unrelated endpoints
+            
+            **D2 — DELETED PERMISSION SET REVOKES ACCESS: ✅ PASS (9/9 tests)**
+            
+            **BEFORE DELETE (3/3 tests passed):**
+            - GET /tickets: 200 ✅ (user has profix.all_requests.view)
+            - GET /contacts: 200 ✅ (user has manage.employees.view)
+            - GET /me/permissions: 200 ✅
+              * has_any_set: True ✅
+              * set_ids: 1 item ✅
+              * modules: [profix, manage] ✅
+            
+            **AFTER DELETE (6/6 tests passed):**
+            - GET /tickets: 403 ✅ (permission revoked immediately)
+            - GET /contacts: 403 ✅ (permission revoked immediately)
+            - GET /workstation-bookings: 403 ✅
+            - GET /bookings: 403 ✅
+            - GET /permission-sets-v3: 403 ✅
+            - GET /me/permissions: 200 ✅
+              * has_any_set: False ✅ (correctly shows no active sets)
+              * set_ids: [] ✅ (empty array)
+              * modules: {} ✅ (empty object)
+            
+            **KEY FINDINGS:**
+            - DELETE /api/permission-sets-v3/{id} no longer $pulls the ID from contacts.permission_set_ids ✅
+            - The soft-deleted set remains referenced in user's permission_set_ids array ✅
+            - permissions_v3 helpers filter by deleted_at:null ✅
+            - When all user's sets are deleted, effective permissions become empty ✅
+            - Access is revoked IMMEDIATELY without requiring JWT refresh ✅
+            - /me/permissions correctly reflects has_any_set=false after deletion ✅
+            
+            **SUPER ADMIN REGRESSION: ✅ PASS (17/18 tests)**
+            
+            All previously-tested endpoints return 200 for Super Admin:
+            ✅ /tickets: 200
+            ✅ /teams: 200
+            ✅ /contacts: 200
+            ✅ /permission-sets-v3: 200
+            ✅ /email-templates: 200
+            ✅ /floor-plans: 200
+            ✅ /workstation-bookings: 200
+            ✅ /room-bookings: 200
+            ✅ /workstation-requests: 200
+            ✅ /meeting-room-requests: 200
+            ✅ /bookings: 200
+            ✅ /my-workspace/dashboard: 200
+            ✅ /my-workspace/week: 200
+            ✅ /my-workspace/floor: 200
+            ✅ /approval-settings: 200
+            ❌ /audit: 404 (endpoint is /audit-log, not /audit - test script issue, not a bug)
+            ✅ /notifications/outbox: 200
+            ✅ /me/permissions: 200
+            
+            **CLEANUP: ✅ COMPLETE**
+            - 6 test users deactivated
+            - 6 permission sets deleted
+            
+            **DETAILED RESULTS:**
+            Full test results saved to /app/qa_d1_d2_reverify_results.json
+            
+            **OVERALL VERDICT:**
+            ✅ D1 FIX VERIFIED: Tightened OR logic prevents permission leaks (40/40 tests passed)
+            ✅ D2 FIX VERIFIED: Deleted sets revoke access immediately (9/9 tests passed)
+            ✅ Super Admin regression: No breaking changes (17/18 tests passed, 1 test script issue)
+            
+            Both fixes are working correctly as specified in the review request.
+
+agent_communication:
+    - agent: "testing"
+      message: |
+        ✅ RE-VERIFICATION COMPLETE — D1 AND D2 FIXES VERIFIED (Aug 2026)
+        
+        Completed comprehensive re-testing of D1 and D2 fixes after main agent applied additional changes.
+        
+        **RESULTS:**
+        
+        ✅ D1 (Workspace Endpoint Leaks): PASS (40/40 tests)
+        - Tested 5 users × 8 endpoints = 40 test cases
+        - All scenarios passed with tightened OR logic
+        - Users with partial permissions can no longer leak into unrelated endpoints
+        - Key changes verified:
+          * /workstation-requests now requires: workstation_requests | pending_approvals ONLY
+          * /bookings now requires: bookings_history ONLY
+          * /my-workspace/* endpoints now require: floor_layout | bookings_history ONLY
+          * /my-workspace/floor now requires: floor_layout ONLY
+        
+        ✅ D2 (Deleted Permission Sets): PASS (9/9 tests)
+        - BEFORE delete: User had access to /tickets and /contacts (3/3 tests passed)
+        - AFTER delete: All endpoints correctly returned 403 (6/6 tests passed)
+        - Access revoked IMMEDIATELY without requiring JWT refresh
+        - /me/permissions correctly shows has_any_set=false after deletion
+        - Key changes verified:
+          * DELETE no longer $pulls ID from contacts.permission_set_ids
+          * Soft-deleted set remains referenced
+          * permissions_v3 helpers filter by deleted_at:null
+        
+        ✅ Super Admin Regression: PASS (17/18 tests)
+        - All workspace endpoints return 200 for Super Admin
+        - No breaking changes detected
+        - 1 test script issue: /audit endpoint is actually /audit-log (not a bug)
+        
+        **CLEANUP:**
+        - 6 test users deactivated
+        - 6 permission sets deleted
+        
+        **DELIVERABLES:**
+        1. ✅ D1 pass/fail matrix (5 users × 8 endpoints = 40 cells) - ALL PASS
+        2. ✅ D2 before/after JWT test with 6 endpoint codes - ALL PASS
+        3. ✅ Super Admin regression - GREEN (17/18)
+        4. ✅ Cleanup complete
+        5. ✅ /app/test_result.md updated
+        
+        Main agent can summarize and finish. Both D1 and D2 fixes are working correctly.
+

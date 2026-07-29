@@ -30,7 +30,7 @@ from pydantic import BaseModel, Field
 
 from core import api_router, db, get_current_user, now_iso
 from routers.room_bookings import _enrich_bookings_with_team
-from routers.permissions_v3 import require_any_v3_page_view
+from routers.permissions_v3 import require_any_v3_page_view, require_v3_page_view
 
 
 # --------------------------------------------------------------------------- #
@@ -353,12 +353,7 @@ def _sort_tuple(sort: str, direction: str) -> List[Tuple[str, int]]:
 
 @api_router.get("/bookings")
 async def list_bookings(
-    user=Depends(require_any_v3_page_view(
-        ("desk_booking", "bookings_history"),
-        ("desk_booking", "workstation_bookings"),
-        ("desk_booking", "meeting_room_bookings"),
-        ("desk_booking", "floor_layout"),
-    )),
+    user=Depends(require_v3_page_view("desk_booking", "bookings_history")),
     type: str = Query("all", description="all | meeting_room | workstation | csv of these"),
     status: str = Query("all", description="all | csv of: active,cancelled,completed"),
     date_from: Optional[str] = Query(None, description="YYYY-MM-DD inclusive"),

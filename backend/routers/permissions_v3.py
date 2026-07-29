@@ -577,9 +577,17 @@ async def update_v3_set(
 
 @api_router.delete("/permission-sets-v3/{pset_id}")
 async def delete_v3_set(pset_id: str, user=Depends(require_role("Super Admin"))):
-    """Soft-delete: mark `deleted_at`/`deleted_by` and un-assign the set from
-    every employee. The document remains in the collection so audit-log
-    references keep resolving."""
+    """Soft-delete: mark `deleted_at`/`deleted_by`. The document remains in the
+    collection so audit-log references keep resolving.
+
+    QA D2 FIX (Aug 2026): we intentionally DO NOT `$pull` the deleted set from
+    `contacts.permission_set_ids`. The v3 helpers now filter by
+    `deleted_at: null`, so a user whose only set has been deleted will:
+      • return an empty `docs` list from permission_sets.find(...),
+      • fall through to the "explicitly denied" branch (return None),
+      • get 403 on every permission-gated endpoint immediately.
+    If we `$pull`ed here, the user's `permission_set_ids` would become `[]`
+    and they'd incorrectly hit the pre-onboarded permissive fallback."""
     existing = await db.permission_sets.find_one({"id": pset_id}, {"_id": 0})
     if not existing:
         raise HTTPException(404, "Permission set not found")
@@ -595,22 +603,20 @@ async def delete_v3_set(pset_id: str, user=Depends(require_role("Super Admin")))
             "updated_by": _actor(user),
         }},
     )
-    res = await db.contacts.update_many(
-        {"permission_set_ids": pset_id},
-        {"$pull": {"permission_set_ids": pset_id}},
-    )
+    # Count (but do not modify) affected contacts, for audit visibility.
+    affected_count = await db.contacts.count_documents({"permission_set_ids": pset_id})
     await log_audit(
         actor=user, action="permission_set.delete", resource="permission_set",
         resource_id=pset_id,
-        detail=f"Deleted permission set '{existing.get('title')}' (soft); unassigned from {res.modified_count} employee(s)",
+        detail=f"Deleted permission set '{existing.get('title')}' (soft); {affected_count} employee(s) had it assigned (assignments preserved as orphan references)",
         metadata={
             "previous": {"title": existing.get("title"), "modules": existing.get("modules") or {}},
-            "unassigned_count": res.modified_count,
+            "affected_count": affected_count,
             "soft": True,
         },
         severity="warning",
     )
-    return {"ok": True, "unassigned_count": res.modified_count}
+    return {"ok": True, "unassigned_count": affected_count}
 
 
 @api_router.post("/permission-sets-v3/{pset_id}/duplicate")
