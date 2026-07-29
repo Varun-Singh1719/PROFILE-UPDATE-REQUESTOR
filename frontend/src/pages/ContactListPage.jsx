@@ -882,7 +882,9 @@ export default function ContactListPage() {
   const [emails, setEmails] = useState([]);      // chip-based Email ID filter
   const [role, setRole] = useState([]);
   const [status, setStatus] = useState([]);
-  const [psetFilter, setPsetFilter] = useState([]);
+  // NOTE: `psetFilter` state is declared further below, seeded from the URL
+  // synchronously to avoid an initial-load race with the deep-link
+  // `?permission_set=` param.
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editing, setEditing] = useState(null);
@@ -899,15 +901,24 @@ export default function ContactListPage() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  // Read `permission_set` URL param on mount (deep-link from Permission Sets tab)
+  // Deep-link support: a permission_set query param may arrive via the
+  // "Users" column on the Permission Sets list tab. We seed state from
+  // the URL synchronously in the initializer so the very first `load()`
+  // call already carries the filter — otherwise the initial unfiltered
+  // fetch races the second (filtered) fetch, and if the unfiltered one
+  // finishes last the user sees "5 rows, then all rows" (bug reported
+  // Jul 2025).
   const [searchParams, setSearchParams] = useSearchParams();
-  useEffect(() => {
-    const psetId = searchParams.get("permission_set");
-    if (psetId) {
-      setPsetFilter((prev) => (prev.includes(psetId) ? prev : [psetId]));
-    }
-    // eslint-disable-next-line
-  }, []);
+  const [psetFilter, setPsetFilterState] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const psetId = params.get("permission_set");
+      return psetId ? [psetId] : [];
+    } catch { return []; }
+  });
+  // Wrap setter so any later programmatic change also keeps the URL param
+  // in sync (single source of truth = state; URL is a mirror for shareability).
+  const setPsetFilter = setPsetFilterState;
 
   useEffect(() => {
     (async () => {
@@ -1573,14 +1584,25 @@ export default function ContactListPage() {
             <span className="text-[11px] uppercase tracking-wider font-semibold text-gray-500">Filtered by permission set:</span>
             {psetFilter.map((pid) => {
               const p = permissionSets.find((x) => x.id === pid);
-              const label = p ? `${p.numeric_id || p.seq_no || "?"} - ${p.title || p.name || "Untitled"}` : pid;
+              const num = p ? (p.numeric_id || p.seq_no || "?") : "?";
+              const name = p ? (p.title || p.name || "Untitled") : pid;
               return (
                 <span
                   key={pid}
                   data-testid={`contact-pset-chip-${pid}`}
-                  className="inline-flex items-center gap-1 rounded-full bg-[#ec9324]/10 border border-[#ec9324]/40 text-[#ec9324] px-3 py-1 text-xs font-semibold"
+                  className="inline-flex items-center gap-2 rounded-full bg-[#ec9324]/10 border border-[#ec9324]/40 text-[#ec9324] pl-3 pr-1 py-1 text-xs font-semibold"
+                  title={`${name} (ID ${num})`}
                 >
-                  {label}
+                  <span className="max-w-[260px] truncate">{name}</span>
+                  {/* Separator dot + ID pill — avoids ambiguity when the name
+                      itself contains " - " (e.g. "HR - Workspace Manager"). */}
+                  <span
+                    className="inline-flex items-center gap-1 h-5 px-1.5 rounded-full bg-white/70 border border-[#ec9324]/30 text-[10px] font-mono tabular-nums"
+                    aria-label={`ID ${num}`}
+                  >
+                    <span className="text-[#ec9324]/70 font-sans font-normal">ID</span>
+                    <span>{num}</span>
+                  </span>
                   <button
                     type="button"
                     onClick={() => {
