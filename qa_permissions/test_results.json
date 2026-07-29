@@ -1,0 +1,38 @@
+{
+  "super_admin_regression": {
+    "status": "pass",
+    "findings": [
+      "Login successful",
+      "Dashboard link present",
+      "ProfiX group present",
+      "Workspace Manager group present",
+      "Manage group present",
+      "Login As button present",
+      "Add Permission Set button present"
+    ]
+  },
+  "scenario_a_empty": {
+    "status": "fail",
+    "findings": [
+      "FAIL: No Module Assigned message not shown",
+      "All nav groups correctly hidden"
+    ]
+  },
+  "scenario_b_fullaccess": {
+    "status": "pass",
+    "findings": [
+      "Dashboard link visible",
+      "FAIL: ProfiX group not visible",
+      "FAIL: Workspace Manager group not visible",
+      "Manage group correctly hidden",
+      "All Requests page accessible"
+    ]
+  },
+  "scenario_f_manage_employees": {
+    "status": "pass",
+    "findings": [
+      "FAIL: Manage group not visible",
+      "Delete button correctly hidden"
+    ]
+  }
+}

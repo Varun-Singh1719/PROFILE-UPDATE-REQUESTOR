@@ -1,0 +1,285 @@
+{
+  "created_at": "2026-07-29T16:15:47.474898",
+  "permission_sets": [
+    {
+      "id": "pset-0cf1420f-a23d-442b-a0b7-63b69fa98cce",
+      "seq_no": 17,
+      "numeric_id": 17,
+      "title": "QA-Empty",
+      "description": "Everything off - no access to any module",
+      "version": 3,
+      "modules": {},
+      "created_on": "2026-07-29T16:15:38.684955+00:00",
+      "created_by": {
+        "id": "ab8c25e6-5823-46fe-937d-4dfe05924cec",
+        "email": "admin@ticketing.com",
+        "name": "Admin User"
+      },
+      "updated_on": "2026-07-29T16:15:38.684969+00:00",
+      "updated_by": {
+        "id": "ab8c25e6-5823-46fe-937d-4dfe05924cec",
+        "email": "admin@ticketing.com",
+        "name": "Admin User"
+      },
+      "copied_from_id": null,
+      "deleted_at": null,
+      "deleted_by": null
+    },
+    {
+      "id": "pset-1d3ab223-73b6-4738-a126-fe3cb6cf6f85",
+      "seq_no": 18,
+      "numeric_id": 18,
+      "title": "QA-FullAccess",
+      "description": "Everything on - full access with overall scope",
+      "version": 3,
+      "modules": {
+        "profix": {
+          "pages": {
+            "all_requests": {
+              "view": {
+                "enabled": true,
+                "visible": true,
+                "scope": "overall"
+              },
+              "edit": {
+                "enabled": true,
+                "visible": true,
+                "scope": "overall"
+              },
+              "functions": {}
+            },
+            "open_requests": {
+              "view": {
+                "enabled": true,
+                "visible": true,
+                "scope": "overall"
+              },
+              "edit": {
+                "enabled": true,
+                "visible": true,
+                "scope": "overall"
+              },
+              "functions": {}
+            }
+          }
+        },
+        "desk_booking": {
+          "pages": {
+            "floor_layout": {
+              "view": {
+                "enabled": true,
+                "visible": true,
+                "scope": "overall"
+              },
+              "edit": {
+                "enabled": true,
+                "visible": true,
+                "scope": "overall"
+              },
+              "functions": {}
+            },
+            "pending_approvals": {
+              "view": {
+                "enabled": true,
+                "visible": true,
+                "scope": "overall"
+              },
+              "edit": {
+                "enabled": true,
+                "visible": true,
+                "scope": "overall"
+              },
+              "functions": {}
+            }
+          }
+        },
+        "dashboard": {
+          "pages": {
+            "workspace_manager": {
+              "access_level": "overall"
+            },
+            "profix": {
+              "access_level": "overall"
+            }
+          }
+        }
+      },
+      "created_on": "2026-07-29T16:15:41.811210+00:00",
+      "created_by": {
+        "id": "ab8c25e6-5823-46fe-937d-4dfe05924cec",
+        "email": "admin@ticketing.com",
+        "name": "Admin User"
+      },
+      "updated_on": "2026-07-29T16:15:41.811225+00:00",
+      "updated_by": {
+        "id": "ab8c25e6-5823-46fe-937d-4dfe05924cec",
+        "email": "admin@ticketing.com",
+        "name": "Admin User"
+      },
+      "copied_from_id": null,
+      "deleted_at": null,
+      "deleted_by": null
+    },
+    {
+      "id": "pset-7238f5c3-cf40-44d0-a602-c4097318722e",
+      "seq_no": 19,
+      "numeric_id": 19,
+      "title": "QA-ManageEmployeesEditNoDelete",
+      "description": "Manage employees view/edit, no delete/invite/bulk",
+      "version": 3,
+      "modules": {
+        "manage": {
+          "pages": {
+            "employees": {
+              "view": {
+                "enabled": true,
+                "visible": true,
+                "scope": "overall"
+              },
+              "edit": {
+                "enabled": true,
+                "visible": true,
+                "scope": "overall"
+              },
+              "functions": {
+                "create": {
+                  "enabled": true,
+                  "visible": true,
+                  "scope": null
+                },
+                "edit": {
+                  "enabled": true,
+                  "visible": true,
+                  "scope": null
+                },
+                "search": {
+                  "enabled": true,
+                  "visible": true,
+                  "scope": null
+                },
+                "filter_role": {
+                  "enabled": true,
+                  "visible": true,
+                  "scope": null
+                },
+                "filter_status": {
+                  "enabled": true,
+                  "visible": true,
+                  "scope": null
+                },
+                "delete": {
+                  "enabled": false,
+                  "visible": false,
+                  "scope": null
+                },
+                "invite": {
+                  "enabled": false,
+                  "visible": false,
+                  "scope": null
+                },
+                "import": {
+                  "enabled": false,
+                  "visible": false,
+                  "scope": null
+                },
+                "export": {
+                  "enabled": false,
+                  "visible": false,
+                  "scope": null
+                },
+                "bulk_activate": {
+                  "enabled": false,
+                  "visible": false,
+                  "scope": null
+                },
+                "bulk_deactivate": {
+                  "enabled": false,
+                  "visible": false,
+                  "scope": null
+                },
+                "login_as": {
+                  "enabled": false,
+                  "visible": false,
+                  "scope": null
+                },
+                "reset_password": {
+                  "enabled": false,
+                  "visible": false,
+                  "scope": null
+                }
+              }
+            }
+          }
+        }
+      },
+      "created_on": "2026-07-29T16:15:44.921546+00:00",
+      "created_by": {
+        "id": "ab8c25e6-5823-46fe-937d-4dfe05924cec",
+        "email": "admin@ticketing.com",
+        "name": "Admin User"
+      },
+      "updated_on": "2026-07-29T16:15:44.921560+00:00",
+      "updated_by": {
+        "id": "ab8c25e6-5823-46fe-937d-4dfe05924cec",
+        "email": "admin@ticketing.com",
+        "name": "Admin User"
+      },
+      "copied_from_id": null,
+      "deleted_at": null,
+      "deleted_by": null
+    }
+  ],
+  "users": [
+    {
+      "id": "e69f1f14-dee1-45d4-8237-8b6c949ffba6",
+      "email": "qa.empty.1785341738@ticketing.com",
+      "name": "QA Empty Admin",
+      "phone": "",
+      "phone_isd": "+91",
+      "role": "Admin",
+      "emp_id": "QA-EMPTY-1785341738",
+      "doj": "2026-07-29",
+      "permission_set_ids": [
+        "pset-0cf1420f-a23d-442b-a0b7-63b69fa98cce"
+      ],
+      "status": "Active",
+      "created_on": "2026-07-29T16:15:40.016199+00:00",
+      "last_login": null,
+      "generated_password": "WxvmeLErFf3I8%"
+    },
+    {
+      "id": "419986a6-4f4f-41f2-9e29-cd9e6374f686",
+      "email": "qa.fullaccess.1785341738@ticketing.com",
+      "name": "QA FullAccess Admin",
+      "phone": "",
+      "phone_isd": "+91",
+      "role": "Admin",
+      "emp_id": "QA-FULL-1785341738",
+      "doj": "2026-07-29",
+      "permission_set_ids": [
+        "pset-1d3ab223-73b6-4738-a126-fe3cb6cf6f85"
+      ],
+      "status": "Active",
+      "created_on": "2026-07-29T16:15:43.115254+00:00",
+      "last_login": null,
+      "generated_password": "TyqJudCgYqam4%"
+    },
+    {
+      "id": "1f7d3555-7e90-4481-b2fa-36860913c764",
+      "email": "qa.manageemployees.1785341738@ticketing.com",
+      "name": "QA ManageEmployees Admin",
+      "phone": "",
+      "phone_isd": "+91",
+      "role": "Admin",
+      "emp_id": "QA-MGEMP-1785341738",
+      "doj": "2026-07-29",
+      "permission_set_ids": [
+        "pset-7238f5c3-cf40-44d0-a602-c4097318722e"
+      ],
+      "status": "Active",
+      "created_on": "2026-07-29T16:15:46.279366+00:00",
+      "last_login": null,
+      "generated_password": "AwLlIpmjEh599%"
+    }
+  ]
+}
