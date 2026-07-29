@@ -7709,3 +7709,156 @@ frontend_permissions_qa_aug2026:
             
             These can be manually spot-checked or the test script can be fixed and re-run.
 
+
+frontend_permissions_qa_aug2026:
+  - task: "Frontend Permissions QA — 7 Scenarios (Correct Contact Payload)"
+    implemented: true
+    working: false
+    file: "frontend/src/components/Sidebar.jsx, frontend/src/App.jsx, frontend/src/context/EffectivePermissionsContext.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: false
+          agent: "testing"
+          comment: |
+            ❌ FRONTEND PERMISSIONS QA COMPLETE — CRITICAL DEFECTS FOUND (Jul 29 2026, 18:51)
+            
+            Executed all 7 scenarios using correct ContactCreate schema (email with real TLD, emp_id, doj required).
+            Test credentials: admin@ticketing.com / Admin@123
+            Test environment: https://qa-perm-engine.preview.emergentagent.com
+            
+            **SCENARIO RESULTS:**
+            
+            ❌ SCENARIO 1 — Super Admin Regression: FAIL
+            - ✅ Sidebar shows ProfiX, Workspace Manager, Manage sections
+            - ❌ Navigate to /manage/permissions redirected to /admin (should stay at /manage/permissions)
+            - ROOT CAUSE: Routing issue - /manage/permissions route not found or redirecting
+            
+            ✅ SCENARIO 2 — Empty Permission Set: PASS
+            - ✅ Sidebar does NOT show Employees, Permissions, Floor Layout
+            - ✅ Direct nav to /manage/permissions → redirected to /admin
+            - ✅ Direct nav to /manage/employees → redirected to /admin
+            - ⚠️  Direct nav to /workspace-manager/floor-layout → URL stays but shows "no access" message
+            - Empty set correctly blocks all access
+            
+            ❌ SCENARIO 3 — Full Access: FAIL
+            - ❌ Sidebar does NOT show Employees, Permissions (only shows ProfiX, Workspace Manager)
+            - ❌ Navigate to /manage/permissions → redirected to /admin
+            - ❌ Navigate to /manage/employees → redirected to /admin
+            - ✅ Navigate to /workspace-manager/floor-layout → stays at URL
+            - ROOT CAUSE: Sidebar.jsx line 65 has `superAdminOnly: true` on Manage group
+            - IMPACT: Users with full manage.* permissions cannot see Manage section in sidebar
+            
+            ❌ SCENARIO 4 — ProfixReadOnly: FAIL
+            - ✅ Sidebar shows All Requests (ProfiX section)
+            - ✅ Sidebar does NOT show Employees, Permissions
+            - ✅ Direct nav to /manage/employees → redirected to /admin
+            - ❌ Direct nav to /workspace-manager/floor-layout → URL stays (should redirect)
+            - ✅ Navigate to /admin/all-requests → stays at URL
+            - ROOT CAUSE: Workspace routes not protected - user without desk_booking permissions can access floor-layout page
+            
+            ✅ SCENARIO 5 — WorkspaceOnly: PASS
+            - ✅ Sidebar shows Floor Layout (Workspace Manager section)
+            - ✅ Sidebar does NOT show All Requests, Employees
+            - ✅ Direct nav to /manage/permissions → redirected to /admin
+            - ✅ Direct nav to /admin/all-requests → redirected to /admin
+            - ✅ Navigate to /workspace-manager/floor-layout → stays at URL
+            - WorkspaceOnly correctly shows only workspace pages
+            
+            ❌ SCENARIO 6 — Deleted Set (UI-layer D2 verification): FAIL
+            - ❌ Before deletion: Employees NOT in sidebar (user has full permissions but isn't Super Admin)
+            - ❌ After deletion: Employees still NOT in sidebar (no change)
+            - ✅ Direct nav to /manage/employees → redirected to /admin
+            - ROOT CAUSE: Same as Scenario 3 - Manage group requires superAdminOnly
+            - IMPACT: Cannot verify D2 fix on frontend because Manage section never shows for non-Super Admin users
+            
+            🔴 SCENARIO 7 — Deep-link Bypass: FAIL — 3 URLs LEAKED
+            - ✅ All /manage/* URLs correctly redirect to /admin
+            - ❌ /workspace-manager/floor-layout → URL stays + content visible (LEAK)
+            - ✅ /workspace-manager/workstation-bookings → redirected to /admin
+            - ✅ /workspace-manager/meeting-room-bookings → redirected to /admin
+            - ❌ /workspace-manager/pending-approvals → URL stays + content visible (LEAK)
+            - ❌ /workspace-manager/bookings → URL stays + content visible (LEAK)
+            - ROOT CAUSE: Route-level protection missing or not working for 3 workspace pages
+            - IMPACT: Users with only profix permissions can access workspace pages via direct URL
+            
+            **CLEANUP: ✅ COMPLETE**
+            - 5 permission sets deleted
+            - 6 users deactivated
+            
+            **CRITICAL DEFECTS FOUND:**
+            
+            🔴 **FRONTEND-D1: Manage group requires superAdminOnly (Sidebar.jsx line 65)**
+            - Sidebar.jsx line 65: `kind: "group", label: "Manage", icon: Settings, superAdminOnly: true`
+            - IMPACT: Users with full manage.* permissions cannot see Manage section in sidebar
+            - AFFECTED SCENARIOS: 3 (Full Access), 6 (Deleted Set)
+            - FIX: Remove `superAdminOnly: true` or change to check v3 permissions instead
+            
+            🔴 **FRONTEND-D2: Route-level protection missing for 3 workspace pages**
+            - /workspace-manager/floor-layout accessible to users without desk_booking.floor_layout.view
+            - /workspace-manager/pending-approvals accessible to users without desk_booking.pending_approvals.view
+            - /workspace-manager/bookings accessible to users without desk_booking.bookings_history.view
+            - IMPACT: Users can bypass sidebar restrictions via direct URL navigation
+            - AFFECTED SCENARIOS: 4 (ProfixReadOnly), 7 (Deep-link Bypass)
+            - FIX: Add route-level permission checks in App.jsx or create ProtectedRoute wrapper
+            
+            🟡 **FRONTEND-D3: /manage/permissions route not found**
+            - Navigating to /manage/permissions redirects to /admin
+            - IMPACT: Cannot access Permissions page even as Super Admin
+            - AFFECTED SCENARIOS: 1 (Super Admin)
+            - FIX: Check App.jsx routing - /manage/permissions route may be missing or incorrect
+            
+            **BACKEND VERIFICATION:**
+            - ✅ Backend correctly returns 403 for floor-plans, workstation-requests, meeting-room-requests, bookings
+            - ✅ Backend D1 fix (workspace endpoints) is working correctly
+            - ✅ Backend D2 fix (deleted sets) is working correctly
+            - Console logs show 403 errors when restricted users try to access protected endpoints
+            
+            **PASS/FAIL SUMMARY:**
+            - ✅ PASS: Scenario 2 (Empty Set), Scenario 5 (WorkspaceOnly)
+            - ❌ FAIL: Scenario 1 (Super Admin), Scenario 3 (Full Access), Scenario 4 (ProfixReadOnly), Scenario 6 (Deleted Set), Scenario 7 (Deep-link Bypass)
+            - PASS RATE: 2/7 (28.6%)
+            
+            **SCREENSHOTS:**
+            - scenario1-super-admin.png: Super Admin dashboard
+            - scenario2-empty-set.png: Empty set "No Module Assigned" banner
+            - scenario3-full-permissions.png: Full access user (missing Manage section)
+            - scenario3-full-employees.png: Full access user redirected to /admin
+            - scenario3-full-floor.png: Full access user on floor layout
+            - scenario4-profix-ro.png: ProfixReadOnly user dashboard
+            - scenario5-workspace-only.png: WorkspaceOnly user on floor layout
+            - scenario6-deleted-set.png: Deleted set user dashboard
+
+agent_communication:
+    - agent: "testing"
+      message: |
+        🔴 FRONTEND PERMISSIONS QA FAILED — 3 CRITICAL DEFECTS FOUND (Jul 29 2026, 18:51)
+        
+        Completed comprehensive frontend permissions QA with 7 scenarios. Only 2/7 scenarios passed.
+        
+        **CRITICAL DEFECTS REQUIRING IMMEDIATE FIX:**
+        
+        1. 🔴 FRONTEND-D1: Sidebar.jsx line 65 has `superAdminOnly: true` on Manage group
+           - Users with full manage.* permissions cannot see Manage section
+           - Affects Scenarios 3 (Full Access) and 6 (Deleted Set)
+           - FIX: Remove `superAdminOnly: true` or check v3 permissions instead
+        
+        2. 🔴 FRONTEND-D2: Route-level protection missing for 3 workspace pages
+           - /workspace-manager/floor-layout, /pending-approvals, /bookings accessible without permissions
+           - Users can bypass sidebar restrictions via direct URL
+           - Affects Scenarios 4 (ProfixReadOnly) and 7 (Deep-link Bypass)
+           - FIX: Add route-level permission checks in App.jsx or ProtectedRoute wrapper
+        
+        3. 🟡 FRONTEND-D3: /manage/permissions route not found
+           - Navigating to /manage/permissions redirects to /admin
+           - Affects Scenario 1 (Super Admin)
+           - FIX: Check App.jsx routing configuration
+        
+        **BACKEND STATUS:**
+        ✅ Backend D1 fix (workspace endpoints) working correctly - returns 403 as expected
+        ✅ Backend D2 fix (deleted sets) working correctly - permissions revoked immediately
+        
+        **NEXT STEPS:**
+        Main agent should fix the 3 frontend defects above. The backend fixes are working correctly,
+        but the frontend is not enforcing permissions properly in the sidebar and routes.
