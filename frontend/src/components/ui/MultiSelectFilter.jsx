@@ -135,7 +135,14 @@ export default function MultiSelectFilter({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return options;
-    return options.filter((o) => (o.label || "").toString().toLowerCase().includes(q));
+    return options.filter((o) => {
+      // Search matches the visible label OR an optional hidden `searchText`
+      // hint provided by the caller (useful when the label omits data that
+      // users may still type — e.g. permission-set IDs shown in the `meta`
+      // column but not in the label).
+      const hay = (o.searchText != null ? o.searchText : o.label) || "";
+      return hay.toString().toLowerCase().includes(q);
+    });
   }, [options, query]);
 
   const showSearch = options.length > searchThreshold;

@@ -988,13 +988,27 @@ export default function ContactListPage() {
   // mode we narrow the picker to only the sets already assigned to any of the
   // selected employees — you cannot remove what isn't there.
   const bulkPsetOptions = useMemo(() => {
-    const mkLabel = (p) => {
+    const mkOption = (p) => {
       const num = p.numeric_id || p.seq_no || "?";
-      const name = p.title || p.name || "Untitled";
-      return `${num} - ${name}`;
+      const nm = p.title || p.name || "Untitled";
+      return {
+        value: p.id,
+        // Name left-aligned…
+        label: nm,
+        // Search still matches the numeric ID (users often type "152").
+        searchText: `${num} ${nm}`,
+        // …ID right-aligned in the "ID : <bold orange>" style used in the
+        // hover-card on the Employee list row.
+        meta: (
+          <>
+            <span className="text-gray-500">ID&nbsp;:&nbsp;</span>
+            <span className="font-semibold text-[#ec9324]">{num}</span>
+          </>
+        ),
+      };
     };
     if (bulkPsetMode !== "remove" || selected.length === 0) {
-      return permissionSets.map((p) => ({ value: p.id, label: mkLabel(p) }));
+      return permissionSets.map(mkOption);
     }
     const selectedContacts = contacts.filter((c) => selected.includes(c.id));
     const assignedIds = new Set();
@@ -1003,7 +1017,7 @@ export default function ContactListPage() {
     }
     return permissionSets
       .filter((p) => assignedIds.has(p.id))
-      .map((p) => ({ value: p.id, label: mkLabel(p) }));
+      .map(mkOption);
   }, [bulkPsetMode, permissionSets, selected, contacts]);
 
   // Clear any chosen values that are no longer visible when the mode flips.
@@ -1509,10 +1523,26 @@ export default function ContactListPage() {
                 </label>
                 <MultiSelectFilter
                   label="Permission Sets"
-                  options={permissionSets.map((p) => ({
-                    value: p.id,
-                    label: `${p.numeric_id || p.seq_no || "?"} - ${p.title || p.name || "Untitled"}`,
-                  }))}
+                  options={permissionSets.map((p) => {
+                    const num = p.numeric_id || p.seq_no || "?";
+                    const nm = p.title || p.name || "Untitled";
+                    return {
+                      value: p.id,
+                      // Name left-aligned (matches Team filter UX in ProfiX › All Requests).
+                      label: nm,
+                      // Include ID and name in the search haystack so users can still
+                      // find a set by typing its number ("152").
+                      searchText: `${num} ${nm}`,
+                      // ID right-aligned, formatted exactly like the hover-card:
+                      //   "ID : <bold orange num>"
+                      meta: (
+                        <>
+                          <span className="text-gray-500">ID&nbsp;:&nbsp;</span>
+                          <span className="font-semibold text-[#ec9324]">{num}</span>
+                        </>
+                      ),
+                    };
+                  })}
                   value={form.permission_set_ids || []}
                   onChange={(ids) => setForm({ ...form, permission_set_ids: ids })}
                   placeholder="Assign one or more Permission Sets…"
@@ -1624,10 +1654,21 @@ export default function ContactListPage() {
                 else sp.delete("permission_set");
                 setSearchParams(sp, { replace: true });
               }}
-              options={permissionSets.map((p) => ({
-                value: p.id,
-                label: `${p.numeric_id || p.seq_no || "?"} - ${p.title || p.name || "Untitled"}`,
-              }))}
+              options={permissionSets.map((p) => {
+                const num = p.numeric_id || p.seq_no || "?";
+                const nm = p.title || p.name || "Untitled";
+                return {
+                  value: p.id,
+                  label: nm,
+                  searchText: `${num} ${nm}`,
+                  meta: (
+                    <>
+                      <span className="text-gray-500">ID&nbsp;:&nbsp;</span>
+                      <span className="font-semibold text-[#ec9324]">{num}</span>
+                    </>
+                  ),
+                };
+              })}
               testIdPrefix="contact-pset-filter"
               className="w-52"
             />
