@@ -46,7 +46,7 @@ const STATUS_PILL = {
   error:  { label: "Error",  text: "#dc2626", border: "#dc2626" }, // red    (like Cancelled)
 };
 
-function fmt(iso) { if (!iso) return "—"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
+function fmt(iso) { if (!iso) return "—"; try { return new Date(iso).toLocaleString(undefined, { timeZone: "Asia/Kolkata" }); } catch { return iso; } }
 
 export default function NotificationsOutboxPage() {
   // ── Permissions V3 (Round 3) ──

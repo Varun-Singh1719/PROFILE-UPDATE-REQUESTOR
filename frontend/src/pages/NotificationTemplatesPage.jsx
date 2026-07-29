@@ -148,9 +148,7 @@ function randomSeatLabel() {
   return `${wing}-${100 + Math.floor(Math.random() * 400)}`;
 }
 function formatToday() {
-  return new Date().toLocaleDateString(undefined, {
-    day: "2-digit", month: "short", year: "numeric",
-  });
+  return new Date().toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
 }
 
 /**

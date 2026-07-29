@@ -39,12 +39,12 @@ pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/$
 // ============================================================ Helpers
 const fmtDateTime = (iso) => {
   if (!iso) return "—";
-  try { return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }); }
+  try { return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" }); }
   catch { return iso; }
 };
 const fmtTime = (iso) => {
   if (!iso) return "—";
-  try { return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); } catch { return iso; }
+  try { return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" }); } catch { return iso; }
 };
 const todayIso = () => {
   const d = new Date(); const p = (n) => String(n).padStart(2, "0");
@@ -396,7 +396,7 @@ export default function MeetingRoomBookingPage() {
       setTimeout(() => titleInputFocusRef.current?.focus?.(), 250);
     });
     toast.info(`Quick-booked the next free 30 min for ${room.name}`, {
-      description: `${sd.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ${ed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}. Add a title and Submit.`,
+      description: `${sd.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })} – ${ed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })}. Add a title and Submit.`,
     });
   }, [computeNextFreeSlot]);
 
@@ -1205,7 +1205,7 @@ function UpcomingBookingsList({ bookings, pendingRequests = [], filterDate, rang
     if (key === today) return "Today";
     if (key === addDaysIso(1)) return "Tomorrow";
     const d = new Date(key);
-    return d.toLocaleDateString(undefined, { weekday: "long", day: "2-digit", month: "short" });
+    return d.toLocaleDateString(undefined, { weekday: "long", day: "2-digit", month: "short", timeZone: "Asia/Kolkata" });
   };
 
   let dayGroups;
@@ -1241,7 +1241,7 @@ function UpcomingBookingsList({ bookings, pendingRequests = [], filterDate, rang
       { key: addDaysIso(1), label: "Tomorrow", items: groups[addDaysIso(1)] || [] },
     ];
   } else {
-    dayGroups = [{ key: filterDate, label: new Date(filterDate).toLocaleDateString(undefined, { weekday: "long", day: "2-digit", month: "short", year: "numeric" }), items: groups[filterDate] || [] }];
+    dayGroups = [{ key: filterDate, label: new Date(filterDate).toLocaleDateString(undefined, { weekday: "long", day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" }), items: groups[filterDate] || [] }];
   }
 
   const totalForView = dayGroups.reduce((s, g) => s + g.items.length, 0);
@@ -2003,7 +2003,7 @@ function RoomHoverTooltip({ room, booking, occupiedNow, blocked, left, top }) {
   const teamName = booking?.organizer_team_name || null;
   const dateStr = booking?.start_at ? new Date(booking.start_at) : null;
   const dateLabel = dateStr && !Number.isNaN(dateStr.getTime())
-    ? dateStr.toLocaleDateString(undefined, { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })
+    ? dateStr.toLocaleDateString(undefined, { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', timeZone: "Asia/Kolkata" })
     : null;
   const timeLabel = booking?.start_at && booking?.end_at
     ? `${fmtTime(booking.start_at)} – ${fmtTime(booking.end_at)}`
@@ -2155,7 +2155,7 @@ function MeetingDetailModal({ row, onClose, onEdit, onDelete, canEdit, canDelete
             <DetailRow icon={<Clock sx={{ fontSize: 14 }} className="text-[#ec9324]"/>} label="When">
               {start ? (
                 <>
-                  <span className="font-semibold">{start.toLocaleDateString(undefined, { weekday: "long", day: "2-digit", month: "short", year: "numeric" })}</span>
+                  <span className="font-semibold">{start.toLocaleDateString(undefined, { weekday: "long", day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" })}</span>
                   <span className="text-gray-400 mx-1">·</span>
                   {fmtTime(row.start_at)} – {fmtTime(row.end_at)}
                 </>

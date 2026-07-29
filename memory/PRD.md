@@ -1,6 +1,12 @@
 # Infollion Utilities — PRD
 
 
+## IST Timezone Standardisation (Jul 2025) — app-wide
+- **Backend**: added `IST` / `ist_now` / `ist_now_iso` / `ist_today` helpers to `core.py`. Rewrote `now_iso()` (used ~141 times) to return IST-tagged (+05:30) ISO strings. Duplicated the helper in `notifications.py` and `inapp_notifications.py`. Fixed direct callers of naive `datetime.now()` / `datetime.utcnow()` / `date.today()` across Workspace Manager (my_workspace, room_bookings, bookings, workstation_*), ProfiX (tickets, contacts), auth (password-reset expiry) and approval_settings. JWT `exp` also on IST-aware datetime.
+- **Frontend**: new `src/lib/dateIST.js` with `formatISTDateTime`, `formatISTDate`, `istTodayISO`, etc. Batch-patched every `.toLocaleString / .toLocaleDateString / .toLocaleTimeString` call to include `timeZone: "Asia/Kolkata"` (37 files, 69 sites) via `scripts/inject_ist_timezone.py` (idempotent). Fixed the org-wide dashboard's "today" bug (was using `Date.toISOString().slice(0,10)` = UTC). Date pickers intentionally kept browser-local per spec.
+- **Env**: recreated `/app/backend/.env` (missing on this fresh container) — MongoDB Atlas `cluster0.vmgql1i.mongodb.net`, `DB_NAME=app_db`, new user `sakshamsinghal_db_user`. Regenerated `JWT_SECRET` + `FERNET_KEY`. Login verified for `admin@ticketing.com / Admin@123`.
+
+
 ## Latest UI polish (Jul 2026) — Workstation Booking · Team Auto Assignment
 - **Workstation-Booking / Pending-Approval conflict validation (new feature)** — applies to *every* booking path (Manual + Employee, Manual + Team, Team Auto Assignment).
   - **Approved conflict** (`EMPLOYEE_ALREADY_BOOKED`): existing behavior — blocked with an error, user must resolve before continuing.

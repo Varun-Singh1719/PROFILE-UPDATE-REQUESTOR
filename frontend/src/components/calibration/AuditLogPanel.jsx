@@ -9,7 +9,7 @@ import api from '../../lib/api';
 
 function fmtDate(iso) {
   if (!iso) return '—';
-  try { return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); }
+  try { return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: "Asia/Kolkata" }); }
   catch { return iso; }
 }
 

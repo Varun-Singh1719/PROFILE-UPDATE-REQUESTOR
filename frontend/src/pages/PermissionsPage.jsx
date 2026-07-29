@@ -926,7 +926,7 @@ function AuditLogTab({ resourceId, catalog, focusResourceId, onClearResource }) 
                         <div className="text-[11px] text-gray-500 truncate">{r.detail || r.action}</div>
                       </div>
                       <div className="text-right shrink-0">
-                        <div className="text-[11px] text-gray-500">{new Date(r.created_at).toLocaleString()}</div>
+                        <div className="text-[11px] text-gray-500">{new Date(r.created_at).toLocaleString(undefined, { timeZone: "Asia/Kolkata" })}</div>
                         <div className="text-[10px] text-gray-400">by {r.actor?.name || r.actor?.email || "—"}</div>
                       </div>
                     </div>

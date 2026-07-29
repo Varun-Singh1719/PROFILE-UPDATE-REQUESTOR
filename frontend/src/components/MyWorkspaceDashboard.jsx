@@ -43,20 +43,18 @@ function toISO(d) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 function shortWeekday(dateISO) {
-  return new Date(dateISO + "T00:00:00").toLocaleDateString(undefined, { weekday: "short" });
+  return new Date(dateISO + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", timeZone: "Asia/Kolkata" });
 }
 function shortDay(dateISO) {
   return new Date(dateISO + "T00:00:00").getDate();
 }
 function longDate(dateISO) {
-  return new Date(dateISO + "T00:00:00").toLocaleDateString(undefined, {
-    weekday: "long", day: "2-digit", month: "long", year: "numeric",
-  });
+  return new Date(dateISO + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", day: "2-digit", month: "long", year: "numeric", timeZone: "Asia/Kolkata" });
 }
 function fmtTime(iso) {
   if (!iso) return "";
   try {
-    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" });
   } catch { return ""; }
 }
 function relativeTimeUntil(iso) {
@@ -341,8 +339,8 @@ function ThisWeekCard({ weekData, weekLoading, onPrev, onNext, onToday, today })
     const start = new Date(weekData.week_start + "T00:00:00");
     const end = new Date(start.getTime() + 6 * 86400000);
     const sameMonth = start.getMonth() === end.getMonth();
-    const fmtStart = start.toLocaleDateString(undefined, { day: "2-digit", month: sameMonth ? undefined : "short" });
-    const fmtEnd = end.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+    const fmtStart = start.toLocaleDateString(undefined, { day: "2-digit", month: sameMonth ? undefined : "short", timeZone: "Asia/Kolkata" });
+    const fmtEnd = end.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
     return `${fmtStart} – ${fmtEnd}`;
   }, [weekData]);
 

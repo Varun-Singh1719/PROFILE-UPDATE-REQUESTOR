@@ -61,7 +61,7 @@ function relativeTime(iso) {
   if (h < 24) return `${h}h ago`;
   const d = Math.round(h / 24);
   if (d < 7) return `${d}d ago`;
-  return new Date(iso).toLocaleDateString();
+  return new Date(iso).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" });
 }
 
 /**
@@ -73,9 +73,7 @@ function formatDate(s) {
   if (!s) return "";
   const t = Date.parse(s);
   if (Number.isNaN(t)) return String(s);
-  return new Date(t).toLocaleDateString(undefined, {
-    day: "2-digit", month: "short", year: "numeric",
-  });
+  return new Date(t).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
 }
 
 /**
@@ -89,12 +87,8 @@ function formatDateTime(s) {
   const hasTime = /T\d/.test(String(s));
   if (!hasTime) return formatDate(s);
   const d = new Date(t);
-  const datePart = d.toLocaleDateString(undefined, {
-    day: "2-digit", month: "short", year: "numeric",
-  });
-  const timePart = d.toLocaleTimeString(undefined, {
-    hour: "numeric", minute: "2-digit", hour12: true,
-  });
+  const datePart = d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
+  const timePart = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" });
   return `${datePart}, ${timePart}`;
 }
 

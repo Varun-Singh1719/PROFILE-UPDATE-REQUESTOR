@@ -46,7 +46,7 @@ function fmtDate(iso) {
   if (!iso) return "—";
   try {
     const d = new Date(iso);
-    return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+    return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
   } catch { return iso; }
 }
 
@@ -309,7 +309,7 @@ const PermissionSetsListTab = forwardRef(function PermissionSetsListTab({ onView
           )}
 
           <div className="ml-auto text-xs text-gray-500">
-            {loading ? "Loading…" : `${total.toLocaleString()} ${total === 1 ? "set" : "sets"}`}
+            {loading ? "Loading…" : `${total.toLocaleString(undefined, { timeZone: "Asia/Kolkata" })} ${total === 1 ? "set" : "sets"}`}
           </div>
         </div>
       </div>

@@ -30,17 +30,27 @@ import MySeatFloorDialog from "./MySeatFloorDialog";
 const ORANGE = "#ec9324";
 
 // ── helpers ────────────────────────────────────────────────────────────────
-function toISO(d) { return d.toISOString().slice(0, 10); }
+// Jul 2025: "today" resolves in IST so the dashboard header matches the
+// timezone the backend persists booking dates in. `toISO` for other Date
+// instances (e.g. week arithmetic) uses local calendar fields — arithmetic
+// on JS Date is timezone-independent as long as we consistently read
+// `getFullYear / getMonth / getDate` (browser-local).
+function toISO(d) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function istTodayISO() {
+  // en-CA gives "YYYY-MM-DD" natively.
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+}
 function longDate(iso) {
   try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      weekday: "long", day: "2-digit", month: "long", year: "numeric",
-    });
+    return new Date(iso + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", day: "2-digit", month: "long", year: "numeric", timeZone: "Asia/Kolkata" });
   } catch { return iso; }
 }
 
 function isoWeekMondayFor(iso) {
-  const d = new Date(iso);
+  const d = new Date(iso + "T00:00:00");
   const day = (d.getDay() + 6) % 7; // 0=Mon
   d.setDate(d.getDate() - day);
   return toISO(d);
@@ -59,12 +69,12 @@ function ProgressBar({ value, max, tone = ORANGE, height = 6 }) {
 export default function WorkspaceOverallDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [today] = useState(toISO(new Date()));
+  const [today] = useState(istTodayISO());
 
   const [overall, setOverall] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const [weekStart, setWeekStart] = useState(() => isoWeekMondayFor(toISO(new Date())));
+  const [weekStart, setWeekStart] = useState(() => isoWeekMondayFor(istTodayISO()));
   const [weekData, setWeekData] = useState({ days: [], start: "" });
   const [weekLoading, setWeekLoading] = useState(false);
 
@@ -355,8 +365,8 @@ export default function WorkspaceOverallDashboard() {
                   const start = new Date(startISO + "T00:00:00");
                   const end = new Date(start.getTime() + 6 * 86400000);
                   const sameMonth = start.getMonth() === end.getMonth();
-                  const fmtStart = start.toLocaleDateString(undefined, { day: "2-digit", month: sameMonth ? undefined : "short" });
-                  const fmtEnd = end.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+                  const fmtStart = start.toLocaleDateString(undefined, { day: "2-digit", month: sameMonth ? undefined : "short", timeZone: "Asia/Kolkata" });
+                  const fmtEnd = end.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
                   return `${fmtStart} – ${fmtEnd}`;
                 })()}</div>
               </div>
@@ -397,7 +407,7 @@ export default function WorkspaceOverallDashboard() {
                 if (status === "assigned") cls = "bg-[#ec9324] border-[#ec9324] text-white shadow-sm";
                 else if (status === "requested") cls = "bg-orange-50 border-2 border-dashed border-[#ec9324] text-[#ec9324]";
                 const dayLabel = d?.date
-                  ? new Date(d.date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short" }).slice(0, 3)
+                  ? new Date(d.date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", timeZone: "Asia/Kolkata" }).slice(0, 3)
                   : "—";
                 const dayNum = d?.date ? new Date(d.date + "T00:00:00").getDate() : "";
                 return (

@@ -429,7 +429,7 @@ function RequestDetailDialog({ req, onOpenChange, onEdit, onDelete }) {
               {req.status}
             </span>
             <span className="text-[11px] text-gray-500">
-              Requested {req.requested_on ? new Date(req.requested_on).toLocaleString() : "—"}
+              Requested {req.requested_on ? new Date(req.requested_on).toLocaleString(undefined, { timeZone: "Asia/Kolkata" }) : "—"}
             </span>
           </div>
 
@@ -459,7 +459,7 @@ function RequestDetailDialog({ req, onOpenChange, onEdit, onDelete }) {
             <div className="text-[11px] text-gray-500 border-t border-gray-100 pt-2">
               {req.status === "Approved" ? "Approved" : req.status === "Declined" ? "Declined" : "Decided"}{" "}
               by <span className="font-medium">{req.decided_by?.name || "—"}</span>{" "}
-              on {new Date(req.decided_at).toLocaleString()}
+              on {new Date(req.decided_at).toLocaleString(undefined, { timeZone: "Asia/Kolkata" })}
               {req.decision_note && (
                 <div className="mt-1 italic text-gray-600">“{req.decision_note}”</div>
               )}

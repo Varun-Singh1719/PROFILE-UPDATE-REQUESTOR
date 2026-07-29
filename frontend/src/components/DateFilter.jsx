@@ -21,7 +21,7 @@ function toDisplayDDMMYYYY(d) {
 
 function fmtShort(d) {
   if (!d) return "";
-  return new Date(d).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" });
+  return new Date(d).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
 }
 
 export function getCurrentMonthRange() {

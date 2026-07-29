@@ -43,9 +43,7 @@ const fmtIsoDate = (iso) => {
   try {
     const d = new Date(String(iso).length === 10 ? `${iso}T00:00:00` : iso);
     if (Number.isNaN(d.getTime())) return String(iso);
-    return d.toLocaleDateString(undefined, {
-      weekday: "short", day: "2-digit", month: "short", year: "numeric",
-    });
+    return d.toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
   } catch { return String(iso); }
 };
 
@@ -54,7 +52,7 @@ const fmtTime = (iso) => {
   try {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return "—";
-    return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" });
   } catch { return "—"; }
 };
 

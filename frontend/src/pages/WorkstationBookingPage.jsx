@@ -101,9 +101,7 @@ const addDaysIso = (iso, days) => {
 const fmtDate = (iso) => {
   if (!iso) return "—";
   try {
-    return new Date(iso + "T00:00:00").toLocaleDateString("en-IN", {
-      day: "2-digit", month: "short", year: "numeric",
-    });
+    return new Date(iso + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
   } catch { return iso; }
 };
 

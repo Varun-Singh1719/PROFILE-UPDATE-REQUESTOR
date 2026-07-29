@@ -43,9 +43,7 @@ const TABS = [
 ];
 
 function longDate(d = new Date()) {
-  return d.toLocaleDateString(undefined, {
-    weekday: "long", day: "2-digit", month: "long", year: "numeric",
-  });
+  return d.toLocaleDateString(undefined, { weekday: "long", day: "2-digit", month: "long", year: "numeric", timeZone: "Asia/Kolkata" });
 }
 
 export default function AdminDashboard() {

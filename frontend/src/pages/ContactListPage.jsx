@@ -61,7 +61,7 @@ import { confirm as confirmDialog } from '../lib/dialog';
 import ISDPicker from "../components/ISDPicker";
 import { DEFAULT_ISD } from "../lib/isdCodes";
 
-function fmt(iso) { if (!iso) return "Never"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
+function fmt(iso) { if (!iso) return "Never"; try { return new Date(iso).toLocaleString(undefined, { timeZone: "Asia/Kolkata" }); } catch { return iso; } }
 
 /**
  * PermissionSetsHoverList

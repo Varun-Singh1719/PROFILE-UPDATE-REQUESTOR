@@ -14,7 +14,7 @@ import {
   DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuSeparator, DropdownMenuLabel,
 } from "./ui/dropdown-menu";
 
-function fmt(iso) { if (!iso) return "-"; try { return new Date(iso).toLocaleDateString(); } catch { return iso; } }
+function fmt(iso) { if (!iso) return "-"; try { return new Date(iso).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" }); } catch { return iso; } }
 
 /**
  * TicketTable (Jul 2026 refresh)

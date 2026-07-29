@@ -41,7 +41,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "../components/ui/dropdown-menu";
 
-function fmt(iso) { if (!iso) return "—"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
+function fmt(iso) { if (!iso) return "—"; try { return new Date(iso).toLocaleString(undefined, { timeZone: "Asia/Kolkata" }); } catch { return iso; } }
 
 // "Type" is a UI-only grouping derived from the template `kind` so the
 // backend contract stays untouched. It maps every seeded/system kind to the

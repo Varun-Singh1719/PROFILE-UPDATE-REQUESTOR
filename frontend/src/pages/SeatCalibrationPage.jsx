@@ -1210,7 +1210,7 @@ export default function SeatCalibrationPage() {
             />
           </div>
           <div className="text-[10px] text-gray-500 mb-3">
-            {lastSaved ? `Saved ${new Date(lastSaved).toLocaleTimeString()}` : 'Not saved yet'} · auto-save every 30s
+            {lastSaved ? `Saved ${new Date(lastSaved).toLocaleTimeString(undefined, { timeZone: "Asia/Kolkata" })}` : 'Not saved yet'} · auto-save every 30s
           </div>
 
           {/* Diff vs live preview */}

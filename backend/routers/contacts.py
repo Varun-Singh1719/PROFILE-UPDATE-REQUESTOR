@@ -16,7 +16,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from core import (
     api_router, db, log_audit, now_iso, require_role, get_current_user,
     hash_password, encrypt_password, decrypt_password, generate_password,
-    _public_contact,
+    _public_contact, ist_now,
     ContactCreate, ContactUpdate, BulkContactStatus, BulkContactRole, BulkContactPermissionSets,
 )
 from routers.permissions_v3 import require_v3_page_view, require_v3_page_edit
@@ -300,7 +300,7 @@ async def export_contacts_csv(
             c.get("doj") or "", _pset_label(c), c.get("status", ""),
             c.get("created_on", ""), c.get("last_login") or "",
         ])
-    filename = f"employees_{datetime.now(timezone.utc).date().isoformat()}.csv"
+    filename = f"employees_{ist_now().date().isoformat()}.csv"
     return StreamingResponse(
         iter([buf.getvalue()]),
         media_type="text/csv",
@@ -396,7 +396,7 @@ async def export_contacts_xlsx(
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
-    filename = f"employees_{datetime.now(timezone.utc).date().isoformat()}.xlsx"
+    filename = f"employees_{ist_now().date().isoformat()}.xlsx"
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

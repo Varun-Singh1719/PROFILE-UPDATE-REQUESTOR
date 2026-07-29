@@ -22,13 +22,13 @@ from __future__ import annotations
 
 import csv
 import io
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timezone, timedelta
 from typing import List, Optional, Dict, Any, Tuple
 
 from fastapi import Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
-from core import api_router, db, get_current_user, now_iso
+from core import api_router, db, get_current_user, now_iso, IST, ist_now, ist_today
 from routers.room_bookings import _enrich_bookings_with_team
 from routers.permissions_v3 import require_any_v3_page_view, require_v3_page_view
 
@@ -78,7 +78,9 @@ def _statuses_from(csv_or_single: Optional[str]) -> List[str]:
 # --------------------------------------------------------------------------- #
 
 def _now_utc_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    # NOTE: kept for API stability — now returns IST-tagged (+05:30) ISO
+    # string per the Jul 2025 timezone standardisation.
+    return ist_now().isoformat()
 
 
 def _compute_status(doc: dict) -> str:
@@ -88,7 +90,7 @@ def _compute_status(doc: dict) -> str:
     if doc.get("date") and not doc.get("end_at"):
         try:
             d = date.fromisoformat(doc["date"])
-            return "Completed" if d < date.today() else "Active"
+            return "Completed" if d < ist_today() else "Active"
         except Exception:
             return "Active"
     end_at = doc.get("end_at")
@@ -96,7 +98,10 @@ def _compute_status(doc: dict) -> str:
         end_dt = datetime.fromisoformat((end_at or "").replace("Z", "+00:00"))
     except Exception:
         return "Active"
-    now = datetime.now(end_dt.tzinfo) if end_dt.tzinfo else datetime.now()
+    if end_dt.tzinfo is None:
+        # legacy naive → assume UTC (backend container was UTC)
+        end_dt = end_dt.replace(tzinfo=timezone.utc)
+    now = ist_now()
     return "Completed" if end_dt <= now else "Active"
 
 
@@ -279,7 +284,7 @@ async def _build_workstation_query(
 ) -> Dict[str, Any]:
     """Build the workstation_bookings query. Dates are stored as 'YYYY-MM-DD' strings."""
     q: Dict[str, Any] = {}
-    today_iso = date.today().isoformat()
+    today_iso = ist_today().isoformat()
     if date_from or date_to:
         rng: Dict[str, str] = {}
         if date_from:
@@ -600,7 +605,7 @@ async def export_bookings(
         for r in rows:
             writer.writerow([c[1](r) for c in columns])
         content = buf.getvalue().encode("utf-8-sig")  # BOM so Excel opens UTF-8 correctly
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        ts = ist_now().strftime("%Y%m%d_%H%M%S")
         return Response(
             content=content,
             media_type="text/csv; charset=utf-8",
@@ -632,7 +637,7 @@ async def export_bookings(
     out = io.BytesIO()
     wb.save(out)
     out.seek(0)
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ts = ist_now().strftime("%Y%m%d_%H%M%S")
     return Response(
         content=out.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

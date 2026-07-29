@@ -73,7 +73,7 @@ const fmtDateTime = (iso) => {
 const fmtTime = (iso) => {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true });
+    return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" });
   } catch { return iso; }
 };
 const fmtTimeRange = (s, e) => `${fmtTime(s)} – ${fmtTime(e)}`;

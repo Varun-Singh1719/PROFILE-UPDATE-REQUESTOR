@@ -37,7 +37,7 @@ function fmtDateLong(iso) {
   if (!iso) return "";
   try {
     const d = new Date(iso + "T00:00:00");
-    return d.toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+    return d.toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
   } catch { return iso; }
 }
 

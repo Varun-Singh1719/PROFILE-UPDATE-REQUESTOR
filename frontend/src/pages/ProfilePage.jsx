@@ -35,7 +35,7 @@ function fmtDateTime(iso) {
   try {
     const d = new Date(iso);
     const day = String(d.getDate()).padStart(2, "0");
-    const month = d.toLocaleString("en-US", { month: "short" });
+    const month = d.toLocaleString("en-US", { month: "short", timeZone: "Asia/Kolkata" });
     const year = d.getFullYear();
     const h = d.getHours();
     const min = String(d.getMinutes()).padStart(2, "0");

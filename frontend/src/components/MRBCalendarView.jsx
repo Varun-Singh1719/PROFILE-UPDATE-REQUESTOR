@@ -27,10 +27,10 @@ const toIsoDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.ge
 const sameDay = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 const fmtTime = (iso) => {
   if (!iso) return "—";
-  try { return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); } catch { return iso; }
+  try { return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" }); } catch { return iso; }
 };
 const fmtLongDate = (d) =>
-  d.toLocaleDateString(undefined, { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+  d.toLocaleDateString(undefined, { weekday: "long", day: "2-digit", month: "long", year: "numeric", timeZone: "Asia/Kolkata" });
 
 // Day grid configuration: 30-min slots across a full 24-hour day so the grid is
 // always taller than the viewport (guarantees the time frame scrolls).
@@ -131,7 +131,7 @@ function EventPreview({ booking, anchor, onClose, onMore, onEdit, onCancel, canE
       <div className="px-3 py-2 space-y-1.5 text-[12px]">
         <div className="flex items-center gap-1.5 text-gray-700"><MapPin sx={{ fontSize: 12 }} className="text-gray-400"/> {booking.room_name}</div>
         <div className="flex items-center gap-1.5 text-gray-700"><Clock sx={{ fontSize: 12 }} className="text-gray-400"/>
-          {new Date(booking.start_at).toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short" })}
+          {new Date(booking.start_at).toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short", timeZone: "Asia/Kolkata" })}
           <span className="text-gray-300">·</span>
           {fmtTime(booking.start_at)} – {fmtTime(booking.end_at)}
         </div>
@@ -212,7 +212,7 @@ function EventDetails({ booking, onClose, onEdit, onCancel, canEdit, canCancel }
             </div>
             <div>
               <div className="text-[10px] font-bold uppercase text-gray-500 mb-0.5">Date</div>
-              <div className="text-gray-800">{new Date(booking.start_at).toLocaleDateString(undefined, { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}</div>
+              <div className="text-gray-800">{new Date(booking.start_at).toLocaleDateString(undefined, { weekday: "long", day: "2-digit", month: "long", year: "numeric", timeZone: "Asia/Kolkata" })}</div>
             </div>
             <div>
               <div className="text-[10px] font-bold uppercase text-gray-500 mb-0.5">Time</div>

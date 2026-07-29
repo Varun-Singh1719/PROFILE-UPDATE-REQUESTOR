@@ -27,14 +27,17 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+# IST (+05:30) — see core.py.
+IST = timezone(timedelta(hours=5, minutes=30))
+
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(IST).isoformat()
 
 
 # ---------------------------------------------------------------------------

@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from core import (
     api_router, db, log_audit, now_iso, hash_password, verify_password,
     encrypt_password, create_access_token, get_current_user, _public_contact,
-    hash_reset_token,
+    hash_reset_token, IST, ist_now,
     LoginIn, GoogleSessionIn, ForgotPasswordIn, ResetPasswordIn,
 )
 from notifications import send_email, render_forgot_password_email
@@ -182,7 +182,7 @@ async def forgot_password(body: ForgotPasswordIn):
     user = await db.contacts.find_one({"email": email})
     if user and user.get("status") == "Active":
         token = secrets.token_urlsafe(32)
-        expires = datetime.now(timezone.utc) + timedelta(hours=1)
+        expires = ist_now() + timedelta(hours=1)
         await db.password_reset_tokens.insert_one({
             "id": str(uuid.uuid4()),
             "user_id": user["id"],
@@ -226,7 +226,7 @@ async def reset_password(body: ResetPasswordIn):
             expires = None
     if isinstance(expires, datetime) and expires.tzinfo is None:
         expires = expires.replace(tzinfo=timezone.utc)
-    if not expires or expires < datetime.now(timezone.utc):
+    if not expires or expires < ist_now():
         raise HTTPException(400, "Invalid or expired reset link")
     user = await db.contacts.find_one({"id": rec["user_id"]})
     if not user or user.get("status") != "Active":

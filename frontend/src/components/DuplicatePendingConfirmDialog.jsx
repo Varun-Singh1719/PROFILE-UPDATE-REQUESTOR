@@ -40,7 +40,7 @@ function fmtDateLong(iso) {
   if (!iso) return "—";
   try {
     const d = new Date(iso + "T00:00:00");
-    return d.toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+    return d.toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
   } catch { return iso; }
 }
 
@@ -48,7 +48,7 @@ function fmtDateTime(iso) {
   if (!iso) return "—";
   try {
     const d = new Date(iso);
-    return d.toLocaleString(undefined, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleString(undefined, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" });
   } catch { return iso; }
 }
 

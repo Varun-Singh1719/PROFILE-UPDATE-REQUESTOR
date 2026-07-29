@@ -47,7 +47,7 @@ const todayIso = () => {
 
 function fmt(iso) {
   if (!iso) return "—";
-  try { return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }); }
+  try { return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" }); }
   catch { return iso; }
 }
 
@@ -55,14 +55,14 @@ function fmtDateLabel(iso) {
   if (!iso) return "";
   try {
     const d = new Date(iso + "T00:00:00");
-    return d.toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+    return d.toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
   } catch { return iso; }
 }
 
 function fmtTime(iso) {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true });
+    return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" });
   } catch { return iso; }
 }
 
@@ -130,7 +130,7 @@ function DateStepper({ value, onChange }) {
     if (!value) return "Select date";
     const d = new Date(value + "T00:00:00");
     if (Number.isNaN(d.getTime())) return value;
-    return d.toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+    return d.toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
   }, [value]);
   // Show the "Today" shortcut only when the current selection isn't already today.
   const isToday = value === todayIso();

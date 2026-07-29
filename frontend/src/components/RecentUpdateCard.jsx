@@ -8,7 +8,7 @@ function fmtDate(iso) {
   try {
     const d = new Date(iso);
     const day = d.getDate().toString().padStart(2, "0");
-    const month = d.toLocaleString("en-US", { month: "short" });
+    const month = d.toLocaleString("en-US", { month: "short", timeZone: "Asia/Kolkata" });
     const year = d.getFullYear();
     let hours = d.getHours();
     const mins = d.getMinutes().toString().padStart(2, "0");

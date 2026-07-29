@@ -53,7 +53,7 @@ import { useEffectivePage } from "../context/EffectivePermissionsContext";
 const fmtDate = (iso) => {
   if (!iso) return "—";
   try {
-    return new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+    return new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
   } catch { return iso; }
 };
 
@@ -61,10 +61,8 @@ const fmtDateTime = (iso) => {
   if (!iso) return "—";
   try {
     const d = new Date(iso);
-    return d.toLocaleString("en-GB", {
-      day: "2-digit", month: "short", year: "numeric",
-      hour: "2-digit", minute: "2-digit", hour12: true,
-    });
+    return d.toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric",
+      hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" });
   } catch { return iso; }
 };
 
@@ -719,8 +717,8 @@ export default function PendingApprovalsPage() {
                         try {
                           const s = new Date(req.start_at);
                           const e = new Date(req.end_at);
-                          const dateLabel = s.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-                          const t = (d) => d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true });
+                          const dateLabel = s.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
+                          const t = (d) => d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" });
                           return `${dateLabel} · ${t(s)} – ${t(e)}`;
                         } catch { return "—"; }
                       };

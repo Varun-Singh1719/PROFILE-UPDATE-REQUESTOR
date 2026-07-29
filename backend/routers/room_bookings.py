@@ -30,7 +30,7 @@ from typing import List, Optional, Dict, Any
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from core import api_router, db, get_current_user, now_iso
+from core import api_router, db, get_current_user, now_iso, IST, ist_now
 from routers.permissions_v3 import require_any_v3_page_view
 
 
@@ -385,9 +385,9 @@ async def list_room_bookings(
     if not include_past:
         q.setdefault("end_at", {})
         if isinstance(q["end_at"], dict):
-            q["end_at"]["$gte"] = datetime.now().isoformat()
+            q["end_at"]["$gte"] = ist_now().isoformat()
         else:
-            q["end_at"] = {"$gte": datetime.now().isoformat()}
+            q["end_at"] = {"$gte": ist_now().isoformat()}
 
     docs = await db.room_bookings.find(q, {"_id": 0}).sort("start_at", 1).to_list(500)
     docs = await _enrich_bookings_with_team(docs)
@@ -506,7 +506,7 @@ async def cancel_room_booking(
 
     if series and doc.get("series_id"):
         await db.room_bookings.update_many(
-            {"series_id": doc["series_id"], "cancelled": False, "end_at": {"$gte": datetime.now().isoformat()}},
+            {"series_id": doc["series_id"], "cancelled": False, "end_at": {"$gte": ist_now().isoformat()}},
             {"$set": {"cancelled": True, "updated_at": now_iso(), "cancelled_by": _actor(user)}},
         )
     else:

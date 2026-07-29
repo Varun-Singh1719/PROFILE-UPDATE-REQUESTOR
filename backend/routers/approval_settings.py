@@ -47,7 +47,7 @@ from typing import Any, Optional
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from core import api_router, db, require_role, now_iso, log_audit
+from core import api_router, db, require_role, now_iso, log_audit, ist_now
 
 
 # --------------------------------------------------------------------------- #
@@ -400,7 +400,7 @@ async def _match_matrix_row(
 
     time_of_day = booking_time
     if not time_of_day:
-        now = _dt.datetime.now()
+        now = ist_now()
         time_of_day = f"{now.hour:02d}:{now.minute:02d}"
     if matches_time_rule(row.get("time") or {}, time_of_day):
         return True

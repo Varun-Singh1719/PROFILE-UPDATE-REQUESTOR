@@ -10,7 +10,7 @@ from fastapi import Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 from core import (
-    api_router, db, now_iso, get_current_user,
+    api_router, db, now_iso, get_current_user, ist_now,
     TicketCreate, TicketUpdate, BulkAssign, BulkStatus, CommentCreate, TicketReopen,
 )
 from notifications import send_email
@@ -496,7 +496,7 @@ async def export_tickets_csv(
             t.get("number_of_profiles", "") or 0,
             t.get("due_date") or "", t.get("created_on", ""), t.get("updated_on", ""),
         ])
-    filename = f"tickets_{datetime.now(timezone.utc).date().isoformat()}.csv"
+    filename = f"tickets_{ist_now().date().isoformat()}.csv"
     return StreamingResponse(
         iter([buf.getvalue()]),
         media_type="text/csv",

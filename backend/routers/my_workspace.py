@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, Query, HTTPException
 
-from core import api_router, db, get_current_user
+from core import api_router, db, get_current_user, IST, ist_now, ist_today
 from routers.permissions_v3 import require_any_v3_page_view, require_v3_page_view
 
 
@@ -36,7 +36,10 @@ from routers.permissions_v3 import require_any_v3_page_view, require_v3_page_vie
 # --------------------------------------------------------------------------- #
 
 def _today_iso() -> str:
-    return _dt.date.today().isoformat()
+    # IST today — the workstation-booking date column is a YYYY-MM-DD IST
+    # local date, so "today" must resolve in IST regardless of the container's
+    # system timezone (UTC on the k8s pod).
+    return ist_today().isoformat()
 
 
 def _iso_week_start(date_iso: str) -> _dt.date:
@@ -152,7 +155,7 @@ async def my_workspace_dashboard(
     if team_ids:
         or_clauses.append({"attendees": {"$elemMatch": {"type": "team", "id": {"$in": team_ids}}}})
 
-    now_iso = _dt.datetime.now().isoformat()
+    now_iso = ist_now().isoformat()
     day_end_iso = _dt.datetime.combine(_dt.date.fromisoformat(the_date), _dt.time(23, 59, 59)).isoformat()
     meetings = await db.room_bookings.find(
         {"$or": or_clauses, "cancelled": False, "end_at": {"$gte": now_iso}},
@@ -482,13 +485,16 @@ def _fmt_ago(ts) -> str:
         return ""
     try:
         if isinstance(ts, str):
-            # strip trailing timezone info naïvely
+            # accept both '+05:30' (IST) and 'Z' / '+00:00' (legacy UTC)
             dt = _dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
         else:
             dt = ts
-        if dt.tzinfo is not None:
-            dt = dt.astimezone(_dt.timezone.utc).replace(tzinfo=None)
-        delta = _dt.datetime.utcnow() - dt
+        # Normalise to IST-aware for the "ago" arithmetic
+        if dt.tzinfo is None:
+            # Legacy naive strings were written on a UTC container; treat as UTC.
+            dt = dt.replace(tzinfo=_dt.timezone.utc)
+        dt = dt.astimezone(IST)
+        delta = ist_now() - dt
         secs = int(delta.total_seconds())
         if secs < 60:   return f"{secs}s ago"
         if secs < 3600: return f"{secs // 60}m ago"

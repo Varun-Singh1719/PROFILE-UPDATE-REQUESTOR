@@ -8,7 +8,7 @@ import Clock from "@mui/icons-material/AccessTime";
 
 function fmt(iso) {
   if (!iso) return "-";
-  try { return new Date(iso).toLocaleString(); } catch { return iso; }
+  try { return new Date(iso).toLocaleString(undefined, { timeZone: "Asia/Kolkata" }); } catch { return iso; }
 }
 
 export default function TicketCard({ ticket, basePath = "/tickets" }) {

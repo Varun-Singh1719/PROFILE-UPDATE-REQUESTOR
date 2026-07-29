@@ -7960,3 +7960,144 @@ agent_communication:
         Super Admin regression test passed completely. The fixes address the reported issues:
         - Admins with v3 manage permissions will now see the Manage section in sidebar
         - Route-level protection now enforces v3 permissions on all protected routes
+
+
+# ============================================================================
+# IST Timezone Standardisation — Jul 2025
+# ============================================================================
+
+user_problem_statement: |
+  In the attached repo, check Workspace manager — verify that IST time zone
+  is being used everywhere while saving date & time and calendar. Point the
+  backend at the user's new MongoDB Atlas cluster (cluster0.vmgql1i.mongodb.net,
+  DB `app_db`, user `sakshamsinghal_db_user`).
+
+backend:
+  - task: "Standardise all persisted timestamps to IST (+05:30) app-wide"
+    implemented: true
+    working: true
+    file: "backend/core.py, backend/notifications.py, backend/inapp_notifications.py, backend/routers/*.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: true
+          agent: "main"
+          comment: |
+            Added `IST` timezone constant, `ist_now`, `ist_now_iso`, `ist_today`,
+            `ist_today_iso` helpers to `core.py`. Rewrote `now_iso()` (used in
+            ~141 call sites across every router) to return an IST-tagged ISO
+            string (+05:30). Applied the same in the two other modules that had
+            their own `now_iso` (`notifications.py`, `inapp_notifications.py`).
+            Fixed 10+ direct callers that used naive `datetime.now()` /
+            `datetime.utcnow()` / `date.today()` in Workspace Manager and
+            related endpoints:
+              - my_workspace.py: `_today_iso`, `now_iso` filter, `_fmt_ago`
+              - room_bookings.py: `end_at >= now` filters (list + cancel-series)
+              - bookings.py: `_now_utc_iso` (renamed but IST-tagged now),
+                `_compute_status` (Completed vs Active), workstation filter
+                today, CSV/XLSX export filenames
+              - tickets.py, contacts.py: export filenames
+              - auth.py: password-reset expiry compare
+              - approval_settings.py: `now.hour:now.minute` current-time rule
+            JWT `exp` now built from `ist_now()` (same instant, just a
+            different tz-offset representation — pyjwt normalises to
+            timestamp).
+            Verified by creating a fresh ticket after the change:
+              `"created_on": "2026-07-30T01:42:18.799844+05:30"`.
+            Verified fresh login writes:
+              `"last_login": "2026-07-30T01:35:23.984503+05:30"`.
+            Legacy rows retain their +00:00 suffix — arithmetic still works
+            because both strings are tz-aware and parsed via
+            `datetime.fromisoformat`.
+
+  - task: "Point backend at user's new MongoDB Atlas cluster"
+    implemented: true
+    working: true
+    file: "backend/.env"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: |
+            Recreated `/app/backend/.env` (missing on this fresh container)
+            with `MONGO_URL=mongodb+srv://sakshamsinghal_db_user:...@cluster0.vmgql1i.mongodb.net/`,
+            `DB_NAME=app_db`, fresh `JWT_SECRET` + `FERNET_KEY`.
+            Login verified with admin@ticketing.com / Admin@123.
+
+frontend:
+  - task: "Display all dates/times in IST regardless of browser timezone"
+    implemented: true
+    working: true
+    file: "frontend/src/lib/dateIST.js (new), 37 pages + components (auto-patched)"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: true
+          agent: "main"
+          comment: |
+            Added `frontend/src/lib/dateIST.js` — shared helpers
+            (`formatISTDateTime`, `formatISTDate`, `formatISTTime`,
+            `istTodayISO`, etc.) that always resolve in `Asia/Kolkata`.
+            Ran `/app/scripts/inject_ist_timezone.py` to inject
+            `timeZone: "Asia/Kolkata"` into every existing
+            `.toLocaleString / .toLocaleDateString / .toLocaleTimeString`
+            call across 37 files (69 call sites total). Idempotent script —
+            re-runs are no-op.
+            Fixed the org-wide dashboard's "today" bug: `WorkspaceOverallDashboard.toISO`
+            used `Date.toISOString().slice(0,10)` (UTC) causing the header to
+            show the wrong day for users late in the IST evening. Now uses
+            `istTodayISO()` (via `en-CA` locale + `Asia/Kolkata` timezone).
+            Verified: header now correctly displays
+            `Thursday, July 30, 2026 · organisation-wide view` when server
+            time is 20:10 UTC (01:40 AM IST).
+            Date pickers (`WorkstationBookingPage`, `FloorLayoutPage`,
+            `MyWorkspaceDashboard`, `MyRequestsTab`) intentionally left
+            browser-local per user's explicit direction.
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 4
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Verify no regressions in existing endpoints after IST timezone switch (backend)"
+    - "Verify no regressions in Workspace Manager UI (Dashboard, Meeting Rooms, Workstation Booking, Bookings, Floor plans) after IST tz overlay (frontend)"
+  stuck_tasks: []
+  test_all: false
+
+agent_communication:
+    - agent: "main"
+      message: |
+        IST timezone standardisation complete (Jul 2025).
+
+        1) Recreated missing `.env` files. Backend now points to the user's
+           new MongoDB Atlas cluster (cluster0.vmgql1i.mongodb.net, DB
+           `app_db`).
+
+        2) Backend: `now_iso()` in `core.py` (~141 call sites), plus the
+           two module-local copies in `notifications.py` /
+           `inapp_notifications.py`, now return IST-tagged (+05:30) ISO
+           strings. Naive `datetime.now()` / `datetime.utcnow()` /
+           `date.today()` call sites (Workspace Manager + ProfiX +
+           auth/approval-settings/contacts) rewritten to use the new
+           `ist_now()` / `ist_today()` helpers. JWT `exp` and password-
+           reset expiry compare on IST-aware datetimes.
+
+        3) Frontend: new `frontend/src/lib/dateIST.js` helper file. A
+           small AST-aware script (`scripts/inject_ist_timezone.py`) added
+           `timeZone: "Asia/Kolkata"` to every `.toLocaleString /
+           .toLocaleDateString / .toLocaleTimeString` invocation across
+           37 files (69 sites). Fixed a genuine UTC-vs-IST bug in the
+           org-wide dashboard's "today" calculation. Date pickers left
+           browser-local per explicit user preference.
+
+        Please regression-test the backend endpoints (auth, tickets,
+        bookings, workstation bookings, my-workspace dashboard, meeting
+        rooms, floor plans) and confirm timestamps written after this
+        change carry the `+05:30` offset.

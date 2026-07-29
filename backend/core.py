@@ -33,6 +33,29 @@ EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
 FERNET_KEY = os.environ.get("FERNET_KEY")
 fernet = Fernet(FERNET_KEY.encode()) if FERNET_KEY else None
 
+# ---------- Timezone (Jul 2025: standardise on IST across the whole app) ----------
+# Every timestamp the backend writes (created_at, updated_at, requested_on,
+# decided_on, cancelled_on, notification.created_at, etc.) is IST-tagged
+# (+05:30). "Today" comparisons and "now" filters also resolve in IST so a
+# booking created at 12:15 AM IST does not show up on the previous UTC day.
+IST = timezone(timedelta(hours=5, minutes=30))
+
+def ist_now() -> datetime:
+    """Current time as a tz-aware datetime in IST (+05:30)."""
+    return datetime.now(IST)
+
+def ist_now_iso() -> str:
+    """Current time as an ISO-8601 string tagged +05:30 (IST)."""
+    return datetime.now(IST).isoformat()
+
+def ist_today_iso() -> str:
+    """Today's date (YYYY-MM-DD) in IST."""
+    return datetime.now(IST).date().isoformat()
+
+def ist_today():
+    """Today's date object in IST."""
+    return datetime.now(IST).date()
+
 # ---------- DB ----------
 mongo_url = os.environ['MONGO_URL']
 # Explicit timeouts so any Atlas hiccup fails fast (returns 500) rather than
@@ -130,13 +153,14 @@ def generate_password(length: int = 12) -> str:
 def create_access_token(user_id: str, email: str, role: str) -> str:
     payload = {
         "sub": user_id, "email": email, "role": role,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=12),
+        "exp": ist_now() + timedelta(hours=12),
         "type": "access"
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 def now_iso():
-    return datetime.now(timezone.utc).isoformat()
+    """Current time as ISO-8601 in IST (+05:30). Used for all persisted timestamps."""
+    return ist_now_iso()
 
 def hash_reset_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
