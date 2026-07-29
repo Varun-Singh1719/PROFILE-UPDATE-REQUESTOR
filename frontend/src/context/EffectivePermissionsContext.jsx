@@ -129,7 +129,25 @@ export function useEffectivePermissionsState() {
     const dash = (ctx.modules || {}).dashboard?.pages?.[product];
     return dash?.access_level || null;
   };
-  return { ready, isPermissive, hasAnySet, isSuperAdmin: !!ctx.is_super_admin, isPageViewVisible, getDashboardAccess, state: ctx };
+  // True when the caller has AT LEAST ONE effective (module, page) with
+  // view.enabled+visible OR any dashboard access — used by Sidebar to
+  // decide between rendering the "No Module Assigned" banner vs. an
+  // empty nav pane. Fixes the case where a user is assigned a set whose
+  // `modules` map is entirely empty (or all-disabled).
+  const hasAnyEffectivePermission = (() => {
+    if (isPermissive) return true;
+    const mods = ctx.modules || {};
+    for (const mk of Object.keys(mods)) {
+      const pages = (mods[mk] || {}).pages || {};
+      for (const pk of Object.keys(pages)) {
+        const entry = pages[pk] || {};
+        if (entry?.view?.enabled && entry?.view?.visible) return true;
+        if (typeof entry?.access_level === "string" && entry.access_level) return true;
+      }
+    }
+    return false;
+  })();
+  return { ready, isPermissive, hasAnySet, hasAnyEffectivePermission, isSuperAdmin: !!ctx.is_super_admin, isPageViewVisible, getDashboardAccess, state: ctx };
 }
 
 /**

@@ -9,6 +9,7 @@ from core import (
     TEAM_COLOR_PALETTE,
     TeamCreate, TeamUpdate,
 )
+from routers.permissions_v3 import has_v3_page_view, require_v3_page_view
 
 
 async def _next_unused_color(exclude_team_id: Optional[str] = None) -> str:
@@ -111,11 +112,30 @@ async def list_teams(user=Depends(get_current_user)):
     name_map = {c["id"]: c for c in contacts}
     for t in teams:
         await _hydrate_team(t, name_map)
-    return teams
+
+    # Backend permission-leak fix (Jul 29 2026): if the caller is NOT a
+    # Super Admin AND does not have manage.teams.view, return a lite payload
+    # (id/name/color/initials/counts only). This keeps cross-module features
+    # like the team filter on ticket lists and the team dropdown on booking
+    # forms working, while preventing leaks of member emails/roles.
+    can_manage_teams = await has_v3_page_view(user, "manage", "teams")
+    if can_manage_teams:
+        return teams
+    lite = []
+    for t in teams:
+        lite.append({
+            "id": t.get("id"),
+            "name": t.get("name"),
+            "color": t.get("color"),
+            "initials": t.get("initials"),
+            "member_count": len(t.get("member_ids") or []),
+            "manager_count": len(t.get("manager_ids") or []),
+        })
+    return lite
 
 
 @api_router.get("/teams/{team_id}")
-async def get_team(team_id: str, user=Depends(get_current_user)):
+async def get_team(team_id: str, user=Depends(require_v3_page_view("manage", "teams"))):
     t = await db.teams.find_one({"id": team_id}, {"_id": 0})
     if not t:
         raise HTTPException(404, "Team not found")

@@ -8,6 +8,7 @@ from core import (
     api_router, db, log_audit, now_iso, require_role,
     EmailTemplateIn, EmailTemplateUpdate,
 )
+from routers.permissions_v3 import require_v3_page_view
 
 
 def _csv_list(v):
@@ -134,7 +135,7 @@ async def retry_notification(notif_id: str, user=Depends(require_role("Super Adm
 
 # ---------- Email Templates ----------
 @api_router.get("/email-templates")
-async def list_email_templates(user=Depends(require_role("Super Admin", "Admin")), q: Optional[str] = None, category: Optional[str] = None, status: Optional[str] = None):
+async def list_email_templates(user=Depends(require_v3_page_view("manage", "email_templates")), q: Optional[str] = None, category: Optional[str] = None, status: Optional[str] = None):
     query = {}
     cat_list = _csv_list(category)
     if cat_list:

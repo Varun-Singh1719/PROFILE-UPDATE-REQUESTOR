@@ -277,15 +277,16 @@ function SearchPalette({ open, onClose, items }) {
 export default function Sidebar() {
   const { user } = useAuth();
   const { can } = usePermissions();
-  const { isPageViewVisible, hasAnySet, ready: permsReady, getDashboardAccess } = useEffectivePermissionsState();
+  const { isPageViewVisible, hasAnySet, hasAnyEffectivePermission, ready: permsReady, getDashboardAccess } = useEffectivePermissionsState();
   const navigate = useNavigate();
   const location = useLocation();
   const isSuperAdmin = user?.role === "Super Admin";
-  // STRICT gating: any non-Super-Admin without an assigned Permission Set
-  // sees an empty sidebar + the "No Module Assigned" hint. Wait for
-  // `permsReady` so we don't flash the empty state during the initial
-  // /api/me/permissions load.
-  const noAccess = permsReady && !isSuperAdmin && !hasAnySet;
+  // STRICT gating: any non-Super-Admin whose effective permission set has
+  // NO usable modules/pages sees the "No Module Assigned" hint. Fires both
+  // when the user has zero assigned sets AND when the assigned set(s)
+  // resolve to an empty `modules` map. Wait for `permsReady` so we don't
+  // flash the empty state during the initial /api/me/permissions load.
+  const noAccess = permsReady && !isSuperAdmin && (!hasAnySet || !hasAnyEffectivePermission);
 
   // Dashboard link visibility — driven by the assigned Permission Sets.
   // Super Admin → always visible. Otherwise the link is only shown when the

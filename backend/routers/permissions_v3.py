@@ -306,7 +306,7 @@ class PermissionSetV3In(BaseModel):
 
 @api_router.get("/permission-sets-v3")
 async def list_v3_sets(
-    user=Depends(get_current_user),
+    user=Depends(get_current_user),  # deferred v3 check inside — see below
     q: Optional[str] = Query(None, description="Search by title/description"),
     created_by: Optional[str] = Query(None, description="Comma-separated user ids"),
     updated_by: Optional[str] = Query(None, description="Comma-separated user ids"),
@@ -333,6 +333,12 @@ async def list_v3_sets(
     Response: `{items: [...], total, page, page_size}`.
     Each item is enriched with `assigned_users_count`.
     """
+    # v3-permission gate: only users with manage.permissions.view can list sets.
+    # (Defined below in this file; call via the module-level helper.)
+    entry = await get_v3_page_view(user, "manage", "permissions")
+    if not entry or not entry.get("enabled") or not entry.get("visible"):
+        raise HTTPException(403, "Access denied to manage.permissions")
+
     query: Dict[str, Any] = {"version": 3}
 
     # Normalise status → set of {"active", "deleted"}
@@ -435,6 +441,9 @@ async def list_v3_filter_options(user=Depends(get_current_user)):
     """Distinct creators/updaters + available modules — used to populate the
     filter dropdowns on the Permission Sets tab. Includes historical users from
     soft-deleted sets so filters remain useful when Status=Deleted."""
+    entry = await get_v3_page_view(user, "manage", "permissions")
+    if not entry or not entry.get("enabled") or not entry.get("visible"):
+        raise HTTPException(403, "Access denied to manage.permissions")
     creators_map: Dict[str, dict] = {}
     updaters_map: Dict[str, dict] = {}
     modules_present: set = set()
@@ -467,6 +476,9 @@ async def list_v3_filter_options(user=Depends(get_current_user)):
 
 @api_router.get("/permission-sets-v3/{pset_id}")
 async def get_v3_set(pset_id: str, user=Depends(get_current_user)):
+    entry = await get_v3_page_view(user, "manage", "permissions")
+    if not entry or not entry.get("enabled") or not entry.get("visible"):
+        raise HTTPException(403, "Access denied to manage.permissions")
     doc = await db.permission_sets.find_one({"id": pset_id, "version": 3}, {"_id": 0})
     if not doc:
         # Try to migrate a legacy set on the fly so the UI can still open it
@@ -905,3 +917,98 @@ async def get_v3_function(user: dict, mkey: str, pkey: str, fkey: str) -> Option
     page = ((merged.get(mkey) or {}).get("pages") or {}).get(pkey) or {}
     entry = (page.get("functions") or {}).get(fkey)
     return entry  # None ⇒ not granted
+
+
+
+# --------------------------------------------------------------------------- #
+# V3 page-level view helper + FastAPI dependency                              #
+# (Added Jul 29 2026 to close backend permission-leak reported by QA — the    #
+# frontend was gating pages but the API endpoints only checked role, so a    #
+# restricted admin could bypass with curl.)                                  #
+# --------------------------------------------------------------------------- #
+
+async def get_v3_page_view(user: dict, mkey: str, pkey: str) -> Optional[dict]:
+    """Return the effective view entry for (mkey, pkey) for `user`.
+
+    Semantics match the frontend `EffectivePermissionsContext.isPageViewVisible`:
+      - Super Admin → permissive (returns overall-scope entry).
+      - Admin with NO assigned permission sets → permissive fallback (matches
+        pre-onboarded behavior; keeps app usable while sets are being rolled
+        out).
+      - Admin WITH sets → OR-union across sets; returns the merged view entry
+        (or None if no set grants this page).
+    """
+    if user.get("role") == "Super Admin":
+        return {"enabled": True, "visible": True, "scope": "overall"}
+
+    set_ids: List[str] = list(user.get("permission_set_ids") or [])
+    if not set_ids:
+        return {"enabled": True, "visible": True, "scope": "overall"}
+
+    docs = await db.permission_sets.find(
+        {"id": {"$in": set_ids}}, {"_id": 0}
+    ).to_list(500)
+    merged: Dict[str, dict] = {}
+    for doc in docs:
+        modules = doc.get("modules") or {}
+        if doc.get("version") != 3:
+            migrated = _migrate_legacy_to_v3(doc)
+            modules = migrated.get("modules") or {}
+        else:
+            modules = _normalize_v3_modules(modules)
+        _merge_modules(merged, modules)
+
+    page = ((merged.get(mkey) or {}).get("pages") or {}).get(pkey) or {}
+    return page.get("view")  # None ⇒ not granted
+
+
+def require_v3_page_view(mkey: str, pkey: str):
+    """FastAPI dependency: 403 unless `user` has view.enabled+visible for (mkey, pkey).
+
+    Usage:
+        @router.get("/contacts")
+        async def list_contacts(user=Depends(require_v3_page_view("manage", "employees"))):
+            ...
+    """
+    async def _dep(user=Depends(get_current_user)):
+        entry = await get_v3_page_view(user, mkey, pkey)
+        if not entry or not entry.get("enabled") or not entry.get("visible"):
+            raise HTTPException(403, f"Access denied to {mkey}.{pkey}")
+        return user
+    return _dep
+
+
+def require_any_v3_page_view(*pages: tuple):
+    """FastAPI dependency: 403 unless `user` has view.enabled+visible for AT LEAST
+    ONE of the given (module, page) tuples.
+
+    Useful when a single API endpoint is used to feed multiple UI surfaces
+    (e.g. floor plans are viewed on Floor Layout page AND Floor Calibration
+    page).
+
+    Usage:
+        @router.get("/floor-plans")
+        async def list_floor_plans(user=Depends(require_any_v3_page_view(
+            ("desk_booking", "floor_layout"),
+            ("desk_booking", "floor_plans"),
+        ))):
+            ...
+    """
+    async def _dep(user=Depends(get_current_user)):
+        for mkey, pkey in pages:
+            entry = await get_v3_page_view(user, mkey, pkey)
+            if entry and entry.get("enabled") and entry.get("visible"):
+                return user
+        allowed = ", ".join(f"{m}.{p}" for m, p in pages)
+        raise HTTPException(403, f"Access denied — needs one of: {allowed}")
+    return _dep
+
+
+async def has_v3_page_view(user: dict, mkey: str, pkey: str) -> bool:
+    """Non-blocking check — returns True if user's effective view for (mkey, pkey)
+    is enabled+visible. Used to conditionally strip sensitive fields from a
+    response that is otherwise broadly accessible (e.g. `list_teams` returns a
+    lite payload to non-managers but full payload to manage.teams viewers).
+    """
+    entry = await get_v3_page_view(user, mkey, pkey)
+    return bool(entry and entry.get("enabled") and entry.get("visible"))

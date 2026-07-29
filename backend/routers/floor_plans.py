@@ -37,6 +37,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from core import api_router, db, get_current_user, require_role, now_iso, log_audit, JWT_SECRET, JWT_ALGORITHM
+from routers.permissions_v3 import require_any_v3_page_view
 
 # Local on-disk storage for uploaded floor-plan PDFs
 PDF_STORAGE_DIR = Path(__file__).resolve().parent.parent / "uploads" / "floor-plans"
@@ -274,7 +275,13 @@ async def ensure_migrated():
 # --------------------------------------------------------------------------- #
 
 @api_router.get("/floor-plans")
-async def list_floor_plans(user=Depends(get_current_user)):
+async def list_floor_plans(user=Depends(require_any_v3_page_view(
+    ("desk_booking", "floor_layout"),
+    ("desk_booking", "floor_plans"),
+    ("desk_booking", "workstation_bookings"),
+    ("desk_booking", "meeting_room_bookings"),
+    ("desk_booking", "pending_approvals"),
+))):
     await ensure_migrated()
     # One-time cleanup: drop deprecated `default` field from DB docs
     await db.floor_plans.update_many({"default": {"$exists": True}}, {"$unset": {"default": ""}})

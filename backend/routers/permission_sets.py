@@ -10,6 +10,7 @@ from core import (
     PERMISSION_MODULES, SCOPE_VALUES, is_scoped,
     PermissionSetCreate, PermissionSetUpdate,
 )
+from routers.permissions_v3 import require_v3_page_view
 
 
 async def _next_permission_set_seq() -> int:
@@ -71,7 +72,7 @@ def _serialize_pset(p: dict) -> dict:
 
 @api_router.get("/permission-sets")
 async def list_permission_sets(
-    user=Depends(get_current_user),
+    user=Depends(require_v3_page_view("manage", "permissions")),
     q: Optional[str] = None,
     created_by: Optional[str] = None,
     created_from: Optional[str] = None,
@@ -100,7 +101,7 @@ async def list_permission_sets(
 
 
 @api_router.get("/permission-sets/stats")
-async def permission_sets_stats(user=Depends(get_current_user)):
+async def permission_sets_stats(user=Depends(require_v3_page_view("manage", "permissions"))):
     total = await db.permission_sets.count_documents({})
     profix = await db.permission_sets.count_documents({"modules.profix": {"$exists": True}})
     desk = await db.permission_sets.count_documents({"modules.desk_booking": {"$exists": True}})
@@ -114,7 +115,7 @@ async def permission_sets_stats(user=Depends(get_current_user)):
 
 
 @api_router.get("/permission-sets/{pset_id}")
-async def get_permission_set(pset_id: str, user=Depends(get_current_user)):
+async def get_permission_set(pset_id: str, user=Depends(require_v3_page_view("manage", "permissions"))):
     q = {"id": pset_id}
     if pset_id.isdigit():
         q = {"$or": [{"id": pset_id}, {"numeric_id": int(pset_id)}]}

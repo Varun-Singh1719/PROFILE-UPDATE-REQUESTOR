@@ -19,6 +19,7 @@ from core import (
     _public_contact,
     ContactCreate, ContactUpdate, BulkContactStatus, BulkContactRole, BulkContactPermissionSets,
 )
+from routers.permissions_v3 import require_v3_page_view
 from notifications import (
     send_email, render_new_employee_email, render_admin_password_reset_email,
 )
@@ -100,7 +101,7 @@ def _csv_list(v):
 
 @api_router.get("/contacts")
 async def list_contacts(
-    user=Depends(get_current_user),
+    user=Depends(require_v3_page_view("manage", "employees")),
     q: Optional[str] = None,
     role: Optional[str] = None,
     type: Optional[str] = None,
