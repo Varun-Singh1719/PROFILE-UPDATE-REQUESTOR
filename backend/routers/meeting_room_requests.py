@@ -38,7 +38,7 @@ DELETE  /api/meeting-room-requests/{id}              — cancel my own pending r
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, date as date_cls, timedelta
+from datetime import datetime, date as date_cls, timedelta, timezone
 from typing import List, Optional, Dict, Any
 
 from fastapi import Depends, HTTPException, Query
@@ -112,10 +112,39 @@ def _actor(user: dict) -> dict:
 
 
 def _parse_iso(s: str, field: str = "datetime") -> datetime:
+    """Parse an ISO 8601 datetime into a NAIVE UTC datetime.
+
+    - Accepts `...Z`, `...+00:00`, `...+05:30`, and legacy naive strings.
+    - TZ-aware inputs are converted to UTC before the tzinfo is stripped.
+    - Legacy naive strings (no tz suffix) are treated as already-UTC
+      (matches how records were stored prior to the Aug 2026 fix).
+
+    Returning a NAIVE UTC datetime preserves compatibility with the existing
+    conflict-detection logic which stringifies via `.isoformat()` and
+    compares lexicographically against stored strings.
+    """
     try:
-        return datetime.fromisoformat(s.replace("Z", "+00:00")).replace(tzinfo=None)
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt
     except Exception:
         raise HTTPException(400, f"Invalid ISO datetime for '{field}'")
+
+
+def _iso_utc(dt: datetime) -> str:
+    """Serialise a datetime to UTC ISO 8601 WITH a trailing `Z` so the
+    frontend `new Date(...)` parses it as UTC (not as local time).
+
+    Aug 2026 timezone-storage fix: before this, values were stored via
+    `datetime.isoformat()` which drops the timezone suffix for naive
+    datetimes — the browser then interpreted them as LOCAL time and
+    displayed a 5:30h offset for IST users. Standardising on `Z`-tagged
+    strings fixes the round-trip.
+    """
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt.isoformat(timespec="seconds") + "Z"
 
 
 async def _resolve_room(plan_id: str, room_id: str) -> Dict[str, Any]:
@@ -149,8 +178,8 @@ async def _first_pending_conflict(
     q: Dict[str, Any] = {
         "room_id": room_id,
         "status": {"$in": ACTIVE_PENDING_STATUSES},
-        "start_at": {"$lt": end.isoformat()},
-        "end_at":   {"$gt": start.isoformat()},
+        "start_at": {"$lt": _iso_utc(end)},
+        "end_at":   {"$gt": _iso_utc(start)},
     }
     if exclude_request_id:
         q["id"] = {"$ne": exclude_request_id}
@@ -329,8 +358,8 @@ async def create_meeting_room_request(
             "room_name": room.get("name"),
             "room_capacity": int(room.get("capacity") or 1),
             "title": payload.title.strip(),
-            "start_at": occ_s.isoformat(),
-            "end_at": occ_e.isoformat(),
+            "start_at": _iso_utc(occ_s),
+            "end_at": _iso_utc(occ_e),
             "attendees": [a.model_dump() for a in payload.attendees],
             "recurring": payload.recurring.model_dump() if payload.recurring else None,
             "series_id": series_id,
@@ -654,8 +683,8 @@ async def reschedule_meeting_room_request(
         "room_name": room.get("name"),
         "room_capacity": int(room.get("capacity") or 1),
         "title": payload.title,
-        "start_at": payload.start_at,
-        "end_at": payload.end_at,
+        "start_at": _iso_utc(start),
+        "end_at": _iso_utc(end),
         "attendees": [a.model_dump() for a in payload.attendees],
         "status": STATUS_PENDING,
         # Clear approval bookkeeping — we're starting the approval cycle over.

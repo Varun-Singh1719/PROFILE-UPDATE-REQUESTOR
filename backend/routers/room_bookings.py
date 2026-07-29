@@ -24,7 +24,7 @@ Conflict rule
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, date as date_cls
+from datetime import datetime, timedelta, date as date_cls, timezone
 from typing import List, Optional, Dict, Any
 
 from fastapi import Depends, HTTPException, Query
@@ -168,10 +168,26 @@ def _actor(user: dict) -> dict:
 
 
 def _parse_iso(s: str, field: str) -> datetime:
+    """Aug 2026 timezone fix: normalise to a NAIVE UTC datetime so downstream
+    comparisons and `_iso_utc` serialisation are consistent regardless of
+    whether the incoming string is `Z`-tagged, `+HH:MM`-tagged, or naive.
+    """
     try:
-        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt
     except Exception:
         raise HTTPException(400, f"Invalid datetime for '{field}'")
+
+
+def _iso_utc(dt: datetime) -> str:
+    """Serialise to UTC ISO with a trailing `Z` — matches
+    meeting_room_requests._iso_utc so both collections store times in the
+    same JS-friendly canonical form."""
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt.isoformat(timespec="seconds") + "Z"
 
 
 async def _resolve_room(plan_id: str, room_id: str) -> Dict[str, Any]:
@@ -209,8 +225,8 @@ async def _first_conflict(
         q["series_id"] = {"$ne": exclude_series}
     if exclude_booking_id:
         q["id"] = {"$ne": exclude_booking_id}
-    s_iso = start.isoformat()
-    e_iso = end.isoformat()
+    s_iso = _iso_utc(start)
+    e_iso = _iso_utc(end)
     doc = await db.room_bookings.find_one(
         {**q, "start_at": {"$lt": e_iso}, "end_at": {"$gt": s_iso}},
         {"_id": 0},
@@ -424,8 +440,8 @@ async def update_room_booking(booking_id: str, payload: BookingUpdate, user=Depe
         raise HTTPException(400, "end_at must be after start_at")
 
     # Conflict check (exclude this booking from comparison)
-    s_iso = start.isoformat()
-    e_iso = end.isoformat()
+    s_iso = _iso_utc(start)
+    e_iso = _iso_utc(end)
     conflict = await db.room_bookings.find_one(
         {
             "room_id": target_room_id,
