@@ -460,7 +460,6 @@ function SidebarNav({ collapsed, currentPath, can, isSuperAdmin, isPageViewVisib
             No Module Assigned
           </div>
           <div className="text-[12px] text-amber-800/80 leading-relaxed">
-            You don&apos;t have any permission sets assigned yet.
             Please contact your Super&nbsp;Admin to request access.
           </div>
         </div>

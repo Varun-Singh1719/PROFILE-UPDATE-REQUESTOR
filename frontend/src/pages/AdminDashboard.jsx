@@ -228,9 +228,7 @@ function NoDashboardShared({ productLabel }) {
       </div>
       <h2 className="text-lg font-semibold text-gray-900">No Dashboard Shared</h2>
       <p className="text-sm text-gray-500 mt-2 max-w-md">
-        You have not been granted access to the {productLabel} dashboard.
-        Please contact your administrator to assign a dashboard permission
-        (Individual, Manager, or Overall) to your account.
+        Please contact your administrator to assign a Dashboard
       </p>
     </div>
   );

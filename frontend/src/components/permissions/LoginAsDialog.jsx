@@ -165,10 +165,6 @@ export default function LoginAsDialog({ open, onOpenChange }) {
             })}
           </div>
 
-          <div className="text-[11px] text-gray-500 leading-relaxed">
-            You&apos;ll open in a new tab. The impersonation session lives only in that tab —
-            closing it (or clicking Logout there) ends the impersonation.
-          </div>
         </div>
 
         <DialogFooter className="px-6 py-3 border-t border-gray-100 flex flex-wrap items-center justify-end gap-2 shrink-0">
