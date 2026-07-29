@@ -104,11 +104,12 @@ function MeetingAccordionItem({ b, state, index }) {
   const organizerEmail = b.organizer?.email || null;
   const teamName = b.organizer_team_name || null;
   const testId = `room-booking-row-${index}`;
+  const itemTestId = `room-booking-item-${index}`;
   return (
     <AccordionItem
       value={String(b.id || index)}
       className="rounded-lg border border-gray-200 bg-white shadow-sm data-[state=open]:border-[#ec9324]/40"
-      data-testid={testId}
+      data-testid={itemTestId}
     >
       <AccordionTrigger className="px-3 py-2.5 hover:no-underline">
         <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -237,11 +238,19 @@ export default function RoomBookingDetailDialog({ room, date, bookings = [], onC
               {room.name || "Meeting Room"}
             </span>
             {hasOngoing ? (
-              <span className="ml-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-100 text-red-700 ring-1 ring-red-200">
+              <span
+                className="ml-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-100 text-red-700 ring-1 ring-red-200"
+                data-testid="room-detail-status-badge"
+                data-status="booked"
+              >
                 Booked
               </span>
             ) : (
-              <span className="ml-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200">
+              <span
+                className="ml-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200"
+                data-testid="room-detail-status-badge"
+                data-status="available"
+              >
                 Available
               </span>
             )}
