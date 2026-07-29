@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import ChevronsUpDown from "@mui/icons-material/UnfoldMore";
 import X from "@mui/icons-material/Close";
 import Search from "@mui/icons-material/SearchOutlined";
@@ -33,17 +34,56 @@ export default function SingleSelect({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const ref = useRef(null);
+  const triggerRef = useRef(null);
+  const popupRef = useRef(null);
+  // Portal-based popup position — same pattern as MultiSelectFilter so the
+  // dropdown can never be clipped by a parent with `overflow: hidden` (e.g.
+  // the Permission Sets edit page table rows).
+  const [popupPos, setPopupPos] = useState({ top: 0, left: 0, width: 0, direction: "down" });
+
+  const updatePosition = () => {
+    const btn = triggerRef.current;
+    if (!btn) return;
+    const rect = btn.getBoundingClientRect();
+    const vpH = window.innerHeight;
+    const spaceBelow = vpH - rect.bottom;
+    const estimatedHeight = 320;
+    const direction = spaceBelow < estimatedHeight && rect.top > spaceBelow ? "up" : "down";
+    setPopupPos({
+      top: direction === "down" ? rect.bottom + 4 : rect.top - 4,
+      left: rect.left,
+      width: rect.width,
+      direction,
+    });
+  };
 
   useEffect(() => {
-    const handler = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) {
+    if (!open) return;
+    const onDoc = (e) => {
+      const inTrigger = ref.current && ref.current.contains(e.target);
+      const inPopup = popupRef.current && popupRef.current.contains(e.target);
+      if (!inTrigger && !inPopup) {
         setOpen(false);
         setSearch("");
       }
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+    const onKey = (e) => { if (e.key === "Escape") { setOpen(false); setSearch(""); } };
+    const onScrollOrResize = () => updatePosition();
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (open) updatePosition();
+  }, [open]);
 
   const selected = options.find((o) => o.value === value) || null;
 
@@ -75,6 +115,7 @@ export default function SingleSelect({
     <div className="relative" ref={ref}>
       <button
         type="button"
+        ref={triggerRef}
         disabled={disabled}
         data-testid={testId}
         onClick={() => !disabled && setOpen((o) => !o)}
@@ -107,8 +148,30 @@ export default function SingleSelect({
         </span>
       </button>
 
-      {open && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-[#ec9324]/40 rounded-md shadow-lg max-h-72 overflow-hidden flex flex-col">
+      {open && typeof document !== "undefined" && createPortal(
+        <div
+          ref={popupRef}
+          data-testid={testId ? `${testId}-popup` : undefined}
+          // Same pointer-shielding pattern as MultiSelectFilter so this
+          // dropdown works inside Radix Dialogs (Permission Sets edit modal,
+          // etc.) — the dialog's DismissableLayer won't treat clicks as
+          // outside.
+          onPointerDownCapture={(e) => e.stopPropagation()}
+          onMouseDownCapture={(e) => e.stopPropagation()}
+          onWheel={(e) => e.stopPropagation()}
+          style={{
+            position: "fixed",
+            top: popupPos.direction === "down" ? popupPos.top : undefined,
+            bottom: popupPos.direction === "up"
+              ? Math.max(0, window.innerHeight - popupPos.top)
+              : undefined,
+            left: popupPos.left,
+            width: popupPos.width,
+            zIndex: 9999,
+            pointerEvents: "auto",
+          }}
+          className="bg-white border border-[#ec9324]/40 rounded-md shadow-lg max-h-72 overflow-hidden flex flex-col"
+        >
           {searchable && (
             <div className="px-2 py-2 border-b border-gray-100">
               <div className="relative">
@@ -125,7 +188,7 @@ export default function SingleSelect({
               </div>
             </div>
           )}
-          <div className="overflow-y-auto max-h-60">
+          <div className="overflow-y-auto max-h-60" onWheel={(e) => e.stopPropagation()}>
             {filtered.length === 0 && (
               <div className="px-3 py-3 text-sm text-gray-400 text-center">No matches</div>
             )}
@@ -177,7 +240,8 @@ export default function SingleSelect({
               );
             })}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
