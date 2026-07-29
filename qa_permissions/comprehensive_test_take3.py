@@ -17,8 +17,8 @@ with open("/app/qa_permissions/fixtures.json") as f:
 with open("/app/qa_permissions/fixtures_take3.json") as f:
     FIXTURES_TAKE3 = json.load(f)
 
-BASE_API = "https://dde1c56a-e137-46de-9dcf-3ae8bd9cc22d.preview.emergentagent.com/api"
-BASE_UI = "https://dde1c56a-e137-46de-9dcf-3ae8bd9cc22d.preview.emergentagent.com"
+BASE_API = "https://qa-perm-engine.preview.emergentagent.com/api"
+BASE_UI = "https://qa-perm-engine.preview.emergentagent.com"
 
 SA_EMAIL = "admin@ticketing.com"
 SA_PASSWORD = "Admin@123"

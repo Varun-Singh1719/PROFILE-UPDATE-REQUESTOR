@@ -9,7 +9,7 @@
       "notes": [
         "manage.teams.view: enabled=true, visible=false",
         "Manage group has superAdminOnly=true - will NOT show in sidebar",
-        "Direct URL /admin/teams: https://dde1c56a-e137-46de-9dcf-3ae8bd9cc22d.preview.emergentagent.com/admin",
+        "Direct URL /admin/teams: https://qa-perm-engine.preview.emergentagent.com/admin",
         "Testing if visible=false prevents page access"
       ]
     },
@@ -32,32 +32,32 @@
     {
       "url": "/admin/contacts",
       "blocked": true,
-      "current_url": "https://dde1c56a-e137-46de-9dcf-3ae8bd9cc22d.preview.emergentagent.com/admin"
+      "current_url": "https://qa-perm-engine.preview.emergentagent.com/admin"
     },
     {
       "url": "/admin/teams",
       "blocked": true,
-      "current_url": "https://dde1c56a-e137-46de-9dcf-3ae8bd9cc22d.preview.emergentagent.com/admin"
+      "current_url": "https://qa-perm-engine.preview.emergentagent.com/admin"
     },
     {
       "url": "/admin/permissions",
       "blocked": true,
-      "current_url": "https://dde1c56a-e137-46de-9dcf-3ae8bd9cc22d.preview.emergentagent.com/admin"
+      "current_url": "https://qa-perm-engine.preview.emergentagent.com/admin"
     },
     {
       "url": "/admin/email-templates",
       "blocked": true,
-      "current_url": "https://dde1c56a-e137-46de-9dcf-3ae8bd9cc22d.preview.emergentagent.com/admin"
+      "current_url": "https://qa-perm-engine.preview.emergentagent.com/admin"
     },
     {
       "url": "/workspace-manager/floor-layout",
       "blocked": false,
-      "current_url": "https://dde1c56a-e137-46de-9dcf-3ae8bd9cc22d.preview.emergentagent.com/workspace-manager/floor-layout"
+      "current_url": "https://qa-perm-engine.preview.emergentagent.com/workspace-manager/floor-layout"
     },
     {
       "url": "/workspace-manager/pending-approvals",
       "blocked": false,
-      "current_url": "https://dde1c56a-e137-46de-9dcf-3ae8bd9cc22d.preview.emergentagent.com/workspace-manager/pending-approvals"
+      "current_url": "https://qa-perm-engine.preview.emergentagent.com/workspace-manager/pending-approvals"
     },
     {
       "api": "/contacts",

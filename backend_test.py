@@ -10,7 +10,7 @@ import sys
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://role-access-qa.preview.emergentagent.com/api"
+BASE_URL = "https://qa-perm-engine.preview.emergentagent.com/api"
 ADMIN_EMAIL = "admin@ticketing.com"
 ADMIN_PASSWORD = "Admin@123"
 

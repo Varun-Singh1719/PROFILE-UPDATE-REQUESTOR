@@ -16,7 +16,7 @@ import sys
 from typing import Dict, List, Optional
 
 # Base configuration
-BASE_URL = "https://dde1c56a-e137-46de-9dcf-3ae8bd9cc22d.preview.emergentagent.com/api"
+BASE_URL = "https://qa-perm-engine.preview.emergentagent.com/api"
 SUPER_ADMIN_EMAIL = "admin@ticketing.com"
 SUPER_ADMIN_PASSWORD = "Admin@123"
 
