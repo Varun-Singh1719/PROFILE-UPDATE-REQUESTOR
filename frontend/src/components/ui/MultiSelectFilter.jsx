@@ -62,13 +62,22 @@ export default function MultiSelectFilter({
   // colored dots that summarise which options are currently on.
   // Signature: (selectedOptions) => ReactNode
   renderTriggerAccessory = null,
+  // When true, the trigger itself becomes a text input that filters options
+  // as the user types (searchbox-in-trigger pattern, matches typical form
+  // combobox UX). In that mode the popup's internal search box is hidden
+  // — the trigger IS the search box. Adds arrow-key nav (↑ / ↓ move a
+  // highlight, Enter toggles the highlighted row, Esc closes).
+  searchInTrigger = false,
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [highlight, setHighlight] = useState(-1);
   const rootRef = useRef(null);
   const triggerRef = useRef(null);
   const popupRef = useRef(null);
   const inputRef = useRef(null);
+  const searchInputRef = useRef(null); // the in-trigger search input (searchInTrigger only)
+  const listRef = useRef(null);
   // Portal-based popup position (viewport coords, will be turned into fixed inset).
   const [popupPos, setPopupPos] = useState({ top: 0, left: 0, width: 0, direction: "down" });
 
@@ -105,7 +114,9 @@ export default function MultiSelectFilter({
     window.addEventListener("scroll", onScrollOrResize, true);
     window.addEventListener("resize", onScrollOrResize);
     // Auto-focus the search field only when we actually show one
-    if (options.length > searchThreshold) {
+    if (searchInTrigger) {
+      // in-trigger mode: the input already has focus (user opened by typing/focusing)
+    } else if (options.length > searchThreshold) {
       setTimeout(() => inputRef.current?.focus(), 30);
     }
     return () => {
@@ -114,7 +125,7 @@ export default function MultiSelectFilter({
       window.removeEventListener("scroll", onScrollOrResize, true);
       window.removeEventListener("resize", onScrollOrResize);
     };
-  }, [open, options.length, searchThreshold, align]);
+  }, [open, options.length, searchThreshold, align, searchInTrigger]);
 
   // Position the popup right before the browser paints it — prevents the
   // initial "jump" from (0,0) to the anchor rect.
@@ -122,8 +133,13 @@ export default function MultiSelectFilter({
     if (open) updatePosition();
   }, [open]);
 
-  // Reset search whenever the popup closes so re-opening is fresh
-  useEffect(() => { if (!open) setQuery(""); }, [open]);
+  // Reset search + highlight whenever the popup closes so re-opening is fresh
+  useEffect(() => {
+    if (!open) {
+      setQuery("");
+      setHighlight(-1);
+    }
+  }, [open]);
 
   const selected = useMemo(() => new Set(value || []), [value]);
 
@@ -145,7 +161,28 @@ export default function MultiSelectFilter({
     });
   }, [options, query]);
 
-  const showSearch = options.length > searchThreshold;
+  // In-trigger mode always suppresses the in-popup search box.
+  const showSearch = !searchInTrigger && options.length > searchThreshold;
+
+  // Clamp the highlight index whenever the filtered list changes.
+  useEffect(() => {
+    if (!open) return;
+    if (filtered.length === 0) { setHighlight(-1); return; }
+    setHighlight((h) => {
+      if (h < 0) return 0;
+      if (h >= filtered.length) return filtered.length - 1;
+      return h;
+    });
+  }, [filtered, open]);
+
+  // Scroll the highlighted row into view when it moves via keyboard.
+  useEffect(() => {
+    if (highlight < 0 || !listRef.current) return;
+    const row = listRef.current.querySelector(`[data-idx="${highlight}"]`);
+    if (row && typeof row.scrollIntoView === "function") {
+      row.scrollIntoView({ block: "nearest" });
+    }
+  }, [highlight]);
 
   const toggle = (val) => {
     if (single) {
@@ -209,39 +246,135 @@ export default function MultiSelectFilter({
 
   const tid = testIdPrefix || undefined;
 
+  // Keyboard navigation inside the popup / in-trigger input.
+  const handleKeyDown = (e) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (!open) { setOpen(true); return; }
+      setHighlight((h) => Math.min((filtered.length - 1), h < 0 ? 0 : h + 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!open) { setOpen(true); return; }
+      setHighlight((h) => Math.max(0, h - 1));
+    } else if (e.key === "Enter") {
+      if (!open) return;
+      e.preventDefault();
+      const opt = filtered[highlight >= 0 ? highlight : 0];
+      if (opt && !opt.disabled) toggle(opt.value);
+    } else if (e.key === "Escape") {
+      if (open) { e.preventDefault(); setOpen(false); }
+    } else if (e.key === "Home") {
+      if (open) { e.preventDefault(); setHighlight(0); }
+    } else if (e.key === "End") {
+      if (open) { e.preventDefault(); setHighlight(filtered.length - 1); }
+    }
+  };
+
+  // Compute a summary string for the searchInTrigger mode: shown as a
+  // "ghost" overlay when the input is empty and there are selections.
+  const selectedSummary = useMemo(() => {
+    if (selectedOptions.length === 0) return "";
+    if (selectedOptions.length <= maxSelectedLabels) {
+      return selectedOptions.map((o) => o.label).join(", ");
+    }
+    const shown = selectedOptions.slice(0, maxSelectedLabels).map((o) => o.label).join(", ");
+    return `${shown} +${selectedOptions.length - maxSelectedLabels}`;
+  }, [selectedOptions, maxSelectedLabels]);
+
+  // Common right-side icons (clear + chevron), used by both trigger variants.
+  const rightIcons = (
+    <span className="flex items-center gap-1 shrink-0">
+      {selectedOptions.length > 0 && !disabled && (
+        <span
+          onClick={clearAll}
+          onMouseDown={(e) => e.preventDefault()} // don't steal focus from input
+          role="button"
+          aria-label={`Clear ${label} filter`}
+          data-testid={tid ? `${tid}-clear` : undefined}
+          className="text-gray-400 hover:text-gray-700 cursor-pointer inline-flex"
+        >
+          <X sx={{ fontSize: 12 }}/>
+        </span>
+      )}
+      {open
+        ? <ChevronUp sx={{ fontSize: 14 }} className="text-gray-500"/>
+        : <ChevronDown sx={{ fontSize: 14 }} className="text-gray-500"/>}
+    </span>
+  );
+
   return (
     <div ref={rootRef} className={`relative ${fullWidth ? "block w-full" : "inline-block"} ${className}`} data-testid={tid}>
-      <button
-        ref={triggerRef}
-        type="button"
-        disabled={disabled}
-        onClick={() => setOpen((o) => !o)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        data-testid={tid ? `${tid}-trigger` : undefined}
-        className="w-full h-9 px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-md
-                   inline-flex items-center justify-between gap-2 hover:border-gray-300
-                   focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30
-                   disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {triggerNode}
-        <span className="flex items-center gap-1 shrink-0">
-          {selectedOptions.length > 0 && !disabled && (
-            <span
-              onClick={clearAll}
-              role="button"
-              aria-label={`Clear ${label} filter`}
-              data-testid={tid ? `${tid}-clear` : undefined}
-              className="text-gray-400 hover:text-gray-700 cursor-pointer inline-flex"
-            >
-              <X sx={{ fontSize: 12 }}/>
-            </span>
-          )}
-          {open
-            ? <ChevronUp sx={{ fontSize: 14 }} className="text-gray-500"/>
-            : <ChevronDown sx={{ fontSize: 14 }} className="text-gray-500"/>}
-        </span>
-      </button>
+      {searchInTrigger ? (
+        // -----------------------------------------------------------------
+        // Search-in-trigger variant — the input IS the filter box.
+        // Selected summary shown as a soft overlay when input is empty; the
+        // instant the user starts typing, `query` fills the input and the
+        // popup opens (if it wasn't already).
+        // -----------------------------------------------------------------
+        <div
+          ref={triggerRef}
+          data-testid={tid ? `${tid}-trigger` : undefined}
+          onClick={() => {
+            if (disabled) return;
+            setOpen(true);
+            searchInputRef.current?.focus();
+          }}
+          className={`relative w-full h-9 px-3 py-1.5 text-xs bg-white border rounded-md
+                     inline-flex items-center gap-2 cursor-text
+                     ${open ? "border-[#ec9324] ring-2 ring-[#ec9324]/30" : "border-gray-200 hover:border-gray-300"}
+                     ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+        >
+          <span className="relative flex-1 min-w-0">
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={query}
+              disabled={disabled}
+              placeholder={selectedOptions.length === 0 ? placeholder : ""}
+              onChange={(e) => { setQuery(e.target.value); if (!open) setOpen(true); }}
+              onFocus={() => { if (!disabled) setOpen(true); }}
+              onKeyDown={handleKeyDown}
+              aria-label={label}
+              aria-haspopup="listbox"
+              aria-expanded={open}
+              aria-autocomplete="list"
+              role="combobox"
+              data-testid={tid ? `${tid}-search` : undefined}
+              className="w-full h-full bg-transparent outline-none text-gray-900 placeholder-gray-400
+                         disabled:cursor-not-allowed"
+            />
+            {/* Ghost overlay — the selected summary. Hidden as soon as the
+                user starts typing so it never fights the input value. */}
+            {query === "" && selectedSummary && (
+              <span
+                className="pointer-events-none absolute inset-0 flex items-center truncate text-gray-900 font-medium"
+                title={selectedSummary}
+                aria-hidden="true"
+              >
+                {selectedSummary}
+              </span>
+            )}
+          </span>
+          {rightIcons}
+        </div>
+      ) : (
+        <button
+          ref={triggerRef}
+          type="button"
+          disabled={disabled}
+          onClick={() => setOpen((o) => !o)}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          data-testid={tid ? `${tid}-trigger` : undefined}
+          className="w-full h-9 px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-md
+                     inline-flex items-center justify-between gap-2 hover:border-gray-300
+                     focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30
+                     disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {triggerNode}
+          {rightIcons}
+        </button>
+      )}
 
       {open && typeof document !== "undefined" && createPortal(
         <div
@@ -261,6 +394,13 @@ export default function MultiSelectFilter({
           // shield Radix's dismiss layer.
           onPointerDownCapture={(e) => e.stopPropagation()}
           onMouseDownCapture={(e) => e.stopPropagation()}
+          // Radix Dialog's RemoveScroll can block wheel events on portalled
+          // siblings; stopping propagation on wheel+touchmove keeps the
+          // popup's own scroll container fully usable (trackpad two-finger
+          // scroll, wheel, touch). We don't preventDefault so the scroll
+          // container still receives the wheel.
+          onWheel={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
           style={{
             position: "fixed",
             top: popupPos.direction === "down" ? popupPos.top : undefined,
@@ -308,13 +448,21 @@ export default function MultiSelectFilter({
             </div>
           )}
 
-          <div className="max-h-64 overflow-y-auto">
+          <div
+            ref={listRef}
+            className="max-h-64 overflow-y-auto overscroll-contain"
+            // Explicit wheel handler so browsers that route wheel to the
+            // outermost scrollable ancestor (some Chromium builds when a
+            // Radix Dialog is open) still let this list scroll on trackpad.
+            onWheel={(e) => e.stopPropagation()}
+          >
             {filtered.length === 0 && (
               <div className="px-3 py-3 text-xs text-gray-500 text-center">No matches</div>
             )}
-            {filtered.map((o) => {
+            {filtered.map((o, idx) => {
               const checked = selected.has(o.value);
               const optDisabled = !!o.disabled;
+              const isHighlighted = idx === highlight;
               // Middle column: prefer explicit `middle`, else if disabled and has
               // `disabledReason`, use that. Kept as its own column so the row is
               // symmetric — empty middle simply leaves the gap.
@@ -324,15 +472,24 @@ export default function MultiSelectFilter({
                   key={o.value}
                   type="button"
                   onClick={() => { if (!optDisabled) toggle(o.value); }}
+                  onMouseEnter={() => setHighlight(idx)}
+                  onMouseDown={(e) => {
+                    // In searchInTrigger mode, don't steal focus from the
+                    // trigger input on click — keeps the input focused so
+                    // typing continues to work after picking a row.
+                    if (searchInTrigger) e.preventDefault();
+                  }}
                   role="option"
                   aria-selected={checked}
                   aria-disabled={optDisabled}
                   disabled={optDisabled}
+                  data-idx={idx}
                   title={optDisabled ? (o.disabledReason || "Not available") : undefined}
                   data-testid={tid ? `${tid}-opt-${o.value}` : undefined}
                   className={`w-full text-left grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto]
                               items-center gap-4 px-3 py-2 text-xs transition-colors
-                              ${checked ? "bg-orange-50" : "hover:bg-gray-50"}
+                              ${checked ? "bg-orange-50" : (isHighlighted ? "bg-gray-100" : "hover:bg-gray-50")}
+                              ${isHighlighted && checked ? "bg-orange-100" : ""}
                               ${optDisabled ? "opacity-60 cursor-not-allowed hover:bg-transparent" : ""}`}
                 >
                   <span

@@ -1353,8 +1353,7 @@ export default function ContactListPage() {
                   testIdPrefix="bulk-pset-multiselect"
                   hideLabelPrefix
                   fullWidth
-                  showCountOnly
-                  countUnitLabel={bulkPsetMode === "remove" ? "to remove" : "to assign"}
+                  searchInTrigger
                 />
               </div>
               {/* Selected sets shown as removable chips — same treatment as the
@@ -1549,6 +1548,7 @@ export default function ContactListPage() {
                   testIdPrefix="contact-permission-sets"
                   hideLabelPrefix
                   fullWidth
+                  searchInTrigger
                 />
               </div>
             </div>
