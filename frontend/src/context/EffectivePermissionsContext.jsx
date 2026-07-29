@@ -97,14 +97,20 @@ export function useEffectivePermissionsState() {
   // "No Module Assigned. Contact Superadmin." message).
   const isPermissive = !!ctx.is_super_admin;
   const hasAnySet = !!ctx.has_any_set;
-  /** Returns true when the given (module, page) page-level view is visible for
-   * the current user. Permissive (Super Admin or no assigned sets) = always true.
-   * Non-permissive with no entry for this page → hidden. */
+  /** Returns true when the given (module, page) page is BOTH visible AND
+   * enabled for the current user — i.e. the user should see it in the
+   * sidebar / navigation. Pages that are marked visible but with
+   * `view.enabled = false` are still "in the catalog" for the user but
+   * they can't actually navigate to / use them, so we exclude them from
+   * navigation surfaces (a disabled page in the sidebar is a dead link).
+   * Permissive (Super Admin) = always true.
+   * Non-permissive with no entry for this page → hidden.
+   */
   const isPageViewVisible = (moduleKey, pageKey) => {
     if (isPermissive) return true;
     const p = ((ctx.modules || {})[moduleKey] || {}).pages?.[pageKey];
     if (!p) return false;
-    return !!p.view?.visible;
+    return !!p.view?.visible && !!p.view?.enabled;
   };
   /** Returns the dashboard access level for a given product
    * ("workspace_manager" | "profix") based on the assigned Permission Sets.
