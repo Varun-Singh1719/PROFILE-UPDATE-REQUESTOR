@@ -1,0 +1,296 @@
+{
+  "scenarios": {
+    "A_Empty": {
+      "me_permissions": {
+        "pass": true,
+        "has_any_set": true,
+        "modules": {}
+      },
+      "/contacts": {
+        "pass": true,
+        "status": 403,
+        "expected": 403,
+        "response": null
+      },
+      "/teams": {
+        "pass": false,
+        "status": 200,
+        "expected": 403,
+        "response": "[{\"id\":\"b62b738d-150d-4d6e-b8fb-22fff621f2e5\",\"name\":\"TechKnights\",\"color\":\"tp7\",\"initials\":\"TK\",\"member_count\":12,\"manager_count\":1},{\"id\":\"837e12ee-17de-4f57-8208-711fdfbd8d6c\",\"name\":\"InfraXcellence\",\"color\":\"tp6\",\"initials\":\"IX\",\"member_count\":15,\"manager_count\":1},{\"id\":\"c143385e-f234-453f-909e-e6ddec9c5ee2\",\"name\":\"FinVision\",\"color\":\"tp5\",\"initials\":\"FV\",\"member_count\":12,\"manager_count\":1},{\"id\":\"d4ba4f59-9661-48a3-8de5-ae0dd0a12b00\",\"name\":\"Fintech Wizards\",\"color\":\"tp3\",\"initials\":\"FW\""
+      },
+      "/permission-sets-v3": {
+        "pass": true,
+        "status": 403,
+        "expected": 403,
+        "response": null
+      },
+      "/email-templates": {
+        "pass": true,
+        "status": 403,
+        "expected": 403,
+        "response": null
+      },
+      "/floor-plans": {
+        "pass": true,
+        "status": 403,
+        "expected": 403,
+        "response": null
+      },
+      "workspace/workstation-bookings": {
+        "pass": false,
+        "status": 200,
+        "expected": 403,
+        "response": "[{\"id\":\"016fb039-6cc4-4910-a1d6-76ea2baabfab\",\"seq_no\":20001,\"plan_id\":\"dd9ea314-e698-4f5d-bf85-16c00724c5ad\",\"plan_name\":\"Tower C - 5th Floor\",\"seat_id\":\"G1\",\"seat_label\":\"G1\",\"date\":\"2026-07-03\",\"employee\":{\"id\":\"5cd57bd6-e127-46da-abc1-5cf4e89aa368\",\"name\":\"Swati Mishra\",\"email\":\"swati.mishra@infollion.com\",\"emp_id\":\"INF734\"},\"team_id\":\"3f074abf-08b7-426d-826a-dd0818287ed8\",\"team_name\":\"Aquaholics\",\"team_color\":\"tp29\",\"recurring\":{\"end_date\":\"2026-08-02\",\"days\":[\"M\",\"W\",\"F\"]},\"series_id\":\"215"
+      },
+      "workspace/room-bookings": {
+        "pass": false,
+        "status": 200,
+        "expected": 403,
+        "response": "[]"
+      },
+      "workspace/workstation-requests": {
+        "pass": false,
+        "status": 200,
+        "expected": 403,
+        "response": "[{\"id\":\"2f777188-eec2-4675-8aea-3bc7d9f61be5\",\"seq_no\":30003,\"plan_id\":\"dd9ea314-e698-4f5d-bf85-16c00724c5ad\",\"plan_name\":\"Tower C - 5th Floor\",\"seat_id\":\"B2\",\"seat_label\":\"B2\",\"date\":\"2026-07-10\",\"employee\":{\"id\":\"27bac8ab-3ca4-4257-9d43-a4548fe33e1c\",\"name\":\"Riya Sharma\",\"email\":\"ra@ticketing.com\",\"emp_id\":\"EMP-0020\"},\"team_id\":null,\"team_name\":null,\"team_color\":null,\"group_id\":\"4e1288cb-113e-4740-9089-93461469ed6f\",\"status\":\"Approved\",\"requested_by\":{\"id\":\"ab8c25e6-5823-46fe-937d-4dfe05924cec"
+      },
+      "workspace/meeting-room-requests": {
+        "pass": false,
+        "status": 200,
+        "expected": 403,
+        "response": "[{\"id\":\"ed477f3a-5e81-4106-8cc5-269a6dee889e\",\"seq_no\":40020,\"plan_id\":\"dd9ea314-e698-4f5d-bf85-16c00724c5ad\",\"plan_name\":\"Tower C - 5th Floor\",\"room_id\":\"room-rvmbce1-mrvtywb1\",\"room_name\":\"Alpha\",\"room_capacity\":14,\"title\":\"Weekly Ops Review\",\"start_at\":\"2026-07-21T09:00:00\",\"end_at\":\"2026-07-21T10:00:00\",\"attendees\":[],\"recurring\":null,\"series_id\":null,\"status\":\"Approved\",\"requested_by\":{\"id\":\"ab8c25e6-5823-46fe-937d-4dfe05924cec\",\"name\":\"Admin User\",\"email\":\"admin@ticketing.com\"},\"requested_"
+      },
+      "workspace/bookings": {
+        "pass": false,
+        "status": 200,
+        "expected": 403,
+        "response": "{\"items\":[{\"id\":\"0b866ce8-9034-439f-a96d-12162245e939\",\"seq_no\":20184,\"type\":\"Workstation\",\"title\":\"Workstation AA2\",\"room_id\":\"AA2\",\"room_name\":\"AA2\",\"room_capacity\":1,\"plan_id\":\"dd9ea314-e698-4f5d-bf85-16c00724c5ad\",\"plan_name\":\"Tower C - 5th Floor\",\"start_at\":\"2026-09-15\",\"end_at\":\"2026-09-15\",\"date\":\"2026-09-15\",\"seat_id\":\"AA2\",\"seat_label\":\"AA2\",\"organizer\":{\"id\":\"d3246b60-1e91-4a48-96f9-91388f37a576\",\"name\":\"Jayant Rajliwal\",\"email\":\"jayant.rajliwal@infollion.com\",\"emp_id\":\"INF319\"},\"organ"
+      },
+      "workspace/my-workspace/dashboard": {
+        "pass": false,
+        "status": 200,
+        "expected": 403,
+        "response": "{\"date\":\"2026-07-29\",\"my_seat\":null,\"upcoming_meetings\":[],\"team_on_floor\":[],\"recent_activity\":[],\"is_manager\":false,\"managed_teams\":[],\"my_team_today\":[]}"
+      },
+      "/tickets": {
+        "pass": false,
+        "status": 200,
+        "expected": 403,
+        "response": "[]"
+      }
+    },
+    "B_FullAccess": {
+      "/contacts": {
+        "pass": true,
+        "status": 200,
+        "expected": 200,
+        "response": null
+      },
+      "/teams": {
+        "pass": true,
+        "status": 200,
+        "expected": 200,
+        "response": null
+      },
+      "/permission-sets-v3": {
+        "pass": true,
+        "status": 200,
+        "expected": 200,
+        "response": null
+      },
+      "/email-templates": {
+        "pass": true,
+        "status": 200,
+        "expected": 200,
+        "response": null
+      },
+      "/floor-plans": {
+        "pass": true,
+        "status": 200,
+        "expected": 200,
+        "response": null
+      },
+      "/tickets?scope=all": {
+        "pass": true,
+        "status": 200,
+        "expected": 200,
+        "response": null
+      },
+      "/workstation-bookings": {
+        "pass": true,
+        "status": 200,
+        "expected": 200,
+        "response": null
+      },
+      "/room-bookings": {
+        "pass": true,
+        "status": 200,
+        "expected": 200,
+        "response": null
+      }
+    },
+    "C_ProfixReadOnly": {
+      "/contacts": {
+        "pass": true,
+        "status": 403,
+        "expected": 403,
+        "response": null
+      },
+      "/permission-sets-v3": {
+        "pass": true,
+        "status": 403,
+        "expected": 403,
+        "response": null
+      },
+      "/email-templates": {
+        "pass": true,
+        "status": 403,
+        "expected": 403,
+        "response": null
+      },
+      "/floor-plans": {
+        "pass": true,
+        "status": 403,
+        "expected": 403,
+        "response": null
+      },
+      "/teams": {
+        "pass": true,
+        "status": 200,
+        "is_lite": true
+      },
+      "/tickets": {
+        "pass": true,
+        "status": 200,
+        "expected": 200,
+        "response": null
+      },
+      "workspace/workstation-bookings": {
+        "pass": false,
+        "status": 200,
+        "expected": 403,
+        "response": "[{\"id\":\"016fb039-6cc4-4910-a1d6-76ea2baabfab\",\"seq_no\":20001,\"plan_id\":\"dd9ea314-e698-4f5d-bf85-16c00724c5ad\",\"plan_name\":\"Tower C - 5th Floor\",\"seat_id\":\"G1\",\"seat_label\":\"G1\",\"date\":\"2026-07-03\",\"employee\":{\"id\":\"5cd57bd6-e127-46da-abc1-5cf4e89aa368\",\"name\":\"Swati Mishra\",\"email\":\"swati.mishra@infollion.com\",\"emp_id\":\"INF734\"},\"team_id\":\"3f074abf-08b7-426d-826a-dd0818287ed8\",\"team_name\":\"Aquaholics\",\"team_color\":\"tp29\",\"recurring\":{\"end_date\":\"2026-08-02\",\"days\":[\"M\",\"W\",\"F\"]},\"series_id\":\"215"
+      },
+      "workspace/room-bookings": {
+        "pass": false,
+        "status": 200,
+        "expected": 403,
+        "response": "[]"
+      },
+      "workspace/workstation-requests": {
+        "pass": false,
+        "status": 200,
+        "expected": 403,
+        "response": "[{\"id\":\"2f777188-eec2-4675-8aea-3bc7d9f61be5\",\"seq_no\":30003,\"plan_id\":\"dd9ea314-e698-4f5d-bf85-16c00724c5ad\",\"plan_name\":\"Tower C - 5th Floor\",\"seat_id\":\"B2\",\"seat_label\":\"B2\",\"date\":\"2026-07-10\",\"employee\":{\"id\":\"27bac8ab-3ca4-4257-9d43-a4548fe33e1c\",\"name\":\"Riya Sharma\",\"email\":\"ra@ticketing.com\",\"emp_id\":\"EMP-0020\"},\"team_id\":null,\"team_name\":null,\"team_color\":null,\"group_id\":\"4e1288cb-113e-4740-9089-93461469ed6f\",\"status\":\"Approved\",\"requested_by\":{\"id\":\"ab8c25e6-5823-46fe-937d-4dfe05924cec"
+      },
+      "workspace/meeting-room-requests": {
+        "pass": false,
+        "status": 200,
+        "expected": 403,
+        "response": "[{\"id\":\"ed477f3a-5e81-4106-8cc5-269a6dee889e\",\"seq_no\":40020,\"plan_id\":\"dd9ea314-e698-4f5d-bf85-16c00724c5ad\",\"plan_name\":\"Tower C - 5th Floor\",\"room_id\":\"room-rvmbce1-mrvtywb1\",\"room_name\":\"Alpha\",\"room_capacity\":14,\"title\":\"Weekly Ops Review\",\"start_at\":\"2026-07-21T09:00:00\",\"end_at\":\"2026-07-21T10:00:00\",\"attendees\":[],\"recurring\":null,\"series_id\":null,\"status\":\"Approved\",\"requested_by\":{\"id\":\"ab8c25e6-5823-46fe-937d-4dfe05924cec\",\"name\":\"Admin User\",\"email\":\"admin@ticketing.com\"},\"requested_"
+      },
+      "workspace/bookings": {
+        "pass": false,
+        "status": 200,
+        "expected": 403,
+        "response": "{\"items\":[{\"id\":\"0b866ce8-9034-439f-a96d-12162245e939\",\"seq_no\":20184,\"type\":\"Workstation\",\"title\":\"Workstation AA2\",\"room_id\":\"AA2\",\"room_name\":\"AA2\",\"room_capacity\":1,\"plan_id\":\"dd9ea314-e698-4f5d-bf85-16c00724c5ad\",\"plan_name\":\"Tower C - 5th Floor\",\"start_at\":\"2026-09-15\",\"end_at\":\"2026-09-15\",\"date\":\"2026-09-15\",\"seat_id\":\"AA2\",\"seat_label\":\"AA2\",\"organizer\":{\"id\":\"d3246b60-1e91-4a48-96f9-91388f37a576\",\"name\":\"Jayant Rajliwal\",\"email\":\"jayant.rajliwal@infollion.com\",\"emp_id\":\"INF319\"},\"organ"
+      },
+      "workspace/my-workspace/dashboard": {
+        "pass": false,
+        "status": 200,
+        "expected": 403,
+        "response": "{\"date\":\"2026-07-29\",\"my_seat\":null,\"upcoming_meetings\":[],\"team_on_floor\":[],\"recent_activity\":[],\"is_manager\":false,\"managed_teams\":[],\"my_team_today\":[]}"
+      }
+    },
+    "N_DeletedSet": {
+      "before_delete_tickets": {
+        "pass": true,
+        "status": 200,
+        "expected": 200,
+        "response": null
+      },
+      "after_delete_tickets": {
+        "pass": false,
+        "status": 200,
+        "expected": 403,
+        "response": "[]"
+      },
+      "after_delete_contacts": {
+        "pass": false,
+        "status": 200,
+        "expected": 403,
+        "response": "[{\"id\":\"ab8c25e6-5823-46fe-937d-4dfe05924cec\",\"email\":\"admin@ticketing.com\",\"name\":\"Admin User\",\"phone\":\"9717377449\",\"role\":\"Super Admin\",\"status\":\"Active\",\"emp_id\":\"EMP-0001\",\"doj\":\"2024-01-01\",\"created_on\":\"2026-06-15T10:47:33.017802+00:00\",\"last_login\":\"2026-07-29T17:23:55.874380+00:00\",\"preferences\":{\"default_dashboard\":\"workspace_manager\"},\"phone_isd\":\"+91\",\"team_id\":null,\"team_name\":null,\"team_color\":null,\"manager_names\":[],\"permission_set_ids\":[],\"permission_sets\":[]},{\"id\":\"ca04432e-4f2e"
+      }
+    }
+  },
+  "bypass_attempts": {},
+  "side_endpoints": {},
+  "super_admin_regression": {
+    "contacts": {
+      "pass": true,
+      "status": 200,
+      "expected": 200,
+      "response": null
+    },
+    "teams": {
+      "pass": true,
+      "status": 200,
+      "expected": 200,
+      "response": null
+    },
+    "permission-sets-v3": {
+      "pass": true,
+      "status": 200,
+      "expected": 200,
+      "response": null
+    },
+    "tickets": {
+      "pass": true,
+      "status": 200,
+      "expected": 200,
+      "response": null
+    }
+  },
+  "known_defects": {
+    "workspace_leak": [
+      "/workstation-bookings",
+      "/room-bookings",
+      "/workstation-requests",
+      "/meeting-room-requests",
+      "/bookings",
+      "/my-workspace/dashboard"
+    ],
+    "deleted_set_grants_access": true
+  },
+  "new_defects": [],
+  "cleanup": [
+    [
+      "user",
+      "99196827-1b47-4faf-92f5-278cf9c08dc6"
+    ],
+    [
+      "pset",
+      "pset-72936b0b-4e58-4134-96ce-7e737c2c9613"
+    ],
+    [
+      "user",
+      "3d3f03cf-e5fc-40a6-9176-1561770e4ce8"
+    ],
+    [
+      "pset",
+      "pset-c2b0c515-f5ad-4f10-b0d3-f292aa7ea039"
+    ],
+    [
+      "user",
+      "3737c553-6da9-49d1-b384-29145551fe12"
+    ],
+    [
+      "pset",
+      "pset-87447ede-ceba-4d6b-961e-cbd34d83cbdc"
+    ],
+    [
+      "user",
+      "620a8d03-2b6e-4fb0-82a0-b21713996b16"
+    ]
+  ]
+}
