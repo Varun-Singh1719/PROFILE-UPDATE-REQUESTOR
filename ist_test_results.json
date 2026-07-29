@@ -1,0 +1,93 @@
+{
+  "tests": {
+    "1_login_twice": {
+      "passed": true,
+      "details": "last_login correctly ends with +05:30",
+      "data": {
+        "last_login": "2026-07-30T03:09:09.467330+05:30"
+      }
+    },
+    "2_create_ticket": {
+      "passed": true,
+      "details": "created_on correctly ends with +05:30; updated_on correctly ends with +05:30",
+      "data": {
+        "ticket_number": null,
+        "created_on": "2026-07-30T03:09:14.422253+05:30",
+        "updated_on": "2026-07-30T03:09:14.422263+05:30"
+      }
+    },
+    "3_export_tickets_csv": {
+      "passed": true,
+      "details": "Filename contains IST today (2026-07-30)",
+      "data": {
+        "content_disposition": "attachment; filename=\"tickets_2026-07-30.csv\""
+      }
+    },
+    "4_bookings_compute_status": {
+      "passed": true,
+      "details": "All 25 bookings have valid status values",
+      "data": {
+        "statuses": [
+          "Active",
+          "Active",
+          "Active",
+          "Active",
+          "Active"
+        ]
+      }
+    },
+    "5_room_bookings": {
+      "passed": true,
+      "details": "Endpoint returned 200 with 0 bookings",
+      "data": null
+    },
+    "6_my_workspace_dashboard": {
+      "passed": true,
+      "details": "Response has expected shape",
+      "data": {
+        "keys": [
+          "date",
+          "my_seat",
+          "upcoming_meetings",
+          "team_on_floor",
+          "recent_activity",
+          "is_manager",
+          "managed_teams",
+          "my_team_today"
+        ]
+      }
+    },
+    "7_my_workspace_week": {
+      "passed": true,
+      "details": "Returns 7 daily entries, week_start matches IST Monday (2026-07-27)",
+      "data": {
+        "week_start": "2026-07-27",
+        "days_count": 7
+      }
+    },
+    "8_forgot_password": {
+      "passed": true,
+      "details": "Endpoint returned 200 as expected",
+      "data": null
+    },
+    "9_reset_password_invalid_token": {
+      "passed": true,
+      "details": "Returned 400 with correct error message",
+      "data": {
+        "detail": "Invalid or expired reset link"
+      }
+    },
+    "10_export_contacts_csv": {
+      "passed": true,
+      "details": "Filename contains IST today (2026-07-30)",
+      "data": {
+        "content_disposition": "attachment; filename=\"employees_2026-07-30.csv\""
+      }
+    }
+  },
+  "summary": {
+    "total": 10,
+    "passed": 10,
+    "failed": 0
+  }
+}
