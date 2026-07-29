@@ -1511,7 +1511,7 @@ export default function ContactListPage() {
                   label="Permission Sets"
                   options={permissionSets.map((p) => ({
                     value: p.id,
-                    label: `${p.numeric_id} - ${p.name}`,
+                    label: `${p.numeric_id || p.seq_no || "?"} - ${p.title || p.name || "Untitled"}`,
                   }))}
                   value={form.permission_set_ids || []}
                   onChange={(ids) => setForm({ ...form, permission_set_ids: ids })}
