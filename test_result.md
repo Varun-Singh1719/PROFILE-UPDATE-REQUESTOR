@@ -3626,7 +3626,7 @@ frontend:
             - "View Booking" button navigates to /workspace-manager/bookings but without ?bookingId= parameter in URL (navigation works but query param missing). This is a minor issue that doesn't affect the core bug fix verification.
             
             **CONSOLE ERRORS:**
-            - 401 errors detected for PDF loading (https://qa-perm-engine.preview.emergentagent.com/api/floor-plans/pdf/...) - this is a backend PDF authentication issue, not related to the bug fixes
+            - 401 errors detected for PDF loading (https://calendar-tz-verify.preview.emergentagent.com/api/floor-plans/pdf/...) - this is a backend PDF authentication issue, not related to the bug fixes
             - No critical JavaScript errors detected
             
             Test date used: 2026-07-03 (date with existing workstation bookings)
@@ -7772,7 +7772,7 @@ frontend_permissions_qa_aug2026:
             
             Executed all 7 scenarios using correct ContactCreate schema (email with real TLD, emp_id, doj required).
             Test credentials: admin@ticketing.com / Admin@123
-            Test environment: https://qa-perm-engine.preview.emergentagent.com
+            Test environment: https://calendar-tz-verify.preview.emergentagent.com
             
             **SCENARIO RESULTS:**
             

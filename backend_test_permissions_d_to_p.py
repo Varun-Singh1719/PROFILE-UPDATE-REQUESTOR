@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://8c28e209-406d-46b7-ab68-4f7d4e44159f.preview.emergentagent.com/api"
+BASE_URL = "https://calendar-tz-verify.preview.emergentagent.com/api"
 ADMIN_EMAIL = "admin@ticketing.com"
 ADMIN_PASSWORD = "Admin@123"
 

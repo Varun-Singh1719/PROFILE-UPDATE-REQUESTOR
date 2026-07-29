@@ -21,7 +21,7 @@ from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
 # Backend URL
-BACKEND_URL = "https://8c28e209-406d-46b7-ab68-4f7d4e44159f.preview.emergentagent.com/api"
+BACKEND_URL = "https://calendar-tz-verify.preview.emergentagent.com/api"
 
 # Super Admin credentials
 SUPER_ADMIN_EMAIL = "admin@ticketing.com"
