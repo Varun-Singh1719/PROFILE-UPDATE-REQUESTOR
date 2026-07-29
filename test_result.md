@@ -384,7 +384,7 @@ frontend:
   - task: "Floor Layout — Meeting room availability by CURRENT TIME (Jul 29 2026)"
     implemented: true
     working: "NA"
-    file: "frontend/src/pages/FloorLayoutPage.jsx, frontend/src/components/WorkstationFloorMap.jsx"
+    file: "frontend/src/pages/FloorLayoutPage.jsx, frontend/src/components/WorkstationFloorMap.jsx, frontend/src/components/RoomBookingDetailDialog.jsx"
     stuck_count: 0
     priority: "high"
     needs_retesting: true
@@ -392,40 +392,39 @@ frontend:
         - working: "NA"
           agent: "main"
           comment: |
-            BUG: On Workspace Manager > Floor Layout the meeting-room boxes
-            were coloured based on the selected DATE only: any booking that
-            fell on the date made the room RED all day. Users expected the
-            colour to reflect the CURRENT time — a room should stay GREEN
-            until a meeting actually starts, turn RED while the meeting is
-            in progress, and flip back to GREEN as soon as the meeting ends
-            (even if more meetings are scheduled later in the day).
+            ROUND 1: Room colour is now derived from CURRENT time (RED only if
+            a booking's [start_at, end_at] window spans "now", GREEN otherwise).
+            Reused the existing 60-s nowTick.
 
-            FIX:
-            1. FloorLayoutPage.jsx (PlanInteractiveView)
-               - Reused the existing `nowTick` (1-minute interval) to derive
-                 a new `roomOccupiedNowByRoom` map that keeps only bookings
-                 whose [start_at, end_at] window spans "now". Cancelled
-                 bookings are excluded. The earliest-starting active booking
-                 wins in the (unlikely) overlap case for deterministic
-                 tooltip content.
-               - Passed the new map to WorkstationFloorMap via a new
-                 `roomOccupiedNowByRoom` prop.
-            2. WorkstationFloorMap.jsx
-               - Added `roomOccupiedNowByRoom` prop (defaults to null →
-                 legacy "has any booking" behaviour is preserved for other
-                 callers).
-               - When the map is provided, colours the room RED only when
-                 a booking is running RIGHT NOW; the RoomBoxLabel tooltip
-                 now surfaces the running meeting details (or falls back to
-                 the first upcoming meeting when nothing is running).
-               - Passed `occupiedNow={isOccupiedNow}` (was hard-coded false)
-                 and `blocked={false}` (was `hasBookings`) so the label
-                 badge matches the room state.
-
-            IMPACT: Workstation seats and every other page using
-            WorkstationFloorMap are UNAFFECTED — the new prop is opt-in and
-            defaults to null, preserving prior behaviour.
-
+            ROUND 2 (Jul 29 2026):
+            (a) HOVER FIX — the hover tooltip previously leaked upcoming
+                meeting details (e.g. "Skip-level Sync 15:30–16:00") on rooms
+                that were currently AVAILABLE. WorkstationFloorMap now passes
+                `hoverBooking = activeNowBooking || null` — so the hover only
+                surfaces meeting details when a meeting is actually running
+                right now. Available rooms just show "Available".
+            (b) CLICK POPUP REWRITE — RoomBookingDetailDialog rewritten to
+                use an Accordion (shadcn) that lists ONLY upcoming meetings
+                (past meetings are filtered out — end_at > now). Each item
+                has a coloured indicator dot:
+                  • RED (pulsing) = ongoing (with "NOW" badge)
+                  • AMBER = upcoming
+                Collapsed row shows title + time-range. Expanded row shows
+                Booking #, organizer name + email, team, attendees, notes,
+                status pill. Ongoing items are auto-expanded on open. Header
+                badge is BOOKED (red) when a meeting is running now, else
+                AVAILABLE (green). Empty state shown when no upcoming
+                meetings remain.
+            Verified via playwright screenshots:
+              • Boolean (07:50–08:10 running now, 08:30–09:30 upcoming):
+                RED "NOW" pill on the map, popup shows "2 UPCOMING MEETINGS"
+                with red dot on Testing + amber dot on Testing - Accordian,
+                both expandable to show Booking #20019/20020 + organizer.
+              • Zeta (Skip-level Sync scheduled 15:30–16:00):
+                hover reads "Zeta · Seats 2 · AVAILABLE / Available" — no
+                meeting details leaked. Map shows GREEN.
+              • Alpha (no bookings): empty state "Room is available — No
+                upcoming meetings scheduled."
     implemented: true
     working: "NA"
     file: "frontend/src/components/ui/MultiSelectFilter.jsx"

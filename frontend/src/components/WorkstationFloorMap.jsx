@@ -403,10 +403,10 @@ const WorkstationFloorMap = ({
                       // and the tooltip uses `room.name`).
                       const roomForLabel = { room_id: r.id, name: r.name, capacity: r.capacity };
                       // Prefer the currently-running booking for the hover
-                      // tooltip (so users see WHY it is red right now); fall
-                      // back to the first upcoming booking for context.
-                      const hoverBooking = activeNowBooking
-                        || (hasBookings ? bookings[0] : null);
+                      // tooltip (so users see WHY it is red right now). When
+                      // the room is Available, DO NOT show upcoming meeting
+                      // details in the hover — only reveal them on click.
+                      const hoverBooking = activeNowBooking || null;
                       return (
                         <div
                           key={r.id}
