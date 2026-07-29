@@ -268,10 +268,15 @@ function SearchPalette({ open, onClose, items }) {
 export default function Sidebar() {
   const { user } = useAuth();
   const { can } = usePermissions();
-  const { isPageViewVisible } = useEffectivePermissionsState();
+  const { isPageViewVisible, hasAnySet, ready: permsReady } = useEffectivePermissionsState();
   const navigate = useNavigate();
   const location = useLocation();
   const isSuperAdmin = user?.role === "Super Admin";
+  // STRICT gating: any non-Super-Admin without an assigned Permission Set
+  // sees an empty sidebar + the "No Module Assigned" hint. Wait for
+  // `permsReady` so we don't flash the empty state during the initial
+  // /api/me/permissions load.
+  const noAccess = permsReady && !isSuperAdmin && !hasAnySet;
 
   // ---- Width / collapse state
   const initialPref = (typeof window !== "undefined") ? window.localStorage.getItem(STORAGE_KEY) : null;
@@ -322,12 +327,15 @@ export default function Sidebar() {
   const handleLogout = async () => { navigate("/login"); }; // legacy — logout now lives in TopBar
   const onNavigateMobile = () => setMobileOpen(false);
 
-  const flatItems = useMemo(() => flattenForSearch(NAV_CONFIG).filter(it => {
-    if (it.superAdminOnly && !isSuperAdmin) return false;
-    if (it.perm && !isSuperAdmin && !can(it.perm.module, it.perm.feature, it.perm.action)) return false;
-    if (it.v3 && !isPageViewVisible(it.v3.module, it.v3.page)) return false;
-    return true;
-  }), [isSuperAdmin, can, isPageViewVisible]);
+  const flatItems = useMemo(() => {
+    if (noAccess) return [];
+    return flattenForSearch(NAV_CONFIG).filter(it => {
+      if (it.superAdminOnly && !isSuperAdmin) return false;
+      if (it.perm && !isSuperAdmin && !can(it.perm.module, it.perm.feature, it.perm.action)) return false;
+      if (it.v3 && !isPageViewVisible(it.v3.module, it.v3.page)) return false;
+      return true;
+    });
+  }, [isSuperAdmin, can, isPageViewVisible, noAccess]);
 
   // Mobile: hamburger button + drawer
   if (isMobile) {
@@ -345,7 +353,7 @@ export default function Sidebar() {
             <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)}/>
             <aside className="relative w-64 bg-white h-full flex flex-col shadow-2xl">
               <SidebarHeader collapsed={false} user={user} onToggle={() => setMobileOpen(false)} mobile onSearch={() => setSearchOpen(true)}/>
-              <SidebarNav collapsed={false} currentPath={location.pathname} can={can} isSuperAdmin={isSuperAdmin} isPageViewVisible={isPageViewVisible} onNavigate={onNavigateMobile}/>
+              <SidebarNav collapsed={false} currentPath={location.pathname} can={can} isSuperAdmin={isSuperAdmin} isPageViewVisible={isPageViewVisible} onNavigate={onNavigateMobile} noAccess={noAccess}/>
             </aside>
           </div>
         )}
@@ -362,7 +370,7 @@ export default function Sidebar() {
         className={`bg-white border-r border-gray-200 flex flex-col fixed top-0 left-0 h-screen z-30 transition-all duration-200 ${collapsed ? "w-16" : "w-64"}`}
       >
         <SidebarHeader collapsed={collapsed} user={user} onToggle={toggle} onSearch={() => setSearchOpen(true)}/>
-        <SidebarNav collapsed={collapsed} currentPath={location.pathname} can={can} isSuperAdmin={isSuperAdmin} isPageViewVisible={isPageViewVisible}/>
+        <SidebarNav collapsed={collapsed} currentPath={location.pathname} can={can} isSuperAdmin={isSuperAdmin} isPageViewVisible={isPageViewVisible} noAccess={noAccess}/>
       </aside>
       <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} items={flatItems}/>
     </>
@@ -419,10 +427,47 @@ function SidebarHeader({ collapsed, user, onToggle, mobile, onSearch }) {
 // --------------------------------------------------------------------------
 // Nav list
 // --------------------------------------------------------------------------
-function SidebarNav({ collapsed, currentPath, can, isSuperAdmin, isPageViewVisible, onNavigate }) {
+function SidebarNav({ collapsed, currentPath, can, isSuperAdmin, isPageViewVisible, onNavigate, noAccess = false }) {
   // CSS quirk: setting overflow-y on one axis coerces the other to non-visible too.
   // For the collapsed icon-only view we keep `overflow-visible` so hover tooltips
   // (which extend to the right of the sidebar) are not clipped.
+
+  // STRICT gating: when the current user has no assigned Permission Sets
+  // (and is not Super Admin) render a friendly empty state instead of the
+  // nav list. Nothing is clickable so they can't stumble into gated pages.
+  if (noAccess) {
+    if (collapsed) {
+      return (
+        <nav className="flex-1 py-3 px-1.5 overflow-visible" data-testid="sidebar-no-access-collapsed">
+          <Tip label="No Module Assigned. Contact Super Admin." show>
+            <div className="w-10 h-10 mx-auto rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+              <Shield sx={{ fontSize: 18 }}/>
+            </div>
+          </Tip>
+        </nav>
+      );
+    }
+    return (
+      <nav
+        className="flex-1 py-6 px-4 overflow-y-auto"
+        data-testid="sidebar-no-access"
+      >
+        <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-4 text-center">
+          <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto mb-2.5">
+            <Shield sx={{ fontSize: 20 }}/>
+          </div>
+          <div className="text-sm font-semibold text-amber-900 mb-1">
+            No Module Assigned
+          </div>
+          <div className="text-[12px] text-amber-800/80 leading-relaxed">
+            You don&apos;t have any permission sets assigned yet.
+            Please contact your Super&nbsp;Admin to request access.
+          </div>
+        </div>
+      </nav>
+    );
+  }
+
   return (
     <nav className={`flex-1 py-3 space-y-1 ${collapsed ? "px-1.5 overflow-visible" : "px-3 overflow-y-auto overflow-x-hidden"}`}>
       {NAV_CONFIG.map(item => {

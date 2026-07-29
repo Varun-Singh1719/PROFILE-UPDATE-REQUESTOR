@@ -11,7 +11,10 @@
  *
  * Rules (client-side hide only, per user instruction):
  *   - Super Admin        → everything visible + usable.
- *   - No assigned sets   → PERMISSIVE fallback: everything visible + usable.
+ *   - No assigned sets   → STRICT: nothing visible, nothing usable (Sidebar
+ *                          shows "No Module Assigned. Contact Superadmin.")
+ *                          All Admin/User access must be granted via assigned
+ *                          Permission Sets — no defaults.
  *   - Assigned sets      → merged {enabled, visible, scope} triple.
  *
  *   • `isVisible`  → false hides the UI element (button not rendered).
@@ -89,7 +92,11 @@ function _lookup(state, moduleKey, pageKey, functionKey) {
 export function useEffectivePermissionsState() {
   const ctx = useContext(EffectivePermissionsContext) || EMPTY;
   const ready = !!ctx?.ready;
-  const isPermissive = ctx.is_super_admin || !ctx.has_any_set;
+  // STRICT gating: only Super Admin is permissive. Admins/Users without
+  // any assigned Permission Sets get an empty view (Sidebar surfaces the
+  // "No Module Assigned. Contact Superadmin." message).
+  const isPermissive = !!ctx.is_super_admin;
+  const hasAnySet = !!ctx.has_any_set;
   /** Returns true when the given (module, page) page-level view is visible for
    * the current user. Permissive (Super Admin or no assigned sets) = always true.
    * Non-permissive with no entry for this page → hidden. */
@@ -116,7 +123,7 @@ export function useEffectivePermissionsState() {
     const dash = (ctx.modules || {}).dashboard?.pages?.[product];
     return dash?.access_level || null;
   };
-  return { ready, isPermissive, isSuperAdmin: !!ctx.is_super_admin, isPageViewVisible, getDashboardAccess, state: ctx };
+  return { ready, isPermissive, hasAnySet, isSuperAdmin: !!ctx.is_super_admin, isPageViewVisible, getDashboardAccess, state: ctx };
 }
 
 /**
@@ -131,7 +138,7 @@ export function useEffectivePermission(moduleKey, pageKey, functionKey) {
   const state = ctx || EMPTY;
   const ready = !!ctx?.ready;
 
-  const isPermissive = state.is_super_admin || !state.has_any_set;
+  const isPermissive = !!state.is_super_admin;
 
   const entry = _lookup(state, moduleKey, pageKey, functionKey);
   const pageBlock = ((state.modules || {})[moduleKey] || {}).pages?.[pageKey] || null;
@@ -169,7 +176,7 @@ export function useEffectivePage(moduleKey, pageKey) {
   const ctx = useContext(EffectivePermissionsContext) || EMPTY;
   const state = ctx;
   const ready = !!ctx?.ready;
-  const isPermissive = state.is_super_admin || !state.has_any_set;
+  const isPermissive = !!state.is_super_admin;
 
   const pageBlock = ((state.modules || {})[moduleKey] || {}).pages?.[pageKey] || null;
 

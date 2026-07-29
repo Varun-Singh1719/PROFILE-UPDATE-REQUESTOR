@@ -83,7 +83,7 @@ export default function LoginAsDialog({ open, onOpenChange }) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden">
+      <DialogContent className="max-w-2xl w-[calc(100vw-2rem)] p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-6 pt-5 pb-3 border-b border-gray-100">
           <DialogTitle className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
             <LogIn sx={{ fontSize: 16 }} className="text-[#ec9324]"/> Login As
@@ -93,7 +93,7 @@ export default function LoginAsDialog({ open, onOpenChange }) {
           </p>
         </DialogHeader>
 
-        <div className="px-6 py-4 space-y-3">
+        <div className="px-6 py-4 space-y-3 overflow-x-hidden">
           {/* Search */}
           <div className="relative">
             <Search sx={{ fontSize: 13 }} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
@@ -151,26 +151,27 @@ export default function LoginAsDialog({ open, onOpenChange }) {
                     {active && <span className="w-2 h-2 rounded-full bg-[#ec9324]"/>}
                   </span>
 
-                  {/* Name — left-aligned */}
+                  {/* Name — left-aligned (allow to shrink so email can truncate) */}
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium text-gray-900 truncate">{u.name || "—"}</div>
                     {u.role && <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">{u.role}</div>}
                   </div>
 
-                  {/* Email — right-aligned */}
-                  <div className="text-xs text-gray-600 truncate max-w-[55%] text-right">{u.email}</div>
+                  {/* Email — right-aligned, hard-truncated so long domains never
+                   * push the row past the dialog's right edge. */}
+                  <div className="text-xs text-gray-600 truncate flex-shrink min-w-0 max-w-[50%] text-right">{u.email}</div>
                 </button>
               );
             })}
           </div>
 
           <div className="text-[11px] text-gray-500 leading-relaxed">
-            You'll open in a new tab. The impersonation session lives only in that tab —
+            You&apos;ll open in a new tab. The impersonation session lives only in that tab —
             closing it (or clicking Logout there) ends the impersonation.
           </div>
         </div>
 
-        <DialogFooter className="px-6 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
+        <DialogFooter className="px-6 py-3 border-t border-gray-100 flex flex-wrap items-center justify-end gap-2 shrink-0">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
