@@ -1,0 +1,23 @@
+{
+  "scenarios": {},
+  "defects": [],
+  "permission_leaks": [],
+  "super_admin_regression": {
+    "sidebar_groups": {
+      "expected": [
+        "ProfiX",
+        "Workspace Manager",
+        "Manage"
+      ],
+      "found": [
+        "ProfiX",
+        "Workspace Manager",
+        "Manage"
+      ],
+      "pass": true
+    }
+  },
+  "created_users": [],
+  "created_permission_sets": [],
+  "critical_error": "Page.evaluate: Error: Failed to create permission set: {\"detail\":\"Invalid token\"}\n    at eval (eval at evaluate (:290:30), <anonymous>:16:27)\n    at async <anonymous>:316:30"
+}

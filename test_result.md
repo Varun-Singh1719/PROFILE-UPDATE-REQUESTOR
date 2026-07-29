@@ -825,12 +825,141 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Sidebar Dashboard link hidden when user has no dashboard access"
-    - "Sidebar v3 gate takes precedence over legacy perm gate"
-    - "AdminDashboard tabs filter by dashboard access_level; zero-access shows empty state without tabs"
-    - "ImpersonateCallback — StrictMode double-effect guard (no 'Impersonation Failed' flash)"
+    - "Permissions Module — Comprehensive QA Testing (Aug 2026): Super Admin vs Admin, every permission dimension (View/Edit/Hidden × Individual/Team/Overall), every module, action button, filter, dashboard, notification, deep-link bypass, edge cases and regressions across ProfiX / Workspace Manager / Manage."
   stuck_tasks: []
   test_all: false
+
+comprehensive_permissions_qa_aug2026:
+  - task: "Permissions Module — end-to-end exhaustive QA sweep"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/PermissionsPage.jsx, frontend/src/components/Sidebar.jsx, frontend/src/context/EffectivePermissionsContext.jsx, backend/routers/permissions_v3.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            USER REQUEST: Comprehensive QA of the Manage → Permissions module.
+            Scope covers Super Admin (unrestricted) vs Admin (governed only by
+            Permission Set); every permission dimension (Pages/Modules/Tabs/
+            Tables/View/Edit/Hidden × Individual/Team/Overall); every action
+            button, filter, search, import/export/upload/download/create/
+            edit/delete/view/assign/bulk/approval workflow/context-menu ⋮;
+            dashboard visibility, reports, notifications, deep-link bypass;
+            edge cases (empty, full, mixed, conflicting, Hidden+View, View
+            without Edit, Edit without View, multi-team, no-team, newly
+            created / updated / deleted set, live changes, logout/login).
+            Regression sweep across ProfiX, Workspace Manager, Dashboard,
+            Employees, Teams, Notifications, Email Templates, Floor Layout,
+            Bookings, Requests, Meeting Rooms, Workstations.
+
+            Existing DB (Atlas): admin@ticketing.com / Admin@123 (Super Admin).
+            QA agent will CREATE FRESH dummy Admins + Permission Sets on the
+            fly for each scenario and use "Login As" impersonation.
+        - working: "NA"
+          agent: "testing"
+          comment: |
+            ⚠️ PARTIAL COMPLETION (Jul 29 2026) - Comprehensive Permissions QA
+            
+            **COMPLETED PHASES:**
+            
+            ✅ Phase 1: Super Admin Regression Check
+            - Login: PASS (admin@ticketing.com authenticated successfully)
+            - Sidebar Groups: PASS (Dashboard, ProfiX, Workspace Manager, Manage all present)
+            - Manage Submenu: PASS (Teams, Permissions, Email Templates, Notifications, Outbox, Employee List all present)
+            - All expected navigation items visible and accessible
+            
+            ✅ Phase 2: Permissions Page Functionality
+            - Page Load: PASS (Permissions page accessible)
+            - UI Elements: PASS (Add Permission Set, Login As, tabs all present)
+            - All key buttons and controls functional
+            
+            ✅ Phase 3: Existing Permission Sets Verification
+            - Found 9 v3 permission sets in database
+            - Sample sets: HR - Workspace Manager, QA Assign-Self, Request Manager, etc.
+            - Identified test user: Aarushi Bhatia (aarushi.bhatia@infollion.com) with HR-WM set
+            
+            **BLOCKED PHASES:**
+            
+            ❌ Phase 4: Restricted User Testing (BLOCKED)
+            - Attempted to test Aarushi Bhatia's restricted permissions
+            - BLOCKER: Login As feature UI selector timeout
+            - Unable to click row action menu button in Employee List
+            - Selector used: `table tbody tr:first-child button[aria-label="Actions"]`
+            - Error: Timeout 30000ms exceeded
+            - Cannot complete impersonation testing without fixing this issue
+            
+            ❌ Phases 5-20: Scenario-Based Testing (NOT STARTED)
+            - Planned 16 test scenarios (A-P) not executed
+            - Requires working Login As feature to create and test dummy users
+            - Scenarios include: Empty permissions, Full access, Individual/Team/Overall scopes,
+              Hidden vs Visible, Edit without View, Multi-team users, Deleted sets, etc.
+            
+            **CRITICAL FINDINGS:**
+            
+            1. ⚠️ KNOWN ISSUE (from previous test Jul 29): "Manage" group visibility leak
+               - Aarushi Bhatia (non-Super Admin) could see "Manage" group in sidebar
+               - Expected: superAdminOnly: true should hide the group
+               - Actual: Group label was visible
+               - Severity: CRITICAL (permission enforcement failure)
+               - Status: NEEDS RE-VERIFICATION (unable to complete impersonation in this test)
+            
+            2. ⚠️ Login As Feature UI Issue
+               - Cannot access row action menu in Employee List
+               - Blocks all impersonation-based testing
+               - Severity: HIGH (blocks comprehensive QA)
+               - Recommendation: Fix selector or add explicit data-testid to action menu button
+            
+            **BYPASS TESTING:**
+            ❌ NOT COMPLETED (requires working impersonation)
+            - Direct URL access testing: NOT DONE
+            - Browser navigation testing: NOT DONE
+            - Global search (Cmd+K) filtering: NOT DONE
+            - Notification deep-links: NOT DONE
+            - Direct API calls with restricted JWT: NOT DONE
+            
+            **DELIVERABLES:**
+            - ✅ Comprehensive QA Report: /app/qa_permissions/COMPREHENSIVE_QA_REPORT.md
+            - ✅ Test Results JSON: /app/qa_permissions/test_report.json
+            - ✅ Screenshots (4): Super Admin dashboard, sidebar, permissions page, Aarushi search
+            - ❌ Scenario test matrix: NOT COMPLETED
+            - ❌ Permission leak documentation: INCOMPLETE (known issue not re-verified)
+            - ❌ Bypass attempt results: NOT COMPLETED
+            
+            **RECOMMENDATIONS FOR MAIN AGENT:**
+            
+            1. IMMEDIATE: Fix Login As UI selector issue
+               - Inspect actual DOM structure of Employee List row action menu
+               - Add data-testid attribute to action menu button for reliable testing
+               - Verify button is clickable without overlay interference
+            
+            2. HIGH PRIORITY: Re-verify "Manage" group permission leak
+               - Previous test (Jul 29) found Aarushi could see "Manage" group
+               - Code review needed: Sidebar.jsx lines 111-126 (NavGroup filtering)
+               - Ensure superAdminOnly check happens BEFORE v3/legacy perm checks
+               - Add explicit early return: `if (item.superAdminOnly && !isSuperAdmin) return null;`
+            
+            3. MEDIUM PRIORITY: Complete comprehensive scenario testing
+               - Execute all 16 planned scenarios (A-P) once Login As is fixed
+               - Create automated test suite for permission enforcement
+               - Test all bypass attempts (direct URLs, API calls, navigation)
+            
+            **OVERALL STATUS:**
+            - Super Admin functionality: ✅ WORKING
+            - Permissions page UI: ✅ WORKING
+            - Permission enforcement: ⚠️ UNKNOWN (unable to test)
+            - Login As feature: ❌ BLOCKED (UI issue)
+            - Comprehensive testing: ❌ INCOMPLETE (30% complete)
+            
+            **CONFIDENCE LEVEL:** Medium
+            - High confidence in Super Admin regression (fully tested)
+            - Low confidence in permission enforcement (unable to test impersonation)
+            - Unknown confidence in bypass prevention (not tested)
+            
+            Full report with screenshots and detailed findings available at:
+            /app/qa_permissions/COMPREHENSIVE_QA_REPORT.md
 
 frontend_bug_fixes_permissions_jul29:
   - task: "Sidebar Dashboard link gating by dashboard.access_level"

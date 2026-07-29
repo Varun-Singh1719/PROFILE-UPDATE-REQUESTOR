@@ -1,0 +1,62 @@
+{
+  "test_date": "2026-07-29T16:03:14.014007",
+  "super_admin_regression": {
+    "login": "PASS",
+    "sidebar": {
+      "Dashboard": "PASS",
+      "ProfiX": "PASS",
+      "Workspace Manager": "PASS",
+      "Manage": "PASS"
+    },
+    "manage_submenu": {
+      "Teams": "PASS",
+      "Permissions": "PASS",
+      "Email Templates": "PASS",
+      "Notifications": "PASS",
+      "Outbox": "PASS",
+      "Employee List": "PASS"
+    },
+    "permissions_page": "PASS",
+    "permissions_elements": {
+      "Add Permission Set button": "PASS",
+      "Login As button": "PASS",
+      "Permission Sets tab": "PASS",
+      "Editor tab": "PASS",
+      "Audit log tab": "PASS"
+    }
+  },
+  "permission_enforcement_tests": [],
+  "defects": [],
+  "permission_leaks": [],
+  "screenshots": [
+    "01_super_admin_dashboard.png",
+    "02_super_admin_sidebar.png",
+    "03_permissions_page.png",
+    "04_aarushi_search.png"
+  ],
+  "existing_permission_sets": {
+    "count": 9,
+    "sample": [
+      {
+        "title": "HR - Workspace Manager",
+        "id": "pset-f63e9bc4-a8f6-4541-a0e8-d38bb92a3cd6"
+      },
+      {
+        "title": "QA Assign-Self",
+        "id": "pset-840d6c29-ecad-46a2-85f1-81077545b2e0"
+      },
+      {
+        "title": "QA MaxEditable Test",
+        "id": "pset-68f30f43-33ed-40c2-bf88-8be83aee6202"
+      },
+      {
+        "title": "QA MaxEditable Test",
+        "id": "pset-e40edf28-83a3-4bc3-a868-2bc438a283b9"
+      },
+      {
+        "title": "Request Manager",
+        "id": "pset-18f5cd29-af3f-42d7-9fd6-317ef70c4438"
+      }
+    ]
+  }
+}
