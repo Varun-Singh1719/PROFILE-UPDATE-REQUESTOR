@@ -14,7 +14,7 @@ from playwright.async_api import async_playwright, expect
 import requests
 
 # Configuration
-BASE_URL = "https://c8e7e467-d7d7-4c8f-a701-1888c65459d3.preview.emergentagent.com"
+BASE_URL = "https://role-access-qa.preview.emergentagent.com"
 API_URL = f"{BASE_URL}/api"
 SUPER_ADMIN_EMAIL = "admin@ticketing.com"
 SUPER_ADMIN_PASSWORD = "Admin@123"
