@@ -825,9 +825,55 @@ metadata:
 
 test_plan:
   current_focus:
-    - "FRONTEND QA: Permissions module — exhaustive UI validation (16 scenarios, Login-As impersonation)"
+    - "SIGN-OFF: All permission defects (backend D1/D2/D4/D6/D7/D8 + frontend FE-D1/FE-D2) fixed and verified (Aug 2026)"
   stuck_tasks: []
   test_all: false
+
+frontend_permissions_qa_aug2026:
+  - task: "Fix FE-D1 — Sidebar Manage group visibility for Admins with v3 manage permissions"
+    implemented: true
+    working: true
+    file: "frontend/src/components/Sidebar.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: |
+            Removed `superAdminOnly: true` from the "Manage" group in NAV
+            config. The group now respects each child's own v3 gate; the
+            "Permissions" child link retains its own `superAdminOnly: true`.
+            NavGroup filter updated to check per-child `superAdminOnly` in
+            addition to the (now-unused) group flag. Manually verified with
+            an impersonated Full-Access Admin: Manage section is visible
+            with children [Teams, Email Templates, Notifications, Outbox,
+            Employee List] but NOT the Permissions link (SA-only preserved).
+
+  - task: "Fix FE-D2 — Route-level v3 permission enforcement (V3ProtectedRoute)"
+    implemented: true
+    working: true
+    file: "frontend/src/App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: |
+            Added V3ProtectedRoute component that checks BOTH role AND v3 page
+            visibility. Super Admin always passes; Admins must have at least
+            one of the given (module, page) pairs marked view.enabled+visible.
+            Applied to routes: /admin/open-tickets, /admin/open-requests,
+            /admin/unassigned, /admin/create, /admin/tickets/:id,
+            /admin/contacts, /admin/teams, /admin/notifications,
+            /admin/email-templates, /admin/notification-templates,
+            /workspace-manager/{floor-layout, floor-plans, calibration,
+            meeting-room-booking, workstation-booking, request-workstation,
+            pending-approvals, bookings}. Manually verified with SA (all
+            routes accessible) and with impersonated Full-Access Admin
+            (/admin/contacts renders, /admin/permissions redirects to /admin
+            since it stays SA-only).
 
 qa_fixes_aug2026:
   - task: "Fix D1 — Apply require_any_v3_page_view to 6 workspace endpoints (list_workstation_bookings, list_room_bookings, list_workstation_requests, list_meeting_room_requests, list_bookings, my_workspace_dashboard/week/floor)"
