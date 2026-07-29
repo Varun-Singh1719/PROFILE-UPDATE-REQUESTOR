@@ -28,6 +28,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import Depends, Query, HTTPException
 
 from core import api_router, db, get_current_user
+from routers.permissions_v3 import require_any_v3_page_view
 
 
 # --------------------------------------------------------------------------- #

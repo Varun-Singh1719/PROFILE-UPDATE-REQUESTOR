@@ -31,6 +31,7 @@ from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from core import api_router, db, get_current_user, now_iso
+from routers.permissions_v3 import require_any_v3_page_view
 
 
 # --------------------------------------------------------------------------- #

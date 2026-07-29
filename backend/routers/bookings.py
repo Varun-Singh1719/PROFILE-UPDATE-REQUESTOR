@@ -30,6 +30,7 @@ from pydantic import BaseModel, Field
 
 from core import api_router, db, get_current_user, now_iso
 from routers.room_bookings import _enrich_bookings_with_team
+from routers.permissions_v3 import require_any_v3_page_view
 
 
 # --------------------------------------------------------------------------- #
