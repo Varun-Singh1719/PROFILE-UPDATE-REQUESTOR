@@ -291,7 +291,11 @@ async def workstation_availability(
 
 @api_router.get("/workstation-bookings")
 async def list_workstation_bookings(
-    user=Depends(get_current_user),
+    user=Depends(require_any_v3_page_view(
+        ("desk_booking", "workstation_bookings"),
+        ("desk_booking", "floor_layout"),
+        ("desk_booking", "bookings_history"),
+    )),
     plan_id: Optional[str] = Query(None),
     seat_id: Optional[str] = Query(None),
     employee_id: Optional[str] = Query(None),

@@ -19,7 +19,7 @@ from core import (
     _public_contact,
     ContactCreate, ContactUpdate, BulkContactStatus, BulkContactRole, BulkContactPermissionSets,
 )
-from routers.permissions_v3 import require_v3_page_view
+from routers.permissions_v3 import require_v3_page_view, require_v3_page_edit
 from notifications import (
     send_email, render_new_employee_email, render_admin_password_reset_email,
 )
@@ -576,7 +576,7 @@ async def create_contact(body: ContactCreate, user=Depends(require_role("Super A
 
 
 @api_router.patch("/contacts/{contact_id}")
-async def update_contact(contact_id: str, body: ContactUpdate, user=Depends(require_role("Super Admin"))):
+async def update_contact(contact_id: str, body: ContactUpdate, user=Depends(require_v3_page_edit("manage", "employees"))):
     update = {k: v for k, v in body.model_dump().items() if v is not None}
     if not update:
         raise HTTPException(400, "Nothing to update")
@@ -618,7 +618,7 @@ async def update_contact(contact_id: str, body: ContactUpdate, user=Depends(requ
 
 
 @api_router.get("/contacts/{contact_id}")
-async def get_contact(contact_id: str, user=Depends(require_role("Super Admin"))):
+async def get_contact(contact_id: str, user=Depends(require_v3_page_view("manage", "employees"))):
     c = await db.contacts.find_one({"id": contact_id}, {"_id": 0, "password_hash": 0, "password_encrypted": 0})
     if not c:
         raise HTTPException(404, "Not found")

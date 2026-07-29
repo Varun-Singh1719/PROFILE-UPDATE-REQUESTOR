@@ -353,7 +353,12 @@ def _sort_tuple(sort: str, direction: str) -> List[Tuple[str, int]]:
 
 @api_router.get("/bookings")
 async def list_bookings(
-    user=Depends(get_current_user),
+    user=Depends(require_any_v3_page_view(
+        ("desk_booking", "bookings_history"),
+        ("desk_booking", "workstation_bookings"),
+        ("desk_booking", "meeting_room_bookings"),
+        ("desk_booking", "floor_layout"),
+    )),
     type: str = Query("all", description="all | meeting_room | workstation | csv of these"),
     status: str = Query("all", description="all | csv of: active,cancelled,completed"),
     date_from: Optional[str] = Query(None, description="YYYY-MM-DD inclusive"),

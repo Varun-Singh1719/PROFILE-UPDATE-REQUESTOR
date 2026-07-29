@@ -459,7 +459,10 @@ async def list_meeting_room_requests(
     mine: bool = Query(False, description="Return rows where the caller is the requester OR a direct/team attendee"),
     include_hidden: bool = Query(False),
     include_booking: bool = Query(True, description="Enrich Approved rows with the linked room_bookings row under `booking`"),
-    user=Depends(get_current_user),
+    user=Depends(require_any_v3_page_view(
+        ("desk_booking", "pending_approvals"),
+        ("desk_booking", "meeting_room_bookings"),
+    )),
 ):
     """List meeting-room requests.
 

@@ -15,7 +15,7 @@ from core import (
 )
 from notifications import send_email
 from routers.permissions import get_effective_scope, get_user_scope_context, scope_to_id_filter
-from routers.permissions_v3 import get_v3_function, TICKET_STATUS_RANK, _MAX_EDITABLE_STATUS_RANK
+from routers.permissions_v3 import get_v3_function, TICKET_STATUS_RANK, _MAX_EDITABLE_STATUS_RANK, require_any_v3_page_view
 
 
 async def _ticket_view_filter(user: dict) -> dict:
@@ -311,7 +311,12 @@ def parse_filters(status, priority, created_by, assigned_to, q, created_on, upda
 
 @api_router.get("/tickets")
 async def list_tickets(
-    user=Depends(get_current_user),
+    user=Depends(require_any_v3_page_view(
+        ("profix", "all_requests"),
+        ("profix", "open_requests"),
+        ("profix", "unassigned"),
+        ("profix", "ticket_detail"),
+    )),
     scope: Optional[str] = None,
     status: Optional[str] = None,
     priority: Optional[str] = None,
@@ -430,7 +435,11 @@ async def list_tickets(
 
 @api_router.get("/tickets/export.csv")
 async def export_tickets_csv(
-    user=Depends(get_current_user),
+    user=Depends(require_any_v3_page_view(
+        ("profix", "all_requests"),
+        ("profix", "open_requests"),
+        ("profix", "unassigned"),
+    )),
     scope: Optional[str] = None,
     status: Optional[str] = None,
     priority: Optional[str] = None,

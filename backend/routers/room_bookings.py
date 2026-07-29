@@ -324,7 +324,11 @@ async def create_room_booking(payload: BookingCreate, user=Depends(get_current_u
 
 @api_router.get("/room-bookings")
 async def list_room_bookings(
-    user=Depends(get_current_user),
+    user=Depends(require_any_v3_page_view(
+        ("desk_booking", "meeting_room_bookings"),
+        ("desk_booking", "floor_layout"),
+        ("desk_booking", "bookings_history"),
+    )),
     plan_id: Optional[str] = Query(None),
     room_id: Optional[str] = Query(None),
     date: Optional[str] = Query(None, description="YYYY-MM-DD"),

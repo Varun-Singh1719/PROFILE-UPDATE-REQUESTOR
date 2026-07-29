@@ -840,12 +840,18 @@ async def my_effective_permissions(user=Depends(get_current_user)):
 
     set_ids: List[str] = list(user.get("permission_set_ids") or [])
     merged: Dict[str, dict] = {}
+    live_set_ids: List[str] = []
 
     if set_ids:
         docs = await db.permission_sets.find(
-            {"id": {"$in": set_ids}}, {"_id": 0}
+            # D2 FIX (Aug 2026): filter out soft-deleted permission sets so a
+            # deleted set stops granting access immediately (previously the
+            # cached JWT continued to work until natural expiry).
+            {"id": {"$in": set_ids}, "deleted_at": {"$in": [None]}},
+            {"_id": 0},
         ).to_list(500)
         for doc in docs:
+            live_set_ids.append(doc.get("id"))
             modules = doc.get("modules") or {}
             if doc.get("version") != 3:
                 # Migrate legacy set → v3 shape in-memory
@@ -859,8 +865,12 @@ async def my_effective_permissions(user=Depends(get_current_user)):
 
     return {
         "is_super_admin": False,
-        "has_any_set": bool(set_ids),
-        "set_ids": set_ids,
+        # `has_any_set` is TRUE only if at least one *live* set is assigned —
+        # so a user whose only set has been deleted correctly falls through to
+        # the "No Module Assigned" banner instead of the pre-onboarded
+        # permissive fallback.
+        "has_any_set": bool(live_set_ids),
+        "set_ids": live_set_ids,
         "modules": merged,
     }
 
@@ -902,8 +912,14 @@ async def get_v3_function(user: dict, mkey: str, pkey: str, fkey: str) -> Option
         }
 
     docs = await db.permission_sets.find(
-        {"id": {"$in": set_ids}}, {"_id": 0}
+        # D2 FIX (Aug 2026): skip soft-deleted sets.
+        {"id": {"$in": set_ids}, "deleted_at": {"$in": [None]}}, {"_id": 0}
     ).to_list(500)
+    # If ALL assigned sets have been deleted, treat the user as fully denied
+    # (NOT as pre-onboarded, since they had sets assigned that were later
+    # revoked). Returning None here disables the feature.
+    if not docs:
+        return None
     merged: Dict[str, dict] = {}
     for doc in docs:
         modules = doc.get("modules") or {}
@@ -946,8 +962,14 @@ async def get_v3_page_view(user: dict, mkey: str, pkey: str) -> Optional[dict]:
         return {"enabled": True, "visible": True, "scope": "overall"}
 
     docs = await db.permission_sets.find(
-        {"id": {"$in": set_ids}}, {"_id": 0}
+        # D2 FIX (Aug 2026): filter out soft-deleted sets so access revocation
+        # is immediate rather than JWT-lifetime-bound.
+        {"id": {"$in": set_ids}, "deleted_at": {"$in": [None]}}, {"_id": 0}
     ).to_list(500)
+    # If ALL assigned sets were deleted, treat as explicitly denied — do NOT
+    # fall through to the pre-onboarded permissive fallback.
+    if not docs:
+        return None
     merged: Dict[str, dict] = {}
     for doc in docs:
         modules = doc.get("modules") or {}
@@ -1012,3 +1034,94 @@ async def has_v3_page_view(user: dict, mkey: str, pkey: str) -> bool:
     """
     entry = await get_v3_page_view(user, mkey, pkey)
     return bool(entry and entry.get("enabled") and entry.get("visible"))
+
+
+# --------------------------------------------------------------------------- #
+# V3 page-level EDIT helper + dependency (Aug 2026 QA fix — D7)
+# --------------------------------------------------------------------------- #
+
+async def get_v3_page_edit(user: dict, mkey: str, pkey: str) -> Optional[dict]:
+    """Return the effective EDIT entry for (mkey, pkey) for `user`.
+
+    Same semantics as `get_v3_page_view` but for the `edit` sub-entry.
+    - Super Admin → permissive (overall scope).
+    - Admin with NO assigned permission sets → permissive fallback.
+    - Admin WITH sets → OR-union across sets; returns merged edit entry or
+      None if not granted.
+    """
+    if user.get("role") == "Super Admin":
+        return {"enabled": True, "visible": True, "scope": "overall"}
+
+    set_ids: List[str] = list(user.get("permission_set_ids") or [])
+    if not set_ids:
+        return {"enabled": True, "visible": True, "scope": "overall"}
+
+    docs = await db.permission_sets.find(
+        {"id": {"$in": set_ids}, "deleted_at": {"$in": [None]}}, {"_id": 0}
+    ).to_list(500)
+    if not docs:
+        return None
+    merged: Dict[str, dict] = {}
+    for doc in docs:
+        modules = doc.get("modules") or {}
+        if doc.get("version") != 3:
+            migrated = _migrate_legacy_to_v3(doc)
+            modules = migrated.get("modules") or {}
+        else:
+            modules = _normalize_v3_modules(modules)
+        _merge_modules(merged, modules)
+
+    page = ((merged.get(mkey) or {}).get("pages") or {}).get(pkey) or {}
+    return page.get("edit")
+
+
+def require_v3_page_edit(mkey: str, pkey: str):
+    """FastAPI dependency: 403 unless user has BOTH view.enabled+visible AND
+    edit.enabled+visible on (mkey, pkey). Edit-without-View is not a valid
+    combination — see QA scenario H.
+    """
+    async def _dep(user=Depends(get_current_user)):
+        view_entry = await get_v3_page_view(user, mkey, pkey)
+        if not view_entry or not view_entry.get("enabled") or not view_entry.get("visible"):
+            raise HTTPException(403, f"Access denied to {mkey}.{pkey} (view required)")
+        edit_entry = await get_v3_page_edit(user, mkey, pkey)
+        if not edit_entry or not edit_entry.get("enabled") or not edit_entry.get("visible"):
+            raise HTTPException(403, f"Edit denied on {mkey}.{pkey}")
+        return user
+    return _dep
+
+
+async def has_any_v3_module_access(user: dict, *modules: str) -> bool:
+    """Returns True if the user has ANY (page, view.enabled+visible) inside ANY
+    of the given module keys. Used to gate cross-module payloads (e.g. teams
+    lite payload — only shared with users who actually consume it via
+    profix/desk_booking pages).
+    """
+    if user.get("role") == "Super Admin":
+        return True
+    set_ids: List[str] = list(user.get("permission_set_ids") or [])
+    if not set_ids:
+        # Pre-onboarded users: permissive fallback (matches other helpers).
+        return True
+    docs = await db.permission_sets.find(
+        {"id": {"$in": set_ids}, "deleted_at": {"$in": [None]}}, {"_id": 0}
+    ).to_list(500)
+    if not docs:
+        return False
+    merged: Dict[str, dict] = {}
+    for doc in docs:
+        raw = doc.get("modules") or {}
+        if doc.get("version") != 3:
+            migrated = _migrate_legacy_to_v3(doc)
+            raw = migrated.get("modules") or {}
+        else:
+            raw = _normalize_v3_modules(raw)
+        _merge_modules(merged, raw)
+    for mkey in modules:
+        pages = ((merged.get(mkey) or {}).get("pages") or {})
+        for _pkey, entry in pages.items():
+            view = (entry or {}).get("view") or {}
+            if view.get("enabled") and view.get("visible"):
+                return True
+    return False
+

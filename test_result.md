@@ -825,9 +825,153 @@ metadata:
 
 test_plan:
   current_focus:
-    - "COMPREHENSIVE QA: Permissions Module — end-to-end exhaustive sweep (Aug 2026, defect-report-only mode)"
+    - "QA VERIFY: Backend fixes for D1, D2, D4, D6, D7, D8 (Aug 2026)"
   stuck_tasks: []
   test_all: false
+
+qa_fixes_aug2026:
+  - task: "Fix D1 — Apply require_any_v3_page_view to 6 workspace endpoints (list_workstation_bookings, list_room_bookings, list_workstation_requests, list_meeting_room_requests, list_bookings, my_workspace_dashboard/week/floor)"
+    implemented: true
+    working: "NA"
+    file: "backend/routers/workstation_bookings.py, backend/routers/room_bookings.py, backend/routers/workstation_requests.py, backend/routers/meeting_room_requests.py, backend/routers/bookings.py, backend/routers/my_workspace.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            FIX for D1 (CRITICAL — workspace endpoints leak data).
+            
+            All 6 GET list endpoints now depend on require_any_v3_page_view
+            with an appropriate set of desk_booking page keys:
+              • /workstation-bookings → workstation_bookings | floor_layout | bookings_history
+              • /room-bookings         → meeting_room_bookings | floor_layout | bookings_history
+              • /workstation-requests  → workstation_requests | pending_approvals | workstation_bookings
+              • /meeting-room-requests → pending_approvals | meeting_room_bookings
+              • /bookings              → bookings_history | workstation_bookings | meeting_room_bookings | floor_layout
+              • /my-workspace/dashboard → any desk_booking page
+              • /my-workspace/week     → desk_booking pages
+              • /my-workspace/floor    → desk_booking pages
+            
+            Super Admin regression verified via curl (all 200).
+
+  - task: "Fix D2 — Deleted permission sets stop granting access immediately"
+    implemented: true
+    working: "NA"
+    file: "backend/routers/permissions_v3.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            FIX for D2 (CRITICAL — deleted set still granted access via cached JWT).
+            
+            All 3 `db.permission_sets.find({"id": {"$in": set_ids}})` queries
+            in permissions_v3.py now filter with `"deleted_at": {"$in": [None]}`:
+              • my_effective_permissions()  (line ~845)
+              • get_v3_function()           (line ~904)
+              • get_v3_page_view()          (line ~948)
+              • get_v3_page_edit()          (new helper)
+              • has_any_v3_module_access() (new helper)
+            
+            Additionally, when ALL of a user's assigned sets have been deleted,
+            get_v3_function / get_v3_page_view / get_v3_page_edit return None
+            (explicit denial) instead of falling through to the pre-onboarded
+            permissive fallback. And my_effective_permissions now returns
+            has_any_set based on the count of *live* (non-deleted) sets, so
+            the client can show the "No Module Assigned" banner correctly.
+
+  - task: "Fix D4 — Tickets endpoint returns 403 (not 200-empty) for users lacking profix access"
+    implemented: true
+    working: "NA"
+    file: "backend/routers/tickets.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            FIX for D4 (MEDIUM — tickets returned 200 with empty list instead of 403).
+            
+            GET /api/tickets and GET /api/tickets/export.csv now depend on
+            require_any_v3_page_view over profix.all_requests, .open_requests,
+            .unassigned, .ticket_detail. Users lacking all of these get 403.
+            (Pre-onboarded users with NO assigned sets still get the permissive
+            fallback via the same helper.)
+
+  - task: "Fix D6 — Teams lite payload only served to users who need it (profix/desk_booking); everyone else gets 403"
+    implemented: true
+    working: "NA"
+    file: "backend/routers/teams.py, backend/routers/permissions_v3.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            FIX for D6 (MEDIUM — teams lite payload leaked to users with zero permissions).
+            
+            Added new helper `has_any_v3_module_access(user, *modules)` in
+            permissions_v3.py. list_teams now:
+              • If user has manage.teams.view → returns FULL payload.
+              • Elif user has ANY page in profix OR desk_booking → returns LITE
+                payload (needed for cross-module features like ticket team
+                filter and booking team dropdown).
+              • Else → 403.
+            
+            Preserves cross-module functionality while denying users with no
+            legitimate cross-module use case.
+
+  - task: "Fix D7 — manage.employees.edit permission enforced on PATCH /contacts/{id}; view enforced on GET /contacts/{id}"
+    implemented: true
+    working: "NA"
+    file: "backend/routers/contacts.py, backend/routers/permissions_v3.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            FIX for D7 (HIGH — PATCH /contacts/{id} required Super Admin; edit
+            permission was effectively dead).
+            
+            Added new dependency `require_v3_page_edit(mkey, pkey)` in
+            permissions_v3.py that requires BOTH view.enabled+visible AND
+            edit.enabled+visible on the given (module, page).
+            
+            Applied:
+              • PATCH /api/contacts/{id}  → require_v3_page_edit("manage", "employees")
+              • GET   /api/contacts/{id}  → require_v3_page_view("manage", "employees")
+            
+            Note: bulk endpoints (POST /contacts/bulk-*) and creation endpoints
+            still use require_role("Super Admin") — the v3 catalog does not
+            expose explicit bulk permission keys under manage.employees, so
+            those remain SA-only until the catalog is extended.
+
+  - task: "Fix D8 — Hidden flag enforced on GET /api/teams list (visible=false → not lite-shared unless cross-module)"
+    implemented: true
+    working: "NA"
+    file: "backend/routers/teams.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            FIX for D8 (MEDIUM — GET /api/teams returned lite payload when
+            manage.teams.view.visible=false, i.e. Hidden users leaked the team list).
+            
+            Handled as a side-effect of the D6 fix: `has_v3_page_view` already
+            checks both `enabled` AND `visible`, so Hidden users now flow to
+            the cross-module gate. If they lack profix/desk_booking access,
+            they get 403 (Hidden is now truly hidden).
 
 comprehensive_permissions_qa_aug2026_final:
   - task: "Permissions Module — Full end-to-end QA sweep (defect report only, no fixes)"
@@ -6815,4 +6959,331 @@ agent_communication:
             3. D1 and D2 remain CRITICAL and should be prioritized
             4. All bypass attempts were successfully blocked - no new security holes found
             5. Comprehensive QA is now COMPLETE (16/16 scenarios tested)
+
+
+        - working: false
+          agent: "testing"
+          comment: |
+            ❌ D1 PARTIALLY FAILED (Aug 2026 QA Verification)
+            
+            Tested 8 workspace endpoints with 4 scenarios:
+            
+            **SCENARIO A: Empty permission set user**
+            ✅ ALL 8 endpoints correctly returned 403:
+            - /workstation-bookings: 403 ✅
+            - /room-bookings: 403 ✅
+            - /workstation-requests: 403 ✅
+            - /meeting-room-requests: 403 ✅
+            - /bookings: 403 ✅
+            - /my-workspace/dashboard: 403 ✅
+            - /my-workspace/week: 403 ✅
+            - /my-workspace/floor: 403 ✅
+            
+            **SCENARIO B: Profix-only user (no desk_booking)**
+            ✅ ALL 8 endpoints correctly returned 403:
+            - /workstation-bookings: 403 ✅
+            - /room-bookings: 403 ✅
+            - /workstation-requests: 403 ✅
+            - /meeting-room-requests: 403 ✅
+            - /bookings: 403 ✅
+            - /my-workspace/dashboard: 403 ✅
+            - /my-workspace/week: 403 ✅
+            - /my-workspace/floor: 403 ✅
+            
+            **SCENARIO C: Desk booking viewer (only workstation_bookings.view)**
+            ❌ FAILED - 5 endpoints incorrectly returned 200 instead of 403:
+            - /workstation-bookings: 200 ✅ (expected 200)
+            - /room-bookings: 403 ✅
+            - /workstation-requests: 200 ❌ (expected 403)
+            - /meeting-room-requests: 403 ✅
+            - /bookings: 200 ❌ (expected 403)
+            - /my-workspace/dashboard: 200 ❌ (expected 403)
+            - /my-workspace/week: 200 ❌ (expected 403)
+            - /my-workspace/floor: 200 ❌ (expected 403)
+            
+            **SCENARIO D: Super Admin regression**
+            ✅ ALL 8 endpoints correctly returned 200
+            
+            **ROOT CAUSE:**
+            The fix applied `require_any_v3_page_view` but the page key combinations are too permissive.
+            For example:
+            - /workstation-requests requires: workstation_requests | pending_approvals | workstation_bookings
+            - User with ONLY workstation_bookings.view can access it via the OR logic
+            
+            **IMPACT:**
+            Users with partial desk_booking permissions can access endpoints they shouldn't.
+            This is a CRITICAL security issue - users with only workstation_bookings.view can:
+            - View workstation requests (/workstation-requests)
+            - View all bookings (/bookings)
+            - Access personal workspace dashboard (/my-workspace/*)
+            
+            **RECOMMENDATION:**
+            Each endpoint should require ONLY its specific page permission, not an OR of multiple pages.
+            For example:
+            - /workstation-requests should require ONLY workstation_requests page
+            - /my-workspace/* should require ONLY its own page (or a dedicated my_workspace page)
+            - /bookings should require ONLY bookings_history page
+
+  - task: "Fix D2 — Deleted permission sets stop granting access immediately"
+    implemented: true
+    working: false
+    file: "backend/routers/permissions_v3.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            FIX for D2 (CRITICAL — deleted set still granted access via cached JWT).
+            
+            All 3 `db.permission_sets.find({"id": {"$in": set_ids}})` queries
+            in permissions_v3.py now filter with `"deleted_at": {"$in": [None]}`:
+              • my_effective_permissions()  (line ~845)
+              • get_v3_function()           (line ~904)
+              • get_v3_page_view()          (line ~948)
+              • get_v3_page_edit()          (new helper)
+              • has_any_v3_module_access() (new helper)
+            
+            Additionally, when ALL of a user's assigned sets have been deleted,
+            get_v3_function / get_v3_page_view / get_v3_page_edit return None
+            (explicit denial) instead of falling through to the pre-onboarded
+            permissive fallback. And my_effective_permissions now returns
+            has_any_set based on the count of *live* (non-deleted) sets, so
+            the client can show the "No Module Assigned" banner correctly.
+        - working: false
+          agent: "testing"
+          comment: |
+            ❌ D2 FAILED (Aug 2026 QA Verification)
+            
+            Tested deleted permission set behavior:
+            
+            **BEFORE DELETION:**
+            ✅ User with profix permission set can access /tickets: 200
+            
+            **AFTER DELETION (same JWT):**
+            ❌ User still has access to ALL endpoints:
+            - GET /tickets: 200 ❌ (expected 403)
+            - GET /contacts: 200 ❌ (expected 403)
+            - GET /workstation-bookings: 200 ❌ (expected 403)
+            - GET /permission-sets-v3: 200 ❌ (expected 403)
+            
+            **BUT /api/me/permissions correctly shows:**
+            ✅ has_any_set: False (expected False)
+            ✅ set_ids: [] (expected [])
+            ✅ modules: {} (expected {})
+            
+            **ROOT CAUSE:**
+            The fix correctly filters deleted sets in the permission helpers, BUT there's a fallback
+            logic that treats users with NO sets as "pre-onboarded" and grants them FULL access.
+            
+            When a user's permission set is deleted:
+            1. The JWT still contains the old permission_set_ids
+            2. The backend filters out deleted sets → empty list
+            3. Empty list triggers "pre-onboarded" fallback → FULL ACCESS granted
+            
+            This is visible in permissions_v3.py:
+            - get_v3_page_view() returns permissive entry when set_ids is empty (line ~962)
+            - get_v3_function() returns permissive entry when set_ids is empty (line ~906)
+            
+            **IMPACT:**
+            CRITICAL SECURITY ISSUE - Deleting a permission set does NOT revoke access.
+            Users retain FULL access until their JWT expires (12 hours) or they re-login.
+            
+            **RECOMMENDATION:**
+            The "pre-onboarded" fallback should ONLY apply to users who have NEVER been assigned
+            a permission set. Users whose sets have been deleted should be explicitly denied.
+            
+            Suggested fix:
+            1. Check if user.permission_set_ids is empty in the JWT → pre-onboarded fallback
+            2. Check if user.permission_set_ids is non-empty but all deleted → explicit denial
+            
+            OR force JWT refresh when permission sets are deleted/modified.
+
+  - task: "Fix D4 — Tickets endpoint returns 403 (not 200-empty) for users lacking profix access"
+    implemented: true
+    working: true
+    file: "backend/routers/tickets.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            FIX for D4 (MEDIUM — tickets returned 200 with empty list instead of 403).
+            
+            GET /api/tickets and GET /api/tickets/export.csv now depend on
+            require_any_v3_page_view over profix.all_requests, .open_requests,
+            .unassigned, .ticket_detail. Users lacking all of these get 403.
+            (Pre-onboarded users with NO assigned sets still get the permissive
+            fallback via the same helper.)
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ D4 PASSED (Aug 2026 QA Verification)
+            
+            Tested tickets endpoint access control:
+            
+            **SCENARIO A: Desk booking only user (no profix)**
+            ✅ GET /tickets: 403 (expected 403)
+            ✅ GET /tickets/export.csv: 403 (expected 403)
+            
+            **SCENARIO B: Super Admin regression**
+            ✅ GET /tickets: 200 (expected 200)
+            
+            **SCENARIO C: User with profix access**
+            ✅ GET /tickets: 200 (expected 200)
+            
+            **CONCLUSION:**
+            Fix is working correctly. Users without profix permissions correctly receive 403.
+
+  - task: "Fix D6 — Teams lite payload only served to users who need it (profix/desk_booking); everyone else gets 403"
+    implemented: true
+    working: true
+    file: "backend/routers/teams.py, backend/routers/permissions_v3.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            FIX for D6 (MEDIUM — teams lite payload leaked to users with zero permissions).
+            
+            Added new helper `has_any_v3_module_access(user, *modules)` in
+            permissions_v3.py. list_teams now:
+              • If user has manage.teams.view → returns FULL payload.
+              • Elif user has ANY page in profix OR desk_booking → returns LITE
+                payload (needed for cross-module features like ticket team
+                filter and booking team dropdown).
+              • Else → 403.
+            
+            Preserves cross-module functionality while denying users with no
+            legitimate cross-module use case.
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ D6 PASSED (Aug 2026 QA Verification)
+            
+            Tested teams endpoint payload differentiation:
+            
+            **SCENARIO A: Empty set user**
+            ✅ GET /teams: 403 (expected 403)
+            
+            **SCENARIO B: Manage.teams.view user**
+            ✅ GET /teams: 200 with FULL payload (expected FULL)
+            - Payload includes: managers[], members[] arrays
+            
+            **SCENARIO C: Profix-only user**
+            ✅ GET /teams: 200 with LITE payload (expected LITE)
+            - Payload includes: id, name, color, initials, member_count, manager_count
+            - Payload excludes: managers[], members[] arrays
+            
+            **SCENARIO D: Desk booking only user**
+            ✅ GET /teams: 200 with LITE payload (expected LITE)
+            
+            **SCENARIO E: Super Admin**
+            ✅ GET /teams: 200 with FULL payload (expected FULL)
+            
+            **CONCLUSION:**
+            Fix is working correctly. Teams endpoint correctly differentiates between:
+            - FULL payload for manage.teams.view users
+            - LITE payload for cross-module users (profix/desk_booking)
+            - 403 for users with no legitimate access
+
+  - task: "Fix D7 — manage.employees.edit permission enforced on PATCH /contacts/{id}; view enforced on GET /contacts/{id}"
+    implemented: true
+    working: true
+    file: "backend/routers/contacts.py, backend/routers/permissions_v3.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            FIX for D7 (HIGH — PATCH /contacts/{id} required Super Admin; edit
+            permission was effectively dead).
+            
+            Added new dependency `require_v3_page_edit(mkey, pkey)` in
+            permissions_v3.py that requires BOTH view.enabled+visible AND
+            edit.enabled+visible on the given (module, page).
+            
+            Applied:
+              • PATCH /api/contacts/{id}  → require_v3_page_edit("manage", "employees")
+              • GET   /api/contacts/{id}  → require_v3_page_view("manage", "employees")
+            
+            Note: bulk endpoints (POST /contacts/bulk-*) and creation endpoints
+            still use require_role("Super Admin") — the v3 catalog does not
+            expose explicit bulk permission keys under manage.employees, so
+            those remain SA-only until the catalog is extended.
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ D7 PASSED (Aug 2026 QA Verification)
+            
+            Tested manage.employees.edit enforcement:
+            
+            **SCENARIO A: View-only user (edit disabled)**
+            ✅ GET /contacts: 200 (expected 200)
+            ✅ GET /contacts/{id}: 200 (expected 200)
+            ✅ PATCH /contacts/{id}: 403 (expected 403)
+            
+            **SCENARIO B: View+Edit user (both enabled)**
+            ✅ GET /contacts: 200 (expected 200)
+            ✅ PATCH /contacts/{id}: 200 (expected 200)
+            
+            **SCENARIO C: Empty set user**
+            ✅ GET /contacts/{id}: 403 (expected 403)
+            
+            **SCENARIO D: Super Admin regression**
+            ✅ GET /contacts: 200 (expected 200)
+            ✅ GET /contacts/{id}: 200 (expected 200)
+            ✅ PATCH /contacts/{id}: 200 (expected 200)
+            
+            **CONCLUSION:**
+            Fix is working correctly. Edit permission is properly enforced on PATCH endpoint.
+
+  - task: "Fix D8 — Hidden flag enforced on GET /api/teams list (visible=false → not lite-shared unless cross-module)"
+    implemented: true
+    working: true
+    file: "backend/routers/teams.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            FIX for D8 (MEDIUM — GET /api/teams returned lite payload when
+            manage.teams.view.visible=false, i.e. Hidden users leaked the team list).
+            
+            Handled as a side-effect of the D6 fix: `has_v3_page_view` already
+            checks both `enabled` AND `visible`, so Hidden users now flow to
+            the cross-module gate. If they lack profix/desk_booking access,
+            they get 403 (Hidden is now truly hidden).
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ D8 PASSED (Aug 2026 QA Verification)
+            
+            Tested hidden flag enforcement on teams endpoint:
+            
+            **SCENARIO A: Hidden teams + profix user**
+            ✅ GET /teams: 200 with LITE payload (expected LITE)
+            - User has manage.teams.view.visible=false (Hidden)
+            - User has profix access (cross-module need)
+            - Correctly returns LITE payload (not full manage payload)
+            
+            **SCENARIO B: Hidden teams + no cross-module access**
+            ✅ GET /teams: 403 (expected 403)
+            - User has manage.teams.view.visible=false (Hidden)
+            - User has NO profix or desk_booking access
+            - Correctly returns 403 (Hidden is truly hidden)
+            
+            **CONCLUSION:**
+            Fix is working correctly. Hidden flag is properly enforced:
+            - Hidden users with cross-module need get LITE payload
+            - Hidden users without cross-module need get 403
 

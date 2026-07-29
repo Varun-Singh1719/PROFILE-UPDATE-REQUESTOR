@@ -9,7 +9,7 @@ from core import (
     TEAM_COLOR_PALETTE,
     TeamCreate, TeamUpdate,
 )
-from routers.permissions_v3 import has_v3_page_view, require_v3_page_view
+from routers.permissions_v3 import has_v3_page_view, require_v3_page_view, has_any_v3_module_access
 
 
 async def _next_unused_color(exclude_team_id: Optional[str] = None) -> str:
@@ -118,9 +118,17 @@ async def list_teams(user=Depends(get_current_user)):
     # (id/name/color/initials/counts only). This keeps cross-module features
     # like the team filter on ticket lists and the team dropdown on booking
     # forms working, while preventing leaks of member emails/roles.
+    #
+    # QA D6/D8 fix (Aug 2026): the lite payload is only shared with users
+    # who legitimately need it for cross-module usage (profix or desk_booking
+    # pages). Users with zero applicable permissions (e.g. Admins on an empty
+    # set or on a manage-only set without teams.view) get 403.
     can_manage_teams = await has_v3_page_view(user, "manage", "teams")
     if can_manage_teams:
         return teams
+    can_use_lite = await has_any_v3_module_access(user, "profix", "desk_booking")
+    if not can_use_lite:
+        raise HTTPException(403, "Access denied to manage.teams")
     lite = []
     for t in teams:
         lite.append({

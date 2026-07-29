@@ -77,7 +77,14 @@ async def _load_team_meta(team_ids: List[str]) -> Dict[str, dict]:
 @api_router.get("/my-workspace/dashboard")
 async def my_workspace_dashboard(
     date: Optional[str] = Query(None, description="YYYY-MM-DD (default: today)"),
-    user=Depends(get_current_user),
+    user=Depends(require_any_v3_page_view(
+        ("desk_booking", "floor_layout"),
+        ("desk_booking", "workstation_bookings"),
+        ("desk_booking", "meeting_room_bookings"),
+        ("desk_booking", "workstation_requests"),
+        ("desk_booking", "bookings_history"),
+        ("desk_booking", "pending_approvals"),
+    )),
 ):
     the_date = date or _today_iso()
     try:
@@ -284,7 +291,13 @@ async def my_workspace_dashboard(
 @api_router.get("/my-workspace/week")
 async def my_workspace_week(
     start: Optional[str] = Query(None, description="Any date within the desired ISO week (default: today)"),
-    user=Depends(get_current_user),
+    user=Depends(require_any_v3_page_view(
+        ("desk_booking", "floor_layout"),
+        ("desk_booking", "workstation_bookings"),
+        ("desk_booking", "workstation_requests"),
+        ("desk_booking", "bookings_history"),
+        ("desk_booking", "pending_approvals"),
+    )),
 ):
     """Return 7 entries (Mon..Sun) of {date, status, seat_label}.
 
@@ -338,7 +351,12 @@ async def my_workspace_week(
 async def my_workspace_floor(
     date: Optional[str] = Query(None, description="YYYY-MM-DD (default: today)"),
     plan_id: Optional[str] = Query(None, description="If omitted, inferred from user's current seat/request"),
-    user=Depends(get_current_user),
+    user=Depends(require_any_v3_page_view(
+        ("desk_booking", "floor_layout"),
+        ("desk_booking", "workstation_bookings"),
+        ("desk_booking", "workstation_requests"),
+        ("desk_booking", "bookings_history"),
+    )),
 ):
     """Return the floor plan + coloured seats for the popup view.
 
