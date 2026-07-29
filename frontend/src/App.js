@@ -34,6 +34,7 @@ import BookingsPage from "./pages/BookingsPage";
 import ProfilePage from "./pages/ProfilePage";
 import WMOverallPreview from "./pages/WMOverallPreview";
 import Loader2 from "@mui/icons-material/Autorenew";
+import { useEffectivePermissionsState } from "./context/EffectivePermissionsContext";
 
 // v3 role model — every authenticated user (Super Admin or Admin) lands at /admin.
 // Routing inside the admin shell is gated by Permission Sets, not by role.
@@ -47,6 +48,27 @@ function ProtectedRoute({ children, roles }) {
   if (roles && !roles.includes(user.role)) {
     return <Navigate to={roleHome()} replace />;
   }
+  return children;
+}
+
+/**
+ * V3ProtectedRoute — checks BOTH role (must be Admin or Super Admin) AND
+ * v3 page visibility. Super Admin always passes. Admins must have at least
+ * ONE of the given (module, page) pairs marked view.enabled+view.visible.
+ *
+ * Added Aug 2026 to close QA frontend defect FE-D2: users with only a role
+ * check could bypass the sidebar (which was v3-aware) via direct URL nav.
+ */
+function V3ProtectedRoute({ children, pages }) {
+  const { user, loading } = useAuth();
+  const { ready, isSuperAdmin, isPageViewVisible } = useEffectivePermissionsState();
+  if (loading || user === null || !ready)
+    return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#ec9324]" sx={{ fontSize: 32 }}/></div>;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!["Super Admin", "Admin"].includes(user.role)) return <Navigate to={roleHome()} replace />;
+  if (isSuperAdmin) return children;
+  const allowed = (pages || []).some(([m, p]) => isPageViewVisible(m, p));
+  if (!allowed) return <Navigate to={roleHome()} replace />;
   return children;
 }
 
@@ -90,40 +112,40 @@ function App() {
             {/* Unified admin shell — Super Admin + Admin */}
             <Route path="/admin" element={<ProtectedRoute roles={ADMIN_ROLES}><AdminDashboard /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute roles={ADMIN_ROLES}><ProfilePage /></ProtectedRoute>} />
-            <Route path="/admin/open-tickets" element={<ProtectedRoute roles={ADMIN_ROLES}>
+            <Route path="/admin/open-tickets" element={<V3ProtectedRoute pages={[["profix","all_requests"]]}>
               <TicketListPage scope="all" title="All Requests" basePath="/admin/tickets" />
-            </ProtectedRoute>} />
-            <Route path="/admin/open-requests" element={<ProtectedRoute roles={ADMIN_ROLES}>
+            </V3ProtectedRoute>} />
+            <Route path="/admin/open-requests" element={<V3ProtectedRoute pages={[["profix","open_requests"],["profix","all_requests"]]}>
               <TicketListPage scope="all" title="Open Requests" basePath="/admin/tickets" lockedStatus="Open" />
-            </ProtectedRoute>} />
-            <Route path="/admin/unassigned" element={<ProtectedRoute roles={ADMIN_ROLES}>
+            </V3ProtectedRoute>} />
+            <Route path="/admin/unassigned" element={<V3ProtectedRoute pages={[["profix","unassigned"]]}>
               <TicketListPage scope="unassigned" title="Unassigned Requests" basePath="/admin/tickets" />
-            </ProtectedRoute>} />
-            <Route path="/admin/create" element={<ProtectedRoute roles={ADMIN_ROLES}><CreateTicketPage /></ProtectedRoute>} />
-            <Route path="/admin/tickets/:id" element={<ProtectedRoute roles={ADMIN_ROLES}><TicketDetailPage /></ProtectedRoute>} />
+            </V3ProtectedRoute>} />
+            <Route path="/admin/create" element={<V3ProtectedRoute pages={[["profix","create_request"],["profix","all_requests"]]}><CreateTicketPage /></V3ProtectedRoute>} />
+            <Route path="/admin/tickets/:id" element={<V3ProtectedRoute pages={[["profix","ticket_detail"],["profix","all_requests"],["profix","open_requests"],["profix","unassigned"]]}><TicketDetailPage /></V3ProtectedRoute>} />
 
-            {/* Super-Admin-only management screens */}
-            <Route path="/admin/contacts" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><ContactListPage /></ProtectedRoute>} />
-            <Route path="/admin/teams" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><TeamsPage /></ProtectedRoute>} />
+            {/* Manage screens — v3 gated. Permissions editor stays SA-only. */}
+            <Route path="/admin/contacts" element={<V3ProtectedRoute pages={[["manage","employees"]]}><ContactListPage /></V3ProtectedRoute>} />
+            <Route path="/admin/teams" element={<V3ProtectedRoute pages={[["manage","teams"]]}><TeamsPage /></V3ProtectedRoute>} />
             <Route path="/admin/permissions" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><PermissionsPage /></ProtectedRoute>} />
             {/* Legacy: standalone permission-sets pages folded into Permissions tabs */}
             <Route path="/admin/permission-sets" element={<Navigate to="/admin/permissions" replace />} />
             <Route path="/admin/permission-sets/:id" element={<PermissionSetRedirect />} />
-            <Route path="/admin/notifications" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><NotificationsOutboxPage /></ProtectedRoute>} />
-            <Route path="/admin/email-templates" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><EmailTemplatesPage /></ProtectedRoute>} />
-            <Route path="/admin/notification-templates" element={<ProtectedRoute roles={SUPER_ADMIN_ONLY}><NotificationTemplatesPage /></ProtectedRoute>} />
+            <Route path="/admin/notifications" element={<V3ProtectedRoute pages={[["manage","notifications"]]}><NotificationsOutboxPage /></V3ProtectedRoute>} />
+            <Route path="/admin/email-templates" element={<V3ProtectedRoute pages={[["manage","email_templates"]]}><EmailTemplatesPage /></V3ProtectedRoute>} />
+            <Route path="/admin/notification-templates" element={<V3ProtectedRoute pages={[["manage","email_templates"]]}><NotificationTemplatesPage /></V3ProtectedRoute>} />
 
-            {/* Workspace Manager */}
-            <Route path="/workspace-manager/floor-layout" element={<ProtectedRoute roles={ADMIN_ROLES}><FloorLayoutPage /></ProtectedRoute>} />
-            <Route path="/workspace-manager/floor-plans" element={<ProtectedRoute roles={ADMIN_ROLES}><FloorPlansListPage /></ProtectedRoute>} />
-            <Route path="/workspace-manager/calibration/:planId" element={<ProtectedRoute roles={ADMIN_ROLES}><SeatCalibrationPage /></ProtectedRoute>} />
+            {/* Workspace Manager — v3 gated */}
+            <Route path="/workspace-manager/floor-layout" element={<V3ProtectedRoute pages={[["desk_booking","floor_layout"]]}><FloorLayoutPage /></V3ProtectedRoute>} />
+            <Route path="/workspace-manager/floor-plans" element={<V3ProtectedRoute pages={[["desk_booking","floor_plans"]]}><FloorPlansListPage /></V3ProtectedRoute>} />
+            <Route path="/workspace-manager/calibration/:planId" element={<V3ProtectedRoute pages={[["desk_booking","floor_plans"]]}><SeatCalibrationPage /></V3ProtectedRoute>} />
             {/* Legacy /calibration (no planId): redirect to the floor-plans list */}
             <Route path="/workspace-manager/calibration" element={<Navigate to="/workspace-manager/floor-plans" replace />} />
-            <Route path="/workspace-manager/meeting-room-booking" element={<ProtectedRoute roles={ADMIN_ROLES}><MeetingRoomBookingPage /></ProtectedRoute>} />
-            <Route path="/workspace-manager/workstation-booking" element={<ProtectedRoute roles={ADMIN_ROLES}><WorkstationBookingPage /></ProtectedRoute>} />
-            <Route path="/workspace-manager/request-workstation" element={<ProtectedRoute roles={ADMIN_ROLES}><RequestWorkstationPage /></ProtectedRoute>} />
-            <Route path="/workspace-manager/pending-approvals" element={<ProtectedRoute roles={ADMIN_ROLES}><PendingApprovalsPage /></ProtectedRoute>} />
-            <Route path="/workspace-manager/bookings" element={<ProtectedRoute roles={ADMIN_ROLES}><BookingsPage /></ProtectedRoute>} />
+            <Route path="/workspace-manager/meeting-room-booking" element={<V3ProtectedRoute pages={[["desk_booking","meeting_room_bookings"]]}><MeetingRoomBookingPage /></V3ProtectedRoute>} />
+            <Route path="/workspace-manager/workstation-booking" element={<V3ProtectedRoute pages={[["desk_booking","workstation_bookings"]]}><WorkstationBookingPage /></V3ProtectedRoute>} />
+            <Route path="/workspace-manager/request-workstation" element={<V3ProtectedRoute pages={[["desk_booking","workstation_requests"]]}><RequestWorkstationPage /></V3ProtectedRoute>} />
+            <Route path="/workspace-manager/pending-approvals" element={<V3ProtectedRoute pages={[["desk_booking","pending_approvals"]]}><PendingApprovalsPage /></V3ProtectedRoute>} />
+            <Route path="/workspace-manager/bookings" element={<V3ProtectedRoute pages={[["desk_booking","bookings_history"]]}><BookingsPage /></V3ProtectedRoute>} />
             
             {/* Legacy redirect */}
             <Route path="/desk-booking" element={<Navigate to="/workspace-manager/floor-layout" replace />} />

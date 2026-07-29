@@ -62,10 +62,10 @@ const NAV_CONFIG = [
     ],
   },
   {
-    kind: "group", label: "Manage", icon: Settings, superAdminOnly: true,
+    kind: "group", label: "Manage", icon: Settings,
     children: [
       { to: "/admin/teams",           label: "Teams",           icon: Users,    v3: { module: "manage", page: "teams" } },
-      { to: "/admin/permissions",     label: "Permissions",     icon: Shield },
+      { to: "/admin/permissions",     label: "Permissions",     icon: Shield,   superAdminOnly: true },
       { to: "/admin/email-templates", label: "Email Templates", icon: MailPlus, v3: { module: "manage", page: "email_templates" } },
       { to: "/admin/notification-templates", label: "Notifications", icon: NotificationsIcon, v3: { module: "manage", page: "email_templates" } },
       { to: "/admin/notifications",   label: "Outbox",          icon: OutboxIcon, v3: { module: "manage", page: "notifications" } },
@@ -111,6 +111,10 @@ function Tip({ label, children, show }) {
 function NavGroup({ item, collapsed, currentPath, can, isSuperAdmin, isPageViewVisible, onNavigate }) {
   const allowed = item.children.filter(c => {
     if (item.superAdminOnly && !isSuperAdmin) return false;
+    // Per-child superAdminOnly (e.g. the "Permissions" link inside Manage —
+    // permission set editing is Super-Admin-only even when Admins have
+    // manage.* view access).
+    if (c.superAdminOnly && !isSuperAdmin) return false;
     // When a v3 gate exists, it is authoritative. The legacy `perm` check
     // relies on `/permissions/me/effective`, which does NOT translate v3
     // page-level `view.enabled` into the old {module, feature, action}
