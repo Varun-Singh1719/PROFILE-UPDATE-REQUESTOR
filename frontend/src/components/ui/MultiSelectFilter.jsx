@@ -68,6 +68,10 @@ export default function MultiSelectFilter({
   // — the trigger IS the search box. Adds arrow-key nav (↑ / ↓ move a
   // highlight, Enter toggles the highlighted row, Esc closes).
   searchInTrigger = false,
+  // In `searchInTrigger` mode, controls whether removable chips are rendered
+  // below the trigger. Set to `false` when the caller wants to render its
+  // own chip strip (e.g. to use a different colour tone).
+  renderChipsBelow = true,
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -346,18 +350,19 @@ export default function MultiSelectFilter({
               <span
                 className="shrink-0 inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold
                            bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/30 tabular-nums whitespace-nowrap"
-                aria-label={`${selectedOptions.length} selected`}
-                title={`${selectedOptions.length} selected`}
+                aria-label={`${selectedOptions.length} ${countUnitLabel}`}
+                title={`${selectedOptions.length} ${countUnitLabel}`}
                 data-testid={tid ? `${tid}-count` : undefined}
               >
-                {selectedOptions.length} selected
+                {selectedOptions.length} {countUnitLabel}
               </span>
             )}
             {rightIcons}
           </div>
 
-          {/* Chip strip — one removable pill per selected option. */}
-          {selectedOptions.length > 0 && (
+          {/* Chip strip — one removable pill per selected option. Skipped when
+              the caller wants to render its own chips (renderChipsBelow=false). */}
+          {renderChipsBelow && selectedOptions.length > 0 && (
             <div
               className="mt-2 flex flex-wrap gap-1.5"
               data-testid={tid ? `${tid}-chips` : undefined}

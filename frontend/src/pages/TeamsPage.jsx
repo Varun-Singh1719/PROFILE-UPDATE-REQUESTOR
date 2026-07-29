@@ -260,8 +260,8 @@ export default function TeamsPage() {
   // Chip helpers
   const removeManager = (id) =>
     setForm((f) => ({ ...f, manager_ids: f.manager_ids.filter((x) => x !== id) }));
-  const removeMember = (id) =>
-    setForm((f) => ({ ...f, member_ids: f.member_ids.filter((x) => x !== id) }));
+  // Note: member removal is now handled by the MultiSelectFilter's built-in
+  // chip strip (searchInTrigger mode) — no per-page helper needed.
 
   return (
     <Layout
@@ -480,14 +480,20 @@ export default function TeamsPage() {
               </label>
               <MultiSelectFilter
                 label="Managers"
-                options={managerOptions}
+                options={managerOptions.map((o) => ({
+                  ...o,
+                  // Include emp_id in the search haystack so users can find a
+                  // manager by typing their EMP ID.
+                  searchText: `${o.label} ${o.meta || ""}`,
+                }))}
                 value={form.manager_ids}
                 onChange={(v) => setForm({ ...form, manager_ids: v })}
                 placeholder="Select one or more managers..."
                 testIdPrefix="team-managers"
                 hideLabelPrefix
                 fullWidth
-                showCountOnly
+                searchInTrigger
+                renderChipsBelow={false}
                 countUnitLabel="manager(s) selected"
               />
               {form.manager_ids.length > 0 && (
@@ -520,37 +526,19 @@ export default function TeamsPage() {
               </label>
               <MultiSelectFilter
                 label="Members"
-                options={memberOptions}
+                options={memberOptions.map((o) => ({
+                  ...o,
+                  searchText: `${o.label} ${o.meta || ""}`,
+                }))}
                 value={form.member_ids}
                 onChange={(v) => setForm({ ...form, member_ids: v })}
                 placeholder="Select team members..."
                 testIdPrefix="team-members"
                 hideLabelPrefix
                 fullWidth
-                showCountOnly
+                searchInTrigger
                 countUnitLabel="member(s) selected"
               />
-              {form.member_ids.length > 0 && (
-                <div
-                  className="flex flex-wrap gap-1.5 mt-2"
-                  data-testid="team-members-chips"
-                >
-                  {form.member_ids
-                    .map((id) => ({ id, emp: employeeById[id] }))
-                    .sort((a, b) =>
-                      (a.emp?.name || "").localeCompare(b.emp?.name || "")
-                    )
-                    .map(({ id, emp }) => (
-                      <SelectionChip
-                        key={id}
-                        label={emp?.name || "Unknown"}
-                        sublabel={emp?.emp_id}
-                        onRemove={() => removeMember(id)}
-                        testId={`team-member-chip-${id}`}
-                      />
-                    ))}
-                </div>
-              )}
             </div>
 
             <div>
