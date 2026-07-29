@@ -383,11 +383,11 @@ backend:
 frontend:
   - task: "Floor Layout — Meeting room availability by CURRENT TIME (Jul 29 2026)"
     implemented: true
-    working: "NA"
+    working: false
     file: "frontend/src/pages/FloorLayoutPage.jsx, frontend/src/components/WorkstationFloorMap.jsx, frontend/src/components/RoomBookingDetailDialog.jsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
@@ -425,6 +425,82 @@ frontend:
                 meeting details leaked. Map shows GREEN.
               • Alpha (no bookings): empty state "Room is available — No
                 upcoming meetings scheduled."
+        - working: false
+          agent: "testing"
+          comment: |
+            ❌ CRITICAL ISSUE FOUND — Status badge missing in RoomBookingDetailDialog header (Jul 29 2026)
+            
+            Comprehensive testing completed for all THREE fixes on Floor Layout page.
+            Test time: 08:34 AM (current wall-clock time during test)
+            
+            **FIX #1 — MEETING ROOM COLOUR BY CURRENT TIME: ✅ PASS**
+            - Found 11 meeting room boxes on floor plan
+            - 10 rooms showing GREEN border (rgb(16, 185, 129)) = no meeting running now
+            - 1 room showing RED border (rgb(220, 38, 38)) = meeting running now (Boolean room)
+            - Room colors correctly reflect CURRENT time, not "any booking today"
+            - Verified: Boolean room has "Testing - Accordian" meeting 08:30-09:30 (running at test time 08:34)
+            - Verified: Zeta room has "Skip-level Sync" meeting 15:30-16:00 (future, so GREEN)
+            - Auto-refresh via nowTick (60s interval) working correctly
+            
+            **FIX #2 — HOVER TOOLTIP (no leak): ✅ PASS**
+            - Tested hover on GREEN room (Alpha):
+              * Tooltip shows: "Alpha · Seats 14 / AVAILABLE / Available"
+              * ✅ Does NOT leak upcoming meeting details
+              * ✅ Shows "Available" status correctly
+            - Tested hover on RED room (Boolean):
+              * Tooltip shows: "Boolean · Seats 2 / IN USE / Testing - Accordian / Admin User / Wed, Jul 29, 2026 · 08:30 AM – 09:30 AM"
+              * ✅ Shows current meeting details (title, organizer, time)
+            - Hover logic correctly distinguishes between available and occupied rooms
+            
+            **FIX #3 — CLICK POPUP (accordion): ❌ CRITICAL ISSUE**
+            - ✅ Clicking room box opens RoomBookingDetailDialog
+            - ✅ Dialog header shows: room name "Boolean", colored RED dot (rgb(239, 68, 68))
+            - ❌ **CRITICAL: Status badge (BOOKED/AVAILABLE) NOT FOUND in header**
+              * Expected: "BOOKED" badge (red) when meeting running now
+              * Expected: "AVAILABLE" badge (green) when no meeting running
+              * Actual: Badge element not rendered in DOM
+            - ✅ Meta row shows: capacity "2 pax", date "Wed, Jul 29, 2026"
+            - ✅ Accordion present with 4 items (but count label shows "1 UPCOMING MEETING" - discrepancy)
+            - ✅ First accordion item structure correct:
+              * Title: "Testing - Accordian"
+              * Time: "08:30 AM – 09:30 AM"
+              * "NOW" pill present (meeting is ongoing)
+              * Item is AUTO-EXPANDED
+              * Organizer: "Admin User · admin@ticketing.com"
+            - ✅ Legend present: "Ongoing" (red dot) · "Upcoming" (amber dot)
+            - ✅ Close button works correctly
+            
+            **REGRESSION CHECKS: ✅ ALL PASS**
+            1. ✅ Workstation seats unaffected (176 seats found, colored by seat.status)
+            2. ✅ Floor Details panel shows stats: Total 176, Available 163, Pending 0, Meetings 3
+            3. ✅ Team filter dropdown opens and works correctly
+            4. ✅ Date picker navigation works:
+               - Next day button advances date
+               - Future date: all rooms GREEN (no ongoing meetings possible)
+               - Previous day button returns to today
+            
+            **CONSOLE ERRORS:**
+            - 2 non-critical 401 errors (pre-login auth checks)
+            - No JavaScript errors related to the fixes
+            
+            **ROOT CAUSE ANALYSIS:**
+            The status badge (BOOKED/AVAILABLE) in RoomBookingDetailDialog header is not rendering.
+            Looking at RoomBookingDetailDialog.jsx lines 239-247, the badge should render based on
+            `hasOngoing` state. The colored dot is rendering correctly (RED), but the badge text
+            elements are not found in the DOM. This suggests either:
+            1. The badge elements are being rendered but with incorrect selectors/classes
+            2. The conditional logic for badge rendering has an issue
+            3. The badge is being hidden by CSS
+            
+            **ADDITIONAL FINDINGS:**
+            - Accordion count label shows "1 UPCOMING MEETING" but 4 accordion items are present
+              (possible data inconsistency or filtering issue)
+            - All other accordion functionality working correctly (colored dots, NOW pill, auto-expand)
+            
+            **RECOMMENDATION:**
+            Main agent should investigate RoomBookingDetailDialog.jsx lines 239-247 to ensure
+            the BOOKED/AVAILABLE badge is rendering correctly in the header. The badge should
+            be visible next to the room name as specified in the review request.
     implemented: true
     working: "NA"
     file: "frontend/src/components/ui/MultiSelectFilter.jsx"
@@ -689,8 +765,7 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "Floor Layout — Meeting room availability by CURRENT TIME (Jul 29 2026)"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -4054,6 +4129,59 @@ agent_communication:
       meeting rooms, notifications templates, permissions, teams admin).
       Credentials: admin@ticketing.com / Admin@123. See the task above for the
       exact scenarios to cover.
+    -agent: "testing"
+    -message: |
+      ❌ FLOOR LAYOUT MEETING ROOM FIXES — CRITICAL ISSUE FOUND (Jul 29 2026)
+      
+      Tested all THREE fixes on Floor Layout page as specified in review request.
+      Test credentials: admin@ticketing.com / Admin@123
+      Test time: 08:34 AM (wall-clock time during test)
+      
+      **SUMMARY:**
+      
+      ✅ FIX #1 — Meeting room colour by CURRENT TIME: PASS
+      - 10 GREEN rooms (no meeting running now)
+      - 1 RED room (Boolean, meeting running 08:30-09:30)
+      - Colors reflect current time, not "any booking today"
+      - Auto-refresh via nowTick working
+      
+      ✅ FIX #2 — Hover tooltip (no leak): PASS
+      - GREEN room hover: shows "Available", NO meeting details leaked
+      - RED room hover: shows current meeting details (title, organizer, time)
+      - Hover logic correctly distinguishes available vs occupied
+      
+      ❌ FIX #3 — Click popup (accordion): CRITICAL ISSUE
+      - Dialog opens correctly ✓
+      - Room name, colored dot, capacity, date all present ✓
+      - **CRITICAL: Status badge (BOOKED/AVAILABLE) NOT RENDERING in header**
+        * Expected: "BOOKED" badge (red) when meeting running now
+        * Expected: "AVAILABLE" badge (green) when no meeting running
+        * Actual: Badge element not found in DOM
+      - Accordion structure correct (colored dots, NOW pill, auto-expand) ✓
+      - Legend present (Ongoing/Upcoming) ✓
+      - Close button works ✓
+      
+      ✅ REGRESSION CHECKS: ALL PASS
+      - Workstation seats unaffected (176 seats)
+      - Floor Details panel shows stats correctly
+      - Team filter dropdown works
+      - Date picker navigation works (future dates = all GREEN)
+      
+      **ROOT CAUSE:**
+      RoomBookingDetailDialog.jsx lines 239-247: Status badge (BOOKED/AVAILABLE)
+      not rendering in header. Colored dot renders correctly (RED), but badge
+      text elements missing from DOM. Possible issues:
+      1. Badge elements rendered with incorrect selectors/classes
+      2. Conditional logic for badge rendering has issue
+      3. Badge hidden by CSS
+      
+      **ADDITIONAL FINDING:**
+      - Accordion count label shows "1 UPCOMING MEETING" but 4 accordion items present
+        (possible data inconsistency or filtering issue)
+      
+      **RECOMMENDATION:**
+      Main agent should investigate RoomBookingDetailDialog.jsx header badge rendering
+      (lines 239-247). Badge must be visible next to room name as per review request spec.
     -agent: "testing"
     -message: |
       ✅ PROFIX BACKEND REGRESSION COMPLETE — 17/18 TESTS PASSED
