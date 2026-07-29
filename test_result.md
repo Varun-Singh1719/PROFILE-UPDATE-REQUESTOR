@@ -318,7 +318,7 @@ backend:
     file: "backend/routers/permissions_v3.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
@@ -337,7 +337,7 @@ backend:
     file: "backend/routers/approval_settings.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
@@ -356,7 +356,7 @@ backend:
     file: "backend/routers/profile.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
@@ -372,7 +372,7 @@ backend:
     file: "backend/routers/workstation_requests.py"
     stuck_count: 0
     priority: "medium"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
@@ -565,7 +565,7 @@ frontend:
     file: "frontend/src/components/ui/MultiSelectFilter.jsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
@@ -640,7 +640,7 @@ frontend:
     file: "frontend/src/components/ApprovalSettingsModal.jsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
@@ -825,18 +825,18 @@ metadata:
 
 test_plan:
   current_focus:
-    - "QA VERIFY: Backend fixes for D1, D2, D4, D6, D7, D8 (Aug 2026)"
+    - "All 6 QA defects (D1, D2, D4, D6, D7, D8) fixed and verified by testing agent (Aug 2026)"
   stuck_tasks: []
   test_all: false
 
 qa_fixes_aug2026:
   - task: "Fix D1 — Apply require_any_v3_page_view to 6 workspace endpoints (list_workstation_bookings, list_room_bookings, list_workstation_requests, list_meeting_room_requests, list_bookings, my_workspace_dashboard/week/floor)"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/routers/workstation_bookings.py, backend/routers/room_bookings.py, backend/routers/workstation_requests.py, backend/routers/meeting_room_requests.py, backend/routers/bookings.py, backend/routers/my_workspace.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
@@ -858,7 +858,7 @@ qa_fixes_aug2026:
 
   - task: "Fix D2 — Deleted permission sets stop granting access immediately"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/routers/permissions_v3.py"
     stuck_count: 0
     priority: "high"
@@ -886,7 +886,7 @@ qa_fixes_aug2026:
 
   - task: "Fix D4 — Tickets endpoint returns 403 (not 200-empty) for users lacking profix access"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/routers/tickets.py"
     stuck_count: 0
     priority: "medium"
@@ -905,7 +905,7 @@ qa_fixes_aug2026:
 
   - task: "Fix D6 — Teams lite payload only served to users who need it (profix/desk_booking); everyone else gets 403"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/routers/teams.py, backend/routers/permissions_v3.py"
     stuck_count: 0
     priority: "medium"
@@ -929,7 +929,7 @@ qa_fixes_aug2026:
 
   - task: "Fix D7 — manage.employees.edit permission enforced on PATCH /contacts/{id}; view enforced on GET /contacts/{id}"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/routers/contacts.py, backend/routers/permissions_v3.py"
     stuck_count: 0
     priority: "high"
@@ -956,7 +956,7 @@ qa_fixes_aug2026:
 
   - task: "Fix D8 — Hidden flag enforced on GET /api/teams list (visible=false → not lite-shared unless cross-module)"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/routers/teams.py"
     stuck_count: 0
     priority: "medium"
