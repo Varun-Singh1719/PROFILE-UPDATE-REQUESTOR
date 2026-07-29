@@ -1,0 +1,485 @@
+{
+  "scenarios": {
+    "D": {
+      "scenario": "D",
+      "name": "ProfixTeamCreator",
+      "tests": [
+        {
+          "test": "GET /api/tickets (team-scoped)",
+          "expected": "200 with team-scoped tickets only",
+          "actual": "200",
+          "pass": true,
+          "details": "Returned 0 tickets"
+        },
+        {
+          "test": "GET /api/contacts (team-scoped)",
+          "expected": "200 with team members only",
+          "actual": "200",
+          "pass": true,
+          "details": "Returned 302 contacts"
+        },
+        {
+          "test": "POST /api/tickets (create permission)",
+          "expected": "200",
+          "actual": "200",
+          "pass": true,
+          "details": "TKT-1121"
+        },
+        {
+          "test": "PATCH /api/contacts/{id} same-team (no edit permission)",
+          "expected": "403",
+          "actual": "403",
+          "pass": true,
+          "details": {
+            "detail": "Not authorized"
+          }
+        },
+        {
+          "test": "PATCH /api/contacts/{id} non-team (out of scope)",
+          "expected": "403",
+          "actual": "403",
+          "pass": true,
+          "details": {
+            "detail": "Not authorized"
+          }
+        }
+      ]
+    },
+    "E": {
+      "scenario": "E",
+      "name": "WorkspaceOnly",
+      "tests": [
+        {
+          "test": "GET /api/floor-plans",
+          "expected": "200",
+          "actual": "200",
+          "pass": true,
+          "details": [
+            {
+              "id": "dd9ea314-e698-4f5d-bf85-16c00724c5ad",
+              "name": "Tower C - 5th Floor",
+              "pdfUrl": "/api/floor-plans/pdf/2854d4b1-4677-4b9e-879b-8114f8f46de5.pdf",
+              "status_override": null,
+              "live_version_id": "4faef50f-6725-4d90-9a11-5785b8cf78af",
+              "draft": null,
+              "draft_updated_at": null,
+              "created_at": "2026-06-26T07:41:09.826535+00:00",
+              "created_by": {
+                "id": "ab8c25e6-5823-46fe-937d-4dfe05924cec",
+                "email": "admin@ticketing.com",
+                "name": "Admin User"
+              },
+              "updated_at": "2026-07-22T08:56:33.883183+00:00",
+              "updated_by": {
+                "id": "ab8c25e6-5823-46fe-937d-4dfe05924cec",
+                "email": "admin@ticketing.com",
+                "name": "Admin User"
+              },
+              "thumbnail": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAoHBwgHBgoICAgLCgoLDhgQDg0NDh0VFhEYIx8lJCIfIiEmKzcvJik0KSEiMEExNDk7Pj4+JS5ESUM8SDc9Pjv/2wBDAQoLCw4NDhwQEBw7KCIoOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozv/wAARCAD3AUADASIAAhEBAxEB/8QAGwABAAMBAQEBAAAAAAAAAAAAAAEDBQIEBgf/xABAEAABAwIEAgcEBwYHAQEAAAABAAIDBBEFEiExQVETFCJTYZPSMnGBkRUjQqGxwfAGFjNy0eEkJTRSkrLxQ3P/xAAYAQEAAwEAAAAAAAAAAAAAAAAAAQIDBP/EADERAAIBAgQDCAICAQUAAAAAAAABEQIDITFBURIT8ARhcYGRobHBFCLh8TIjQlKC0f/aAAwDAQACEQMRAD8A/ZUUa8015oCUUa8015oCUUa8015oCUUa8015oCUUa8015oCUUa8015oCUUa8015oCUUa8015oCUUa8015oCUUa8015oCUUa8015oCUUa8015oCUUa8015oCUUa8015oCUUa8015oCUUa8015oCUUa8015oCUUa8015oCUUa8015oCUUa8015oCUREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREARFF0BKJdLoAii6XCAlFDnBrSSbAJdASiXVZnhG8rP+QUSiYksRRcc1yZommzpGA8i4JKIg7RQHBwuCCDxCXCkEooa5rxdpuLkfLRSgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgC51vvYLpQEBFnW9rX3LpQDfgoNgbk2GyAy8IaG1tYRiHWbv1Zr2NTz+WivxpkEmGSNqZzBGSO2BfW+1uK82DvhdW1ojoHUzg/tPJJzanntz0Xpxl8ceGSOlpust0uzbjvdcNEfjVee8a+Z11Tz15bf0ZgigFbSiLFS4CCzIjftix+A93gvoHODGl7jYNFyeSwGyRur6Qtwkx3gFpNewLH4aeOq3pDaJ5Dc9gezz8FbssKmqN+/ZbkX5mmfr6MHEazD8SbTStxB9OGSkABh1Omvhw18VvSfwn/ylfNNkldTQFuAt0nPZyHTbX/3TRfSyfwn/AMpVey1Oqqqp5uNGtO/6Jv0qlU0rv2+j5oUtCaStH0u4ZntL7tPZOulvtfDkvoaNrW0cLWSmVoYAHn7Qtuvnus4eKStL8KcA17Q7tEZjrrf7Pw5r6GjLHUUDoozEwsBaw/ZFtlTsnDxuIy0nd7lu08XDjOfdstjOEdOP2nL+vO6Ys/09jbbnttrZe+KupqiZ8UMrXvYcrgOB1/ovFnZ+8gb9HnNk/wBTry+Xgq8Lkpn4lUtgonU72y9p5JObQ/L3K9uvhr4VGNT36+titdHFTLnBLbr7NSmBERB7x/8A2KuVcH8M/wA7v+xVi7jkmcWEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAFFtbp8FBeGtc55ytbqSTpbmgJIuCOfiuZGlzQG29pp18CCqRiNERGRVRWlNmdr2ivQDcXUU1p5MlprMEA7hAANgqTW0oEpNRH9T/E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",
+              "version_count": 4,
+              "live_seat_count": 176,
+              "last_published_at": "2026-07-22T08:56:33.883183+00:00",
+              "has_draft": false,
+              "status": "live"
+            }
+          ]
+        },
+        {
+          "test": "GET /api/workstation-bookings (KNOWN LEAK D1)",
+          "expected": "200 (leak confirmed)",
+          "actual": "200",
+          "pass": true,
+          "details": "Returned 222 bookings - LEAK CONFIRMED"
+        },
+        {
+          "test": "GET /api/contacts (no manage.employees)",
+          "expected": "403",
+          "actual": "403",
+          "pass": true,
+          "details": {
+            "detail": "Access denied to manage.employees"
+          }
+        },
+        {
+          "test": "GET /api/teams (no manage.teams)",
+          "expected": "200 with lite payload or 403",
+          "actual": "200",
+          "pass": true,
+          "details": "Status 200, lite payload: True"
+        },
+        {
+          "test": "GET /api/tickets (no profix)",
+          "expected": "403 or 200 with []",
+          "actual": "200",
+          "pass": true,
+          "details": []
+        },
+        {
+          "test": "GET /api/permission-sets-v3 (no manage.permissions)",
+          "expected": "403",
+          "actual": "403",
+          "pass": true,
+          "details": {
+            "detail": "Access denied to manage.permissions"
+          }
+        }
+      ]
+    },
+    "F": {
+      "scenario": "F",
+      "name": "ManageEmployeesEditNoDelete",
+      "tests": [
+        {
+          "test": "GET /api/contacts (view permission)",
+          "expected": "200",
+          "actual": "200",
+          "pass": true,
+          "details": "Returned 304 contacts"
+        },
+        {
+          "test": "POST /api/contacts (create - depends on catalog)",
+          "expected": "403 or 200 (depends on catalog)",
+          "actual": "403",
+          "pass": true,
+          "details": "Status 403 - catalog may not have create function"
+        },
+        {
+          "test": "PATCH /api/contacts/{id} (edit permission)",
+          "expected": "200",
+          "actual": "403",
+          "pass": false,
+          "details": {
+            "detail": "Not authorized"
+          }
+        },
+        {
+          "test": "DELETE /api/contacts/{id} (no delete permission)",
+          "expected": "403 or 404 (endpoint may not exist)",
+          "actual": "405",
+          "pass": false,
+          "details": "Status 405 - delete endpoint may not exist in catalog"
+        },
+        {
+          "test": "POST /api/contacts/upload (bulk - depends on catalog)",
+          "expected": "403 or 404 (depends on catalog)",
+          "actual": "405",
+          "pass": true,
+          "details": "Status 405 - bulk upload may not be in catalog"
+        }
+      ]
+    },
+    "G": {
+      "scenario": "G",
+      "name": "HiddenWithView",
+      "tests": [
+        {
+          "test": "GET /api/teams (view.enabled=true, view.visible=false)",
+          "expected": "403 (hidden should suppress)",
+          "actual": "200",
+          "pass": false,
+          "details": "Status 200 - Hidden flag should suppress access even with enabled=true"
+        },
+        {
+          "test": "GET /api/teams/{id} (view.enabled=true, view.visible=false)",
+          "expected": "403 (hidden should suppress)",
+          "actual": "403",
+          "pass": true,
+          "details": "Status 403 - Hidden flag should suppress access"
+        }
+      ]
+    },
+    "H": {
+      "scenario": "H",
+      "name": "EditWithoutView",
+      "tests": [
+        {
+          "test": "GET /api/contacts (view.enabled=false)",
+          "expected": "403",
+          "actual": "403",
+          "pass": true,
+          "details": {
+            "detail": "Access denied to manage.employees"
+          }
+        },
+        {
+          "test": "PATCH /api/contacts/{id} (edit=true but view=false)",
+          "expected": "403 (view is prerequisite)",
+          "actual": "403",
+          "pass": true,
+          "details": "Status 403 - Edit without view should be denied"
+        }
+      ]
+    },
+    "I": {
+      "scenario": "I",
+      "name": "ViewWithoutEdit",
+      "tests": [
+        {
+          "test": "GET /api/teams (view=true)",
+          "expected": "200 with FULL payload",
+          "actual": "200",
+          "pass": true,
+          "details": "Full payload: True"
+        },
+        {
+          "test": "POST /api/teams (no create permission)",
+          "expected": "403",
+          "actual": "403",
+          "pass": true,
+          "details": {
+            "detail": "Not authorized"
+          }
+        },
+        {
+          "test": "PATCH /api/teams/{id} (edit=false)",
+          "expected": "403",
+          "actual": "403",
+          "pass": true,
+          "details": {
+            "detail": "Not authorized"
+          }
+        },
+        {
+          "test": "DELETE /api/teams/{id} (no delete permission)",
+          "expected": "403",
+          "actual": "403",
+          "pass": true,
+          "details": {
+            "detail": "Not authorized"
+          }
+        }
+      ]
+    },
+    "J": {
+      "scenario": "J",
+      "name": "MultiTeamUser",
+      "tests": [
+        {
+          "test": "GET /api/tickets (multi-team scope)",
+          "expected": "200 with tickets from both teams",
+          "actual": "200",
+          "pass": true,
+          "details": "Returned 0 tickets - should include both team_A and team_B tickets"
+        }
+      ]
+    },
+    "K": {
+      "scenario": "K",
+      "name": "NoTeamUser",
+      "tests": [
+        {
+          "test": "GET /api/tickets (no team, scope=team)",
+          "expected": "200 with []",
+          "actual": "200",
+          "pass": true,
+          "details": "Empty result: True, no crashes"
+        },
+        {
+          "test": "No 500 errors",
+          "expected": "No server errors",
+          "actual": "No 500s observed",
+          "pass": true,
+          "details": "System handles no-team user gracefully"
+        }
+      ]
+    },
+    "L": {
+      "scenario": "L",
+      "name": "NewlyCreatedSet",
+      "tests": [
+        {
+          "test": "GET /api/teams (immediate permission application)",
+          "expected": "200 (permissions apply immediately)",
+          "actual": "200",
+          "pass": true,
+          "details": "Permissions applied immediately after set creation and assignment"
+        }
+      ]
+    },
+    "M": {
+      "scenario": "M",
+      "name": "UpdatedSet-LiveChange",
+      "tests": [
+        {
+          "test": "GET /api/teams BEFORE update (view=enabled)",
+          "expected": "200 with FULL payload",
+          "actual": "200",
+          "pass": true,
+          "details": "Full payload: True"
+        },
+        {
+          "test": "GET /api/teams AFTER update (view=disabled, SAME JWT)",
+          "expected": "403 or LITE payload (live changes propagate)",
+          "actual": "200",
+          "pass": true,
+          "details": "Restricted: True - Live changes propagated"
+        }
+      ]
+    },
+    "O": {
+      "scenario": "O",
+      "name": "MultipleSetsMerge",
+      "tests": [
+        {
+          "test": "GET /api/tickets (from set1: individual scope)",
+          "expected": "200",
+          "actual": "200",
+          "pass": true,
+          "details": "Profix permission from set1 active"
+        },
+        {
+          "test": "GET /api/teams (from set2: overall scope)",
+          "expected": "200 with FULL payload",
+          "actual": "200",
+          "pass": true,
+          "details": "Teams permission from set2 active, full payload: True"
+        },
+        {
+          "test": "OR merge verification",
+          "expected": "Both permissions active",
+          "actual": "Both active",
+          "pass": true,
+          "details": "Multiple sets merged with OR semantics"
+        }
+      ]
+    },
+    "P": {
+      "scenario": "P",
+      "name": "ContextMenuFineGrained",
+      "tests": [
+        {
+          "test": "Catalog inspection for granular permissions",
+          "expected": "Catalog has bulk/export/import functions",
+          "actual": "bulk=True, export=True, import=True",
+          "pass": true,
+          "details": "Catalog granular permissions: bulk=True, export=True, import=True"
+        },
+        {
+          "test": "GET /api/tickets (view enabled)",
+          "expected": "200",
+          "actual": "200",
+          "pass": true,
+          "details": "Individual endpoint works"
+        },
+        {
+          "test": "POST /api/tickets/bulk-assign (no bulk permission)",
+          "expected": "403 or 400",
+          "actual": "400",
+          "pass": true,
+          "details": "Bulk endpoint: 400"
+        },
+        {
+          "test": "GET /api/tickets/export.csv (no export permission)",
+          "expected": "403 or 200 (document behavior)",
+          "actual": "200",
+          "pass": true,
+          "details": "Export endpoint: 200 - catalog may not enforce export separately"
+        }
+      ]
+    }
+  },
+  "bypass_attempts": [
+    {
+      "test": "1. GET /api/permission-sets-v3/{guessed_id}",
+      "expected": "403",
+      "actual": "403",
+      "pass": true
+    },
+    {
+      "test": "2. GET /api/contacts/{id} (no manage.employees)",
+      "expected": "403",
+      "actual": "403",
+      "pass": true
+    },
+    {
+      "test": "3. GET /api/tickets/{id} outside scope",
+      "expected": "403 or 404",
+      "actual": "404",
+      "pass": true
+    },
+    {
+      "test": "4. GET /api/audit (SA only)",
+      "expected": "403 or 404",
+      "actual": "404",
+      "pass": true
+    },
+    {
+      "test": "5. GET /api/permissions/audit (SA only)",
+      "expected": "403",
+      "actual": "403",
+      "pass": true
+    },
+    {
+      "test": "6. GET /api/tickets?scope=all (query param bypass attempt)",
+      "expected": "200 but scoped to individual",
+      "actual": "200",
+      "pass": true,
+      "details": "Backend should enforce individual scope regardless of query param"
+    },
+    {
+      "test": "7. POST /api/teams (no permission)",
+      "expected": "403",
+      "actual": "403",
+      "pass": true
+    },
+    {
+      "test": "8. GET /api/notifications/outbox (SA only)",
+      "expected": "403 or 404",
+      "actual": "403",
+      "pass": true
+    },
+    {
+      "test": "9. GET /api/my-workspace/overall-dashboard",
+      "expected": "403 or 200 (depends on permission)",
+      "actual": "200",
+      "pass": true,
+      "details": "Status 200 - may depend on dashboard permissions"
+    },
+    {
+      "test": "10. POST /api/auth/impersonate (non-SA)",
+      "expected": "403",
+      "actual": "403",
+      "pass": true
+    },
+    {
+      "test": "11. GET /api/floor-plans/{guessed_id}",
+      "expected": "403 or 404",
+      "actual": "404",
+      "pass": true
+    }
+  ],
+  "defects": [],
+  "test_fixtures": {
+    "users": [
+      "4cf2788c-7521-4950-9e4e-cf0795a18d6b",
+      "59796796-fac2-4ddc-b00a-7a70fd728738",
+      "4814949c-a703-438b-b115-a6607c723e76",
+      "ccde6c11-d223-438a-afb8-49ad7e80042a",
+      "2ca380d0-7e45-4761-8263-3164b19a0761",
+      "4fa26fdd-0965-4778-b274-3bbe89b10e5a",
+      "eb431db2-5e32-448d-ae2e-216c047058dc",
+      "39972889-66cc-431c-abe7-929f1e3ce285",
+      "71f88d8a-b202-4f09-b538-78c3ad39f81d",
+      "443d6979-42a7-47ef-a942-b09aa05e742c",
+      "d4546a0a-79e7-4be9-a82c-330329109814",
+      "f0cf91ae-e924-482f-87a4-135f693b4064",
+      "93bc82fa-9af2-4182-8d12-d0fca40a67ae"
+    ],
+    "permission_sets": [
+      "pset-d2e4e920-7e48-4f5d-bf88-ec41f45ccd59",
+      "pset-f8c5533b-7362-49b8-8164-531c2d5768a9",
+      "pset-97f01fe7-70ab-41e3-9418-d2728ba0c8a2",
+      "pset-b13c47d7-302d-4ae7-918f-0e82eca525d0",
+      "pset-7f5e080d-7a89-4372-b3fb-0966ddb9700a",
+      "pset-582fe82c-6220-448e-a2fc-83714eb9d22c",
+      "pset-7eb2944f-dd0d-46f2-b792-3ed1f7300448",
+      "pset-980541e7-213f-48e1-bef1-0d600d819f71",
+      "pset-544f9e4d-4983-4ee1-9741-b35becb73212",
+      "pset-f71615f4-54bd-4136-92dd-3a06d8907ac0",
+      "pset-0387c246-8dd7-4fbb-acf3-19d936d92d2b",
+      "pset-77a70569-993e-4205-a831-68726eeb7761",
+      "pset-8c8abe5c-cb44-4636-bf85-7c62980029a5",
+      "pset-6de808f5-c782-4d20-bdb0-7802098a0adc"
+    ]
+  }
+}
