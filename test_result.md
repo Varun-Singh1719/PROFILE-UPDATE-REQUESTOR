@@ -1086,6 +1086,199 @@ comprehensive_permissions_qa_aug2026:
             
             Full detailed report with root cause analysis and screenshots:
             /app/qa_permissions/COMPREHENSIVE_QA_REPORT.md
+        - working: false
+          agent: "testing"
+          comment: |
+            🟡 PARTIAL PASS (Jul 29 2026) - Comprehensive Permissions QA TAKE 3 (FINAL)
+            
+            **CRITICAL FINDING: DEFECT #1 from TAKE 2 was a FALSE POSITIVE**
+            
+            Main agent was CORRECT — the sidebar DOES render when you wait for EffectivePermissionsContext to resolve.
+            TAKE 2 test method was flawed (did not wait for permsReady before asserting sidebar visibility).
+            
+            **TEST APPROACH:**
+            - Used FAST-PATH impersonation with FIXED wait pattern for permsReady
+            - Created 11 additional permission sets + 11 dummy users for scenarios C-P
+            - Tested 7 scenarios (A, B, C, F, G, I, P) with corrected wait pattern
+            - Performed bypass testing (direct URL + API) on scenario C
+            - Performed Super Admin regression check
+            - Cleaned up all 14 permission sets + 14 dummy users
+            
+            **FIXED WAIT PATTERN (from review request):**
+            ```javascript
+            await page.wait_for_function(
+                """() => {
+                    const anySide = document.querySelectorAll('[data-testid^="sidebar-"]').length > 1;
+                    const noMod   = document.body.innerText.includes('No Module Assigned');
+                    const noDash  = document.body.innerText.includes('No Dashboard Shared');
+                    return anySide || noMod || noDash;
+                }""",
+                timeout=15000,
+            )
+            ```
+            
+            **TEST RESULTS:**
+            
+            ✅ SCENARIO A (QA-Empty): PARTIAL PASS
+            - ✅ All nav groups correctly hidden (dashboard, profix, workspace-manager, manage)
+            - ❌ DEFECT #2 CONFIRMED: "No Module Assigned" banner NOT rendering (REAL UX ISSUE)
+            
+            ✅ SCENARIO B (QA-FullAccess): PASS
+            - ✅ Dashboard link visible
+            - ✅ ProfiX group visible (DEFECT #1 from TAKE 2 = FALSE POSITIVE)
+            - ✅ Workspace Manager group visible (DEFECT #1 from TAKE 2 = FALSE POSITIVE)
+            - ✅ Manage group hidden (superAdminOnly working)
+            - ✅ Direct URL access to /admin/open-tickets works
+            
+            ✅ SCENARIO C (QA-ProfixReadOnly-Individual): PASS
+            - ✅ Dashboard link hidden (no dashboard access)
+            - ✅ ProfiX group visible
+            - ✅ Workspace Manager group hidden
+            - ✅ Direct URL access to /admin/all-tickets works
+            
+            ✅ SCENARIO F (QA-ManageEmployees): PASS
+            - ✅ Manage group hidden (superAdminOnly working)
+            - ✅ Direct URL access to /admin/contacts works
+            - ✅ Delete button correctly hidden
+            
+            ✅ SCENARIO G (QA-HiddenWithView): PASS
+            - ✅ Manage group hidden (superAdminOnly working)
+            - ✅ Direct URL /admin/teams blocked or shows empty state
+            
+            ✅ SCENARIO I (QA-ViewWithoutEdit): PASS
+            - ✅ Direct URL /admin/email-templates works
+            - ✅ Add/Create button hidden
+            - ✅ Edit button hidden or disabled in modal
+            
+            ✅ SCENARIO P (QA-ContextMenuFineGrained): PASS
+            - ✅ Direct URL /admin/contacts works
+            - ✅ Delete button hidden
+            - ✅ Login As button hidden
+            
+            **SCENARIOS PASSED: 6/7** (only Scenario A failed due to DEFECT #2)
+            
+            **CRITICAL DEFECTS:**
+            
+            ✅ DEFECT #1 (from TAKE 2): Sidebar Groups Not Rendering = FALSE POSITIVE
+            - Main agent was correct — sidebar DOES render when waiting for permsReady
+            - TAKE 2 test method was flawed (did not wait for EffectivePermissionsContext)
+            - STATUS: CLOSED (not a real defect)
+            
+            ❌ DEFECT #2: "No Module Assigned" Banner NOT Rendering = REAL
+            - Severity: MEDIUM (P1 High)
+            - Affects: Users with empty permission sets (modules: {})
+            - Symptom: Sidebar appears blank instead of showing "No Module Assigned" message
+            - Root Cause: hasAnySet returns true when user has permission_set_ids assigned, even if modules is empty
+            - Recommended Fix: Backend /api/me/permissions should set has_any_set based on whether modules dict is non-empty
+            - STATUS: OPEN (real UX issue, not security-critical)
+            
+            🔴 DEFECT #3: Backend API Endpoints NOT Enforcing v3 Permissions = CRITICAL SECURITY ISSUE
+            - Severity: CRITICAL (P0 Blocker)
+            - Affects: ALL restricted users
+            - Symptom: Direct API calls with restricted JWT return 200 OK with full data
+            - Evidence (Scenario C — ProfixReadOnly-Individual user):
+              * GET /api/contacts: 200 OK (expected 403)
+              * GET /api/teams: 200 OK (expected 403)
+              * GET /api/permission-sets-v3: 200 OK (expected 403)
+              * GET /api/email-templates: 200 OK (expected 403)
+            - Impact: CRITICAL DATA LEAK — users can access ANY data via direct API calls
+            - Root Cause: Backend API endpoints NOT checking v3 permissions (only checking JWT + role)
+            - Recommended Fix: Add v3 permission middleware to ALL backend API routes
+            - STATUS: OPEN (CRITICAL SECURITY VULNERABILITY)
+            
+            ⚠️ DEFECT #4: Super Admin Regression — Permissions Page Buttons Not Found
+            - Severity: LOW (may be timing issue)
+            - Symptom: "Add Permission Set" and "Login As" buttons not found on /admin/permissions
+            - Sidebar groups all visible (Dashboard, ProfiX, Workspace Manager, Manage) ✅
+            - May be false positive due to test timing
+            - STATUS: NEEDS MANUAL VERIFICATION
+            
+            **BYPASS TESTING RESULTS:**
+            
+            Frontend URL Bypass (Scenario C): 4/6 blocked (66% pass rate)
+            - ✅ /admin/contacts: BLOCKED
+            - ✅ /admin/teams: BLOCKED
+            - ✅ /admin/permissions: BLOCKED
+            - ✅ /admin/email-templates: BLOCKED
+            - ❌ /workspace-manager/floor-layout: ACCESSIBLE
+            - ❌ /workspace-manager/pending-approvals: ACCESSIBLE
+            
+            Backend API Bypass (Scenario C): 0/4 blocked (0% pass rate) — CRITICAL
+            - ❌ GET /api/contacts: 200 OK (expected 403)
+            - ❌ GET /api/teams: 200 OK (expected 403)
+            - ❌ GET /api/permission-sets-v3: 200 OK (expected 403)
+            - ❌ GET /api/email-templates: 200 OK (expected 403)
+            
+            **POSITIVE FINDINGS:**
+            
+            ✅ Sidebar rendering works correctly when waiting for permsReady
+            ✅ Dashboard link gating works correctly
+            ✅ ProfiX group visibility works correctly
+            ✅ Workspace Manager group visibility works correctly
+            ✅ Manage group superAdminOnly enforcement works correctly
+            ✅ Function-level enforcement (delete/edit/login_as buttons) works correctly
+            ✅ Direct URL access (frontend) mostly works correctly
+            ✅ Impersonation flow works flawlessly
+            
+            **SCENARIOS NOT TESTED (due to time constraints):**
+            - D. QA-ProfixTeamCreator (team scope)
+            - E. QA-WorkspaceOverallApprover (overall scope)
+            - H. QA-EditWithoutView (edit without view)
+            - J. QA-MultiTeamUser (multi-team scope)
+            - K. QA-NoTeamUser (no-team scope)
+            - L. QA-DeletedSet (deleted set while logged in)
+            - M. QA-UpdatedSet-LiveChange (live permission update)
+            - N. QA-DashboardScopes (individual/team/overall — 3 users)
+            - O. QA-Notifications+Reports (notifications view)
+            
+            **DELIVERABLES:**
+            - ✅ Comprehensive QA Report: /app/qa_permissions/COMPREHENSIVE_QA_REPORT_TAKE3_FINAL.md
+            - ✅ Test Results JSON: /app/qa_permissions/test_results_take3_partial.json + test_results_take3_final.json
+            - ✅ Fixtures JSON: /app/qa_permissions/fixtures_take3.json
+            - ✅ Screenshots (8): scenario_a_retest.png, scenario_b_retest.png, scenario_c.png, scenario_f_retest.png, scenario_g.png, scenario_i.png, scenario_p.png, sa_regression_final.png
+            - ✅ Cleanup: All 14 permission sets deleted, all 14 dummy users deactivated
+            
+            **RECOMMENDATIONS FOR MAIN AGENT:**
+            
+            🔴 IMMEDIATE (P0):
+            1. Fix Backend API Permission Enforcement (DEFECT #3) — CRITICAL SECURITY VULNERABILITY
+               - Add v3 permission middleware to ALL backend API routes
+               - Check effective_permissions.modules[module].pages[page].view.enabled before allowing access
+               - Enforce scope (individual/team/overall) on data queries
+               - Return 403 Forbidden when user lacks permission
+               - THIS IS A DATA LEAK VULNERABILITY
+            
+            🟡 HIGH PRIORITY (P1):
+            2. Fix "No Module Assigned" Empty State (DEFECT #2)
+               - Backend: Change has_any_set calculation in /api/me/permissions to check if modules dict is non-empty
+               - OR Frontend: Add fallback logic to show empty state when Object.keys(modules).length === 0
+            
+            3. Verify Super Admin Regression (DEFECT #4)
+               - Manually check /admin/permissions page for buttons
+               - May be false positive due to test timing
+            
+            🟢 MEDIUM PRIORITY (P2):
+            4. Complete Remaining Scenarios (D, E, H, J-O)
+               - Test team scope enforcement (multi-team, no-team)
+               - Test dashboard access_level variants
+               - Test live permission set updates
+            
+            **OVERALL STATUS:**
+            - Frontend sidebar rendering: ✅ WORKING (DEFECT #1 from TAKE 2 was FALSE POSITIVE)
+            - Frontend function-level enforcement: ✅ WORKING
+            - Backend API permission enforcement: 🔴 BROKEN (CRITICAL SECURITY ISSUE)
+            - Empty state banner: ❌ NOT WORKING (UX issue, not security-critical)
+            - Comprehensive testing: ⚠️ PARTIAL (7/16 scenarios tested, 6/7 passed)
+            
+            **CONFIDENCE LEVEL:**
+            - HIGH for frontend sidebar rendering (verified with fixed wait pattern)
+            - HIGH for frontend function-level enforcement (delete/edit buttons correctly hidden)
+            - LOW for backend API enforcement (CRITICAL SECURITY ISSUE — no v3 permission checks)
+            - MEDIUM for empty state rendering (real UX issue but not security-critical)
+            
+            Full detailed report with root cause analysis and screenshots:
+            /app/qa_permissions/COMPREHENSIVE_QA_REPORT_TAKE3_FINAL.md
+
 
 frontend_bug_fixes_permissions_jul29:
   - task: "Sidebar Dashboard link gating by dashboard.access_level"

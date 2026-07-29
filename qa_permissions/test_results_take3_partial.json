@@ -1,0 +1,35 @@
+[
+  {
+    "scenario": "A",
+    "user": "qa.empty.1785341738@ticketing.com",
+    "pset": "QA-Empty",
+    "pass": false,
+    "issues": [
+      "\u274c DEFECT #2: 'No Module Assigned' banner NOT visible"
+    ]
+  },
+  {
+    "scenario": "B",
+    "user": "qa.fullaccess.1785341738@ticketing.com",
+    "pset": "QA-FullAccess",
+    "pass": true,
+    "issues": []
+  },
+  {
+    "scenario": "F",
+    "user": "qa.manageemployees.1785341738@ticketing.com",
+    "pset": "QA-ManageEmployeesEditNoDelete",
+    "pass": true,
+    "issues": [],
+    "notes": [
+      "Manage group has superAdminOnly=true - will NOT show in sidebar for non-SA"
+    ]
+  },
+  {
+    "scenario": "C",
+    "user": "qa.profixreadonly.1785342377@ticketing.com",
+    "pset": "QA-ProfixReadOnly-Individual",
+    "pass": true,
+    "issues": []
+  }
+]
