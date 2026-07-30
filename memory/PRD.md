@@ -1,6 +1,13 @@
 # Infollion Utilities — PRD
 
 
+## Employees Activation / Deactivation + 24h Session (Jul 30 2026)
+- **Manage → Employees confirmation dialog**: the row-level status Switch on `/admin/contacts` now opens a confirmation modal ("Are you sure you want to activate/deactivate user {Employee Name}?") before hitting `PATCH /contacts/{id}`. Yes triggers the API call, No cancels. Deactivate path uses a red confirm button + hint "A deactivated user will not be able to log in."; Activate path uses the brand orange.
+- **Deactivated login block**: `POST /api/auth/login` and `POST /api/auth/google-session` return **HTTP 403 `{"detail":"User profile Deactivated"}`** when `contacts.status != "Active"`. The frontend surfaces the string verbatim (toast + inline `error`).
+- **24-hour session timer**: JWT `exp` bumped from 12h → 24h in `core.create_access_token`; both auth cookies use `max_age=86400`. Frontend `AuthContext` decodes `exp` from the token and schedules a `setTimeout` for auto-logout at expiry; the axios response interceptor also catches 401 `Token expired` defensively. On expiry the user is bounced to `/login?session_expired=1` where `LoginPage` shows a `notify.info("Your session has expired. Please log in again.")` toast and strips the query param.
+- **Env**: recreated `/app/backend/.env` and `/app/frontend/.env` on this container. Backend now points at the user-provided Atlas cluster (`cluster0.vmgql1i.mongodb.net`, `DB_NAME=app_db`, user `sakshamsinghal_db_user`). Regenerated `JWT_SECRET` + `FERNET_KEY`. Login verified for `admin@ticketing.com / Admin@123`.
+
+
 ## IST Timezone Standardisation (Jul 2025) — app-wide
 - **Backend**: added `IST` / `ist_now` / `ist_now_iso` / `ist_today` helpers to `core.py`. Rewrote `now_iso()` (used ~141 times) to return IST-tagged (+05:30) ISO strings. Duplicated the helper in `notifications.py` and `inapp_notifications.py`. Fixed direct callers of naive `datetime.now()` / `datetime.utcnow()` / `date.today()` across Workspace Manager (my_workspace, room_bookings, bookings, workstation_*), ProfiX (tickets, contacts), auth (password-reset expiry) and approval_settings. JWT `exp` also on IST-aware datetime.
 - **Frontend**: new `src/lib/dateIST.js` with `formatISTDateTime`, `formatISTDate`, `istTodayISO`, etc. Batch-patched every `.toLocaleString / .toLocaleDateString / .toLocaleTimeString` call to include `timeZone: "Asia/Kolkata"` (37 files, 69 sites) via `scripts/inject_ist_timezone.py` (idempotent). Fixed the org-wide dashboard's "today" bug (was using `Date.toISOString().slice(0,10)` = UTC). Date pickers intentionally kept browser-local per spec.

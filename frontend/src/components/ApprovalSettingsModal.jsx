@@ -21,6 +21,7 @@ import Info from "@mui/icons-material/InfoOutlined";
 import Settings from "@mui/icons-material/SettingsOutlined";
 import CalendarIcon from "@mui/icons-material/CalendarTodayOutlined";
 import Clock from "@mui/icons-material/AccessTime";
+import Timer from "@mui/icons-material/HourglassBottomOutlined";
 import api from "../lib/api";
 import notify from "../lib/notify";
 import { Calendar } from "./ui/calendar";
@@ -41,18 +42,24 @@ const BOOL_CRITERIA = [
 
 // Configurable criteria (gear cells)
 const CONFIG_CRITERIA = [
-  { key: "date", label: "Date", icon: CalendarIcon },
-  { key: "time", label: "Time", icon: Clock },
+  { key: "date",     label: "Date",     icon: CalendarIcon },
+  { key: "time",     label: "Time",     icon: Clock },
+  { key: "duration", label: "Duration", icon: Timer,
+    // Duration rule only applies to time-bounded resources (meeting rooms).
+    // For workstations we render a disabled placeholder cell.
+    resources: ["meeting_room"] },
 ];
 
 const EMPTY_DATE = () => ({ enabled: false, mode: "on", from: null, to: null });
 const EMPTY_TIME = () => ({ enabled: false, operator: "on", from: null, to: null });
+const EMPTY_DURATION = () => ({ enabled: false, value: 30, unit: "min" }); // value ∈ 1..60, unit ∈ min|hour
 
 const emptyRow = () => ({
   team_member: false,
   manager: false,
   date: EMPTY_DATE(),
   time: EMPTY_TIME(),
+  duration: EMPTY_DURATION(),
 });
 
 const emptyMatrix = () =>
@@ -85,6 +92,18 @@ function summarizeTime(rule) {
   if (rule.operator === "between") return f ? (t ? `${f}–${t}` : `From ${f}`) : "";
   return "";
 }
+function summarizeDuration(rule) {
+  if (!rule || !rule.enabled || !rule.value) return "";
+  const v = Number(rule.value) || 0;
+  const unit = rule.unit === "hour" ? (v === 1 ? "hour" : "hours") : (v === 1 ? "min" : "mins");
+  return `≤ ${v} ${unit}`;
+}
+// Duration in minutes (used for summary sub-line and any downstream logic).
+function durationToMinutes(rule) {
+  if (!rule || !rule.value) return 0;
+  const v = Number(rule.value) || 0;
+  return rule.unit === "hour" ? v * 60 : v;
+}
 
 // ---------- Sub-dialog: Date rule ----------
 function DateRuleDialog({ open, onOpenChange, resourceLabel, value, onSave }) {
@@ -101,7 +120,10 @@ function DateRuleDialog({ open, onOpenChange, resourceLabel, value, onSave }) {
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl p-0 overflow-hidden" data-testid="approval-date-rule-dialog">
+      <DialogContent
+        className="max-w-3xl p-0 overflow-hidden z-[1000]"
+        overlayClassName="z-[1000]"
+        data-testid="approval-date-rule-dialog">
         <div className="px-6 pt-5 pb-3 border-b border-gray-100">
           <h4 className="text-base font-semibold text-gray-900">Auto-Approve by Date — {resourceLabel}</h4>
           <p className="text-xs text-gray-500 mt-0.5">Requests whose booking date matches this rule will be auto-approved.</p>
@@ -168,7 +190,10 @@ function TimeRuleDialog({ open, onOpenChange, resourceLabel, value, onSave }) {
   const op = draft.operator || "on";
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg p-0 overflow-hidden" data-testid="approval-time-rule-dialog">
+      <DialogContent
+        className="max-w-lg p-0 overflow-hidden z-[1000]"
+        overlayClassName="z-[1000]"
+        data-testid="approval-time-rule-dialog">
         <div className="px-6 pt-5 pb-3 border-b border-gray-100">
           <h4 className="text-base font-semibold text-gray-900">Auto-Approve by Time — {resourceLabel}</h4>
           <p className="text-xs text-gray-500 mt-0.5">Requests whose booking time (or submission time for workstations) matches will be auto-approved.</p>
@@ -243,6 +268,78 @@ function TimeRuleDialog({ open, onOpenChange, resourceLabel, value, onSave }) {
   );
 }
 
+// ---------- Sub-dialog: Duration rule ----------
+// Value 1..60 and unit min/hour. Any meeting whose scheduled length is <=
+// the configured duration will be auto-approved. E.g. value=30 unit=min →
+// meetings up to 30 minutes long are auto-approved.
+function DurationRuleDialog({ open, onOpenChange, resourceLabel, value, onSave }) {
+  const [draft, setDraft] = useState(value || EMPTY_DURATION());
+  useEffect(() => { if (open) setDraft(value || EMPTY_DURATION()); }, [open, value]);
+  const numOptions = useMemo(() => Array.from({ length: 60 }, (_, i) => i + 1), []);
+  const totalMin = durationToMinutes(draft);
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="max-w-md p-0 overflow-hidden z-[1000]"
+        overlayClassName="z-[1000]"
+        data-testid="approval-duration-rule-dialog">
+        <div className="px-6 pt-5 pb-3 border-b border-gray-100">
+          <h4 className="text-base font-semibold text-gray-900">Auto-Approve by Duration — {resourceLabel}</h4>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Any meeting whose scheduled length is <b>less than or equal to</b> the value below
+            will be auto-approved.
+          </p>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-xs font-medium text-gray-600">Value</span>
+              <select
+                value={draft.value}
+                onChange={(e) => setDraft({ ...draft, value: Number(e.target.value) })}
+                className="mt-1 w-full h-10 rounded-md border border-gray-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]"
+                data-testid="approval-duration-value"
+              >
+                {numOptions.map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium text-gray-600">Unit</span>
+              <select
+                value={draft.unit}
+                onChange={(e) => setDraft({ ...draft, unit: e.target.value })}
+                className="mt-1 w-full h-10 rounded-md border border-gray-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]"
+                data-testid="approval-duration-unit"
+              >
+                <option value="min">Minutes</option>
+                <option value="hour">Hours</option>
+              </select>
+            </label>
+          </div>
+          <div className="text-xs text-gray-500 bg-amber-50 border border-amber-100 rounded-md p-3">
+            <span className="font-medium text-amber-800">Preview:</span> Meetings up to{" "}
+            <b>{draft.value} {draft.unit === "hour" ? (draft.value === 1 ? "hour" : "hours") : (draft.value === 1 ? "minute" : "minutes")}</b>
+            {" "}({totalMin} min) will be auto-approved.
+          </div>
+        </div>
+        <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100 bg-gray-50/60">
+          <Button variant="outline" onClick={() => { onSave(EMPTY_DURATION()); onOpenChange(false); }}
+            data-testid="approval-duration-clear" className="rounded-md">Clear rule</Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-md">Cancel</Button>
+            <Button
+              onClick={() => { onSave({ ...draft, enabled: !!draft.value }); onOpenChange(false); }}
+              data-testid="approval-duration-save"
+              className="bg-[#ec9324] hover:bg-[#d4811f] text-white rounded-md">Save</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ---------- Main Modal ----------
 export default function ApprovalSettingsModal({ open, onClose, initial, onSaved }) {
   const [enabled, setEnabled] = useState(false);
@@ -263,6 +360,7 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
         manager: !!src.manager,
         date: { ...EMPTY_DATE(), ...(src.date || {}) },
         time: { ...EMPTY_TIME(), ...(src.time || {}) },
+        duration: { ...EMPTY_DURATION(), ...(src.duration || {}) },
       };
     }
     setMatrix(merged);
@@ -276,21 +374,28 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
 
   const columnAllChecked = (res) => {
     const row = matrix[res] || {};
+    // Duration only applies to meeting_room; ignore it for workstation totals.
+    const durationRelevant = res === "meeting_room";
     return (
       BOOL_CRITERIA.every((c) => row[c.key]) &&
-      !!row.date?.enabled && !!row.time?.enabled
+      !!row.date?.enabled && !!row.time?.enabled &&
+      (!durationRelevant || !!row.duration?.enabled)
     );
   };
   const toggleColumnAll = (res) => {
     const next = !columnAllChecked(res);
+    const durationRelevant = res === "meeting_room";
     setMatrix((m) => ({
       ...m,
       [res]: {
         team_member: next,
         manager: next,
-        // For date/time we only toggle the enabled flag (values preserved)
+        // For date/time/duration we only toggle the enabled flag (values preserved)
         date: { ...(m[res].date || EMPTY_DATE()), enabled: next && !!m[res].date?.from },
         time: { ...(m[res].time || EMPTY_TIME()), enabled: next && !!m[res].time?.from },
+        duration: durationRelevant
+          ? { ...(m[res].duration || EMPTY_DURATION()), enabled: next && !!m[res].duration?.value }
+          : (m[res].duration || EMPTY_DURATION()),
       },
     }));
   };
@@ -301,11 +406,15 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
     const nxt = {};
     for (const r of RESOURCES) {
       const row = matrix[r.key] || emptyRow();
+      const durationRelevant = r.key === "meeting_room";
       nxt[r.key] = {
         team_member: next,
         manager: next,
         date: { ...(row.date || EMPTY_DATE()), enabled: next && !!row.date?.from },
         time: { ...(row.time || EMPTY_TIME()), enabled: next && !!row.time?.from },
+        duration: durationRelevant
+          ? { ...(row.duration || EMPTY_DURATION()), enabled: next && !!row.duration?.value }
+          : (row.duration || EMPTY_DURATION()),
       };
     }
     setMatrix(nxt);
@@ -324,6 +433,7 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
           manager: !!src.manager,
           date: { ...EMPTY_DATE(), ...(src.date || {}) },
           time: { ...EMPTY_TIME(), ...(src.time || {}) },
+          duration: { ...EMPTY_DURATION(), ...(src.duration || {}) },
         };
       }
       setMatrix(merged);
@@ -456,7 +566,7 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
                     ))}
                   </tr>
                 ))}
-                {/* Configurable criteria rows (Date, Time) */}
+                {/* Configurable criteria rows (Date, Time, Duration) */}
                 {CONFIG_CRITERIA.map((c, ci) => {
                   const stripeIdx = BOOL_CRITERIA.length + ci;
                   const Icon = c.icon;
@@ -464,14 +574,36 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
                     <tr key={c.key} className={stripeIdx % 2 ? "bg-white" : "bg-gray-50/40"}>
                       <td className="px-3 py-3">
                         <div className="font-medium text-gray-900 text-sm inline-flex items-center gap-1.5">
-                          <Icon size={13} className="text-gray-500" />
+                          <Icon sx={{ fontSize: 13 }} className="text-gray-500" />
                           {c.label}
                         </div>
                       </td>
                       {RESOURCES.map((r) => {
                         const rule = matrix[r.key]?.[c.key];
-                        const summary = c.key === "date" ? summarizeDate(rule) : summarizeTime(rule);
+                        const applies = !c.resources || c.resources.includes(r.key);
+                        const summary = !applies
+                          ? ""
+                          : c.key === "date"
+                            ? summarizeDate(rule)
+                            : c.key === "time"
+                              ? summarizeTime(rule)
+                              : summarizeDuration(rule);
                         const configured = !!summary;
+                        // Render disabled placeholder for criteria that don't apply
+                        // to this resource (e.g. Duration for Workstation).
+                        if (!applies) {
+                          return (
+                            <td key={r.key} className="text-center px-3 py-3 align-middle">
+                              <span
+                                className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-dashed border-gray-200 text-gray-300 cursor-not-allowed"
+                                title={`${c.label} is not applicable to ${r.label}`}
+                                data-testid={`settings-cell-${r.key}-${c.key}-na`}
+                              >
+                                —
+                              </span>
+                            </td>
+                          );
+                        }
                         return (
                           <td key={r.key} className="text-center px-3 py-3 align-middle">
                             <div className="inline-flex items-center gap-1.5">
@@ -576,6 +708,17 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
           value={editingValue}
           onSave={(next) => {
             setMatrix((m) => ({ ...m, [editingRule.resource]: { ...m[editingRule.resource], time: next } }));
+          }}
+        />
+      )}
+      {editingRule?.criterion === "duration" && (
+        <DurationRuleDialog
+          open={true}
+          onOpenChange={(v) => { if (!v) setEditingRule(null); }}
+          resourceLabel={editingResource?.label || ""}
+          value={editingValue}
+          onSave={(next) => {
+            setMatrix((m) => ({ ...m, [editingRule.resource]: { ...m[editingRule.resource], duration: next } }));
           }}
         />
       )}

@@ -69,12 +69,22 @@ def _empty_time_rule() -> dict:
     return {"enabled": False, "operator": "on", "from": None, "to": None}
 
 
+def _empty_duration_rule() -> dict:
+    # Auto-approve any meeting whose scheduled length is <= value (converted
+    # to minutes using unit). Applies to meeting_room; ignored elsewhere.
+    return {"enabled": False, "value": 30, "unit": "min"}
+
+
+DURATION_UNITS = ("min", "hour")
+
+
 def _default_row() -> dict:
     return {
         "team_member": False,
         "manager": False,
         "date": _empty_date_rule(),
         "time": _empty_time_rule(),
+        "duration": _empty_duration_rule(),
     }
 
 
@@ -120,6 +130,37 @@ def _sanitize_time_rule(v: Any) -> dict:
     return out
 
 
+def _sanitize_duration_rule(v: Any) -> dict:
+    out = _empty_duration_rule()
+    if not isinstance(v, dict):
+        return out
+    out["enabled"] = bool(v.get("enabled"))
+    try:
+        raw_val = int(v.get("value") or 0)
+    except Exception:
+        raw_val = 0
+    # Clamp to 1..60 (UI dropdown range). 0/negative falls back to the default 30.
+    if raw_val <= 0:
+        raw_val = 30
+    out["value"] = max(1, min(60, raw_val))
+    unit = str(v.get("unit") or "min").lower()
+    out["unit"] = unit if unit in DURATION_UNITS else "min"
+    return out
+
+
+def _duration_rule_minutes(rule: Optional[dict]) -> int:
+    """Convert a duration rule into total minutes (value × unit)."""
+    if not rule:
+        return 0
+    try:
+        v = int(rule.get("value") or 0)
+    except Exception:
+        v = 0
+    if v <= 0:
+        return 0
+    return v * 60 if (rule.get("unit") == "hour") else v
+
+
 def _sanitize(matrix: Any) -> dict:
     """Return a matrix dict guaranteed to have every resource + criterion cell."""
     clean = _default_matrix()
@@ -133,6 +174,7 @@ def _sanitize(matrix: Any) -> dict:
             clean[r][c] = bool(row.get(c))
         clean[r]["date"] = _sanitize_date_rule(row.get("date"))
         clean[r]["time"] = _sanitize_time_rule(row.get("time"))
+        clean[r]["duration"] = _sanitize_duration_rule(row.get("duration"))
     return clean
 
 
@@ -237,6 +279,10 @@ async def update_approval_settings(
                 # time rule
                 if "time" in incoming:
                     merged[r]["time"] = _sanitize_time_rule(incoming.get("time"))
+                # duration rule (meeting_room only, but we still persist any
+                # incoming value on other resources so admins don't lose it).
+                if "duration" in incoming:
+                    merged[r]["duration"] = _sanitize_duration_rule(incoming.get("duration"))
         new_doc["matrix"] = merged
 
     actor = {"id": user.get("id"), "email": user.get("email"), "name": user.get("name")}
@@ -341,6 +387,25 @@ def matches_time_rule(rule: dict, booking_time: Optional[str]) -> bool:
     return False
 
 
+def matches_duration_rule(rule: dict, booking_duration_minutes: Optional[int]) -> bool:
+    """Return True iff the meeting length is <= the configured duration
+    (converted to minutes). Disabled/unconfigured rules return False."""
+    if not rule or not rule.get("enabled"):
+        return False
+    if booking_duration_minutes is None:
+        return False
+    try:
+        dur = int(booking_duration_minutes)
+    except Exception:
+        return False
+    if dur <= 0:
+        return False
+    threshold = _duration_rule_minutes(rule)
+    if threshold <= 0:
+        return False
+    return dur <= threshold
+
+
 async def should_auto_approve_workstation(
     submitter: dict,
     is_recurring: bool = False,  # kept for signature compat; unused
@@ -356,6 +421,7 @@ async def should_auto_approve_workstation(
         submitter, "workstation",
         booking_date=booking_date,
         booking_time=booking_time,
+        booking_duration_minutes=None,
     )
 
 
@@ -363,17 +429,21 @@ async def should_auto_approve_meeting_room(
     submitter: dict,
     booking_date: Optional[str] = None,
     booking_time: Optional[str] = None,
+    booking_duration_minutes: Optional[int] = None,
 ) -> bool:
     """Return True if the meeting-room request should be auto-approved.
 
     Uses the `meeting_room` cell of the approval-settings matrix. Same OR
-    semantics as workstation: team-member / manager / date / time — any
-    matching enabled cell triggers auto-approval.
+    semantics as workstation: team-member / manager / date / time /
+    duration — any matching enabled cell triggers auto-approval. The
+    duration rule matches when the meeting's scheduled length is <= the
+    configured value.
     """
     return await _match_matrix_row(
         submitter, "meeting_room",
         booking_date=booking_date,
         booking_time=booking_time,
+        booking_duration_minutes=booking_duration_minutes,
     )
 
 
@@ -382,6 +452,7 @@ async def _match_matrix_row(
     resource: str,
     booking_date: Optional[str],
     booking_time: Optional[str],
+    booking_duration_minutes: Optional[int] = None,
 ) -> bool:
     """Shared logic for workstation + meeting-room auto-approval."""
     settings = await get_settings()
@@ -404,5 +475,11 @@ async def _match_matrix_row(
         time_of_day = f"{now.hour:02d}:{now.minute:02d}"
     if matches_time_rule(row.get("time") or {}, time_of_day):
         return True
+
+    # Duration rule only applies to meeting rooms and requires a caller-
+    # provided duration (workstation requests don't have a meeting length).
+    if resource == "meeting_room" and booking_duration_minutes is not None:
+        if matches_duration_rule(row.get("duration") or {}, booking_duration_minutes):
+            return True
 
     return False

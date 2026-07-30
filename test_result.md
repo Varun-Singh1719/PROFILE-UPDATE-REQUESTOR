@@ -825,9 +825,93 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Employees activate/deactivate confirmation + deactivated login block + 24h session timer (Jul 30 2026)"
+    - "Auto-Approval — Date/Time dialog z-index fix + new Duration criterion (Jul 30 2026)"
   stuck_tasks: []
   test_all: false
+
+auto_approval_duration_jul2026:
+  - task: "ApprovalSettingsModal — Date/Time/Duration sub-dialog z-index fix"
+    implemented: true
+    working: true
+    file: "frontend/src/components/ApprovalSettingsModal.jsx, frontend/src/components/ui/dialog.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: |
+            BUG: The Date and Time gear sub-dialogs were rendering BEHIND the
+            parent Approval Configuration modal because the parent uses
+            z-[999] while Radix Dialog defaults to z-50 on both its Overlay
+            and Content.
+            FIX:
+              • Added `overlayClassName` prop to DialogContent
+                (frontend/src/components/ui/dialog.jsx) so callers can pass a
+                z-index override to the DialogOverlay too.
+              • DateRuleDialog + TimeRuleDialog (+ new DurationRuleDialog) all
+                pass `className="... z-[1000]"` + `overlayClassName="z-[1000]"`
+                so both layers sit above the parent modal.
+            Verified via playwright: dialog z-index computed → 1000, visible
+            on top of the settings matrix.
+
+  - task: "ApprovalSettingsModal — new Duration criterion (frontend)"
+    implemented: true
+    working: true
+    file: "frontend/src/components/ApprovalSettingsModal.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: |
+            Added a "Duration" row to the auto-approval matrix.
+              • Workstation column renders a dashed "—" placeholder because
+                the Duration rule only applies to time-bounded resources.
+              • Meeting Room column shows the gear button + summary chip.
+            DurationRuleDialog (new sub-component):
+              • Value dropdown 1..60 + Unit dropdown Minutes / Hours.
+              • Live preview banner: "Meetings up to N minutes (X min)
+                will be auto-approved."
+              • Save persists `{ enabled, value, unit }` under
+                matrix.meeting_room.duration.
+            columnAllChecked / toggleColumnAll / toggleAll updated to include
+            duration for the meeting_room column so the "Select all" tri-state
+            reflects the new row.
+            Verified via playwright screenshots.
+
+  - task: "Backend — duration rule in approval_settings + meeting-room evaluator"
+    implemented: true
+    working: true
+    file: "backend/routers/approval_settings.py, backend/routers/meeting_room_requests.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: |
+            • Added `_empty_duration_rule()` returning
+              {enabled:False, value:30, unit:"min"}.
+            • Added `_sanitize_duration_rule()` — clamps value to 1..60 and
+              validates unit ∈ {min, hour}.
+            • Extended `_default_row` / `_sanitize` / PUT merge logic to
+              include the new field.
+            • New helper `matches_duration_rule(rule, minutes)` — True iff
+              the meeting length ≤ threshold (converted to minutes).
+            • `_match_matrix_row` now accepts `booking_duration_minutes` and
+              evaluates the duration rule only for the meeting_room resource.
+            • `should_auto_approve_meeting_room` gains a
+              `booking_duration_minutes` kwarg.
+            • `meeting_room_requests.create_meeting_room_request` computes
+              per-occurrence duration = (end − start).total_seconds()//60
+              and forwards it to the evaluator.
+            Verified via curl round-trip:
+              GET /approval-settings   → meeting_room.duration serialized.
+              PUT /approval-settings   → {enabled:True, value:45, unit:"min"}
+                                          persisted correctly.
+              POST /approval-settings/reset → duration reset to defaults.
 
 employees_activation_and_session_jul2026:
   - task: "Employees — Activate/Deactivate confirmation dialog"

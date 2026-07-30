@@ -438,6 +438,15 @@ async def create_meeting_room_request(
         booking_time = f"{start.hour:02d}:{start.minute:02d}"
     except Exception:
         pass
+    # Duration (minutes) is used by the "Duration" auto-approval rule — any
+    # meeting whose scheduled length is <= the configured value is auto-
+    # approved. When multiple recurring occurrences are booked at once, the
+    # per-occurrence length is what matters (not the total series length).
+    booking_duration_minutes: int | None = None
+    try:
+        booking_duration_minutes = max(0, int((end - start).total_seconds() // 60))
+    except Exception:
+        pass
     auto_approved_bookings: List[dict] = []
     try:
         from routers.approval_settings import should_auto_approve_meeting_room
@@ -445,6 +454,7 @@ async def create_meeting_room_request(
             actor,
             booking_date=start.date().isoformat(),
             booking_time=booking_time,
+            booking_duration_minutes=booking_duration_minutes,
         ):
             for req in inserted:
                 try:
