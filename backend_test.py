@@ -25,7 +25,7 @@ from datetime import datetime, timedelta, date as date_cls
 from typing import Dict, Any, List, Optional
 
 # Backend URL
-BASE_URL = "https://emp-status-toggle.preview.emergentagent.com/api"
+BASE_URL = "https://metrics-calc-config.preview.emergentagent.com/api"
 
 # Test credentials
 SUPER_ADMIN = {"email": "admin@ticketing.com", "password": "Admin@123"}
