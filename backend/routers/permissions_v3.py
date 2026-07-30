@@ -87,6 +87,12 @@ def _merge_max_editable_status(a: Optional[str], b: Optional[str]) -> Optional[s
 _DASHBOARD_ACCESS_RANK = {None: 0, "individual": 1, "manager": 2, "overall": 3}
 _DASHBOARD_ACCESS_VALUES = ("individual", "manager", "overall")
 
+# Dashboard metrics-based-on precedence (Jul 2026, ProfiX-only). When merging
+# multiple assigned permission sets, "assigned_to" wins over "created_by",
+# which wins over None. Only meaningful for the `profix` dashboard page.
+_DASHBOARD_METRICS_RANK = {None: 0, "created_by": 1, "assigned_to": 2}
+_DASHBOARD_METRICS_VALUES = ("created_by", "assigned_to")
+
 
 def _sanitize_access_level(v: Any) -> Optional[str]:
     if v in _DASHBOARD_ACCESS_VALUES:
@@ -98,6 +104,18 @@ def _merge_access_level(a: Optional[str], b: Optional[str]) -> Optional[str]:
     """Pick the higher-ranked dashboard access level."""
     ra = _DASHBOARD_ACCESS_RANK.get(a, 0)
     rb = _DASHBOARD_ACCESS_RANK.get(b, 0)
+    return a if ra >= rb else b
+
+
+def _sanitize_metrics_based_on(v: Any) -> Optional[str]:
+    if v in _DASHBOARD_METRICS_VALUES:
+        return v
+    return None
+
+
+def _merge_metrics_based_on(a: Optional[str], b: Optional[str]) -> Optional[str]:
+    ra = _DASHBOARD_METRICS_RANK.get(a, 0)
+    rb = _DASHBOARD_METRICS_RANK.get(b, 0)
     return a if ra >= rb else b
 
 
@@ -142,6 +160,14 @@ def _merge_modules(target: Dict[str, dict], src: Dict[str, dict]) -> None:
                 t_page["access_level"] = _merge_access_level(
                     t_page.get("access_level"), incoming
                 )
+                # ProfiX-only: merge the "metrics_based_on" configurable.
+                if pkey == "profix":
+                    incoming_metrics = _sanitize_metrics_based_on(
+                        (pdata or {}).get("metrics_based_on")
+                    )
+                    t_page["metrics_based_on"] = _merge_metrics_based_on(
+                        t_page.get("metrics_based_on"), incoming_metrics
+                    )
                 continue
             # Everything else — merge the {view, edit, functions} triples
             t_page = t_pages.setdefault(pkey, {"view": {}, "edit": {}, "functions": {}})
@@ -259,7 +285,12 @@ def _normalize_v3_modules(modules: Any) -> Dict[str, dict]:
                     continue
                 pdata = pdata if isinstance(pdata, dict) else {}
                 lvl = _sanitize_access_level(pdata.get("access_level"))
-                pages_out[pkey] = {"access_level": lvl}
+                page_entry: Dict[str, Any] = {"access_level": lvl}
+                # ProfiX-only: persist Super-Admin's Dashboard-Metrics-Based-On choice.
+                if pkey == "profix":
+                    metrics = _sanitize_metrics_based_on(pdata.get("metrics_based_on"))
+                    page_entry["metrics_based_on"] = metrics
+                pages_out[pkey] = page_entry
             if pages_out:
                 out[mkey] = {"pages": pages_out}
             continue
@@ -1040,6 +1071,52 @@ async def has_v3_page_view(user: dict, mkey: str, pkey: str) -> bool:
     """
     entry = await get_v3_page_view(user, mkey, pkey)
     return bool(entry and entry.get("enabled") and entry.get("visible"))
+
+
+async def get_profix_dashboard_config(user: dict) -> dict:
+    """Return the effective ProfiX Dashboard config for `user`.
+
+    Response:
+        {
+          "access_level": "individual" | "manager" | "overall" | None,
+          "metrics_based_on": "created_by" | "assigned_to",
+        }
+
+    Rules:
+      • Super Admin → access_level="overall", metrics_based_on defaults to
+        "created_by" unless overridden by an assigned permission set.
+      • Otherwise → OR-union across assigned Permission Sets (matches
+        `my_effective_permissions`). `metrics_based_on` defaults to
+        "created_by" when nothing is configured.
+    """
+    default_metric = "created_by"
+    is_super = user.get("role") == "Super Admin"
+
+    set_ids: List[str] = list(user.get("permission_set_ids") or [])
+    if not set_ids:
+        # No sets → permissive fallback. Super Admin gets overall, others None.
+        return {
+            "access_level": "overall" if is_super else None,
+            "metrics_based_on": default_metric,
+        }
+
+    docs = await db.permission_sets.find(
+        {"id": {"$in": set_ids}, "deleted_at": {"$in": [None]}}, {"_id": 0}
+    ).to_list(500)
+    merged: Dict[str, dict] = {}
+    for doc in docs:
+        modules = doc.get("modules") or {}
+        if doc.get("version") != 3:
+            migrated = _migrate_legacy_to_v3(doc)
+            modules = migrated.get("modules") or {}
+        else:
+            modules = _normalize_v3_modules(modules)
+        _merge_modules(merged, modules)
+
+    dash_profix = (((merged.get("dashboard") or {}).get("pages") or {}).get("profix")) or {}
+    access = dash_profix.get("access_level") or ("overall" if is_super else None)
+    metric = _sanitize_metrics_based_on(dash_profix.get("metrics_based_on")) or default_metric
+    return {"access_level": access, "metrics_based_on": metric}
 
 
 # --------------------------------------------------------------------------- #

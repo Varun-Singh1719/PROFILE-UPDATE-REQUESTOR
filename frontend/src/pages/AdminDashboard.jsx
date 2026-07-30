@@ -49,7 +49,7 @@ function longDate(d = new Date()) {
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { ready: permsReady, getDashboardAccess } = useEffectivePermissionsState();
+  const { ready: permsReady, getDashboardAccess, getDashboardMetricsBasedOn } = useEffectivePermissionsState();
   const [activeTab, setActiveTab] = useState("workspace_manager");
   const [defaultTab, setDefaultTab] = useState("workspace_manager");
   const [prefsLoaded, setPrefsLoaded] = useState(false);
@@ -240,10 +240,12 @@ export default function AdminDashboard() {
   }
 
   // Profix tab — legacy stats dashboard with new compact header
+  const profixMetric = getDashboardMetricsBasedOn?.("profix") || "created_by";
   return (
     <ProfixDashboardBody
       navigate={navigate}
       headerActions={tabBar}
+      metricsBasedOn={profixMetric}
     />
   );
 }
@@ -264,7 +266,7 @@ function NoDashboardShared({ productLabel }) {
 }
 
 // ---------- Profix dashboard content ----------
-function ProfixDashboardBody({ navigate, headerActions }) {
+function ProfixDashboardBody({ navigate, headerActions, metricsBasedOn }) {
   const { user } = useAuth();
   const [stats, setStats] = useState({});
   const [dqs, setDqs] = useState([]);
@@ -274,7 +276,11 @@ function ProfixDashboardBody({ navigate, headerActions }) {
   const [loading, setLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
 
-  const params = useMemo(() => dateFilterToParams(dateFilter), [dateFilter]);
+  const params = useMemo(() => {
+    const p = dateFilterToParams(dateFilter);
+    if (metricsBasedOn) p.metrics_based_on = metricsBasedOn;
+    return p;
+  }, [dateFilter, metricsBasedOn]);
 
   useEffect(() => {
     let cancelled = false;
@@ -374,7 +380,7 @@ function ProfixDashboardBody({ navigate, headerActions }) {
             </div>
             <div className="mt-3 bg-gray-50 rounded-lg py-2.5 px-3"
               data-testid={`dq-profiles-assigned-${m.email}`}>
-              <div className="text-[11px] uppercase tracking-wide text-gray-500 font-medium mb-1.5">Profiles Assigned</div>
+              <div className="text-[11px] uppercase tracking-wide text-gray-500 font-medium mb-1.5">Profiles</div>
               <div className="grid grid-cols-2 gap-2 text-center">
                 <div>
                   <div className="text-base font-bold text-[#ec9324]">{m.open_profiles ?? 0}</div>

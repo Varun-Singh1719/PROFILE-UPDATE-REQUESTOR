@@ -85,7 +85,7 @@ export default function ManagerDashboard() {
               </div>
             </div>
             <div className="mt-3 bg-gray-50 rounded-lg py-2.5 px-3">
-              <div className="text-[11px] uppercase tracking-wide text-gray-500 font-medium mb-1.5">Profiles Assigned</div>
+              <div className="text-[11px] uppercase tracking-wide text-gray-500 font-medium mb-1.5">Profiles</div>
               <div className="grid grid-cols-2 gap-2 text-center">
                 <div>
                   <div className="text-base font-bold text-[#ec9324]">{m.open_profiles ?? 0}</div>

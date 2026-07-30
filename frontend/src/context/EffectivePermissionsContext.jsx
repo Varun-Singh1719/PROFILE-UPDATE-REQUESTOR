@@ -129,6 +129,21 @@ export function useEffectivePermissionsState() {
     const dash = (ctx.modules || {}).dashboard?.pages?.[product];
     return dash?.access_level || null;
   };
+  /** Returns the ProfiX dashboard "metrics_based_on" configuration.
+   *
+   * Values: "created_by" (default) | "assigned_to"
+   *
+   * Super Admin also honors any per-Permission-Set override (falls back to
+   * "created_by" when nothing configured). This drives the ticket-owner field
+   * used to compute ProfiX Dashboard cards + Team stats.
+   */
+  const getDashboardMetricsBasedOn = (product) => {
+    if (product !== "profix") return null;
+    const dash = (ctx.modules || {}).dashboard?.pages?.profix;
+    const v = dash?.metrics_based_on;
+    if (v === "created_by" || v === "assigned_to") return v;
+    return "created_by";
+  };
   // True when the caller has AT LEAST ONE effective (module, page) with
   // view.enabled+visible OR any dashboard access — used by Sidebar to
   // decide between rendering the "No Module Assigned" banner vs. an
@@ -147,7 +162,7 @@ export function useEffectivePermissionsState() {
     }
     return false;
   })();
-  return { ready, isPermissive, hasAnySet, hasAnyEffectivePermission, isSuperAdmin: !!ctx.is_super_admin, isPageViewVisible, getDashboardAccess, state: ctx };
+  return { ready, isPermissive, hasAnySet, hasAnyEffectivePermission, isSuperAdmin: !!ctx.is_super_admin, isPageViewVisible, getDashboardAccess, getDashboardMetricsBasedOn, state: ctx };
 }
 
 /**

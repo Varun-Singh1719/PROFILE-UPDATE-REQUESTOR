@@ -295,7 +295,24 @@ PERMISSION_MODULES_V3 = [
         ],
         "pages": [
             {"key": "workspace_manager", "label": "Workspace Manager", "route": "/admin", "type": "access_level"},
-            {"key": "profix",            "label": "Profix",            "route": "/admin", "type": "access_level"},
+            {
+                "key": "profix",
+                "label": "Profix",
+                "route": "/admin",
+                "type": "access_level",
+                # Extra Super-Admin-configurable field (Jul 2026):
+                # Controls which ticket-owner field the ProfiX dashboard uses
+                # when calculating card totals + team-section metrics.
+                "metrics_field": {
+                    "key": "metrics_based_on",
+                    "label": "Dashboard Metrics Based On",
+                    "default": "created_by",
+                    "options": [
+                        {"key": "created_by",  "label": "Created By"},
+                        {"key": "assigned_to", "label": "Assigned To"},
+                    ],
+                },
+            },
         ],
     },
     {

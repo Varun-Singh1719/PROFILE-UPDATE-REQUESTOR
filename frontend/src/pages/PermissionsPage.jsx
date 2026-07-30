@@ -59,10 +59,16 @@ const DASHBOARD_MODULE_KEY = "dashboard";
 const isDashboardModule = (mod) => mod?.type === "access_level" || mod?.key === DASHBOARD_MODULE_KEY;
 
 const emptyRW = () => ({ enabled: false, visible: true, scope: null });
-const emptyDashboardPageState = () => ({ access_level: null });
+const emptyDashboardPageState = (page) => {
+  // Dashboard pages carry a single access_level. The ProfiX page ALSO carries
+  // a Super-Admin-configurable "metrics_based_on" ("created_by" | "assigned_to").
+  const st = { access_level: null };
+  if (page?.key === "profix") st.metrics_based_on = null;
+  return st;
+};
 
 function emptyPageState(page, isDashboard = false) {
-  if (isDashboard) return emptyDashboardPageState();
+  if (isDashboard) return emptyDashboardPageState(page);
   const functions = {};
   for (const f of page.functions || []) functions[f.key] = emptyRW();
   return { view: emptyRW(), edit: emptyRW(), functions };
@@ -90,6 +96,10 @@ function mergeStateWithCatalog(catalog, incoming) {
       const dstP = base[m.key].pages[p.key];
       if (dash) {
         dstP.access_level = srcP.access_level || null;
+        if (p.key === "profix") {
+          const m = srcP.metrics_based_on;
+          dstP.metrics_based_on = (m === "created_by" || m === "assigned_to") ? m : null;
+        }
         continue;
       }
       dstP.view = { ...emptyRW(), ...(srcP.view || {}) };
@@ -332,8 +342,20 @@ function DashboardModuleCard({ mod, state, expanded, onToggle, onClear, Icon, up
     updateState((prev) => {
       const nm = { ...(prev[mod.key] || { pages: {} }) };
       const np = { ...(nm.pages || {}) };
-      const cur = np[pkey] || emptyDashboardPageState();
+      const cur = np[pkey] || emptyDashboardPageState({ key: pkey });
       np[pkey] = { ...cur, access_level: lvl };
+      return { ...prev, [mod.key]: { pages: np } };
+    });
+  };
+
+  // ProfiX-only: extra Super-Admin dropdown controlling which ticket-owner
+  // field the ProfiX dashboard uses (Created By / Assigned To).
+  const setPageMetric = (pkey, val) => {
+    updateState((prev) => {
+      const nm = { ...(prev[mod.key] || { pages: {} }) };
+      const np = { ...(nm.pages || {}) };
+      const cur = np[pkey] || emptyDashboardPageState({ key: pkey });
+      np[pkey] = { ...cur, metrics_based_on: val };
       return { ...prev, [mod.key]: { pages: np } };
     });
   };
@@ -374,6 +396,15 @@ function DashboardModuleCard({ mod, state, expanded, onToggle, onClear, Icon, up
           </div>
           {(mod.pages || []).map((page) => {
             const current = state.pages?.[page.key]?.access_level || null;
+            const currentMetric = state.pages?.[page.key]?.metrics_based_on || null;
+            const metricsField = page?.metrics_field || (page.key === "profix" ? {
+              key: "metrics_based_on",
+              label: "Dashboard Metrics Based On",
+              options: [
+                { key: "created_by",  label: "Created By" },
+                { key: "assigned_to", label: "Assigned To" },
+              ],
+            } : null);
             return (
               <div key={page.key} className="px-5 py-4" data-testid={`dashboard-product-${page.key}`}>
                 <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -385,9 +416,12 @@ function DashboardModuleCard({ mod, state, expanded, onToggle, onClear, Icon, up
                   </div>
                   <button
                     type="button"
-                    onClick={() => setPageLevel(page.key, null)}
-                    disabled={!current}
-                    className={`text-[11px] font-semibold px-2 py-1 rounded ${current ? "text-gray-600 hover:bg-gray-100" : "text-gray-300 cursor-default"}`}
+                    onClick={() => {
+                      setPageLevel(page.key, null);
+                      if (metricsField) setPageMetric(page.key, null);
+                    }}
+                    disabled={!current && !currentMetric}
+                    className={`text-[11px] font-semibold px-2 py-1 rounded ${(current || currentMetric) ? "text-gray-600 hover:bg-gray-100" : "text-gray-300 cursor-default"}`}
                     data-testid={`dashboard-clear-${page.key}`}
                   >
                     Clear
@@ -427,6 +461,34 @@ function DashboardModuleCard({ mod, state, expanded, onToggle, onClear, Icon, up
                     );
                   })}
                 </div>
+
+                {/* ProfiX-only: Dashboard Metrics Based On */}
+                {metricsField && (
+                  <div className="mt-4 pt-4 border-t border-dashed border-gray-200"
+                       data-testid={`dashboard-metrics-${page.key}`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-semibold text-gray-900">
+                          {metricsField.label}
+                        </div>
+                        <div className="text-[11px] text-gray-500 mt-0.5">
+                          Controls which ticket-owner field ProfiX dashboard cards + team metrics are calculated on.
+                        </div>
+                      </div>
+                      <div className="w-full sm:w-64">
+                        <SingleSelect
+                          options={(metricsField.options || []).map((o) => ({ value: o.key, label: o.label }))}
+                          value={currentMetric}
+                          onChange={(v) => setPageMetric(page.key, v || null)}
+                          placeholder="— select —"
+                          testId={`dashboard-metrics-select-${page.key}`}
+                          size="sm"
+                          allowClear
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -625,13 +687,27 @@ function computeDiff(catalog, before, after) {
       if (dash) {
         const bl = bp?.access_level || null;
         const al = ap?.access_level || null;
-        if (bl === al) continue;
-        rows.push({
-          module: m.label, page: p.label, kind: "access_level", label: "Access Level",
-          before: bl ? String(bl) : "—",
-          after:  al ? String(al) : "—",
-          change: !bl && al ? "added" : (bl && !al ? "removed" : "changed"),
-        });
+        if (bl !== al) {
+          rows.push({
+            module: m.label, page: p.label, kind: "access_level", label: "Access Level",
+            before: bl ? String(bl) : "—",
+            after:  al ? String(al) : "—",
+            change: !bl && al ? "added" : (bl && !al ? "removed" : "changed"),
+          });
+        }
+        // ProfiX-only: Dashboard Metrics Based On diff
+        if (p.key === "profix") {
+          const bm = bp?.metrics_based_on || null;
+          const am = ap?.metrics_based_on || null;
+          if (bm !== am) {
+            rows.push({
+              module: m.label, page: p.label, kind: "metrics_based_on", label: "Dashboard Metrics Based On",
+              before: bm ? String(bm) : "—",
+              after:  am ? String(am) : "—",
+              change: !bm && am ? "added" : (bm && !am ? "removed" : "changed"),
+            });
+          }
+        }
         continue;
       }
       for (const kind of ["view", "edit"]) {
@@ -1048,7 +1124,11 @@ export default function PermissionsPage() {
       // Dashboard module — set all products to "overall" (broadest)
       if (isDashboardModule(mod)) {
         const pages = {};
-        for (const p of mod.pages || []) pages[p.key] = { access_level: "overall" };
+        for (const p of mod.pages || []) {
+          const entry = { access_level: "overall" };
+          if (p.key === "profix") entry.metrics_based_on = "created_by";
+          pages[p.key] = entry;
+        }
         return { ...prev, [mkey]: { pages } };
       }
       const pages = {};
