@@ -825,12 +825,118 @@ metadata:
 
 test_plan:
   current_focus:
-    - "COMPREHENSIVE BACKEND QA — Auto-Approval module for Workstation + Meeting Room (Jul 30 2026)"
-    - "Every rule (team_member / manager / date on|before|after|between / time on|before|after|between / duration min|hour) individually + all combinations"
-    - "Full request lifecycle: pending → auto-approved / pending → manual; verify Booking, Audit, Notifications"
-    - "Regression: normal manual approval, bookings, dashboard, calendar, floor map, reports, audit, approval history APIs must be unaffected"
+    - "COMPREHENSIVE BACKEND QA — Auto-Approval module (COMPLETE — 0 bugs, ready for frontend QA)"
   stuck_tasks: []
-  test_all: true
+  test_all: false
+
+auto_approval_backend_qa_jul30_2026:
+  - task: "Auto-Approval — Approval Settings CRUD (GET/PUT/reset)"
+    implemented: true
+    working: true
+    file: "backend/routers/approval_settings.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "GET/PUT/reset all 200. Persists all 5 criteria across both resources. Duration sanitisation clamps 0→30, 100→60, -5→30, 'abc'→30, unit 'days'→'min'."
+
+  - task: "Auto-Approval — Requestor-type cells (team_member / manager)"
+    implemented: true
+    working: true
+    file: "backend/routers/approval_settings.py::is_manager, _match_matrix_row"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "Team-member cell approves is_manager=False users only; Manager cell approves is_manager=True users only. Cross-approval correctly blocked."
+
+  - task: "Auto-Approval — Date rule (on/before/after/between)"
+    implemented: true
+    working: true
+    file: "backend/routers/approval_settings.py::matches_date_rule"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "All 4 modes verified with matching + non-matching dates. Invalid ranges (from>to in between), enabled=false with values set, malformed date strings — all handled gracefully."
+
+  - task: "Auto-Approval — Time rule (on/before/after/between)"
+    implemented: true
+    working: true
+    file: "backend/routers/approval_settings.py::matches_time_rule"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "All 4 operators verified. Strict < and > semantics for before/after. Between with from>to auto-swaps lo/hi. Missing booking_time defaults to ist_now() with no crash."
+
+  - task: "Auto-Approval — Duration rule (meeting_room)"
+    implemented: true
+    working: true
+    file: "backend/routers/approval_settings.py::matches_duration_rule, meeting_room_requests.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "value:30 min → 30-min meeting approved, 31-min pending; value:1 hour → 60-min approved, 61-min pending; workstation ignores duration; per-occurrence evaluation on recurring."
+
+  - task: "Auto-Approval — OR semantics across cells + global disable"
+    implemented: true
+    working: true
+    file: "backend/routers/approval_settings.py::_match_matrix_row"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "Any single matching cell auto-approves. Global enabled=false overrides all cells. Cross-resource isolation verified (ws matrix does not affect mr and vice versa)."
+
+  - task: "Auto-Approval — Lifecycle side-effects (booking + audit)"
+    implemented: true
+    working: true
+    file: "backend/routers/meeting_room_requests.py::_auto_approve_request"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "Auto-approved requests transition Pending → Approved, create matching room_bookings row, and log audit entry meeting_room_request.auto_approve."
+
+  - task: "Auto-Approval — Impersonation classification"
+    implemented: true
+    working: true
+    file: "backend/routers/auth.py::impersonate"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "POST /auth/impersonate returns a token whose /auth/me is the impersonated user. Auto-approval uses is_manager(impersonated_user), not the actor."
+
+  - task: "Auto-Approval — Regression sanity endpoints"
+    implemented: true
+    working: true
+    file: "backend/routers/*"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "dashboard, my-workspace, floor-plans, meeting-room-requests, workstation-requests, teams all 200. Audit endpoint lives at /api/permissions/audit (not /api/audit-logs — cosmetic naming, no impact)."
 
 backend_auto_approval_qa_jul30_2026:
   - task: "Comprehensive Backend QA — Auto-Approval Module (Workstation + Meeting Room)"
