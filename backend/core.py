@@ -153,7 +153,7 @@ def generate_password(length: int = 12) -> str:
 def create_access_token(user_id: str, email: str, role: str) -> str:
     payload = {
         "sub": user_id, "email": email, "role": role,
-        "exp": ist_now() + timedelta(hours=12),
+        "exp": ist_now() + timedelta(hours=24),
         "type": "access"
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)

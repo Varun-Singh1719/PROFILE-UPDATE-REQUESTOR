@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import notify from "../lib/notify";
@@ -18,6 +18,20 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // If AuthContext bounced the user here after a token expiry, surface a hint.
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("session_expired") === "1") {
+        notify.info("Your session has expired. Please log in again.");
+        // Clean the query param so a manual refresh doesn't re-toast.
+        params.delete("session_expired");
+        const qs = params.toString();
+        window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
+      }
+    } catch (_) { /* ignore */ }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

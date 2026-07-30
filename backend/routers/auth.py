@@ -51,11 +51,11 @@ async def login(body: LoginIn, response: Response):
     if not user:
         raise HTTPException(401, "Invalid credentials")
     if user.get("status") != "Active":
-        raise HTTPException(403, "Account is inactive")
+        raise HTTPException(403, "User profile Deactivated")
     if not verify_password(body.password, user.get("password_hash", "")):
         raise HTTPException(401, "Invalid credentials")
     token = create_access_token(user["id"], user["email"], user["role"])
-    response.set_cookie("access_token", token, httponly=True, secure=True, samesite="none", max_age=43200, path="/")
+    response.set_cookie("access_token", token, httponly=True, secure=True, samesite="none", max_age=86400, path="/")
     await db.contacts.update_one({"id": user["id"]}, {"$set": {"last_login": now_iso()}})
     _public_contact(user)
     await log_audit(
@@ -91,10 +91,10 @@ async def google_session(body: GoogleSessionIn, response: Response):
     if not user:
         raise HTTPException(403, "User does not exist.")
     if user.get("status") != "Active":
-        raise HTTPException(403, "User does not exist.")
+        raise HTTPException(403, "User profile Deactivated")
 
     token = create_access_token(user["id"], user["email"], user["role"])
-    response.set_cookie("access_token", token, httponly=True, secure=True, samesite="none", max_age=43200, path="/")
+    response.set_cookie("access_token", token, httponly=True, secure=True, samesite="none", max_age=86400, path="/")
     await db.contacts.update_one({"id": user["id"]}, {"$set": {"last_login": now_iso()}})
     _public_contact(user)
     return {"user": user, "access_token": token}

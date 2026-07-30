@@ -897,6 +897,8 @@ export default function ContactListPage() {
 
   const [detailContact, setDetailContact] = useState(null);
   const [generated, setGenerated] = useState(null); // {password, email}
+  const [toggleTarget, setToggleTarget] = useState(null); // {contact} for activate/deactivate confirmation
+  const [toggleBusy, setToggleBusy] = useState(false);
   const [permissionSets, setPermissionSets] = useState([]);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -1090,13 +1092,26 @@ export default function ContactListPage() {
   // Legacy alias kept so nothing else in this file breaks.
   const exportCsv = () => exportEmployees("csv");
 
-  const toggleStatus = async (c) => {
+  const toggleStatus = (c) => {
+    // Show confirmation modal instead of immediately toggling
+    setToggleTarget(c);
+  };
+
+  const confirmToggleStatus = async () => {
+    if (!toggleTarget) return;
+    const c = toggleTarget;
     const next = c.status === "Active" ? "Inactive" : "Active";
+    setToggleBusy(true);
     try {
       await api.patch(`/contacts/${c.id}`, { status: next });
       notify.success(`${c.name} is now ${next}`);
+      setToggleTarget(null);
       load();
-    } catch (e) { notify.error(e?.response?.data?.detail || "Failed"); }
+    } catch (e) {
+      notify.error(e?.response?.data?.detail || "Failed");
+    } finally {
+      setToggleBusy(false);
+    }
   };
 
   const openCreate = () => {
@@ -1868,6 +1883,49 @@ export default function ContactListPage() {
           onClose={() => setGenerated(null)}
         />
       )}
+      {/* Activate / Deactivate confirmation */}
+      <Dialog open={!!toggleTarget} onOpenChange={(o) => { if (!o && !toggleBusy) setToggleTarget(null); }}>
+        <DialogContent className="sm:max-w-md" data-testid="toggle-status-dialog">
+          <DialogHeader>
+            <DialogTitle>
+              {toggleTarget?.status === "Active" ? "Deactivate" : "Activate"} User
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to {toggleTarget?.status === "Active" ? "deactivate" : "activate"} user{" "}
+              <span className="font-semibold text-gray-900">{toggleTarget?.name}</span>?
+              {toggleTarget?.status === "Active" && (
+                <span className="block mt-2 text-xs text-gray-500">
+                  A deactivated user will not be able to log in.
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setToggleTarget(null)}
+              disabled={toggleBusy}
+              data-testid="toggle-status-no"
+            >
+              No
+            </Button>
+            <Button
+              type="button"
+              onClick={confirmToggleStatus}
+              disabled={toggleBusy}
+              className={
+                toggleTarget?.status === "Active"
+                  ? "bg-red-600 hover:bg-red-700 text-white"
+                  : "bg-[#ec9324] hover:bg-[#d47f14] text-white"
+              }
+              data-testid="toggle-status-yes"
+            >
+              {toggleBusy ? "Please wait…" : "Yes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

@@ -825,9 +825,140 @@ metadata:
 
 test_plan:
   current_focus:
-    - "SIGN-OFF: All permission defects (backend D1/D2/D4/D6/D7/D8 + frontend FE-D1/FE-D2) fixed and verified (Aug 2026)"
+    - "Employees activate/deactivate confirmation + deactivated login block + 24h session timer (Jul 30 2026)"
   stuck_tasks: []
   test_all: false
+
+employees_activation_and_session_jul2026:
+  - task: "Employees — Activate/Deactivate confirmation dialog"
+    implemented: true
+    working: true
+    file: "frontend/src/pages/ContactListPage.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Row-level Switch in Employees table now opens a confirmation
+            Dialog ("Are you sure you want to activate/deactivate user
+            {name}?") with Yes / No buttons. Yes calls PATCH /contacts/{id}
+            with the new status. No closes the dialog. Deactivate path
+            highlights the destructive intent (red button + hint "A
+            deactivated user will not be able to log in").
+            Dialog data-testids:
+              • toggle-status-dialog
+              • toggle-status-yes
+              • toggle-status-no
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ ALL TESTS PASSED (9/9) - Activate/Deactivate confirmation flow fully verified (Jul 30 2026)
+            
+            Comprehensive end-to-end testing completed on Employees table Activate/Deactivate confirmation flow.
+            Test user: Aakash Malik (aakash.malik@infollion.com)
+            Test credentials: admin@ticketing.com / Admin@123
+            
+            **DEACTIVATE CONFIRMATION DIALOG:**
+            ✅ Toggle switch click opens confirmation dialog (data-testid="toggle-status-dialog")
+            ✅ Dialog title: "Deactivate User"
+            ✅ Dialog description: "Are you sure you want to deactivate user Aakash Malik?"
+            ✅ Hint text: "A deactivated user will not be able to log in."
+            ✅ Yes button (data-testid="toggle-status-yes") - RED color (bg-red-600) ✅
+            ✅ No button (data-testid="toggle-status-no") present
+            ✅ Clicking "No" closes dialog, user remains Active (toggle ON)
+            ✅ No toast appears when clicking "No"
+            ✅ Clicking "Yes" deactivates user (toggle OFF)
+            ✅ Success toast: "Aakash Malik is now Inactive"
+            
+            **ACTIVATE CONFIRMATION DIALOG:**
+            ✅ Toggle switch click (on Inactive user) opens confirmation dialog
+            ✅ Dialog title: "Activate User"
+            ✅ Dialog description: "Are you sure you want to activate user Aakash Malik?"
+            ✅ Yes button - ORANGE color (bg-[#ec9324]) ✅
+            ✅ Clicking "Yes" activates user (toggle ON)
+            ✅ Success toast: "Aakash Malik is now Active"
+            
+            **BUTTON COLOR VERIFICATION:**
+            ✅ Deactivate: RED button (bg-red-600 hover:bg-red-700) - destructive action
+            ✅ Activate: ORANGE button (bg-[#ec9324] hover:bg-[#d47f14]) - positive action
+            
+            **DEACTIVATED USER LOGIN BLOCK:**
+            ✅ Deactivated user login attempt blocked
+            ✅ Error message displayed: "User profile Deactivated" (both inline and toast)
+            ✅ User NOT redirected to /admin dashboard
+            ✅ Login form remains on /login page
+            
+            **CLEANUP:**
+            ✅ Test user successfully reactivated (Aakash Malik now Active)
+            
+            NO ISSUES FOUND. All confirmation dialogs, button colors, and login blocks working as specified.
+
+  - task: "Login — Block deactivated users with 'User profile Deactivated' message"
+    implemented: true
+    working: true
+    file: "backend/routers/auth.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: |
+            Login endpoint (/api/auth/login) and Google session endpoint now
+            return HTTP 403 with detail="User profile Deactivated" when a
+            user's status != "Active". Previously the message read "Account
+            is inactive" / "User does not exist." (google).
+            Verified via curl: deactivated `manager@ticketing.com` login
+            attempt returns 403 {"detail":"User profile Deactivated"}.
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ VERIFIED - Deactivated user login block working correctly (Jul 30 2026)
+            
+            Tested as part of comprehensive Activate/Deactivate flow testing.
+            Test user: aakash.malik@infollion.com (deactivated)
+            
+            **LOGIN ATTEMPT RESULTS:**
+            ✅ HTTP 403 error returned from backend
+            ✅ Error message: "User profile Deactivated" displayed in:
+               - Inline error (data-testid="login-error")
+               - Toast notification (red toast)
+            ✅ User NOT redirected to /admin dashboard
+            ✅ Login form remains on /login page
+            
+            Backend correctly checks user status BEFORE allowing login.
+            Frontend correctly displays the error message to the user.
+            
+            NO ISSUES FOUND.
+
+  - task: "Session — 24-hour auto-logout"
+    implemented: true
+    working: true
+    file: "backend/core.py, backend/routers/auth.py, frontend/src/context/AuthContext.jsx, frontend/src/pages/LoginPage.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: true
+          agent: "main"
+          comment: |
+            Backend:
+              • create_access_token JWT `exp` bumped from 12h → 24h.
+              • Login + google-session cookies max_age bumped 43200 → 86400s.
+            Frontend (AuthContext.jsx):
+              • Decodes JWT.exp on login / fetchMe and schedules a
+                setTimeout for auto-logout at expiry.
+              • Global axios response interceptor also catches 401 "Token
+                expired" defensively.
+              • On expiry: wipes localStorage/sessionStorage tokens, sets
+                user=false, and navigates to /login?session_expired=1.
+            LoginPage.jsx:
+              • Reads ?session_expired=1 on mount and surfaces a
+                notify.info "Your session has expired. Please log in again."
+                toast, then strips the query param.
+            Verified via curl JWT payload → exp − now = 24.00 hours.
 
 frontend_permissions_qa_aug2026:
   - task: "Fix FE-D1 — Sidebar Manage group visibility for Admins with v3 manage permissions"
@@ -3626,7 +3757,7 @@ frontend:
             - "View Booking" button navigates to /workspace-manager/bookings but without ?bookingId= parameter in URL (navigation works but query param missing). This is a minor issue that doesn't affect the core bug fix verification.
             
             **CONSOLE ERRORS:**
-            - 401 errors detected for PDF loading (https://calendar-tz-verify.preview.emergentagent.com/api/floor-plans/pdf/...) - this is a backend PDF authentication issue, not related to the bug fixes
+            - 401 errors detected for PDF loading (https://emp-status-toggle.preview.emergentagent.com/api/floor-plans/pdf/...) - this is a backend PDF authentication issue, not related to the bug fixes
             - No critical JavaScript errors detected
             
             Test date used: 2026-07-03 (date with existing workstation bookings)
@@ -7772,7 +7903,7 @@ frontend_permissions_qa_aug2026:
             
             Executed all 7 scenarios using correct ContactCreate schema (email with real TLD, emp_id, doj required).
             Test credentials: admin@ticketing.com / Admin@123
-            Test environment: https://calendar-tz-verify.preview.emergentagent.com
+            Test environment: https://emp-status-toggle.preview.emergentagent.com
             
             **SCENARIO RESULTS:**
             
@@ -8232,4 +8363,54 @@ agent_communication:
         **CONCLUSION:**
         IST timezone standardisation is complete and working correctly. All backend endpoints
         tested successfully with no regressions. The main agent's implementation is verified.
+    - agent: "testing"
+      message: |
+        ✅ EMPLOYEES ACTIVATE/DEACTIVATE CONFIRMATION + DEACTIVATED LOGIN BLOCK — ALL TESTS PASSED (Jul 30 2026)
+        
+        Completed comprehensive end-to-end testing of Employees table Activate/Deactivate confirmation flow
+        and deactivated user login block as requested in review playbook.
+        
+        **TEST SUMMARY: 9/9 PASSED**
+        
+        ✅ STEP 1: Login as Super Admin (admin@ticketing.com) - PASSED
+        ✅ STEP 2: Find ACTIVE non-admin user (Aakash Malik / aakash.malik@infollion.com) - PASSED
+        ✅ STEP 3: Deactivate confirmation dialog verification - PASSED
+           - Dialog opens with data-testid="toggle-status-dialog"
+           - Title: "Deactivate User"
+           - Description: "Are you sure you want to deactivate user Aakash Malik?"
+           - Hint text: "A deactivated user will not be able to log in."
+           - Yes button (data-testid="toggle-status-yes") is RED (bg-red-600)
+           - No button (data-testid="toggle-status-no") present
+        ✅ STEP 4: Click "No" - dialog closes, user remains Active - PASSED
+           - Dialog closed, no toast appeared, toggle still ON
+        ✅ STEP 5: Click "Yes" - user deactivated successfully - PASSED
+           - Success toast: "Aakash Malik is now Inactive"
+           - Toggle switched to OFF (unchecked)
+        ✅ STEP 6: Logout from Super Admin - PASSED
+        ✅ STEP 7: Deactivated user login blocked - PASSED
+           - Login attempt with aakash.malik@infollion.com
+           - Error message: "User profile Deactivated" (inline + toast)
+           - User NOT redirected to /admin
+        ✅ STEP 8: Login as Super Admin again - PASSED
+        ✅ STEP 9: Reactivate user (ACTIVATE confirmation) - PASSED
+           - Dialog title: "Activate User"
+           - Description: "Are you sure you want to activate user Aakash Malik?"
+           - Yes button is ORANGE (bg-[#ec9324] hover:bg-[#d47f14])
+           - Success toast: "Aakash Malik is now Active"
+           - Toggle switched to ON (checked)
+           - Cleanup complete
+        
+        **BUTTON COLOR VERIFICATION:**
+        ✅ Deactivate: RED button (bg-red-600) - destructive action
+        ✅ Activate: ORANGE button (bg-[#ec9324]) - positive action
+        
+        **KEY FINDINGS:**
+        - All confirmation dialogs working correctly with proper wording
+        - Button colors match specification (RED for deactivate, ORANGE for activate)
+        - Deactivated user login correctly blocked with "User profile Deactivated" error
+        - Backend returns HTTP 403 with correct error message
+        - Frontend displays error in both inline and toast formats
+        - All data-testids present and working as specified
+        
+        NO ISSUES FOUND. All features working as specified in the review request.
 
