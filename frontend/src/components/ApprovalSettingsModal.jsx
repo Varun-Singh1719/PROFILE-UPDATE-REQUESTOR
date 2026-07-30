@@ -29,9 +29,14 @@ import { Dialog, DialogContent } from "./ui/dialog";
 import { Button } from "./ui/button";
 
 // Column definition — add future resources here.
+// `enforced` was historically used to render a "Config only" badge for
+// resources whose auto-approval rules were stored but NOT yet evaluated by
+// the backend. As of Jul 30 2026 both workstation AND meeting-room requests
+// evaluate the matrix (see should_auto_approve_meeting_room), so both are
+// flagged as enforced.
 const RESOURCES = [
-  { key: "workstation",  label: "Workstation",   enforced: true  },
-  { key: "meeting_room", label: "Meeting Room",  enforced: false },
+  { key: "workstation",  label: "Workstation",   enforced: true },
+  { key: "meeting_room", label: "Meeting Room",  enforced: true },
 ];
 
 // Bool criteria (checkbox cells)
