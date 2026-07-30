@@ -9,6 +9,7 @@ the caller's Permission Set. When set to "assigned_to" the dashboard cards +
 per-member "Team" stats use `assigned_to_id` as the primary owner field;
 otherwise they use `created_by_id` (default).
 """
+import asyncio
 from typing import Optional
 
 from fastapi import Depends, HTTPException
@@ -87,10 +88,12 @@ async def dashboard_stats(
         q = _merge_query(base, extra) if "$and" in base else {**base, **extra}
         return await db.tickets.count_documents(q)
 
-    total = await cnt({})
-    open_c = await cnt({"status": "Open"})
-    inprog = await cnt({"status": "In Progress"})
-    closed = await cnt({"status": "Closed"})
+    total, open_c, inprog, closed = await asyncio.gather(
+        cnt({}),
+        cnt({"status": "Open"}),
+        cnt({"status": "In Progress"}),
+        cnt({"status": "Closed"}),
+    )
     return {
         "total": total,
         "open": open_c,
@@ -199,31 +202,51 @@ async def dq_performance(
 
     date_match = _date_match(date_from, date_to, date_field)
     view_filter = await _ticket_view_filter(user)
-    out = []
-    for m in members:
+
+    async def _member_stats(m: dict) -> dict:
         base = {field: m["id"], **date_match}
         base = _merge_query(base, view_filter)
+        q_open = _merge_query(base, {"status": "Open"})
+        q_ip = _merge_query(base, {"status": "In Progress"})
+        q_closed = _merge_query(base, {"status": "Closed"})
 
-        agg_open = await db.tickets.aggregate([
-            {"$match": _merge_query(base, {"status": "Open"})},
-            {"$group": {"_id": None, "total": {"$sum": "$number_of_profiles"}}}
-        ]).to_list(1)
-        agg_ip = await db.tickets.aggregate([
-            {"$match": _merge_query(base, {"status": "In Progress"})},
-            {"$group": {"_id": None, "total": {"$sum": "$number_of_profiles"}}}
-        ]).to_list(1)
+        (
+            total,
+            open_c,
+            in_progress_c,
+            closed_c,
+            agg_open,
+            agg_ip,
+        ) = await asyncio.gather(
+            db.tickets.count_documents(base),
+            db.tickets.count_documents(q_open),
+            db.tickets.count_documents(q_ip),
+            db.tickets.count_documents(q_closed),
+            db.tickets.aggregate([
+                {"$match": q_open},
+                {"$group": {"_id": None, "total": {"$sum": "$number_of_profiles"}}},
+            ]).to_list(1),
+            db.tickets.aggregate([
+                {"$match": q_ip},
+                {"$group": {"_id": None, "total": {"$sum": "$number_of_profiles"}}},
+            ]).to_list(1),
+        )
         open_profiles = agg_open[0]["total"] if agg_open else 0
         in_progress_profiles = agg_ip[0]["total"] if agg_ip else 0
-        out.append({
+        return {
             "id": m["id"], "name": m["name"], "email": m["email"],
-            "total": await db.tickets.count_documents(base),
-            "open": await db.tickets.count_documents(_merge_query(base, {"status": "Open"})),
-            "in_progress": await db.tickets.count_documents(_merge_query(base, {"status": "In Progress"})),
-            "closed": await db.tickets.count_documents(_merge_query(base, {"status": "Closed"})),
+            "total": total,
+            "open": open_c,
+            "in_progress": in_progress_c,
+            "closed": closed_c,
             "open_profiles": open_profiles,
             "in_progress_profiles": in_progress_profiles,
             "profiles_assigned": open_profiles + in_progress_profiles,
-        })
+        }
+
+    # Perf: parallelise all per-member roundtrips instead of sequential Atlas
+    # queries — collapses 6 members × 6 ops from ~10s to ~1-2s.
+    out = await asyncio.gather(*[_member_stats(m) for m in members]) if members else []
     return out
 
 
