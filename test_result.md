@@ -9463,3 +9463,268 @@ agent_communication:
         
         The Auto-Approval UI is fully functional and meets all specifications.
         Ready for production use.
+
+dashboard_frontend_qa_jul30_2026:
+  - task: "EXHAUSTIVE FRONTEND QA — Dashboard Module (Permissions editor + ProfiX Dashboard + Workspace Manager)"
+    implemented: true
+    working: false
+    file: "frontend/src/pages/PermissionsPage.jsx, frontend/src/pages/AdminDashboard.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: false
+          agent: "testing"
+          comment: |
+            ❌ CRITICAL ISSUES FOUND — Dashboard Module Frontend QA (Jul 30, 2026)
+            
+            Completed exhaustive frontend testing of Dashboard Module as requested in review playbook.
+            Test credentials: admin@ticketing.com / Admin@123 (Super Admin)
+            
+            **EXECUTIVE SUMMARY:**
+            - ❌ PHASE 1 (Permissions Editor): CRITICAL RENDERING ISSUE
+            - ⚠️ PHASE 2 (ProfiX Dashboard): PARTIAL PASS (data issues)
+            - ✅ PHASE 4 (Workspace Manager): PASS (no regression)
+            - ✅ PHASE 7 (Regression Sanity): PASS (all pages load)
+            - ✅ PHASE 8 (Console/Network): PASS (only pre-login 401s)
+            
+            **CRITICAL ISSUE #1: PERMISSIONS EDITOR — DASHBOARD MODULE NOT RENDERING PRODUCT BLOCKS**
+            
+            **Problem:**
+            When expanding the Dashboard module in Permissions Editor (/admin/permissions?tab=editor),
+            the product blocks (Workspace Manager and ProfiX) are NOT visible on screen. Instead,
+            the viewport shows the ProfiX module pages (All Requests, Open Requests, etc.).
+            
+            **Evidence:**
+            1. DOM Investigation confirms data-testids exist in HTML:
+               - ✅ `dashboard-product-profix` exists in DOM
+               - ✅ `dashboard-product-workspace_manager` exists in DOM
+               - ✅ `dashboard-metrics-profix` exists in DOM
+               - ✅ `dashboard-metrics-workspace_manager` does NOT exist (correct)
+            
+            2. But Playwright selectors CANNOT find these elements:
+               - ❌ `page.query_selector('[data-testid="dashboard-product-profix"]')` returns None
+               - ❌ `page.query_selector('[data-testid="dashboard-product-workspace_manager"]')` returns None
+               - ❌ All access level radios return None
+               - ❌ Metrics dropdown returns None
+            
+            3. Screenshots show:
+               - Dashboard module toggle exists and can be clicked
+               - After clicking, the expanded content shows ProfiX module pages instead of Dashboard product blocks
+               - The actual Dashboard product blocks are not visible in the viewport
+            
+            **Root Cause Analysis:**
+            This appears to be a rendering/visibility issue where:
+            - The Dashboard module HTML is being generated correctly (testids exist in DOM)
+            - But the content is either:
+              a) Hidden behind another element (z-index issue)
+              b) Positioned off-screen (CSS positioning issue)
+              c) The wrong module is being expanded (JavaScript logic issue)
+              d) Viewport is not scrolling to show the expanded content
+            
+            **Impact:**
+            - ❌ CANNOT verify ProfiX metrics dropdown functionality
+            - ❌ CANNOT verify Workspace Manager does NOT have metrics dropdown
+            - ❌ CANNOT test access level radio selection
+            - ❌ CANNOT test Clear button functionality
+            - ❌ CANNOT verify persistence of metrics_based_on setting
+            
+            **Workaround Attempted:**
+            - Tried scrolling: `await page.evaluate("window.scrollTo(0, 400)")`
+            - Tried waiting: `await asyncio.sleep(2)`
+            - Tried force clicking: `await element.click(force=True)`
+            - None of these resolved the visibility issue
+            
+            **What DID Work:**
+            - ✅ Permission set creation succeeded (saved with title "QA Dashboard Metrics Test")
+            - ✅ Navigation to view mode worked
+            - ✅ Set ID was captured: pset-d4156ab1-ca3e-4a33-9b06-78e96cd99112
+            - This suggests the backend is working, but the UI is not rendering correctly
+            
+            ---
+            
+            **ISSUE #2: PROFIX DASHBOARD — NO DATA DISPLAYED**
+            
+            **Problem:**
+            ProfiX Dashboard (/admin with ProfiX tab) renders correctly but shows no data:
+            - ✅ ProfiX tab exists and is clickable
+            - ✅ Header renders: "Hi Admin 👋"
+            - ✅ "New Request" button present
+            - ✅ DateFilter present
+            - ✅ Refresh button present
+            - ❌ Four metric cards found: 0 (expected 4)
+            - ❌ Team member cards found: 0 (expected at least 1)
+            - ✅ "Recent Updates" section header present
+            
+            **Possible Causes:**
+            1. Super Admin may not have ProfiX dashboard access configured
+            2. No tickets exist in the system
+            3. No team members have ProfiX access
+            4. API endpoints returning empty data
+            
+            **Unable to Verify:**
+            - ❌ CANNOT verify "Profiles" label rename (no team cards visible)
+            - ❌ CANNOT verify metric card values
+            - ❌ CANNOT verify data flip based on metrics_based_on
+            
+            ---
+            
+            **WHAT PASSED:**
+            
+            ✅ **PHASE 4: Workspace Manager Dashboard Regression**
+            - Workspace Manager tab exists and is clickable
+            - Dashboard loads without errors
+            - No stuck loading indicators
+            - No console errors
+            
+            ✅ **PHASE 7: Regression Sanity Checks**
+            - /admin/open-tickets: ✅ Loads without errors
+            - /admin/contacts: ✅ Loads without errors
+            - /admin/teams: ✅ Loads without errors
+            - /admin/permissions?tab=list: ✅ Loads without errors
+            
+            ✅ **PHASE 8: Console / Network Health Check**
+            - Console Errors: 2 (both pre-login 401s on /api/auth/me)
+            - Network Errors: 2 (both pre-login 401s on /api/auth/me)
+            - No JavaScript errors
+            - No 4xx/5xx errors after login
+            
+            ---
+            
+            **TESTS NOT COMPLETED DUE TO BLOCKING ISSUES:**
+            
+            ❌ **PHASE 1: Permissions Editor** (BLOCKED by rendering issue)
+            - Test 1.3: Verify both product blocks exist
+            - Test 1.4: Verify access level radios (Individual, Manager, Overall)
+            - Test 1.5: Verify ProfiX has metrics dropdown
+            - Test 1.6: Verify Workspace Manager does NOT have metrics dropdown
+            - Test 1.7: Test metrics dropdown options (Created By / Assigned To)
+            - Test 1.8: Create permission set with metrics
+            - Test 1.9: Verify persistence
+            - Test 1.10: Test Clear button
+            
+            ❌ **PHASE 2: ProfiX Dashboard** (BLOCKED by no data)
+            - Test 2.1: Verify four metric cards with values
+            - Test 2.2: Verify Team section with member cards
+            - Test 2.3: Verify "Profiles" label (NOT "Profiles Assigned")
+            
+            ❌ **PHASE 3: ProfiX Dashboard Metric Flip** (NOT ATTEMPTED due to Phase 1/2 blocks)
+            - Cannot test metric flip without being able to configure metrics in Permissions Editor
+            
+            ❌ **PHASE 5: Permission Enforcement** (NOT ATTEMPTED)
+            - Cannot test hidden tabs without configuring permissions
+            
+            ❌ **PHASE 6: Filter Behaviour** (NOT ATTEMPTED)
+            - Cannot test DateFilter without data
+            
+            ---
+            
+            **SCREENSHOTS CAPTURED:**
+            1. phase1-01-initial-state.png — Permissions Editor initial state
+            2. phase1-02-after-tests.png — After attempting to interact with Dashboard module
+            3. phase1-03-before-save.png — Before saving permission set
+            4. phase1-04-after-reopen.png — After reopening saved permission set
+            5. phase1-05-after-clear.png — After clicking Clear button
+            6. phase2-profix-dashboard.png — ProfiX Dashboard (no data)
+            7. phase4-workspace-manager.png — Workspace Manager Dashboard
+            8. dashboard-module-investigation.png — Full-page screenshot showing DOM structure
+            
+            ---
+            
+            **RECOMMENDATIONS FOR MAIN AGENT:**
+            
+            **CRITICAL (Must Fix):**
+            1. **Investigate Permissions Editor Dashboard Module Rendering**
+               - Check PermissionsPage.jsx DashboardModuleCard component
+               - Verify the Dashboard module is using the correct component (DashboardModuleCard vs ModuleAccordion)
+               - Check if there's a CSS issue hiding the product blocks
+               - Verify the module expansion logic
+               - Test manually in browser to confirm the issue
+            
+            2. **Verify ProfiX Dashboard Data**
+               - Check if Super Admin has ProfiX dashboard access configured
+               - Verify /api/dashboard/stats endpoint returns data
+               - Verify /api/dashboard/dq-performance endpoint returns team members
+               - Check if there are tickets in the system
+            
+            **MEDIUM (Should Fix):**
+            3. **Complete Phase 3-6 Testing**
+               - Once Phase 1 rendering issue is fixed, re-test all blocked scenarios
+               - Test metric flip via Login-As
+               - Test permission enforcement
+               - Test filter behaviour
+            
+            **LOW (Nice to Have):**
+            4. **Improve Test Data**
+               - Ensure test environment has sample tickets
+               - Ensure test users have ProfiX access
+               - Ensure team members exist with ProfiX permissions
+            
+            ---
+            
+            **NEXT STEPS:**
+            1. Main agent should investigate the Permissions Editor rendering issue
+            2. Main agent should verify ProfiX Dashboard data availability
+            3. Once fixed, testing agent should re-run comprehensive tests
+            4. Complete all 8 phases of the test plan
+            
+            **TESTING STATUS: INCOMPLETE — BLOCKED BY CRITICAL RENDERING ISSUE**
+
+
+agent_communication:
+    - agent: "testing"
+      message: |
+        ❌ EXHAUSTIVE FRONTEND QA — CRITICAL RENDERING ISSUE FOUND (Jul 30, 2026)
+        
+        **SUMMARY:**
+        Attempted comprehensive frontend QA of Dashboard Module (Permissions + ProfiX + Workspace Manager).
+        Testing BLOCKED by critical rendering issue in Permissions Editor.
+        
+        **CRITICAL ISSUE:**
+        Dashboard module in Permissions Editor (/admin/permissions?tab=editor) is NOT rendering
+        the product blocks (Workspace Manager and ProfiX) when expanded. The data-testids exist
+        in the DOM, but the elements are not visible in the viewport. Instead, the ProfiX module
+        pages are showing.
+        
+        **EVIDENCE:**
+        - DOM investigation confirms testids exist: dashboard-product-profix, dashboard-product-workspace_manager
+        - Playwright selectors return None (elements not visible/accessible)
+        - Screenshots show ProfiX module pages instead of Dashboard product blocks
+        - Permission set creation works (backend OK), but UI not rendering correctly
+        
+        **IMPACT:**
+        Cannot test:
+        - ❌ ProfiX metrics dropdown ("Dashboard Metrics Based On")
+        - ❌ Workspace Manager does NOT have metrics dropdown
+        - ❌ Access level radio selection
+        - ❌ Clear button functionality
+        - ❌ Persistence of metrics_based_on setting
+        - ❌ Metric flip via Login-As
+        - ❌ Permission enforcement
+        
+        **WHAT PASSED:**
+        ✅ Workspace Manager Dashboard regression (no errors)
+        ✅ Regression sanity checks (all pages load)
+        ✅ Console/network health (only pre-login 401s)
+        
+        **WHAT FAILED:**
+        ❌ Permissions Editor Dashboard module rendering
+        ❌ ProfiX Dashboard showing no data (0 metric cards, 0 team members)
+        
+        **ACTION ITEMS FOR MAIN AGENT:**
+        1. **CRITICAL**: Investigate PermissionsPage.jsx DashboardModuleCard rendering
+           - Check if Dashboard module is using correct component
+           - Verify CSS/z-index not hiding content
+           - Test manually in browser
+        
+        2. **HIGH**: Verify ProfiX Dashboard data availability
+           - Check /api/dashboard/stats endpoint
+           - Check /api/dashboard/dq-performance endpoint
+           - Verify Super Admin has ProfiX access
+        
+        3. **MEDIUM**: Once fixed, request re-test of all 8 phases
+        
+        **TESTING STATUS: INCOMPLETE — BLOCKED BY CRITICAL RENDERING ISSUE**
+        
+        Main agent should fix the rendering issue and request re-test.
+
