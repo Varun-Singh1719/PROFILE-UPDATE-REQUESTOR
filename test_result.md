@@ -830,6 +830,24 @@ test_plan:
   test_all: false
 
 auto_approval_backend_qa_jul30_2026:
+  - task: "Housekeeping — retire 'Config only' badge and add /api/audit-logs alias (Jul 30 2026)"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/ApprovalSettingsModal.jsx, backend/routers/audit.py"
+    stuck_count: 0
+    priority: "low"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            (1) Removed the dead `enforced` flag + amber "Config only" badge
+                from ApprovalSettingsModal.jsx and dropped the now-unused
+                Info icon import.
+            (2) Backend audit route lives at /api/audit-log (singular). Added
+                /api/audit-logs plural alias sharing the same handler for
+                API-consumer discoverability. Both return 200.
+
   - task: "Auto-Approval — Approval Settings CRUD (GET/PUT/reset)"
     implemented: true
     working: true
@@ -8999,3 +9017,99 @@ agent_communication:
         - Summarize and finish the task
         
         YOU MUST ASK USER BEFORE DOING FRONTEND TESTING
+    - agent: "testing"
+      message: |
+        COMPREHENSIVE FRONTEND QA COMPLETED — Auto-Approval UI + Housekeeping (Jul 30, 2026)
+        
+        **EXECUTIVE SUMMARY:**
+        ✅ ALL 14 TESTS PASSED (14/14)
+        ❌ 0 CRITICAL ISSUES
+        ⚠️ 0 MAJOR ISSUES
+        
+        **TESTED FEATURES:**
+        
+        1. ✅ HOUSEKEEPING — "Config only" badge REMOVED
+           - Verified NO "Config only" badge appears anywhere in the modal
+           - Full page text search confirmed no occurrence
+           
+        2. ✅ AUTO-APPROVAL MATRIX STRUCTURE
+           - 2 columns verified: Workstation, Meeting Room
+           - 5 rows verified:
+             * Team Member Request (boolean cells)
+             * Manager Request (boolean cells)
+             * Date (gear cells with sub-dialog)
+             * Time (gear cells with sub-dialog)
+             * Duration (meeting_room gear, workstation placeholder "—")
+           
+        3. ✅ BOOLEAN CELL TOGGLES
+           - Checkboxes toggle correctly (False → True)
+           - State changes persist
+           
+        4. ✅ SELECT ALL FUNCTIONALITY
+           - Column "Select all" works for each resource
+           - Master "Select all (Entire Matrix)" works
+           
+        5. ✅ DATE SUB-DIALOG + Z-INDEX
+           - Dialog opens correctly
+           - z-index = 1000 (above parent modal z-999) ✅
+           - Calendar component visible and interactive
+           - Mode selection (between, on, before, after) works
+           - Clear rule button present
+           - Cancel/Save buttons work
+           
+        6. ✅ TIME SUB-DIALOG + Z-INDEX
+           - Dialog opens correctly
+           - z-index = 1000 (above parent modal) ✅
+           - Operator selection (on, before, after, between) works
+           - Time input accepts HH:MM format
+           - Cancel/Save buttons work
+           
+        7. ✅ DURATION SUB-DIALOG + Z-INDEX
+           - Dialog opens correctly
+           - z-index = 1000 (above parent modal) ✅
+           - Title: "Auto-Approve by Duration — Meeting Room" ✅
+           - NO "less than or equal to" description text ✅
+           - NO "Preview" banner ✅
+           - Value dropdown (1..60) works
+           - Unit dropdown (Minutes/Hours) works
+           - Clear rule, Cancel, Save buttons present
+           - Chip displays correctly: "≤ 45 mins" ✅
+           - Workstation Duration cell shows dashed "—" placeholder ✅
+           
+        8. ✅ GLOBAL ENABLED TOGGLE
+           - Toggle switches between ON/OFF correctly
+           - State persists
+           
+        9. ✅ SAVE FUNCTIONALITY
+           - Save button works
+           - Modal closes after save
+           - Settings persist (verified by reopening modal)
+           
+        10. ✅ RESET FUNCTIONALITY
+            - Reset button works
+            - Settings return to defaults
+            - Chips removed after reset
+            
+        11. ✅ REGRESSION — EMPLOYEES ACTIVATE/DEACTIVATE
+            - Confirmation dialog opens when toggling user status
+            - Dialog title: "Deactivate User" (for deactivation)
+            - Dialog message: "Are you sure you want to deactivate user [Name]?"
+            - Yes button (RED for deactivate, ORANGE for activate) ✅
+            - No button present ✅
+            - Clicking "No" closes dialog, status unchanged ✅
+            - Clicking "Yes" changes user status ✅
+            - Success toast appears after status change ✅
+            
+        **ALL REQUIREMENTS MET:**
+        ✅ Housekeeping: "Config only" badge removed
+        ✅ Matrix: 2 columns, 5 rows with correct cell types
+        ✅ Sub-dialogs: All 3 dialogs (Date, Time, Duration) render above parent modal (z-index 1000)
+        ✅ Duration dialog: NO "less than or equal to" text, NO "Preview" banner
+        ✅ Duration: Workstation shows "—" placeholder, Meeting Room shows gear
+        ✅ Toggles, Select all, Save, Reset all working
+        ✅ Regression: Employees Activate/Deactivate confirmation dialog working
+        
+        **NO ISSUES FOUND.**
+        
+        The Auto-Approval UI is fully functional and meets all specifications.
+        Ready for production use.

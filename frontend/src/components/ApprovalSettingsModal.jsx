@@ -17,7 +17,6 @@ import RotateCcw from "@mui/icons-material/RestartAlt";
 import Save from "@mui/icons-material/SaveOutlined";
 import CheckSquare from "@mui/icons-material/CheckBoxOutlined";
 import Square from "@mui/icons-material/CheckBoxOutlineBlank";
-import Info from "@mui/icons-material/InfoOutlined";
 import Settings from "@mui/icons-material/SettingsOutlined";
 import CalendarIcon from "@mui/icons-material/CalendarTodayOutlined";
 import Clock from "@mui/icons-material/AccessTime";
@@ -29,14 +28,9 @@ import { Dialog, DialogContent } from "./ui/dialog";
 import { Button } from "./ui/button";
 
 // Column definition — add future resources here.
-// `enforced` was historically used to render a "Config only" badge for
-// resources whose auto-approval rules were stored but NOT yet evaluated by
-// the backend. As of Jul 30 2026 both workstation AND meeting-room requests
-// evaluate the matrix (see should_auto_approve_meeting_room), so both are
-// flagged as enforced.
 const RESOURCES = [
-  { key: "workstation",  label: "Workstation",   enforced: true },
-  { key: "meeting_room", label: "Meeting Room",  enforced: true },
+  { key: "workstation",  label: "Workstation"  },
+  { key: "meeting_room", label: "Meeting Room" },
 ];
 
 // Bool criteria (checkbox cells)
@@ -522,11 +516,6 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
                     >
                       <div className="flex flex-col items-center gap-1">
                         <span>{r.label}</span>
-                        {!r.enforced && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 inline-flex items-center gap-1">
-                            <Info sx={{ fontSize: 10 }}/> Config only
-                          </span>
-                        )}
                         <button
                           type="button"
                           onClick={() => toggleColumnAll(r.key)}
