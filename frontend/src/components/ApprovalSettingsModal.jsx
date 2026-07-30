@@ -281,7 +281,6 @@ function DurationRuleDialog({ open, onOpenChange, resourceLabel, value, onSave }
   const [draft, setDraft] = useState(value || EMPTY_DURATION());
   useEffect(() => { if (open) setDraft(value || EMPTY_DURATION()); }, [open, value]);
   const numOptions = useMemo(() => Array.from({ length: 60 }, (_, i) => i + 1), []);
-  const totalMin = durationToMinutes(draft);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -290,10 +289,6 @@ function DurationRuleDialog({ open, onOpenChange, resourceLabel, value, onSave }
         data-testid="approval-duration-rule-dialog">
         <div className="px-6 pt-5 pb-3 border-b border-gray-100">
           <h4 className="text-base font-semibold text-gray-900">Auto-Approve by Duration — {resourceLabel}</h4>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Any meeting whose scheduled length is <b>less than or equal to</b> the value below
-            will be auto-approved.
-          </p>
         </div>
         <div className="px-6 py-5 space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -322,11 +317,6 @@ function DurationRuleDialog({ open, onOpenChange, resourceLabel, value, onSave }
                 <option value="hour">Hours</option>
               </select>
             </label>
-          </div>
-          <div className="text-xs text-gray-500 bg-amber-50 border border-amber-100 rounded-md p-3">
-            <span className="font-medium text-amber-800">Preview:</span> Meetings up to{" "}
-            <b>{draft.value} {draft.unit === "hour" ? (draft.value === 1 ? "hour" : "hours") : (draft.value === 1 ? "minute" : "minutes")}</b>
-            {" "}({totalMin} min) will be auto-approved.
           </div>
         </div>
         <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100 bg-gray-50/60">
