@@ -616,7 +616,11 @@ function TreeEditorDialog({ seg, onClose, onSaved }) {
               {seg.name}
             </h2>
             <p className="text-xs text-gray-500 truncate">
-              Click a node&apos;s circle to collapse or expand. Click a label to select — then hit <span className="font-semibold text-[#ec9324]">+ Add</span> to grow a branch. Double-click a label to rename.
+              Click a label to select it. Use the orange&nbsp;
+              <span className="font-semibold text-[#ec9324]">+ Child</span>&nbsp;
+              chip to grow deeper, or the blue&nbsp;
+              <span className="font-semibold text-[#0ea5e9]">+ Peer</span>&nbsp;
+              chip (Level&nbsp;2+) to add a sibling. Double-click a label to rename.
             </p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -660,6 +664,14 @@ function TreeEditorDialog({ seg, onClose, onSaved }) {
           <span className="inline-flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-white border-2 border-[#ec9324] inline-block" />
             Leaf node
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block px-1.5 py-0.5 rounded-full bg-[#ec9324] text-white text-[9px] font-bold leading-none">+ Child</span>
+            deeper level
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block px-1.5 py-0.5 rounded-full bg-[#0ea5e9] text-white text-[9px] font-bold leading-none">+ Peer</span>
+            same level (sibling)
           </span>
           <span className="ml-auto">
             {dirty ? (

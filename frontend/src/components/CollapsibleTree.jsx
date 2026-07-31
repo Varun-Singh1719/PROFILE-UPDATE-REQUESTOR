@@ -84,7 +84,10 @@ export default function CollapsibleTree({ data, onChange, editable = false }) {
     const marginBottom = 20;
     const marginLeft = 40;
     const nodeRadius = 6;
-    const dx = 34; // vertical distance between siblings
+    // Vertical spacing between siblings. Kept generous (60px) so the "+ Peer"
+    // chip that hangs BELOW a Level 2+ node has room to sit without
+    // colliding with the next sibling row.
+    const dx = 60;
 
     // Build a shielded hierarchy — d3.hierarchy mutates the raw objects to add
     // .children pointers, so we work off a JSON clone. `d.data` will then
@@ -99,11 +102,11 @@ export default function CollapsibleTree({ data, onChange, editable = false }) {
     root.each((d) => {
       d.id = idCounter++;
       d._children = d.children;
-      // Collapse everything below depth 1 by default so the initial view is
-      // compact but users can still see the first-level branches.
-      if (d.depth >= 1) d.children = null;
+      // Show EVERYTHING expanded on (re)render — otherwise a freshly-added
+      // child would live inside a collapsed subtree and appear to "not
+      // work" from the user's POV. Users can still collapse a subtree
+      // manually by clicking its parent circle.
     });
-    if (root._children) root.children = root._children;
 
     // Horizontal tree layout — root on LEFT, branches grow RIGHT.
     const dy = 200;
@@ -279,59 +282,71 @@ export default function CollapsibleTree({ data, onChange, editable = false }) {
         .attr("stroke-width", 1.5);
     }
 
-    // ----------------------------------------- "+ Add" chip
+    // ---------------------------------- "+ Child" / "+ Peer" chips
+    // • ROOT (depth 0): only a "+ Child" chip (peers to the root would be
+    //   siblings of the root itself, which we don't support in this tree).
+    // • Any depth >= 1: TWO chips
+    //     – "+ Child"  → adds one level DEEPER (drawn to the RIGHT of the
+    //                    label, or right of the circle for non-leaf/non-root
+    //                    label-on-left nodes).
+    //     – "+ Peer"   → adds a SIBLING at the same level under the same
+    //                    parent (drawn BELOW the node).
+    // A single helper renders a chip with a given label + click action.
+    function drawChip(g, label, x, y, mode, target) {
+      const chipW = label.length <= 8 ? 68 : 82;
+      const chipH = 20;
+      const chip = g.append("g")
+        .attr("class", mode === "add-peer" ? "seg-add-peer-chip" : "seg-add-chip")
+        .attr("data-mode", mode)
+        .attr("transform", `translate(${x - chipW / 2},${y - chipH / 2})`)
+        .attr("cursor", "pointer")
+        .on("click", (evt) => {
+          evt.stopPropagation();
+          setPrompt({ mode, target, initial: "" });
+        });
+      chip.append("rect")
+        .attr("width", chipW).attr("height", chipH)
+        .attr("rx", chipH / 2).attr("ry", chipH / 2)
+        .attr("fill", mode === "add-peer" ? "#0ea5e9" : "#ec9324")
+        .attr("stroke", mode === "add-peer" ? "#0284c7" : "#d4811f")
+        .attr("stroke-width", 1);
+      chip.append("text")
+        .attr("x", chipW / 2).attr("y", chipH / 2 + 4)
+        .attr("text-anchor", "middle")
+        .attr("fill", "white")
+        .style("font-size", "11px")
+        .style("font-weight", "600")
+        .style("font-family", "Inter, system-ui, sans-serif")
+        .style("pointer-events", "none")
+        .text(label);
+    }
+
     function renderAddChips() {
       gNode.selectAll("g.seg-add-chip").remove();
+      gNode.selectAll("g.seg-add-peer-chip").remove();
       if (!editable) return;
       gNode.selectAll("g.seg-node").each(function (d) {
         const g = d3.select(this);
-        // Only show chip on the selected node — keeps the canvas clean.
         if (selectedIdRef.current !== d.id) return;
 
-        // Measure the label so the chip sits AFTER the text, never on top.
         const labelSel = g.select("text.seg-label");
         const labelNode = labelSel.node();
-        let chipX;
-        if (labelNode) {
-          const bbox = labelNode.getBBox();
-          if (labelOnLeft(d)) {
-            // Non-leaf (non-root) → label extends to the LEFT of the node;
-            // chip goes to the RIGHT of the circle with a small gap.
-            chipX = 14;
-          } else {
-            // Leaf OR root → label extends to the RIGHT of the node; chip
-            // sits AFTER the label text with a small gap.
-            chipX = bbox.x + bbox.width + 10;
-          }
-        } else {
-          chipX = 22;
+        const bbox = labelNode ? labelNode.getBBox() : { x: 12, width: 60 };
+
+        // Where does the "+ Child" chip sit horizontally?
+        //   • label-on-LEFT (non-root, non-leaf) → right of the circle (x=~50)
+        //   • label-on-RIGHT (root OR leaf)     → past the end of the label
+        const childChipCX = labelOnLeft(d) ? 50 : bbox.x + bbox.width + 44;
+
+        // "+ Child" — always drawn, on ALL selected nodes (root incl.)
+        drawChip(g, "+ Child", childChipCX, 0, "add-child", d);
+
+        // "+ Peer" — only for depth >= 1 (root has no peers).
+        //   Drawn BELOW the current node. We centre it under the circle so
+        //   it visually maps to "another sibling added below me".
+        if (d.depth >= 1) {
+          drawChip(g, "+ Peer", 0, 26, "add-peer", d);
         }
-
-        const chipW = 62;
-        const chipH = 20;
-        const chip = g.append("g")
-          .attr("class", "seg-add-chip")
-          .attr("transform", `translate(${chipX},${-chipH / 2})`)
-          .attr("cursor", "pointer")
-          .on("click", (evt) => {
-            evt.stopPropagation();
-            setPrompt({ mode: "add", target: d, initial: "" });
-          });
-
-        chip.append("rect")
-          .attr("width", chipW).attr("height", chipH).attr("rx", chipH / 2).attr("ry", chipH / 2)
-          .attr("fill", "#ec9324")
-          .attr("stroke", "#d4811f")
-          .attr("stroke-width", 1);
-        chip.append("text")
-          .attr("x", chipW / 2).attr("y", chipH / 2 + 4)
-          .attr("text-anchor", "middle")
-          .attr("fill", "white")
-          .style("font-size", "11px")
-          .style("font-weight", "600")
-          .style("font-family", "Inter, system-ui, sans-serif")
-          .style("pointer-events", "none")
-          .text("+ Add");
       });
     }
 
@@ -359,9 +374,23 @@ export default function CollapsibleTree({ data, onChange, editable = false }) {
       if (!target || !target.data) {
         return { error: "Selected node no longer exists — please retry." };
       }
-      if (mode === "add") {
+      if (mode === "add-child" || mode === "add") {
+        // Adds a child DEEPER — one level below the target.
         if (!Array.isArray(target.data.children)) target.data.children = [];
         target.data.children.push({ name: trimmed });
+      } else if (mode === "add-peer") {
+        // Adds a SIBLING at the same level — a new child of the target's
+        // parent, right after the target's slot.
+        const parent = target.parent;
+        if (!parent || !parent.data) {
+          return { error: "Cannot add a peer to the root node." };
+        }
+        if (!Array.isArray(parent.data.children)) parent.data.children = [];
+        // Insert AFTER the current target for a nicer visual (new peer
+        // appears just below the currently-selected node).
+        const targetIdx = parent.data.children.findIndex((c) => c === target.data);
+        const insertAt = targetIdx >= 0 ? targetIdx + 1 : parent.data.children.length;
+        parent.data.children.splice(insertAt, 0, { name: trimmed });
       } else if (mode === "rename") {
         target.data.name = trimmed;
       }
@@ -426,13 +455,21 @@ export default function CollapsibleTree({ data, onChange, editable = false }) {
             <>
               <DialogHeader>
                 <DialogTitle>
-                  {prompt?.mode === "rename" ? "Rename node" : "Add child node"}
+                  {prompt?.mode === "rename"
+                    ? "Rename node"
+                    : prompt?.mode === "add-peer"
+                      ? "Add peer node"
+                      : "Add child node"}
                 </DialogTitle>
               </DialogHeader>
               <div className="pt-1 space-y-3">
                 <div>
                   <Label htmlFor="tree-node-input" className="text-xs font-medium text-gray-600">
-                    {prompt?.mode === "rename" ? "New name" : "Child name"}
+                    {prompt?.mode === "rename"
+                      ? "New name"
+                      : prompt?.mode === "add-peer"
+                        ? "Peer (sibling) name"
+                        : "Child name"}
                   </Label>
                   <Input
                     id="tree-node-input"
@@ -440,10 +477,24 @@ export default function CollapsibleTree({ data, onChange, editable = false }) {
                     autoFocus
                     onChange={(e) => { setPromptValue(e.target.value); setPromptError(""); }}
                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleConfirm(); } }}
-                    placeholder={prompt?.mode === "rename" ? "Node name" : "e.g. Enterprise"}
+                    placeholder={
+                      prompt?.mode === "rename"
+                        ? "Node name"
+                        : prompt?.mode === "add-peer"
+                          ? "e.g. Mid-Market"
+                          : "e.g. Enterprise"
+                    }
                     maxLength={120}
                     data-testid="tree-node-input"
                   />
+                  {prompt?.mode === "add-peer" && prompt?.target?.data?.name && (
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      Will be added as a sibling of&nbsp;
+                      <span className="font-medium text-gray-700">
+                        “{prompt.target.data.name}”
+                      </span>
+                    </p>
+                  )}
                   {promptError && (
                     <p className="text-xs text-red-600 mt-1" data-testid="tree-node-error">
                       {promptError}
@@ -458,7 +509,11 @@ export default function CollapsibleTree({ data, onChange, editable = false }) {
                 <Button
                   onClick={handleConfirm}
                   disabled={!promptValue.trim()}
-                  className="bg-[#ec9324] hover:bg-[#d4811f] text-white"
+                  className={
+                    prompt?.mode === "add-peer"
+                      ? "bg-[#0ea5e9] hover:bg-[#0284c7] text-white"
+                      : "bg-[#ec9324] hover:bg-[#d4811f] text-white"
+                  }
                   data-testid="tree-node-confirm"
                 >
                   {prompt?.mode === "rename" ? "Save" : "Add"}

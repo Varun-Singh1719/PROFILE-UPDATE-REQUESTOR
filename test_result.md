@@ -10178,3 +10178,324 @@ agent_communication:
         
         Ready for production. No issues found.
 
+
+crm_segmentations_peer_child_chips_jul31_2026:
+  - task: "CRM → Segmentations Tree — Peer/Child chips + fix Level-2 add (Jul 31 2026)"
+    implemented: true
+    working: true
+    file: "frontend/src/components/CollapsibleTree.jsx, frontend/src/pages/SegmentationsPage.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            USER-REPORTED BUGS (Jul 31 2026 follow-up):
+              1. "Clicking + Add on a Level 2 node doesn't give me the option
+                 to add the name" — actually the modal DID open, but the
+                 child that was added lived inside an auto-collapsed subtree
+                 and looked invisible, so it felt broken.
+              2. New feature: from Level 2 onwards each node must expose TWO
+                 add affordances:
+                   • "+ Peer"  → adds a SIBLING (below the node)
+                   • "+ Child" → adds a deeper level (next to / parallel to
+                                the name)
+                 Root (Level 1) still gets only "+ Child".
+
+            FIXES:
+              A. Removed the depth-based auto-collapse in
+                 CollapsibleTree.jsx. On every render the tree is now shown
+                 FULLY EXPANDED — freshly added nodes are visible instantly.
+                 Users can still collapse a subtree manually by clicking a
+                 parent's orange circle.
+              B. Rewrote `renderAddChips()` to draw two chips on selected
+                 depth-≥1 nodes:
+                   • orange "+ Child"  → chip mode "add-child", placed at
+                                         the RIGHT of the label (past
+                                         getBBox().width) or right of the
+                                         circle when the label is on the
+                                         left.
+                   • blue   "+ Peer"   → chip mode "add-peer", placed BELOW
+                                         the circle at (0, 26).
+                 Root gets ONLY the orange "+ Child" chip.
+              C. `confirmPromptRef` now handles three modes: "add-child",
+                 "add-peer", "rename".  "add-peer" mutates
+                 `target.parent.data.children` (splice at target.index+1 so
+                 the new sibling appears immediately below the selected
+                 node in the layout).
+              D. Modal titles/copy updated:
+                   • "Add child node" | "Child name" | placeholder Enterprise
+                   • "Add peer node"  | "Peer (sibling) name" | placeholder
+                     Mid-Market  + hint text "Will be added as a sibling of
+                     '<name>'"
+                 Confirm button also switches to BLUE for peer mode to match
+                 the chip colour.
+              E. Bumped node vertical spacing dx from 34 → 60 so the peer
+                 chip that hangs below a node no longer visually collides
+                 with the next sibling row.
+              F. Tree editor dialog header + legend now explain the two
+                 chip colours.
+
+            VERIFIED BY MAIN AGENT (browser automation):
+              • Root selected → +Child chips: 1, +Peer chips: 0 ✅
+              • Enterprise (Level 2) selected → +Child: 1, +Peer: 1 ✅
+              • Peer dialog title = "Add peer node" ✅
+              • After clicking peer chip → SMB appears as sibling of
+                Enterprise (labels: [Peer Test, Enterprise, SMB]) ✅
+              • Adding "Fortune 500" child under Enterprise → 4 nodes
+                visible instantly (no auto-collapse) ✅
+
+            REQUEST FOR TESTING AGENT: full end-to-end verification of the
+            Peer/Child chip flow, plus regression on the previous 4 fixes.
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ COMPREHENSIVE E2E TESTING COMPLETE — ALL 13 SCENARIOS PASSED (A-M)
+            
+            Test environment: https://0b879cb7-8515-425d-a078-421146bb9a32.preview.emergentagent.com
+            Test credentials: admin@ticketing.com / Admin@123
+            Test segmentation: "QA Peer Test" (created and deleted during test)
+            
+            **SCENARIO RESULTS:**
+            
+            ✅ A. Login and navigation to /crm/segmentations — PASS
+            
+            ✅ B. Create new segmentation "QA Peer Test" — PASS
+               - Tree popup opened automatically after creation
+            
+            ✅ C. ROOT label click verification — PASS
+               - Exactly 1 orange "+ Child" chip present (data-mode="add-child")
+               - Exactly 0 "+ Peer" chips (root has no peers)
+            
+            ✅ D. Add child "Enterprise" to root — PASS
+               - Modal title: "Add child node" ✓
+               - Dialog closed after adding
+               - 2 nodes rendered: ["Enterprise", "QA Peer Test"]
+            
+            ✅ E. Enterprise label click verification — PASS
+               - Exactly 1 orange "+ Child" chip present
+               - Exactly 1 blue "+ Peer" chip present
+               - Blue "+ Peer" chip positioned BELOW Enterprise label
+                 (peer Y center: 559.7px, label bottom: 543.9px) ✓
+            
+            ✅ F. Add peer "SMB" to Enterprise — PASS
+               - Modal title: "Add peer node" ✓
+               - Hint text contains "sibling of" and "Enterprise" ✓
+               - 3 nodes rendered: ["SMB", "Enterprise", "QA Peer Test"]
+               - SMB and Enterprise horizontally aligned (X diff: 0.0px, within 40px tolerance) ✓
+            
+            ✅ G. Add child "Fortune 500" to Enterprise — PASS
+               - Modal title: "Add child node" ✓
+               - "Fortune 500" VISIBLE immediately (auto-expand working) ✓
+               - 4 nodes total: ["Fortune 500", "SMB", "Enterprise", "QA Peer Test"]
+               - Enterprise circle fill: #ec9324 (has-children indicator) ✓
+            
+            ✅ H. Fortune 500 (Level 3) chip verification — PASS
+               - BOTH chips present: 1 orange "+ Child" + 1 blue "+ Peer"
+               - Peer chip fill color: #0ea5e9 (blue) ✓
+            
+            ✅ I. Empty-name validation on both add flows — PASS
+               - Add-child: Confirm button DISABLED when input empty ✓
+               - Add-peer: Confirm button DISABLED when input empty ✓
+            
+            ✅ J. Rename "SMB" to "SMB-Renamed" — PASS
+               - Modal title: "Rename node" ✓
+               - Input pre-populated with "SMB" ✓
+               - Label updated to "SMB-Renamed" in SVG ✓
+            
+            ✅ K. Regression checks — ALL PASS
+               - K1: Root vertically centered (Y diff: 20.8px, within 60px tolerance) ✓
+               - K2: Root label fully visible (x=410.0 > 0, no left clipping) ✓
+               - K3: NO native browser dialog fired at any point ✓
+            
+            ✅ L. Save and reopen tree persistence — PASS
+               - Tree dialog closed after save
+               - Tree dialog reopened via "Open Tree" button
+               - All 4 nodes persist: ["Fortune 500", "SMB-Renamed", "Enterprise", "QA Peer Test"] ✓
+            
+            ✅ M. Cleanup — PASS
+               - Test segmentation "QA Peer Test" deleted successfully
+            
+            **KEY FINDINGS:**
+            
+            1. ✅ Chip rendering logic correct:
+               - Root (Level 1): 1 orange "+ Child" chip only
+               - Level 2+: 1 orange "+ Child" + 1 blue "+ Peer" chip
+            
+            2. ✅ Chip positioning correct:
+               - "+ Child" chip: positioned to the RIGHT of label
+               - "+ Peer" chip: positioned BELOW the node circle
+            
+            3. ✅ Auto-expand fix working perfectly:
+               - Newly-added nodes visible immediately
+               - No manual expand click required
+               - Tree fully expanded on every render
+            
+            4. ✅ Modal behavior correct:
+               - "Add child node" title for child additions
+               - "Add peer node" title for peer additions
+               - "Rename node" title for renames
+               - Hint text shows "sibling of [node name]" for peer mode
+               - Confirm button color: BLUE for peer mode, ORANGE for child/rename
+            
+            5. ✅ Validation working:
+               - Confirm button disabled when input is empty
+               - Works on both add-child and add-peer flows
+            
+            6. ✅ Peer sibling positioning correct:
+               - SMB and Enterprise horizontally aligned (X diff: 0.0px)
+               - Both at same depth level (Level 2)
+            
+            7. ✅ Has-children indicator working:
+               - Enterprise circle filled orange (#ec9324) when it has children
+            
+            8. ✅ Regression items verified:
+               - Root vertically centered (within 60px tolerance)
+               - Root label fully visible (no left clipping)
+               - NO native browser dialogs fired (page.on('dialog') listener confirmed)
+            
+            9. ✅ Persistence working:
+               - All nodes persist after save/reopen
+               - Tree structure maintained correctly
+            
+            10. ✅ Rename functionality working:
+                - Double-click opens rename modal
+                - Input pre-populated with current name
+                - Label updates in SVG after save
+            
+            **CONSOLE LOGS:**
+            - No JavaScript errors detected
+            - No console warnings related to the tree functionality
+            
+            **REGRESSION IMPACT:**
+            - Previous 4 fixes remain working (root centering, no clipping, no native dialogs, auto-expand)
+            - No breaking changes to existing segmentation list/CRUD operations
+            
+            NO ISSUES FOUND. All functionality working as specified.
+
+metadata:
+  created_by: "main_agent"
+  version: "1.1"
+  test_sequence: 7
+  run_ui: true
+
+test_plan:
+  current_focus: []
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    - agent: "main"
+      message: |
+        Follow-up fix on the CRM → Segmentations Collapsible Tree popup:
+
+          A. Level 2+ nodes now expose TWO chips when selected:
+               • Orange "+ Child" (add deeper level, chip data-mode="add-child")
+               • Blue   "+ Peer"  (add sibling,     chip data-mode="add-peer")
+          B. Root (Level 1) still shows only "+ Child".
+          C. Tree is now shown FULLY EXPANDED, so newly-added children are
+             visible immediately (previous auto-collapse hid grandchildren
+             and looked like a bug).
+          D. dx bumped 34→60 so the +Peer chip has room below each node.
+
+        Preview: https://0b879cb7-8515-425d-a078-421146bb9a32.preview.emergentagent.com
+        Login  : admin@ticketing.com / Admin@123
+
+        Data-testids/selectors of interest:
+          • g.seg-add-chip[data-mode="add-child"]  (orange)
+          • g.seg-add-chip[data-mode="add-peer"]   (blue) — NOTE: DOM class
+                                                     is `seg-add-peer-chip`,
+                                                     query it as
+                                                     `g.seg-add-peer-chip`
+                                                     OR
+                                                     `g[data-mode="add-peer"]`
+          • tree-node-dialog / tree-node-input / tree-node-confirm
+            title text = "Add child node" | "Add peer node" | "Rename node"
+
+        Test scenarios (report PASS/FAIL, screenshot on FAIL):
+
+          A. Login → /crm/segmentations. Create "QA Peer Test". Tree popup
+             opens.
+
+          B. Click ROOT label ("QA Peer Test"). Verify:
+               • Selection ring appears.
+               • EXACTLY 1 orange "+ Child" chip is present.
+               • ZERO "+ Peer" chips (root gets none).
+
+          C. Click "+ Child" on root. Modal title = "Add child node".
+             Type "Enterprise", confirm. Verify 2 nodes render (QA Peer Test
+             + Enterprise) and modal closes.
+
+          D. Click the "Enterprise" label. Verify:
+               • Selection ring appears on Enterprise.
+               • Exactly 1 orange "+ Child" chip is present.
+               • Exactly 1 blue "+ Peer" chip is present (visually BELOW
+                 the Enterprise circle).
+
+          E. Click "+ Peer". Modal title = "Add peer node". Sub-hint text
+             mentions "Will be added as a sibling of "Enterprise"". Type
+             "SMB", confirm. Verify:
+               • Dialog closes.
+               • Tree now has 3 nodes (QA Peer Test + Enterprise + SMB).
+               • SMB is drawn as a sibling of Enterprise (both connected
+                 to root, at approximately the same horizontal depth y).
+
+          F. Click Enterprise label again → click "+ Child". Modal title =
+             "Add child node". Type "Fortune 500", confirm. Verify:
+               • 4 nodes total.
+               • "Fortune 500" is VISIBLE immediately (no expand-click
+                 required — auto-expand regression fix).
+               • Enterprise circle now filled orange (has-children).
+
+          G. Click "Fortune 500" label (Level 3). Verify BOTH chips present
+             again (+ Child + Peer). Peer chip must be blue.
+
+          H. Test empty-name validation on both add-child and add-peer
+             dialogs — the confirm button must be DISABLED until a
+             non-blank name is typed.
+
+          I. Test rename via double-click on "SMB" — modal title "Rename
+             node", input pre-populated with "SMB". Change to "SMB-Renamed"
+             and save. Verify label updates.
+
+          J. Regression on the previous 4 fixes: (i) root remains
+             vertically centered, (ii) root label fully visible on the
+             left (no clipping), (iii) NO native browser dialog fires at
+             any point (attach page.on('dialog', ...) throughout).
+
+          K. Save + reopen the tree via the "Open Tree" button on the
+             detail card. Verify all 4 nodes persist (Enterprise → Fortune
+             500 branch and SMB peer).
+
+          L. CLEANUP: delete "QA Peer Test" segmentation via the detail
+             card so the DB stays clean.
+
+        Do NOT test frontend features outside the CRM Segmentations flow.
+        Do NOT attempt to fix bugs — only report them.
+    - agent: "testing"
+      message: |
+        ✅ COMPREHENSIVE E2E TESTING COMPLETE — ALL 13 SCENARIOS PASSED
+        
+        Tested the CRM → Segmentations Collapsible Tree popup with focus on:
+        1. New "+ Peer" (blue) & "+ Child" (orange) chips for Level 2+ nodes
+        2. Auto-expand fix — newly-added nodes visible immediately
+        
+        **ALL SCENARIOS PASSED (A-M):**
+        - Root shows only 1 orange "+ Child" chip (0 peer chips) ✓
+        - Level 2+ nodes show BOTH chips (1 orange + 1 blue) ✓
+        - Blue "+ Peer" chip positioned BELOW node circle ✓
+        - Auto-expand working: new nodes visible immediately ✓
+        - Modal titles correct: "Add child node", "Add peer node", "Rename node" ✓
+        - Hint text shows "sibling of [node name]" for peer mode ✓
+        - Empty-name validation working on both add flows ✓
+        - Peer siblings horizontally aligned (X diff: 0.0px) ✓
+        - Has-children indicator working (circle fill #ec9324) ✓
+        - Regression checks passed: root centered, no clipping, no native dialogs ✓
+        - Persistence working: all nodes persist after save/reopen ✓
+        - Cleanup completed successfully ✓
+        
+        NO ISSUES FOUND. Ready for production.
+
+
