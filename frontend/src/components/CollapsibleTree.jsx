@@ -231,20 +231,30 @@ export default function CollapsibleTree({
     const root = d3.hierarchy(dataClone);
 
     let idCounter = 0;
+    // PASS 1 — assign IDs and snapshot every node's `_children`.
+    // IMPORTANT: this pass must NOT mutate `.children`, otherwise d3's
+    // iterator (which reads node.children AFTER the callback fires) will
+    // stop descending that branch. Skipping this step for descendants
+    // causes them to never get `_children` set, which was breaking
+    // collapse/expand at deep levels (SaaS, Biotechnology, etc.):
+    //   - filled circle turns to outline after collapse
+    //   - subsequent clicks do nothing (hasKids() → false)
+    //   - re-expanding a parent auto-explodes all the way to leaves
     root.each((d) => {
       d.id = idCounter++;
       d._children = d.children;
-      // Collapse anything past the caller-specified default depth so a
-      // freshly-opened large tree doesn't drown the viewport. The chevron
-      // stays available on the node (click to expand).
-      if (
-        Number.isFinite(defaultExpandDepth) &&
-        d.depth >= defaultExpandDepth &&
-        d.children
-      ) {
-        d.children = null;
-      }
     });
+    // PASS 2 — collapse every node at or past the default depth.
+    // We use root.descendants() (an array snapshot) so nulling one node's
+    // .children doesn't hide descendants from the loop — we've captured
+    // them all up front and can safely null-out at any depth in one go.
+    if (Number.isFinite(defaultExpandDepth)) {
+      root.descendants().forEach((d) => {
+        if (d.depth >= defaultExpandDepth && d.children) {
+          d.children = null;
+        }
+      });
+    }
 
     const dy = 1; // minimal — real horizontal position is assigned per depth below
     const treeLayout = d3.tree().nodeSize([dx, dy]);
