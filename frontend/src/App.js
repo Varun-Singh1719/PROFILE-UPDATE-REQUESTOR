@@ -31,6 +31,7 @@ import WorkstationBookingPage from "./pages/WorkstationBookingPage";
 import RequestWorkstationPage from "./pages/RequestWorkstationPage";
 import PendingApprovalsPage from "./pages/PendingApprovalsPage";
 import BookingsPage from "./pages/BookingsPage";
+import SegmentationsPage from "./pages/SegmentationsPage";
 import ProfilePage from "./pages/ProfilePage";
 import WMOverallPreview from "./pages/WMOverallPreview";
 import Loader2 from "@mui/icons-material/Autorenew";
@@ -146,6 +147,9 @@ function App() {
             <Route path="/workspace-manager/request-workstation" element={<V3ProtectedRoute pages={[["desk_booking","workstation_requests"]]}><RequestWorkstationPage /></V3ProtectedRoute>} />
             <Route path="/workspace-manager/pending-approvals" element={<V3ProtectedRoute pages={[["desk_booking","pending_approvals"]]}><PendingApprovalsPage /></V3ProtectedRoute>} />
             <Route path="/workspace-manager/bookings" element={<V3ProtectedRoute pages={[["desk_booking","bookings_history"]]}><BookingsPage /></V3ProtectedRoute>} />
+            
+            {/* CRM (label to be finalised later) — currently accessible to any Super Admin / Admin */}
+            <Route path="/crm/segmentations" element={<ProtectedRoute roles={ADMIN_ROLES}><SegmentationsPage /></ProtectedRoute>} />
             
             {/* Legacy redirect */}
             <Route path="/desk-booking" element={<Navigate to="/workspace-manager/floor-layout" replace />} />

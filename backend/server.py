@@ -45,6 +45,7 @@ from routers import approval_settings as _approval_settings  # noqa: F401
 from routers import bookings as _bookings  # noqa: F401
 from routers import my_workspace as _my_workspace  # noqa: F401
 from routers import permissions_v3 as _permissions_v3  # noqa: F401
+from routers import segmentations as _segmentations  # noqa: F401
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -110,6 +111,10 @@ async def startup():
     await db.inapp_notifications.create_index([("user_id", 1), ("created_at", -1)])
     await db.inapp_notifications.create_index([("user_id", 1), ("read", 1)])
     await db.notification_templates.create_index("kind", unique=True)
+    # CRM → Segmentations
+    await db.segmentations.create_index("id", unique=True)
+    await db.segmentations.create_index([("name", 1)])
+    await db.segmentations.create_index([("created_on", -1)])
     # ─── Migration: default phone_isd = "+91" for existing contacts that
     # pre-date the ISD split (Jul-2026). Idempotent — the query only matches
     # rows that don't already have a phone_isd persisted.

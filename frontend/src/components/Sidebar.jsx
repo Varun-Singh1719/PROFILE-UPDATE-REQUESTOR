@@ -32,6 +32,14 @@ import BookUser from "@mui/icons-material/ContactPageOutlined";
 import CircleDot from "@mui/icons-material/RadioButtonChecked";
 import AddTaskIcon from "./icons/AddTaskIcon";
 import EventSeatRoundedIcon from "./icons/EventSeatRoundedIcon";
+import Diversity3 from "@mui/icons-material/Diversity3Outlined";
+import PieChart from "@mui/icons-material/PieChartOutlineOutlined";
+
+// --------------------------------------------------------------------------
+// MODULE_LABEL — the CRM section will be renamed later; centralising the
+// label here means the eventual rename is a one-line change.
+// --------------------------------------------------------------------------
+const CRM_MODULE_LABEL = "CRM";
 
 // --------------------------------------------------------------------------
 // Navigation config (single source of truth)
@@ -59,6 +67,12 @@ const NAV_CONFIG = [
       { to: "/workspace-manager/pending-approvals", label: "Pending Approvals", icon: AddTaskIcon, perm: { module: "desk_booking", feature: "seat_request", action: "view" }, v3: { module: "desk_booking", page: "pending_approvals" } },
       { to: "/workspace-manager/bookings",     label: "Bookings",          icon: ClipboardList, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
       { to: "/workspace-manager/floor-plans",  label: "Floor Calibration", icon: Crosshair,   perm: { module: "desk_booking", feature: "seat_request", action: "edit" }, v3: { module: "desk_booking", page: "floor_plans" } },
+    ],
+  },
+  {
+    kind: "group", label: CRM_MODULE_LABEL, icon: Diversity3,
+    children: [
+      { to: "/crm/segmentations", label: "Segmentations", icon: PieChart },
     ],
   },
   {
