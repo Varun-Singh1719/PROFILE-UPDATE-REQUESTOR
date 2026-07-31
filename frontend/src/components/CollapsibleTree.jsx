@@ -219,9 +219,13 @@ export default function CollapsibleTree({ data, onChange, editable = false }) {
       d._children = d.children;
     });
 
-    const dy = 220;
+    const dy = 240;
     const treeLayout = d3.tree().nodeSize([dx, dy]);
-    const diagonal = d3.linkHorizontal().x((d) => d.y).y((d) => d.x);
+    // Horizontal cubic bezier link generator (source on the LEFT, target
+    // on the RIGHT). We drive it with adjusted endpoints so the line
+    // STARTS after the source label ends and ENDS just before the target
+    // circle — no more overlap with node names.
+    const bezier = d3.linkHorizontal().x((d) => d.y).y((d) => d.x);
 
     root.x0 = 0;
     root.y0 = 0;
@@ -231,8 +235,30 @@ export default function CollapsibleTree({ data, onChange, editable = false }) {
       (Array.isArray(d._children) && d._children.length > 0) ||
       (Array.isArray(d.children) && d.children.length > 0);
 
-    // Root ALWAYS gets its label on the RIGHT (long names never clip).
-    const labelOnLeft = (d) => d.depth > 0 && hasKids(d);
+    // ALL labels always on the RIGHT of the circle (per user request
+    // 2026-07-31 v10) — no more label-on-the-left for parent nodes.
+    const labelOnLeft = () => false;
+
+    // Map<hierarchyNodeId, labelPixelWidth> — populated after nodeEnter
+    // renders the labels, used to offset the outgoing link start.
+    const labelWidthById = new Map();
+    const approxLabelW = (d) => Math.max(24, ((d.data.name || "").length * 7.2) + 6);
+    const measuredW = (d) =>
+      labelWidthById.get(d.id) != null ? labelWidthById.get(d.id) : approxLabelW(d);
+
+    // Build a link path that starts AFTER the source's label.
+    const linkPath = (link) => {
+      const src = link.source;
+      const tgt = link.target;
+      const gapBeforeStart = 8;     // gap between label end and line start
+      const gapBeforeCircle = 8;    // gap between line end and target circle
+      const srcHoriz = src.y + 12 + measuredW(src) + gapBeforeStart;
+      const tgtHoriz = tgt.y - gapBeforeCircle;
+      return bezier({
+        source: { y: srcHoriz, x: src.x },
+        target: { y: tgtHoriz, x: tgt.x },
+      });
+    };
 
     // Path lookup for the current hierarchy (uses d.data references).
     const pathOf = (d) => {
@@ -307,12 +333,14 @@ export default function CollapsibleTree({ data, onChange, editable = false }) {
         });
 
       // Label — hidden when this node is currently being edited (replaced
-      // by a foreignObject <input> in decorateNode below).
+      // by a foreignObject <input> in renderInlineEditor below). Always
+      // rendered on the RIGHT of the circle so long names never clip and
+      // the outgoing link doesn't cross the text.
       nodeEnter.append("text")
         .attr("class", "seg-label")
         .attr("dy", "0.32em")
-        .attr("x", (d) => (labelOnLeft(d) ? -12 : 12))
-        .attr("text-anchor", (d) => (labelOnLeft(d) ? "end" : "start"))
+        .attr("x", 12)
+        .attr("text-anchor", "start")
         .attr("paint-order", "stroke")
         .attr("stroke", "white")
         .attr("stroke-width", 3)
@@ -348,19 +376,33 @@ export default function CollapsibleTree({ data, onChange, editable = false }) {
         .attr("fill-opacity", 0)
         .attr("stroke-opacity", 0);
 
-      // ---- Links
+      // Measure label widths NOW that labels are in the DOM — links that
+      // depend on them are rendered right after this step.
+      gNode.selectAll("text.seg-label").each(function (d) {
+        try {
+          const bb = this.getBBox();
+          if (bb && bb.width > 0) labelWidthById.set(d.id, bb.width);
+        } catch (_e) { /* getBBox can throw on detached nodes */ }
+      });
+
+      // ---- Links (custom path — starts after source label, ends before
+      // target circle so it never overlaps a name)
       const link = gLink.selectAll("path.seg-link").data(links, (d) => d.target.id);
       const linkEnter = link.enter().append("path")
         .attr("class", "seg-link")
         .attr("d", () => {
-          const o = { x: source.x0, y: source.y0 };
-          return diagonal({ source: o, target: o });
+          // Enter from source's previous position — approximate the same
+          // "after-label" origin so the animation feels grounded.
+          const srcH = source.y0 + 12 + approxLabelW({ data: { name: "" } }) + 8;
+          const o = { y: srcH, x: source.x0 };
+          return bezier({ source: o, target: o });
         });
-      link.merge(linkEnter).transition(transition).attr("d", diagonal);
+      link.merge(linkEnter).transition(transition).attr("d", linkPath);
       link.exit().transition(transition).remove()
         .attr("d", () => {
-          const o = { x: source.x, y: source.y };
-          return diagonal({ source: o, target: o });
+          const srcH = source.y + 12 + approxLabelW({ data: { name: "" } }) + 8;
+          const o = { y: srcH, x: source.x };
+          return bezier({ source: o, target: o });
         });
 
       root.eachBefore((d) => { d.x0 = d.x; d.y0 = d.y; });
