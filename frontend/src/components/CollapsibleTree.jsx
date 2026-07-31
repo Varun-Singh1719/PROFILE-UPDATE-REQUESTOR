@@ -36,6 +36,14 @@ export default function CollapsibleTree({
   const zoomBehaviorRef = useRef(null);
   const didInitialFitRef = useRef(false);
   const fitToViewRef = useRef(null); // set inside useLayoutEffect
+  // Last-known cursor position over the SVG (in SVG pixel coords). Used
+  // to make the toolbar Zoom In / Zoom Out buttons zoom around the point
+  // the user is looking at, not the abstract centre of the canvas.
+  const lastCursorRef = useRef(null);
+  // Bound inside useLayoutEffect; called from toolbar buttons and the "F"
+  // keyboard shortcut so we always use the latest hierarchy.
+  const focusNodeRef = useRef(null);
+  const zoomAtPointRef = useRef(null); // (kFactor: number) => void
 
   // Local mirror of the incoming `data` — we mutate this scratchpad on
   // every add / rename / cancel, and only sync back to the parent via
@@ -209,6 +217,11 @@ export default function CollapsibleTree({
   const handlersRef = useRef({});
   handlersRef.current = { startAddChild, startAddPeer, startRename, commitEdit, cancelEdit };
 
+  // Timer used to distinguish a single click (toggle expand/collapse)
+  // from a double click (focus/zoom-to-node) on a node circle. Persists
+  // across useLayoutEffect re-renders.
+  const clickTimerRef = useRef(null);
+
   // -------------------------------------------- tree render (D3)
   useLayoutEffect(() => {
     if (!svgRef.current || !containerRef.current || !viewData) return;
@@ -369,7 +382,14 @@ export default function CollapsibleTree({
       .attr("pointer-events", "all");
 
     // ------------------------------------------ update()
-    function update(source, event) {
+    // opts.anchor (optional) — { node, oldX, oldY }:
+    //   Preserves the anchor node's on-screen pixel position across the
+    //   layout change, so an expand/collapse never yanks the tree around
+    //   the clicked node. If the newly-visible descendants would overflow
+    //   the viewport, we add a minimal extra pan (intelligent auto-pan)
+    //   so users always see what they just revealed without losing sight
+    //   of the parent.
+    function update(source, event, opts) {
       const duration = event && event.altKey ? 2500 : 260;
       const nodes = root.descendants().reverse();
       const links = root.links();
@@ -396,6 +416,69 @@ export default function CollapsibleTree({
 
       const transition = svg.transition().duration(duration);
 
+      // -------- Viewport-preserving pan (anchor + auto-pan) ------------
+      // We animate the zoom transform in parallel with the node/link
+      // transitions using the same duration & easing → the tree "breathes
+      // open" around the clicked node instead of the whole thing shifting.
+      if (opts && opts.anchor && zoomBehaviorRef.current) {
+        const anchor = opts.anchor;
+        const t = d3.zoomTransform(svgRef.current);
+        // Delta in LOGICAL coords needed to keep the clicked node at the
+        // exact same screen pixel it was at before the toggle.
+        //   screen = t.x + logicalY * t.k
+        //   old_logicalY was anchor.oldY; new_logicalY is anchor.node.y.
+        // translateBy(dx, dy) shifts the transform's tx by t.k * dx, so
+        // passing (oldY - newY, oldX - newX) is exactly right.
+        let dX = anchor.oldY - anchor.node.y;
+        let dY = anchor.oldX - anchor.node.x;
+
+        // ---- Intelligent auto-pan: after anchor, if the anchor's newly-
+        // visible subtree runs past the viewport, add just enough extra
+        // pan to bring it in without pushing the parent off-screen.
+        if (anchor.node.children && anchor.node.children.length > 0) {
+          const margin = 24;
+          // Where would the transform sit after the anchor delta?
+          const projTx = t.x + t.k * dX;
+          const projTy = t.y + t.k * dY;
+          // Bounding box of the anchor's subtree in LOGICAL coords.
+          let maxRight = -Infinity, minLeft = Infinity, maxBottom = -Infinity, minTop = Infinity;
+          anchor.node.each((cc) => {
+            const lw = measuredW(cc);
+            const r  = cc.y + 12 + lw;
+            const l  = cc.y - nodeRadius;
+            const bT = cc.x - 14;
+            const bB = cc.x + 14;
+            if (r > maxRight) maxRight = r;
+            if (l < minLeft)  minLeft  = l;
+            if (bB > maxBottom) maxBottom = bB;
+            if (bT < minTop)   minTop   = bT;
+          });
+
+          // Right overflow → pan the tree LEFT by the overflow amount.
+          const rightScreen = projTx + maxRight * t.k;
+          if (rightScreen > cw - margin) {
+            dX -= (rightScreen - (cw - margin)) / t.k;
+          }
+          // Bottom overflow
+          const botScreen = projTy + maxBottom * t.k;
+          if (botScreen > ch - margin) {
+            dY -= (botScreen - (ch - margin)) / t.k;
+          }
+          // Top overflow (mostly when collapsing repositions upward)
+          const topScreen = projTy + minTop * t.k;
+          if (topScreen < margin) {
+            dY += (margin - topScreen) / t.k;
+          }
+          // NOTE: we deliberately do NOT correct left overflow — that
+          // would push the parent off-screen, which the spec forbids.
+        }
+
+        if (Math.abs(dX) > 0.1 || Math.abs(dY) > 0.1) {
+          svg.transition().duration(duration).ease(d3.easeCubicOut)
+            .call(zoomBehaviorRef.current.translateBy, dX, dY);
+        }
+      }
+
       // ---- Nodes
       const node = gNode.selectAll("g.seg-node").data(nodes, (d) => d.id);
       const nodeEnter = node.enter().append("g")
@@ -410,12 +493,32 @@ export default function CollapsibleTree({
         .attr("fill", (d) => (hasKids(d) ? "#ec9324" : "#fff"))
         .attr("stroke", "#ec9324")
         .attr("stroke-width", 2)
+        // Single-click on the circle = toggle expand/collapse WITH anchor
+        // preservation. Double-click = smooth focus/zoom onto the node.
+        // We debounce the single-click by 220 ms so a double-click never
+        // fires a spurious toggle-toggle-focus sequence.
         .on("click", (evt, d) => {
           evt.stopPropagation();
-          if (hasKids(d)) {
-            d.children = d.children ? null : d._children;
-            update(d, evt);
+          if (!hasKids(d)) return;
+          if (clickTimerRef.current) {
+            clearTimeout(clickTimerRef.current);
           }
+          clickTimerRef.current = setTimeout(() => {
+            clickTimerRef.current = null;
+            // Capture the clicked node's logical position BEFORE mutating
+            // so we can pin its screen pixel across the layout change.
+            const anchor = { node: d, oldX: d.x, oldY: d.y };
+            d.children = d.children ? null : d._children;
+            update(d, evt, { anchor });
+          }, 220);
+        })
+        .on("dblclick", (evt, d) => {
+          evt.stopPropagation();
+          if (clickTimerRef.current) {
+            clearTimeout(clickTimerRef.current);
+            clickTimerRef.current = null;
+          }
+          focusNode(d);
         });
 
       // Label — hidden when this node is currently being edited (replaced
@@ -666,7 +769,7 @@ export default function CollapsibleTree({
     // link paths. Wheel is always allowed (wheel + no ctrl → pan; wheel +
     // ctrl → zoom, matching the trackpad pinch gesture browsers emit).
     const zoomBehavior = d3.zoom()
-      .scaleExtent([0.15, 3])
+      .scaleExtent([0.1, 4])
       .filter((evt) => {
         // Always allow wheel (we translate the semantics below).
         if (evt.type === "wheel") return true;
@@ -701,6 +804,52 @@ export default function CollapsibleTree({
     svg.call(zoomBehavior).on("dblclick.zoom", null); // preserve dbl-click rename
 
     zoomBehaviorRef.current = zoomBehavior;
+
+    // Track cursor position over the SVG so the toolbar zoom buttons can
+    // pivot around whatever the user is currently looking at. We DO NOT
+    // clear this ref on mouseleave — the whole point is that when the
+    // user's cursor moves off the SVG (typically to click a toolbar
+    // button), we still zoom around the last-inspected spot instead of
+    // snapping back to the abstract viewport centre.
+    svg.on("mousemove.cursor", (evt) => {
+      const [x, y] = d3.pointer(evt, svgRef.current);
+      lastCursorRef.current = [x, y];
+    });
+
+    // -------- Focus a node: smooth centre + brief highlight ------------
+    const focusNode = (d, targetScale = 1.1) => {
+      if (!d) return;
+      const cw = container.clientWidth || 1000;
+      const ch = container.clientHeight || 600;
+      // Clamp scale into the zoom extent.
+      const k = Math.max(0.1, Math.min(4, targetScale));
+      const target = d3.zoomIdentity
+        .translate(cw / 2 - d.y * k, ch / 2 - d.x * k)
+        .scale(k);
+      svg.transition().duration(500).ease(d3.easeCubicOut)
+        .call(zoomBehavior.transform, target);
+      // Brief highlight — swell + pulse the circle so the user immediately
+      // spots the newly-focused node.
+      gNode.selectAll("g.seg-node")
+        .filter((n) => n === d)
+        .select("circle.seg-circle")
+        .transition().duration(240).ease(d3.easeCubicOut)
+        .attr("r", nodeRadius * 2.4)
+        .attr("stroke-width", 3.5)
+        .transition().delay(180).duration(360).ease(d3.easeCubicOut)
+        .attr("r", nodeRadius)
+        .attr("stroke-width", 2);
+    };
+    focusNodeRef.current = focusNode;
+
+    // -------- Cursor-centred zoom (used by toolbar buttons + "+/-" keys)
+    const zoomAtPoint = (kFactor) => {
+      const [cx, cy] = lastCursorRef.current ||
+        [(container.clientWidth || 1000) / 2, (container.clientHeight || 600) / 2];
+      svg.transition().duration(180).ease(d3.easeCubicOut)
+        .call(zoomBehavior.scaleBy, kFactor, [cx, cy]);
+    };
+    zoomAtPointRef.current = zoomAtPoint;
 
     // --- Fit-to-view: compute the bounding box of visible nodes/labels
     // and centre + scale so the whole thing fits inside the container.
@@ -769,14 +918,24 @@ export default function CollapsibleTree({
         case "ArrowDown":  dyKey = -step; break;
         case "0":          if (fitToViewRef.current) { evt.preventDefault(); fitToViewRef.current(true); } return;
         case "+":
-        case "=":          if (zoomBehaviorRef.current) { evt.preventDefault(); svg.transition().duration(180).call(zoomBehaviorRef.current.scaleBy, 1.25); } return;
+        case "=":          if (zoomAtPointRef.current) { evt.preventDefault(); zoomAtPointRef.current(1.25); } return;
         case "-":
-        case "_":          if (zoomBehaviorRef.current) { evt.preventDefault(); svg.transition().duration(180).call(zoomBehaviorRef.current.scaleBy, 1 / 1.25); } return;
+        case "_":          if (zoomAtPointRef.current) { evt.preventDefault(); zoomAtPointRef.current(1 / 1.25); } return;
+        case "f":
+        case "F":          {
+          // Focus on the currently selected node (if any)
+          if (selectedIdRef.current != null && focusNodeRef.current) {
+            const target = root.descendants().find((n) => n.id === selectedIdRef.current);
+            if (target) { evt.preventDefault(); focusNodeRef.current(target); }
+          }
+          return;
+        }
         default: return;
       }
       evt.preventDefault();
-      const current = d3.zoomTransform(svgRef.current);
-      svg.call(zoomBehavior.translateBy, dxKey / current.k, dyKey / current.k);
+      // Keyboard pan uses a short animation for a smoother feel.
+      svg.transition().duration(120).ease(d3.easeCubicOut)
+        .call(zoomBehavior.translateBy, dxKey / d3.zoomTransform(svgRef.current).k, dyKey / d3.zoomTransform(svgRef.current).k);
     };
     container.addEventListener("keydown", onKeyDown);
 
@@ -789,15 +948,15 @@ export default function CollapsibleTree({
   }, [viewData, editable, editingPath, defaultExpandDepth]);
 
   // -------------------------------------------- toolbar callbacks
+  // Buttons zoom around the LAST-KNOWN cursor position over the SVG (or
+  // the viewport centre if the cursor has never entered the canvas). This
+  // matches Figma / Miro / Google Maps behaviour: the point of interest
+  // stays under the cursor while the tree scales around it.
   const zoomIn = useCallback(() => {
-    if (!zoomBehaviorRef.current || !svgRef.current) return;
-    d3.select(svgRef.current).transition().duration(180)
-      .call(zoomBehaviorRef.current.scaleBy, 1.25);
+    if (zoomAtPointRef.current) zoomAtPointRef.current(1.3);
   }, []);
   const zoomOut = useCallback(() => {
-    if (!zoomBehaviorRef.current || !svgRef.current) return;
-    d3.select(svgRef.current).transition().duration(180)
-      .call(zoomBehaviorRef.current.scaleBy, 1 / 1.25);
+    if (zoomAtPointRef.current) zoomAtPointRef.current(1 / 1.3);
   }, []);
   const fit = useCallback(() => {
     if (fitToViewRef.current) fitToViewRef.current(true);
