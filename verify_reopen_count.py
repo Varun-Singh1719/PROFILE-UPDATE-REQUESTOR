@@ -2,7 +2,7 @@
 """Quick verification of reopen count behavior"""
 import requests
 
-BASE_URL = "https://metrics-calc-config.preview.emergentagent.com/api"
+BASE_URL = "https://crm-module-1.preview.emergentagent.com/api"
 ADMIN_EMAIL = "admin@ticketing.com"
 ADMIN_PASSWORD = "Admin@123"
 

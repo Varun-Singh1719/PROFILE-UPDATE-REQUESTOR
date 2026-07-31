@@ -25,7 +25,7 @@ import sys
 from typing import Optional, Dict, Any, List
 
 # Backend URL
-BASE_URL = "https://299c275b-1ec2-49f7-b51b-4e0b0901d5dd.preview.emergentagent.com/api"
+BASE_URL = "https://crm-module-1.preview.emergentagent.com/api"
 
 # Test credentials
 ADMIN_EMAIL = "admin@ticketing.com"
