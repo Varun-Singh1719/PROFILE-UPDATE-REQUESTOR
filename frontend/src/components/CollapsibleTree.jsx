@@ -1,45 +1,76 @@
-import React, { useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
 import * as d3 from "d3";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "./ui/dialog";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 
 /**
- * CollapsibleTree — a React wrapper around the classic
+ * CollapsibleTree — React wrapper around the classic
  * https://observablehq.com/@d3/collapsible-tree example.
  *
  * Props:
- *   data        — hierarchical object { name, children?: [...] }
- *   onChange?   — called with the updated data whenever the user mutates
- *                 the tree (add child, rename, delete). If omitted, the
- *                 tree is read-only.
- *   editable?   — bool; when true the "add child" affordance is shown on
- *                 the selected node.
+ *   data      — hierarchical object { name, children?: [...] }
+ *   onChange? — called with the updated data whenever the user mutates the
+ *               tree (add child / rename). If omitted the tree is read-only.
+ *   editable? — bool; enables the "+ Add" chip and inline rename.
  *
  * Behaviour:
- *   • Root at LEFT, tree grows to the RIGHT (horizontal layout).
- *   • Click a node's circle → toggle collapse/expand.
- *   • When editable: single-click a node's LABEL → selects it (blue ring)
- *     and a small "+" chip appears next to it. Click "+" to add a child.
- *     Double-click a label → rename inline. Right-click / Delete key on a
- *     selected non-root node → delete branch.
- *   • Smooth d3 transitions match the observable example.
+ *   • Horizontal layout — root on the LEFT, tree grows to the RIGHT.
+ *   • SVG fills its container and the content is vertically centered
+ *     (`preserveAspectRatio="xMinYMid meet"`).
+ *   • Circle click  → collapse/expand.
+ *   • Label click   → select node (blue ring).
+ *   • Selected node shows a "+ Add" chip AFTER the label (measured with
+ *     getBBox so there's no overlap on any name length).
+ *   • Label double-click → rename via the in-app modal (NOT window.prompt).
+ *   • All errors surface via the same in-app modal — no browser alerts.
  */
 export default function CollapsibleTree({ data, onChange, editable = false }) {
   const svgRef = useRef(null);
   const containerRef = useRef(null);
-  const rootRef = useRef(null); // the d3 hierarchy root (with _children for collapsed)
-  const selectedIdRef = useRef(null);
-  const iCounterRef = useRef(0);
 
-  // Immutable snapshot of the data → hierarchy. Any mutation goes through
-  // onChange with a fresh JSON structure so the parent stays authoritative.
-  const cloneDataFromHierarchy = useCallback((root) => {
+  // The last selected node id — kept in a ref so d3 handlers stay in sync
+  // without triggering a re-render every time selection changes.
+  const selectedIdRef = useRef(null);
+
+  // React-managed prompt/error dialog. The d3 handlers open it through
+  // setPrompt(...).  target is the *d3 hierarchy node* whose data we mutate.
+  const [prompt, setPrompt] = useState(null);
+  // prompt shape:
+  //   { mode: 'add' | 'rename',   target: d3-node, initial: string }
+  // OR
+  //   { mode: 'error',            message: string }
+  const [promptValue, setPromptValue] = useState("");
+  const [promptError, setPromptError] = useState("");
+
+  useEffect(() => {
+    if (prompt && (prompt.mode === "add" || prompt.mode === "rename")) {
+      setPromptValue(prompt.initial || "");
+      setPromptError("");
+    }
+  }, [prompt]);
+
+  // ---- Clone raw data from d3 hierarchy's *data* pointer -----------------
+  // We MUST walk `node.data` here (the raw JS object) because our add-child
+  // logic mutates `target.data.children.push(...)`. Walking `node.children`
+  // (the hierarchy's own child list) would miss those mutations.
+  const cloneFromRootData = useCallback((rootData) => {
     const walk = (n) => {
-      const kids = (n.children || n._children || []).map(walk);
-      return kids.length ? { name: n.data.name, children: kids } : { name: n.data.name };
+      const kids = Array.isArray(n?.children) ? n.children.map(walk) : [];
+      return kids.length ? { name: n.name, children: kids } : { name: n.name };
     };
-    return walk(root);
+    return walk(rootData);
   }, []);
 
-  // (Re)build the tree whenever `data` changes.
+  // Whether the current dialog has been confirmed. On confirm, d3 handlers
+  // above have queued a mutation and closed the dialog; that closing calls
+  // setPrompt(null) which re-runs this effect and mutates `data`.
+  const confirmPromptRef = useRef(null);
+
+  // ------------------------------------------------------------- render tree
   useLayoutEffect(() => {
     if (!svgRef.current || !containerRef.current || !data) return;
 
@@ -47,78 +78,102 @@ export default function CollapsibleTree({ data, onChange, editable = false }) {
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
 
-    // ---- Layout constants (from the observable notebook, tuned for our UI)
-    const marginTop = 10;
-    const marginRight = 200;
-    const marginBottom = 10;
+    // Layout constants (from the observable notebook, tuned for our UI)
+    const marginTop = 20;
+    const marginRight = 220;
+    const marginBottom = 20;
     const marginLeft = 40;
+    const nodeRadius = 6;
+    const dx = 34; // vertical distance between siblings
 
-    const dx = 32; // vertical distance between siblings
-    const nodeRadius = 5;
+    // Build a shielded hierarchy — d3.hierarchy mutates the raw objects to add
+    // .children pointers, so we work off a JSON clone. `d.data` will then
+    // point into this *cloned* structure, giving us a safe scratchpad we can
+    // mutate freely before emitting via onChange.
+    const dataClone = JSON.parse(JSON.stringify(data));
+    const root = d3.hierarchy(dataClone);
 
-    const width = () => container.clientWidth || 1000;
-
-    // Build the hierarchy from the snapshot
-    const root = d3.hierarchy(data);
-    rootRef.current = root;
-
-    // Assign a stable-ish id to every node
-    iCounterRef.current = 0;
+    // Assign a stable numeric id per node so the selection ring survives
+    // collapse/expand cycles inside a single render.
+    let idCounter = 0;
     root.each((d) => {
-      d.id = iCounterRef.current++;
+      d.id = idCounter++;
       d._children = d.children;
-    });
-    // Collapse everything below depth 1 by default so the initial view is compact
-    root.descendants().forEach((d) => {
+      // Collapse everything below depth 1 by default so the initial view is
+      // compact but users can still see the first-level branches.
       if (d.depth >= 1) d.children = null;
     });
-    // Restore first-level children so the root's branches are visible.
     if (root._children) root.children = root._children;
 
-    // Horizontal tree layout — root at LEFT, children to the RIGHT
-    const dy = Math.max(160, (width() - marginLeft - marginRight) / Math.max(1, root.height + 1));
+    // Horizontal tree layout — root on LEFT, branches grow RIGHT.
+    const dy = 200;
     const treeLayout = d3.tree().nodeSize([dx, dy]);
     const diagonal = d3.linkHorizontal().x((d) => d.y).y((d) => d.x);
 
-    // Root positioned at (0, 0)
     root.x0 = 0;
     root.y0 = 0;
 
-    const gLink = svg.append("g")
+    // Helper: is this node currently a parent (has any child, expanded OR
+    // collapsed)?  We can't just do `d._children` — an empty array `[]` is
+    // TRUTHY in JS, which was mis-flagging fresh root nodes with `children:
+    // []` as non-leaves and rendering their labels LEFT of the circle
+    // (off-screen).  See bug fix Jul 31 2026.
+    const hasKids = (d) =>
+      (Array.isArray(d._children) && d._children.length > 0) ||
+      (Array.isArray(d.children) && d.children.length > 0);
+
+    // Layout direction of a node's label. Non-root, non-leaf → label LEFT
+    // (observable convention). Root is ALWAYS labelled to the RIGHT so we
+    // never lose long names off the left edge of the viewport.
+    const labelOnLeft = (d) => d.depth > 0 && hasKids(d);
+
+    const gRoot = svg.append("g");
+
+    const gLink = gRoot.append("g")
       .attr("fill", "none")
       .attr("stroke", "#cbd5e1")
       .attr("stroke-opacity", 0.9)
       .attr("stroke-width", 1.5);
 
-    const gNode = svg.append("g")
+    const gNode = gRoot.append("g")
       .attr("cursor", "pointer")
       .attr("pointer-events", "all");
 
+    // -------------- update() renders one d3 layout pass -------------------
     function update(source, event) {
-      const duration = event && event.altKey ? 2500 : 250;
+      const duration = event && event.altKey ? 2500 : 260;
       const nodes = root.descendants().reverse();
       const links = root.links();
 
       treeLayout(root);
 
-      let left = root;
-      let right = root;
+      // Content bounds (in tree coordinates)
+      let top = root, bot = root;
       root.eachBefore((n) => {
-        if (n.x < left.x) left = n;
-        if (n.x > right.x) right = n;
+        if (n.x < top.x) top = n;
+        if (n.x > bot.x) bot = n;
       });
+      const contentH = (bot.x - top.x) + marginTop + marginBottom;
+      const cw = container.clientWidth || 1000;
+      const ch = container.clientHeight || 600;
 
-      const height = right.x - left.x + marginTop + marginBottom;
-      const w = width();
+      // viewBox = container pixel dimensions → no scaling, no
+      // preserveAspectRatio surprises.  We centre the tree vertically inside
+      // that box via a translate on the outer group.
+      svg.attr("viewBox", `0 0 ${cw} ${ch}`)
+        .attr("preserveAspectRatio", "none");
 
-      const transition = svg.transition()
+      // Vertical centre: shift down by (ch - contentH)/2, then offset by
+      // -top.x so the topmost node lands at that shifted origin. Root stays
+      // pinned to marginLeft on the LEFT (per user request).
+      const yShift = Math.max(marginTop, (ch - contentH) / 2) - top.x;
+      gRoot.transition()
         .duration(duration)
-        .attr("viewBox", `${-marginLeft} ${left.x - marginTop} ${w} ${height}`)
-        .attr("height", height)
-        .attr("width", w)
-        .tween("resize", window.ResizeObserver ? null : () => () => svg.dispatch("toggle"));
+        .attr("transform", `translate(${marginLeft},${yShift})`);
 
-      // ---- NODES ----
+      const transition = svg.transition().duration(duration);
+
+      // ------------------------------------------------------------ nodes
       const node = gNode.selectAll("g.seg-node").data(nodes, (d) => d.id);
 
       const nodeEnter = node.enter().append("g")
@@ -127,71 +182,63 @@ export default function CollapsibleTree({ data, onChange, editable = false }) {
         .attr("fill-opacity", 0)
         .attr("stroke-opacity", 0);
 
-      // Circle: click to expand/collapse
+      // Circle → collapse/expand toggle
       nodeEnter.append("circle")
+        .attr("class", "seg-circle")
         .attr("r", nodeRadius)
-        .attr("fill", (d) => (d._children ? "#ec9324" : "#fff"))
+        .attr("fill", (d) => (hasKids(d) ? "#ec9324" : "#fff"))
         .attr("stroke", "#ec9324")
         .attr("stroke-width", 2)
-        .on("click", (event, d) => {
-          event.stopPropagation();
-          d.children = d.children ? null : d._children;
-          update(d, event);
+        .on("click", (evt, d) => {
+          evt.stopPropagation();
+          if (hasKids(d)) {
+            d.children = d.children ? null : d._children;
+            update(d, evt);
+          }
         });
 
-      // Label text
+      // Label
       nodeEnter.append("text")
+        .attr("class", "seg-label")
         .attr("dy", "0.32em")
-        .attr("x", (d) => (d._children ? -10 : 10))
-        .attr("text-anchor", (d) => (d._children ? "end" : "start"))
+        .attr("x", (d) => (labelOnLeft(d) ? -12 : 12))
+        .attr("text-anchor", (d) => (labelOnLeft(d) ? "end" : "start"))
         .attr("paint-order", "stroke")
         .attr("stroke", "white")
         .attr("stroke-width", 3)
         .attr("stroke-linejoin", "round")
         .attr("fill", "#111827")
-        .style("font-size", "12.5px")
+        .style("font-size", "13px")
         .style("font-family", "Inter, system-ui, sans-serif")
         .style("font-weight", (d) => (d.depth === 0 ? "700" : "500"))
         .text((d) => d.data.name)
-        .on("click", (event, d) => {
-          event.stopPropagation();
+        .on("click", (evt, d) => {
+          evt.stopPropagation();
           if (!editable) return;
           selectedIdRef.current = d.id;
           renderSelectionRing();
+          renderAddChips();
         })
-        .on("dblclick", (event, d) => {
-          event.stopPropagation();
+        .on("dblclick", (evt, d) => {
+          evt.stopPropagation();
           if (!editable) return;
-          const current = d.data.name || "";
-          const next = window.prompt("Rename node:", current);
-          if (next !== null) {
-            const trimmed = next.trim();
-            if (trimmed && trimmed !== current) {
-              d.data.name = trimmed;
-              // For the ROOT node the segmentation title is edited elsewhere;
-              // still allow rename here for consistency.
-              onChange?.(cloneDataFromHierarchy(root));
-              update(d);
-            }
-          }
+          setPrompt({ mode: "rename", target: d, initial: d.data.name || "" });
         });
 
-      // Enter → merge
       const nodeUpdate = node.merge(nodeEnter).transition(transition)
         .attr("transform", (d) => `translate(${d.y},${d.x})`)
         .attr("fill-opacity", 1)
         .attr("stroke-opacity", 1);
 
-      nodeUpdate.select("circle")
-        .attr("fill", (d) => (d._children ? "#ec9324" : "#fff"));
+      nodeUpdate.select("circle.seg-circle")
+        .attr("fill", (d) => (hasKids(d) ? "#ec9324" : "#fff"));
 
-      // Exit
       node.exit().transition(transition).remove()
         .attr("transform", () => `translate(${source.y},${source.x})`)
         .attr("fill-opacity", 0)
         .attr("stroke-opacity", 0);
 
-      // ---- LINKS ----
+      // ------------------------------------------------------------ links
       const link = gLink.selectAll("path.seg-link").data(links, (d) => d.target.id);
 
       const linkEnter = link.enter().append("path")
@@ -208,82 +255,87 @@ export default function CollapsibleTree({ data, onChange, editable = false }) {
           return diagonal({ source: o, target: o });
         });
 
-      // Cache prev positions for the next transition
       root.eachBefore((d) => { d.x0 = d.x; d.y0 = d.y; });
 
-      renderSelectionRing();
-      renderAddChips();
+      // Selection ring + chips are rendered AFTER the transition kicks so
+      // getBBox() of the label reflects the final DOM.
+      window.requestAnimationFrame(() => {
+        renderSelectionRing();
+        renderAddChips();
+      });
     }
 
-    // ---- Selection ring (blue outline on selected node)
+    // ----------------------------------------- selection ring (blue)
     function renderSelectionRing() {
       gNode.selectAll("circle.seg-select-ring").remove();
       if (!editable || selectedIdRef.current == null) return;
       gNode.selectAll("g.seg-node")
         .filter((d) => d.id === selectedIdRef.current)
-        .insert("circle", "circle")
+        .insert("circle", "circle.seg-circle")
         .attr("class", "seg-select-ring")
-        .attr("r", 10)
-        .attr("fill", "rgba(59,130,246,0.10)")
+        .attr("r", nodeRadius + 5)
+        .attr("fill", "rgba(59,130,246,0.08)")
         .attr("stroke", "#3b82f6")
         .attr("stroke-width", 1.5);
     }
 
-    // ---- "+ add child" chips (only visible on hover / selected)
+    // ----------------------------------------- "+ Add" chip
     function renderAddChips() {
       gNode.selectAll("g.seg-add-chip").remove();
       if (!editable) return;
-      const nodesSel = gNode.selectAll("g.seg-node");
-      nodesSel.each(function (d) {
+      gNode.selectAll("g.seg-node").each(function (d) {
         const g = d3.select(this);
-        // Position chip past the label; roughly 88px to the right of the node
-        const chipX = 22;
-        const chipY = -1;
+        // Only show chip on the selected node — keeps the canvas clean.
+        if (selectedIdRef.current !== d.id) return;
+
+        // Measure the label so the chip sits AFTER the text, never on top.
+        const labelSel = g.select("text.seg-label");
+        const labelNode = labelSel.node();
+        let chipX;
+        if (labelNode) {
+          const bbox = labelNode.getBBox();
+          if (labelOnLeft(d)) {
+            // Non-leaf (non-root) → label extends to the LEFT of the node;
+            // chip goes to the RIGHT of the circle with a small gap.
+            chipX = 14;
+          } else {
+            // Leaf OR root → label extends to the RIGHT of the node; chip
+            // sits AFTER the label text with a small gap.
+            chipX = bbox.x + bbox.width + 10;
+          }
+        } else {
+          chipX = 22;
+        }
+
+        const chipW = 62;
+        const chipH = 20;
         const chip = g.append("g")
           .attr("class", "seg-add-chip")
-          .attr("transform", `translate(${chipX},${chipY - 9})`)
-          .style("opacity", selectedIdRef.current === d.id ? 1 : 0)
-          .on("mouseenter", function () { d3.select(this).style("opacity", 1); })
-          .on("click", (event) => {
-            event.stopPropagation();
-            addChildTo(d);
+          .attr("transform", `translate(${chipX},${-chipH / 2})`)
+          .attr("cursor", "pointer")
+          .on("click", (evt) => {
+            evt.stopPropagation();
+            setPrompt({ mode: "add", target: d, initial: "" });
           });
+
         chip.append("rect")
-          .attr("width", 60).attr("height", 18).attr("rx", 9).attr("ry", 9)
-          .attr("fill", "#ec9324");
+          .attr("width", chipW).attr("height", chipH).attr("rx", chipH / 2).attr("ry", chipH / 2)
+          .attr("fill", "#ec9324")
+          .attr("stroke", "#d4811f")
+          .attr("stroke-width", 1);
         chip.append("text")
-          .attr("x", 30).attr("y", 12)
+          .attr("x", chipW / 2).attr("y", chipH / 2 + 4)
           .attr("text-anchor", "middle")
           .attr("fill", "white")
-          .style("font-size", "10.5px")
+          .style("font-size", "11px")
           .style("font-weight", "600")
           .style("font-family", "Inter, system-ui, sans-serif")
           .style("pointer-events", "none")
           .text("+ Add");
-        // Hover to show chip on any node
-        g.on("mouseenter.chip", () => chip.style("opacity", 1));
-        g.on("mouseleave.chip", () => {
-          if (selectedIdRef.current !== d.id) chip.style("opacity", 0);
-        });
       });
     }
 
-    // ---- Mutations ----
-    function addChildTo(d) {
-      const name = window.prompt("New child name:", "New segment");
-      if (name === null) return;
-      const trimmed = name.trim();
-      if (!trimmed) return;
-      // Ensure the target has children array & expanded state
-      if (!d.data.children) d.data.children = [];
-      d.data.children.push({ name: trimmed });
-      // Rebuild via onChange; the parent will pass fresh `data` in and
-      // the effect re-runs. Also expand the target so the new child shows.
-      const nextData = cloneDataFromHierarchy(root);
-      onChange?.(nextData);
-    }
-
-    // Clicking blank area deselects
+    // Click on blank → deselect
     svg.on("click", () => {
       if (selectedIdRef.current != null) {
         selectedIdRef.current = null;
@@ -292,21 +344,130 @@ export default function CollapsibleTree({ data, onChange, editable = false }) {
       }
     });
 
+    // ------------------------------------------ Confirm handler bridge
+    // The React dialog's onConfirm needs to call back into this closure so
+    // it can mutate `d.data` on the *current* hierarchy and re-render. We
+    // expose that via a ref stored on the component.
+    confirmPromptRef.current = ({ mode, target, value }) => {
+      const trimmed = (value || "").trim();
+      if (!trimmed) {
+        return { error: "Name cannot be empty" };
+      }
+      if (trimmed.length > 120) {
+        return { error: "Name cannot exceed 120 characters" };
+      }
+      if (!target || !target.data) {
+        return { error: "Selected node no longer exists — please retry." };
+      }
+      if (mode === "add") {
+        if (!Array.isArray(target.data.children)) target.data.children = [];
+        target.data.children.push({ name: trimmed });
+      } else if (mode === "rename") {
+        target.data.name = trimmed;
+      }
+      // Emit the mutated data upward — walking root.data catches the push.
+      const next = cloneFromRootData(root.data);
+      onChange?.(next);
+      return { ok: true };
+    };
+
     // First render
     update(root);
 
-    // Resize observer to keep the layout responsive
+    // Responsive resize
     const ro = new ResizeObserver(() => update(root));
     ro.observe(container);
     return () => ro.disconnect();
-  }, [data, editable, onChange, cloneDataFromHierarchy]);
+  }, [data, editable, onChange, cloneFromRootData]);
 
+  // -------------------- Confirm / cancel dialog handlers ------------------
+  const handleConfirm = () => {
+    if (!prompt) return;
+    if (prompt.mode === "error") { setPrompt(null); return; }
+    const fn = confirmPromptRef.current;
+    if (!fn) { setPrompt(null); return; }
+    const res = fn({ mode: prompt.mode, target: prompt.target, value: promptValue });
+    if (res && res.error) {
+      setPromptError(res.error);
+      return;
+    }
+    setPrompt(null);
+  };
+
+  const handleCancel = () => setPrompt(null);
+
+  // ------------------------------------------------------------------ JSX
   return (
-    <div ref={containerRef} className="w-full h-full overflow-auto bg-white">
+    <div ref={containerRef} className="w-full h-full overflow-hidden bg-white">
       <svg
         ref={svgRef}
-        style={{ font: "12px Inter, system-ui, sans-serif", maxWidth: "100%", height: "auto" }}
+        width="100%"
+        height="100%"
+        style={{ font: "13px Inter, system-ui, sans-serif", display: "block" }}
+        data-testid="segmentation-tree-svg"
       />
+
+      {/* ── Custom in-app prompt / error dialog (replaces window.prompt) ── */}
+      <Dialog open={!!prompt} onOpenChange={(o) => { if (!o) handleCancel(); }}>
+        <DialogContent className="max-w-sm" data-testid="tree-node-dialog">
+          {prompt?.mode === "error" ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-red-600">Something went wrong</DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-gray-700 pt-1">{prompt.message}</p>
+              <DialogFooter>
+                <Button onClick={handleCancel} className="bg-[#ec9324] hover:bg-[#d4811f] text-white">
+                  OK
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>
+                  {prompt?.mode === "rename" ? "Rename node" : "Add child node"}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="pt-1 space-y-3">
+                <div>
+                  <Label htmlFor="tree-node-input" className="text-xs font-medium text-gray-600">
+                    {prompt?.mode === "rename" ? "New name" : "Child name"}
+                  </Label>
+                  <Input
+                    id="tree-node-input"
+                    value={promptValue}
+                    autoFocus
+                    onChange={(e) => { setPromptValue(e.target.value); setPromptError(""); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleConfirm(); } }}
+                    placeholder={prompt?.mode === "rename" ? "Node name" : "e.g. Enterprise"}
+                    maxLength={120}
+                    data-testid="tree-node-input"
+                  />
+                  {promptError && (
+                    <p className="text-xs text-red-600 mt-1" data-testid="tree-node-error">
+                      {promptError}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={handleCancel} data-testid="tree-node-cancel">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleConfirm}
+                  disabled={!promptValue.trim()}
+                  className="bg-[#ec9324] hover:bg-[#d4811f] text-white"
+                  data-testid="tree-node-confirm"
+                >
+                  {prompt?.mode === "rename" ? "Save" : "Add"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
