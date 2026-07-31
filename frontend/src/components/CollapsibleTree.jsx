@@ -246,7 +246,7 @@ export default function CollapsibleTree({
       }
     });
 
-    const dy = 200;
+    const dy = 1; // minimal — real horizontal position is assigned per depth below
     const treeLayout = d3.tree().nodeSize([dx, dy]);
     // Horizontal cubic bezier link generator (source on the LEFT, target
     // on the RIGHT). We drive it with adjusted endpoints so the line
@@ -269,9 +269,57 @@ export default function CollapsibleTree({
     // Map<hierarchyNodeId, labelPixelWidth> — populated after nodeEnter
     // renders the labels, used to offset the outgoing link start.
     const labelWidthById = new Map();
-    const approxLabelW = (d) => Math.max(24, ((d.data.name || "").length * 7.2) + 6);
-    const measuredW = (d) =>
-      labelWidthById.get(d.id) != null ? labelWidthById.get(d.id) : approxLabelW(d);
+    // Slightly wide-side approximation (7.6 factor + 8 pad) so we err on the
+    // side of *more* column width, which prevents links from starting AFTER
+    // the next depth's column (the "reverse-order" visual bug).
+    const approxLabelW = (d) => Math.max(28, ((d.data.name || "").length * 7.6) + 8);
+    const measuredW = (d) => {
+      const m = labelWidthById.get(d.id);
+      const a = approxLabelW(d);
+      // Use the LARGER of measured & approx so a slightly-wide font glyph
+      // never causes overflow past its allotted column.
+      if (m == null) return a;
+      return Math.max(m, a);
+    };
+
+    // ----------------------------------------------------------------
+    // Dynamic per-depth column layout.
+    // d3.tree with nodeSize([dx, dy]) gives every depth the SAME horizontal
+    // step, which visibly breaks when labels are longer than dy: the
+    // outgoing link start ends up past the next column and appears to loop
+    // backward. To fix that at every level we assign each depth its own
+    // column width, sized to fit the widest label at that depth PLUS the
+    // gaps used by linkPath() (label-end gap + circle gap + small pad).
+    // The result: text/lines never crash between adjacent columns
+    // regardless of label length.
+    // ----------------------------------------------------------------
+    const COL_LABEL_PAD = 12;   // where label starts inside its column (matches text x=12)
+    const COL_GAP_START = 8;    // gap between label-end and link-start
+    const COL_GAP_END   = 8;    // gap between link-end and next circle
+    const COL_SAFETY    = 12;   // extra breathing room
+    // The link source is drawn AFTER the source label ends; the link target
+    // is drawn just BEFORE the next circle. Column-to-column advance is
+    // therefore  labelPad + labelW + startGap + endGap + safety.
+    const depthAdvance = (labelW) =>
+      COL_LABEL_PAD + labelW + COL_GAP_START + COL_GAP_END + COL_SAFETY;
+
+    // Compute per-depth max label width (using visible descendants only)
+    // and cumulative column X. Recomputed on every update() because
+    // expand/collapse changes which nodes participate.
+    let colX = [0];
+    function recomputeColumns() {
+      colX = [0];
+      const maxByDepth = new Map();
+      root.each((d) => {
+        const w = measuredW(d);
+        const cur = maxByDepth.get(d.depth) || 0;
+        if (w > cur) maxByDepth.set(d.depth, w);
+      });
+      const maxDepth = root.height; // 0 for a lone root
+      for (let dd = 1; dd <= maxDepth; dd++) {
+        colX[dd] = colX[dd - 1] + depthAdvance(maxByDepth.get(dd - 1) || 0);
+      }
+    }
 
     // Build a link path that starts AFTER the source's label.
     const linkPath = (link) => {
@@ -317,6 +365,16 @@ export default function CollapsibleTree({
       const links = root.links();
 
       treeLayout(root);
+
+      // Re-assign each node's HORIZONTAL position (d.y) based on the
+      // per-depth column X we computed from label widths — this replaces
+      // d3.tree's uniform dy*depth spacing so long labels never bleed into
+      // the next column. Vertical (d.x) stays exactly as Reingold-Tilford
+      // computed it, which correctly prevents subtree overlap vertically.
+      recomputeColumns();
+      root.each((d) => {
+        d.y = colX[d.depth] || 0;
+      });
 
       const cw = container.clientWidth || 1000;
       const ch = container.clientHeight || 600;
