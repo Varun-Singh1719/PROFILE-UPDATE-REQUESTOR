@@ -616,11 +616,13 @@ function TreeEditorDialog({ seg, onClose, onSaved }) {
               {seg.name}
             </h2>
             <p className="text-xs text-gray-500 truncate">
-              Click a label to select it. Use the orange&nbsp;
+              Click a label to select. Hit the orange&nbsp;
               <span className="font-semibold text-[#ec9324]">+ Child</span>&nbsp;
               chip to grow deeper, or the blue&nbsp;
               <span className="font-semibold text-[#0ea5e9]">+ Peer</span>&nbsp;
-              chip (Level&nbsp;2+) to add a sibling. Double-click a label to rename.
+              chip (Level&nbsp;2+) to add a sibling — a new node appears right
+              on the canvas with a cursor ready. Double-click any label to
+              rename.
             </p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
