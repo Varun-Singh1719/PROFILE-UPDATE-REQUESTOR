@@ -10757,12 +10757,109 @@ metadata:
 
 test_plan:
   current_focus:
-    - "CRM → Segmentations Tree — Inline node creation (no popup) (Jul 31 2026)"
+    - "CRM Segmentations — D3 Trackpad Zoom Improvements (Aug 2026)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
+crm_segmentation_d3_trackpad_zoom_aug_2026:
+  - task: "CRM Segmentations — D3 Trackpad Zoom (cursor-anchored pinch + viewport preservation)"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/CollapsibleTree.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Improved trackpad zoom in the CRM Segmentation D3 collapsible
+            tree. Three changes in frontend/src/components/CollapsibleTree.jsx:
+
+            1) Viewport preservation across React re-renders.
+               The tree's useLayoutEffect re-runs on every viewData /
+               editingPath change (add / rename / delete / inline commit)
+               and calls svg.selectAll("*").remove(), which wiped gRoot.
+               d3-zoom's transform state lives on svg.__zoom (the DOM
+               node) and survived, but the fresh gRoot came back with
+               no `transform` attribute → the tree visually SNAPPED
+               back to the origin on every inline edit until the next
+               mouse gesture. FIX: right after gRoot is (re)appended,
+               read svgRef.current.__zoom and re-apply it to gRoot so
+               k, x, y in effect before the rebuild remain in effect
+               after. Only runs after the initial fit (guarded by
+               didInitialFitRef.current).
+
+            2) Custom wheelDelta for smooth cross-browser/OS pinch.
+               d3-zoom's default wheelDelta multiplies by 10x when
+               event.ctrlKey is true (Mac trackpad pinch is delivered
+               as wheel + synthetic ctrlKey=true). That produced huge
+               scale jumps per pinch tick → the jumping / non-smooth
+               symptom the spec forbids. New wheelDelta:
+                 • Only responds to ctrl/meta+wheel (pinch). Plain
+                   wheel returns 0 → d3-zoom does nothing.
+                 • Normalizes deltaY across deltaMode 0/1/2 (px/lines/
+                   pages) so Chrome, Safari, Firefox on macOS,
+                   Windows precision trackpads, and Linux all feel
+                   identical.
+                 • Applies a fixed 0.003 gain → roughly 3x the base
+                   step (Figma/Miro feel), same on every OS/browser.
+
+            3) Cursor as zoom anchor (kept, hardened).
+               We deliberately let d3-zoom's built-in wheeled() handler
+               do the anchor math — it captures d3.pointer(event, this)
+               as the anchor, computes k via wheelDelta, and adjusts
+               x/y so the pixel under the cursor stays fixed. During a
+               pinch only k changes; x/y updates are pure anchor
+               compensation. We do NOT recompute the transform ourselves
+               during a pinch — no cumulative errors, no jumping, no
+               recentering.
+
+            4) Filter tightened.
+               Zoom behavior filter now rejects non-pinch wheel events
+               entirely, so d3-zoom's wheel.zoom and our wheel.pan
+               handler cannot both fire on the same wheel event.
+               Plain two-finger scroll → wheel.pan translates.
+               Pinch → d3-zoom scales around cursor. No race.
+
+            5) Expand / collapse behavior UNCHANGED.
+               The existing anchor logic in update() (translateBy in a
+               parallel transition) already preserves the clicked
+               node's screen position. Combined with fix (1), an
+               inline edit or an expand/collapse now preserves k, x, y
+               EXACTLY — the viewport never jumps back to identity
+               or refits.
+
+            NO NEW API. Toolbar zoom in/out/fit, keyboard +/-/0/F,
+            focus-node double-click all still work.
+
 agent_communication:
+    - agent: "main"
+      message: |
+        Applied 3 targeted changes to CollapsibleTree.jsx for CRM
+        Segmentation → D3 Trackpad Zoom improvements:
+          (a) reapply persisted svg.__zoom transform to freshly-
+              rebuilt gRoot after every React re-render so viewport
+              never jumps on inline edits;
+          (b) custom wheelDelta (0.003 gain, deltaMode-normalized,
+              pinch-only) for smooth Figma/Miro-style pinch that is
+              identical on Chrome/Safari/Firefox + macOS/Windows/Linux;
+          (c) filter tightened so d3-zoom only handles pinch wheel;
+              plain wheel is exclusively the wheel.pan translation
+              handler, no dual-firing race.
+        Please test:
+          • Login as admin@ticketing.com / Admin@123
+          • Go to /crm/segmentations, open any segmentation with tree
+          • Add / rename / delete a node → viewport (k, x, y) MUST NOT
+            reset — the tree stays where it was, only the layout
+            changes locally.
+          • Trackpad pinch anywhere on the canvas → the point under
+            the cursor stays fixed while the tree scales around it.
+            Should feel continuous, no jumping.
+          • Two-finger scroll (no pinch) → tree pans, does NOT zoom.
+          • Toolbar zoom in / zoom out / fit / +/- keys still work.
+
     - agent: "main"
       message: |
         Replaced the "add node" / "rename node" popup with fully inline,

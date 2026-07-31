@@ -372,6 +372,33 @@ export default function CollapsibleTree({
     };
 
     const gRoot = svg.append("g");
+
+    // -----------------------------------------------------------------
+    // Viewport preservation across React re-renders.
+    //
+    // This useLayoutEffect re-runs on every viewData / editingPath
+    // change (add / rename / delete / inline-edit commit) and wipes
+    // `svg.selectAll("*")` — including gRoot. However d3-zoom stores
+    // the current pan+zoom transform as `svg.__zoom` on the SVG DOM
+    // node itself, which SURVIVES the child wipe.
+    //
+    // If we don't re-apply that persisted transform to the freshly-
+    // created gRoot, the tree visually snaps back to the origin on
+    // every inline edit until the next mouse gesture fires. That
+    // exactly matches the "viewport jumps / recenters" symptoms the
+    // spec forbids.
+    //
+    // We therefore reapply `svg.__zoom` to gRoot RIGHT NOW so the k,
+    // x, y in effect right before the rebuild are still in effect
+    // right after.
+    // -----------------------------------------------------------------
+    {
+      const persisted = svgRef.current.__zoom;
+      if (persisted && didInitialFitRef.current) {
+        gRoot.attr("transform", persisted.toString());
+      }
+    }
+
     const gLink = gRoot.append("g")
       .attr("fill", "none")
       .attr("stroke", "#cbd5e1")
@@ -764,15 +791,56 @@ export default function CollapsibleTree({
     });
 
     // ---------------------------------------------- Zoom + pan (d3.zoom)
-    // Filter clicks so single-click on chips/circles/labels still work —
-    // dragging starts only on the background canvas (empty area) or the
-    // link paths. Wheel is always allowed (wheel + no ctrl → pan; wheel +
-    // ctrl → zoom, matching the trackpad pinch gesture browsers emit).
+    //
+    // Pinch-to-zoom (Mac trackpad + Windows precision trackpads + Ctrl+
+    // wheel on any OS) is delivered by browsers as a `wheel` event with
+    // `event.ctrlKey === true` (synthesized — the physical ctrl key is
+    // usually NOT down). We route pinch to d3-zoom (which does proper
+    // cursor-anchored scaling) and route plain two-finger scroll to a
+    // separate `wheel.pan` handler (translation only).
+    //
+    // Cross-browser/OS normalization:
+    //   • Chrome / Safari on macOS trackpad pinch → deltaMode=0 (px),
+    //     deltaY tiny (±1..±20), ctrlKey=true.
+    //   • Firefox on macOS trackpad pinch → deltaMode=1 (lines),
+    //     deltaY tiny, ctrlKey=true.
+    //   • Windows precision trackpad → deltaMode=0, ctrlKey=true.
+    //   • Ctrl + physical mouse wheel → deltaMode=0, deltaY large
+    //     (±100+), ctrlKey=true.
+    // We normalize deltaY to pixels first, then apply a fixed 0.003x
+    // gain — same feel on every OS, every browser.
+    //
+    // d3-zoom's default wheelDelta multiplies by 10x when ctrlKey is
+    // true, which is way too aggressive for trackpad pinch and causes
+    // the "jumping" symptom. Our custom wheelDelta below is smooth.
+    //
+    // Cursor as anchor: we let d3-zoom's built-in wheeled() handler
+    // do the (proven) math. It captures `d3.pointer(event, this)` as
+    // the anchor, computes new k via wheelDelta, and adjusts x/y so
+    // the pixel under the cursor stays fixed. We NEVER recompute the
+    // transform ourselves during a pinch — only k changes, x/y are
+    // pure anchor compensation.
+    //
+    // Filter clicks so single-click on chips/circles/labels still work
+    // — drag pan starts only on the background canvas (empty area) or
+    // link paths.
     const zoomBehavior = d3.zoom()
       .scaleExtent([0.1, 4])
+      .wheelDelta((evt) => {
+        // Only respond to pinch. Plain wheel → wheel.pan handler.
+        if (!(evt.ctrlKey || evt.metaKey)) return 0;
+        // Normalize deltaY to pixels regardless of browser/OS.
+        let dy = evt.deltaY;
+        if (evt.deltaMode === 1) dy *= 16;      // lines → ~px
+        else if (evt.deltaMode === 2) dy *= 400; // pages → ~px
+        // 0.003 → ~3x d3's non-ctrl base step. Smooth, continuous
+        // Figma/Miro-style zoom curve. Same on every OS/browser.
+        return -dy * 0.003;
+      })
       .filter((evt) => {
-        // Always allow wheel (we translate the semantics below).
-        if (evt.type === "wheel") return true;
+        // Wheel: only allow d3-zoom to handle pinch. Plain wheel is
+        // translated to pan by wheel.pan (registered below).
+        if (evt.type === "wheel") return evt.ctrlKey || evt.metaKey;
         // Ignore touchscreen pinches until we need them
         if (evt.type === "touchstart" || evt.type === "touchmove") return true;
         // For mousedown/pointerdown: only start dragging on the SVG
@@ -789,15 +857,20 @@ export default function CollapsibleTree({
         gRoot.attr("transform", event.transform.toString());
       });
 
-    // Custom wheel handling: two-finger trackpad pan (delta w/o ctrl) →
-    // translate; pinch (delta w/ ctrl) → zoom. d3.zoom already treats
-    // ctrl+wheel as zoom by default, but by default plain wheel is also
-    // zoom. We override so plain wheel = pan.
+    // Plain two-finger trackpad scroll (no ctrl/meta) → pan only.
+    // Pinch (ctrl/meta + wheel) is intentionally NOT handled here —
+    // it falls through to d3-zoom's wheeled() handler which does the
+    // cursor-anchored scale.
     svg.on("wheel.pan", (event) => {
-      if (event.ctrlKey || event.metaKey) return; // let default zoom fire
+      if (event.ctrlKey || event.metaKey) return; // pinch → d3-zoom
       event.preventDefault();
       const current = d3.zoomTransform(svgRef.current);
-      const next = current.translate(-event.deltaX / current.k, -event.deltaY / current.k);
+      // Normalize deltaX/deltaY to pixels for consistent pan speed.
+      let dx = event.deltaX;
+      let dy = event.deltaY;
+      if (event.deltaMode === 1) { dx *= 16; dy *= 16; }
+      else if (event.deltaMode === 2) { dx *= 400; dy *= 400; }
+      const next = current.translate(-dx / current.k, -dy / current.k);
       svg.call(zoomBehavior.transform, next);
     }, { passive: false });
 
