@@ -29,6 +29,7 @@ class SegmentationCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
     description: Optional[str] = Field(None, max_length=2000)
     status: Optional[str] = "Active"
+    tree: Optional[dict] = None
 
     @field_validator("name")
     @classmethod
@@ -51,6 +52,7 @@ class SegmentationUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=120)
     description: Optional[str] = Field(None, max_length=2000)
     status: Optional[str] = None
+    tree: Optional[dict] = None
 
     @field_validator("name")
     @classmethod
@@ -129,11 +131,15 @@ async def create_segmentation(body: SegmentationCreate, user=Depends(get_current
         raise HTTPException(400, "A segmentation with this name already exists")
 
     now = now_iso()
+    # Default seed tree = root node with the segmentation name; the user can
+    # add branches inside the Collapsible Tree editor after create.
+    tree = body.tree or {"name": body.name, "children": []}
     doc = {
         "id": str(uuid.uuid4()),
         "name": body.name,
         "description": body.description or "",
         "status": body.status or "Active",
+        "tree": tree,
         "created_by": _actor_stub(user),
         "created_on": now,
         "updated_by": _actor_stub(user),
@@ -163,6 +169,8 @@ async def update_segmentation(seg_id: str, body: SegmentationUpdate, user=Depend
         updates["description"] = body.description
     if body.status is not None:
         updates["status"] = body.status
+    if body.tree is not None:
+        updates["tree"] = body.tree
 
     if not updates:
         return _serialize(existing)

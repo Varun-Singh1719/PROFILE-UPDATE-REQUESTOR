@@ -17,6 +17,10 @@ import Pencil from "@mui/icons-material/EditOutlined";
 import Trash2 from "@mui/icons-material/DeleteOutlined";
 import MoreVertical from "@mui/icons-material/MoreVert";
 import Circle from "@mui/icons-material/FiberManualRecord";
+import AccountTree from "@mui/icons-material/AccountTreeOutlined";
+import X from "@mui/icons-material/Close";
+import Save from "@mui/icons-material/SaveOutlined";
+import CollapsibleTree from "../components/CollapsibleTree";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "../components/ui/dropdown-menu";
@@ -31,7 +35,7 @@ const fmtDateTime = (iso) => {
   } catch { return iso; }
 };
 
-const EMPTY_FORM = { name: "", description: "", status: "Active" };
+const EMPTY_FORM = { name: "", description: "" };
 
 // ============================================================ MAIN
 export default function SegmentationsPage() {
@@ -44,6 +48,10 @@ export default function SegmentationsPage() {
   const [editing, setEditing] = useState(null);      // segmentation being edited (null = create)
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+
+  // Collapsible-tree popup: opens after Create (or when user clicks a tree
+  // affordance from a row). `treeSeg` = the segmentation whose tree we edit.
+  const [treeSeg, setTreeSeg] = useState(null);
 
   // ---- Fetch list ----
   const load = async () => {
@@ -94,10 +102,12 @@ export default function SegmentationsPage() {
     setForm({
       name: row.name || "",
       description: row.description || "",
-      status: row.status || "Active",
     });
     setFormOpen(true);
   };
+
+  const openTree = (row) => setTreeSeg(row);
+  const closeTree = () => setTreeSeg(null);
 
   const submit = async () => {
     const name = (form.name || "").trim();
@@ -110,22 +120,26 @@ export default function SegmentationsPage() {
       const payload = {
         name,
         description: (form.description || "").trim(),
-        status: form.status || "Active",
       };
       let saved;
       if (editing) {
         const r = await api.patch(`/segmentations/${editing.id}`, payload);
         saved = r.data;
         notify.success("Segmentation updated");
+        setFormOpen(false);
+        await load();
+        if (saved?.id) setSelectedId(saved.id);
       } else {
         const r = await api.post("/segmentations", payload);
         saved = r.data;
         notify.success("Segmentation created");
         setSelectedId(saved?.id || null);
+        setFormOpen(false);
+        await load();
+        // Open the Collapsible Tree popup on create so the user can start
+        // shaping the segmentation right away.
+        if (saved) setTreeSeg(saved);
       }
-      setFormOpen(false);
-      await load();
-      if (saved?.id) setSelectedId(saved.id);
     } catch (e) {
       notify.error(formatApiError(e, "Failed to save segmentation"));
     } finally {
@@ -297,6 +311,7 @@ export default function SegmentationsPage() {
               row={selected}
               onEdit={() => openEdit(selected)}
               onDelete={() => remove(selected)}
+              onOpenTree={() => openTree(selected)}
             />
           ) : (
             <EmptyDetail onCreate={openCreate} hasAny={rows.length > 0} />
@@ -314,12 +329,22 @@ export default function SegmentationsPage() {
         onSubmit={submit}
         saving={saving}
       />
+
+      {/* Collapsible Tree popup — opens on create, and via "Open Tree" button */}
+      <TreeEditorDialog
+        seg={treeSeg}
+        onClose={closeTree}
+        onSaved={async (updated) => {
+          await load();
+          if (updated?.id) setSelectedId(updated.id);
+        }}
+      />
     </Layout>
   );
 }
 
 // ============================================================ Sub-components
-function SegmentationDetail({ row, onEdit, onDelete }) {
+function SegmentationDetail({ row, onEdit, onDelete, onOpenTree }) {
   return (
     <div className="max-w-3xl mx-auto px-8 py-8" data-testid="segmentation-detail-card">
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
@@ -339,6 +364,15 @@ function SegmentationDetail({ row, onEdit, onDelete }) {
             )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            <Button
+              size="sm"
+              onClick={onOpenTree}
+              data-testid="segmentation-detail-tree"
+              className="h-8 bg-[#ec9324] hover:bg-[#d4811f] text-white"
+            >
+              <AccountTree sx={{ fontSize: 14 }} className="mr-1.5" />
+              Open Tree
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -371,9 +405,22 @@ function SegmentationDetail({ row, onEdit, onDelete }) {
       </div>
 
       <div className="mt-6 rounded-lg border border-dashed border-gray-300 bg-white/60 px-6 py-8 text-center">
-        <div className="text-sm text-gray-500">
-          Functionality for this segmentation will appear here.
+        <AccountTree className="text-gray-400 mx-auto mb-2" sx={{ fontSize: 28 }} />
+        <div className="text-sm text-gray-600 font-medium mb-1">
+          Shape this segmentation as a tree
         </div>
+        <div className="text-xs text-gray-500 mb-4">
+          Break this segment into sub-groups using a collapsible tree.
+        </div>
+        <Button
+          size="sm"
+          onClick={onOpenTree}
+          className="bg-[#ec9324] hover:bg-[#d4811f] text-white"
+          data-testid="segmentation-detail-tree-cta"
+        >
+          <AccountTree sx={{ fontSize: 14 }} className="mr-1.5" />
+          Open Tree
+        </Button>
       </div>
     </div>
   );
@@ -472,29 +519,6 @@ function SegmentationFormDialog({ open, onOpenChange, editing, form, setForm, on
               maxLength={2000}
             />
           </div>
-
-          <div>
-            <Label>Status</Label>
-            <div className="mt-1 flex gap-2">
-              {["Active", "Inactive"].map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => patch("status", s)}
-                  data-testid={`segmentation-form-status-${s.toLowerCase()}`}
-                  className={`flex-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors ${
-                    form.status === s
-                      ? s === "Active"
-                        ? "bg-emerald-50 border-emerald-300 text-emerald-700"
-                        : "bg-gray-100 border-gray-300 text-gray-700"
-                      : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
         <DialogFooter>
           <Button
@@ -516,5 +540,136 @@ function SegmentationFormDialog({ open, onOpenChange, editing, form, setForm, on
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+
+// ============================================================ Tree editor dialog
+// A large, fullscreen-ish popup that hosts the D3 Collapsible Tree canvas.
+// Loaded when the user creates a segmentation OR clicks "Open Tree".
+function TreeEditorDialog({ seg, onClose, onSaved }) {
+  const [tree, setTree] = useState(null);
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // (Re)load whenever the target segmentation changes
+  useEffect(() => {
+    if (!seg) { setTree(null); setDirty(false); return; }
+    // Deep-clone so local edits don't mutate parent state
+    const base = seg.tree && typeof seg.tree === "object"
+      ? JSON.parse(JSON.stringify(seg.tree))
+      : { name: seg.name, children: [] };
+    // Make sure the root name always mirrors the segmentation name
+    base.name = seg.name;
+    setTree(base);
+    setDirty(false);
+  }, [seg]);
+
+  const handleTreeChange = (next) => {
+    setTree(next);
+    setDirty(true);
+  };
+
+  const handleSave = async () => {
+    if (!seg || !tree) return;
+    setSaving(true);
+    try {
+      const r = await api.patch(`/segmentations/${seg.id}`, { tree });
+      notify.success("Tree saved");
+      setDirty(false);
+      await onSaved?.(r.data);
+      onClose();
+    } catch (e) {
+      notify.error(formatApiError(e, "Failed to save tree"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const requestClose = async () => {
+    if (!dirty) { onClose(); return; }
+    const ok = await confirmDialog({
+      title: "Discard changes?",
+      description: "You have unsaved changes to the tree. Close anyway?",
+      confirmLabel: "Discard",
+      tone: "destructive",
+    });
+    if (ok) onClose();
+  };
+
+  if (!seg) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8 animate-in fade-in duration-150"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) requestClose(); }}
+      data-testid="segmentation-tree-dialog"
+    >
+      <div className="relative w-full max-w-[1200px] h-[85vh] bg-white rounded-lg shadow-2xl border border-gray-200 flex flex-col animate-in zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-3 flex-shrink-0">
+          <div className="w-9 h-9 rounded-lg bg-[#ec9324]/10 text-[#ec9324] flex items-center justify-center flex-shrink-0">
+            <AccountTree sx={{ fontSize: 20 }} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base font-bold text-gray-900 truncate" data-testid="tree-dialog-title">
+              {seg.name}
+            </h2>
+            <p className="text-xs text-gray-500 truncate">
+              Click a node&apos;s circle to collapse or expand. Click a label to select — then hit <span className="font-semibold text-[#ec9324]">+ Add</span> to grow a branch. Double-click a label to rename.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Button
+              onClick={handleSave}
+              disabled={saving || !dirty}
+              className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9"
+              data-testid="tree-dialog-save"
+            >
+              <Save sx={{ fontSize: 16 }} className="mr-1.5" />
+              {saving ? "Saving…" : "Save"}
+            </Button>
+            <button
+              onClick={requestClose}
+              className="p-1.5 rounded text-gray-400 hover:text-gray-800 hover:bg-gray-100"
+              aria-label="Close"
+              data-testid="tree-dialog-close"
+            >
+              <X sx={{ fontSize: 18 }} />
+            </button>
+          </div>
+        </div>
+
+        {/* Canvas */}
+        <div className="flex-1 min-h-0 overflow-hidden bg-gradient-to-br from-white to-gray-50">
+          {tree && (
+            <CollapsibleTree
+              data={tree}
+              onChange={handleTreeChange}
+              editable
+            />
+          )}
+        </div>
+
+        {/* Footer legend */}
+        <div className="px-5 py-2.5 border-t border-gray-100 text-[11px] text-gray-500 flex items-center gap-4 flex-shrink-0">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#ec9324] inline-block" />
+            Has children (click to collapse)
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-white border-2 border-[#ec9324] inline-block" />
+            Leaf node
+          </span>
+          <span className="ml-auto">
+            {dirty ? (
+              <span className="text-amber-600 font-medium">● Unsaved changes</span>
+            ) : (
+              <span className="text-gray-400">All changes saved</span>
+            )}
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
