@@ -2,7 +2,7 @@
 """Quick verification of reopen count behavior"""
 import requests
 
-BASE_URL = "https://segment-builder-3.preview.emergentagent.com/api"
+BASE_URL = "https://d3-segment-anchor.preview.emergentagent.com/api"
 ADMIN_EMAIL = "admin@ticketing.com"
 ADMIN_PASSWORD = "Admin@123"
 

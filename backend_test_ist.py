@@ -15,7 +15,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Optional, Tuple
 
 # Backend URL from environment
-BACKEND_URL = "https://segment-builder-3.preview.emergentagent.com/api"
+BACKEND_URL = "https://d3-segment-anchor.preview.emergentagent.com/api"
 
 # Super Admin credentials
 ADMIN_EMAIL = "admin@ticketing.com"
