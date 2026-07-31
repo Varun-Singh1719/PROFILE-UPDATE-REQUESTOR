@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import Layout from "../components/Layout";
 import api, { formatApiError } from "../lib/api";
 import { Button } from "../components/ui/button";
@@ -8,6 +8,7 @@ import { Textarea } from "../components/ui/textarea";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "../components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
 import notify from "../lib/notify";
 import { confirm as confirmDialog } from "../lib/dialog";
 import Plus from "@mui/icons-material/Add";
@@ -18,8 +19,7 @@ import Trash2 from "@mui/icons-material/DeleteOutlined";
 import MoreVertical from "@mui/icons-material/MoreVert";
 import Circle from "@mui/icons-material/FiberManualRecord";
 import AccountTree from "@mui/icons-material/AccountTreeOutlined";
-import X from "@mui/icons-material/Close";
-import Save from "@mui/icons-material/SaveOutlined";
+import InfoOutlined from "@mui/icons-material/InfoOutlined";
 import CollapsibleTree from "../components/CollapsibleTree";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
@@ -48,10 +48,6 @@ export default function SegmentationsPage() {
   const [editing, setEditing] = useState(null);      // segmentation being edited (null = create)
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
-
-  // Collapsible-tree popup: opens after Create (or when user clicks a tree
-  // affordance from a row). `treeSeg` = the segmentation whose tree we edit.
-  const [treeSeg, setTreeSeg] = useState(null);
 
   // ---- Fetch list ----
   const load = async () => {
@@ -106,9 +102,6 @@ export default function SegmentationsPage() {
     setFormOpen(true);
   };
 
-  const openTree = (row) => setTreeSeg(row);
-  const closeTree = () => setTreeSeg(null);
-
   const submit = async () => {
     const name = (form.name || "").trim();
     if (!name) {
@@ -136,9 +129,6 @@ export default function SegmentationsPage() {
         setSelectedId(saved?.id || null);
         setFormOpen(false);
         await load();
-        // Open the Collapsible Tree popup on create so the user can start
-        // shaping the segmentation right away.
-        if (saved) setTreeSeg(saved);
       }
     } catch (e) {
       notify.error(formatApiError(e, "Failed to save segmentation"));
@@ -305,13 +295,16 @@ export default function SegmentationsPage() {
         </aside>
 
         {/* MAIN — detail / placeholder */}
-        <main className="flex-1 bg-gray-50 overflow-y-auto" data-testid="segmentations-detail">
+        <main className="flex-1 bg-gray-50 overflow-hidden flex flex-col" data-testid="segmentations-detail">
           {selected ? (
             <SegmentationDetail
               row={selected}
               onEdit={() => openEdit(selected)}
               onDelete={() => remove(selected)}
-              onOpenTree={() => openTree(selected)}
+              onTreeSaved={async (updated) => {
+                await load();
+                if (updated?.id) setSelectedId(updated.id);
+              }}
             />
           ) : (
             <EmptyDetail onCreate={openCreate} hasAny={rows.length > 0} />
@@ -329,100 +322,253 @@ export default function SegmentationsPage() {
         onSubmit={submit}
         saving={saving}
       />
-
-      {/* Collapsible Tree popup — opens on create, and via "Open Tree" button */}
-      <TreeEditorDialog
-        seg={treeSeg}
-        onClose={closeTree}
-        onSaved={async (updated) => {
-          await load();
-          if (updated?.id) setSelectedId(updated.id);
-        }}
-      />
     </Layout>
   );
 }
 
 // ============================================================ Sub-components
-function SegmentationDetail({ row, onEdit, onDelete, onOpenTree }) {
+function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
+  // -------- Auto-saving tree state ----------
+  // We hold a local scratchpad of the tree so on-canvas edits (add / rename /
+  // reorder) don't need a modal Save button — they're auto-persisted with a
+  // small debounce. `saveState` drives the tiny status text in the header.
+  const [saveState, setSaveState] = useState("saved"); // "saved" | "saving" | "dirty" | "error"
+  const pendingTreeRef = useRef(null);
+  const saveTimerRef = useRef(null);
+  const lastSavedTreeRef = useRef(null);
+
+  // Reset local state when we switch to a different segmentation.
+  useEffect(() => {
+    pendingTreeRef.current = null;
+    lastSavedTreeRef.current = null;
+    setSaveState("saved");
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+  }, [row.id]);
+
+  const doSave = async () => {
+    const tree = pendingTreeRef.current;
+    if (!tree) return;
+    pendingTreeRef.current = null;
+    setSaveState("saving");
+    try {
+      const r = await api.patch(`/segmentations/${row.id}`, { tree });
+      lastSavedTreeRef.current = tree;
+      setSaveState("saved");
+      // Refresh the outer list silently to update updated_by/updated_on
+      onTreeSaved?.(r.data);
+    } catch (e) {
+      setSaveState("error");
+      notify.error(formatApiError(e, "Failed to save tree"));
+    }
+  };
+
+  const handleTreeChange = (next) => {
+    // Root name must always mirror the segmentation name (safety net).
+    if (next && typeof next === "object") next.name = row.name;
+    pendingTreeRef.current = next;
+    setSaveState("dirty");
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(doSave, 600); // debounce
+  };
+
+  // Seed the tree data (defensively): stitch together `row.tree` with the
+  // current segmentation name at the root.
+  const seedTree = useMemo(() => {
+    const base = row.tree && typeof row.tree === "object"
+      ? JSON.parse(JSON.stringify(row.tree))
+      : { name: row.name, children: [] };
+    base.name = row.name;
+    return base;
+    // We deliberately depend on row.id (not row.tree) so the tree component
+    // only remounts when the user switches segmentations — collapsing /
+    // expanding a node shouldn't reset the whole canvas.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [row.id]);
+
   return (
-    <div className="max-w-3xl mx-auto px-8 py-8" data-testid="segmentation-detail-card">
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-        <div className="px-6 py-5 border-b border-gray-100 flex items-start gap-4">
-          <div className="w-11 h-11 rounded-lg bg-[#ec9324]/10 text-[#ec9324] flex items-center justify-center flex-shrink-0">
-            <PieChart sx={{ fontSize: 22 }} />
+    <div
+      className="flex-1 min-h-0 flex flex-col bg-gray-50"
+      data-testid="segmentation-detail-panel"
+    >
+      {/* Header — name / status + action cluster (Info · Edit · Delete) */}
+      <div className="px-6 py-4 bg-white border-b border-gray-200 flex items-start gap-4 flex-shrink-0">
+        <div className="w-11 h-11 rounded-lg bg-[#ec9324]/10 text-[#ec9324] flex items-center justify-center flex-shrink-0">
+          <PieChart sx={{ fontSize: 22 }} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-lg font-bold text-gray-900 truncate" data-testid="segmentation-detail-title">
+              {row.name}
+            </h2>
+            <StatusPill status={row.status} />
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-gray-900 truncate">{row.name}</h2>
-              <StatusPill status={row.status} />
-            </div>
-            {row.description ? (
-              <p className="mt-1 text-sm text-gray-600">{row.description}</p>
-            ) : (
-              <p className="mt-1 text-sm text-gray-400 italic">No description</p>
-            )}
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Button
-              size="sm"
-              onClick={onOpenTree}
-              data-testid="segmentation-detail-tree"
-              className="h-8 bg-[#ec9324] hover:bg-[#d4811f] text-white"
-            >
-              <AccountTree sx={{ fontSize: 14 }} className="mr-1.5" />
-              Open Tree
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onEdit}
-              data-testid="segmentation-detail-edit"
-              className="h-8"
-            >
-              <Pencil sx={{ fontSize: 14 }} className="mr-1.5" />
-              Edit
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onDelete}
-              data-testid="segmentation-detail-delete"
-              className="h-8 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-            >
-              <Trash2 sx={{ fontSize: 14 }} className="mr-1.5" />
-              Delete
-            </Button>
-          </div>
+          {row.description ? (
+            <p className="mt-0.5 text-xs text-gray-600 line-clamp-2">{row.description}</p>
+          ) : (
+            <p className="mt-0.5 text-xs text-gray-400 italic">No description</p>
+          )}
         </div>
 
-        <dl className="px-6 py-5 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
-          <MetaField label="Created by" value={row.created_by?.name || "—"} sub={row.created_by?.email} />
-          <MetaField label="Created on" value={fmtDateTime(row.created_on)} />
-          <MetaField label="Updated by" value={row.updated_by?.name || "—"} sub={row.updated_by?.email} />
-          <MetaField label="Updated on" value={fmtDateTime(row.updated_on)} />
-        </dl>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <SegmentationInfoPopover row={row} />
+          <IconAction
+            onClick={onEdit}
+            title="Edit"
+            testid="segmentation-detail-edit"
+            className="text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+          >
+            <Pencil sx={{ fontSize: 18 }} />
+          </IconAction>
+          <IconAction
+            onClick={onDelete}
+            title="Delete"
+            testid="segmentation-detail-delete"
+            className="text-red-500 hover:bg-red-50 hover:text-red-700"
+          >
+            <Trash2 sx={{ fontSize: 18 }} />
+          </IconAction>
+        </div>
       </div>
 
-      <div className="mt-6 rounded-lg border border-dashed border-gray-300 bg-white/60 px-6 py-8 text-center">
-        <AccountTree className="text-gray-400 mx-auto mb-2" sx={{ fontSize: 28 }} />
-        <div className="text-sm text-gray-600 font-medium mb-1">
-          Shape this segmentation as a tree
-        </div>
-        <div className="text-xs text-gray-500 mb-4">
-          Break this segment into sub-groups using a collapsible tree.
-        </div>
-        <Button
-          size="sm"
-          onClick={onOpenTree}
-          className="bg-[#ec9324] hover:bg-[#d4811f] text-white"
-          data-testid="segmentation-detail-tree-cta"
-        >
-          <AccountTree sx={{ fontSize: 14 }} className="mr-1.5" />
-          Open Tree
-        </Button>
+      {/* Right-side Tree View Panel */}
+      <div className="flex-1 min-h-0 relative bg-white" data-testid="segmentation-tree-panel">
+        <CollapsibleTree
+          data={seedTree}
+          onChange={handleTreeChange}
+          editable
+          defaultExpandDepth={2}
+        />
+      </div>
+
+      {/* Compact footer legend + save status (mirrors the previous modal) */}
+      <div className="px-5 py-2 border-t border-gray-100 bg-white text-[11px] text-gray-500 flex items-center gap-4 flex-wrap flex-shrink-0">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-[#ec9324] inline-block" />
+          Has children (click to collapse)
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-white border-2 border-[#ec9324] inline-block" />
+          Leaf node
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block px-1.5 py-0.5 rounded-full bg-[#ec9324] text-white text-[9px] font-bold leading-none">+ Child</span>
+          deeper level
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block px-1.5 py-0.5 rounded-full bg-[#0ea5e9] text-white text-[9px] font-bold leading-none">+ Peer</span>
+          same level (sibling)
+        </span>
+        <span className="ml-auto text-[11px]">
+          {saveState === "saving" && <span className="text-amber-600 font-medium">Saving…</span>}
+          {saveState === "dirty" && <span className="text-amber-600 font-medium">● Unsaved changes</span>}
+          {saveState === "saved" && <span className="text-gray-400">All changes saved</span>}
+          {saveState === "error" && <span className="text-red-600 font-medium">Save failed</span>}
+        </span>
       </div>
     </div>
+  );
+}
+
+// Tiny icon-button wrapper — consistent hover / focus ring with the rest
+// of the top bar. Mirrors the NotificationBell trigger visually.
+function IconAction({ children, onClick, title, testid, className = "" }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      data-testid={testid}
+      className={`inline-flex items-center justify-center w-9 h-9 rounded-full transition-colors ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+// Info (ⓘ) popover — same visual pattern as the top-bar NotificationBell.
+// Shows Created By / Created On and Updated By / Updated On.
+function SegmentationInfoPopover({ row }) {
+  const [open, setOpen] = useState(false);
+  const rows = [
+    {
+      label: "Created By",
+      userName: row.created_by?.name || "—",
+      userEmail: row.created_by?.email || "",
+      date: fmtDateTime(row.created_on),
+    },
+    {
+      label: "Updated By",
+      userName: row.updated_by?.name || "—",
+      userEmail: row.updated_by?.email || "",
+      date: fmtDateTime(row.updated_on),
+    },
+  ];
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          data-testid="segmentation-detail-info"
+          title="Details"
+          aria-label="Details"
+          className="inline-flex items-center justify-center w-9 h-9 rounded-full text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+        >
+          <InfoOutlined sx={{ fontSize: 20 }} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-[340px] p-0 overflow-hidden"
+        data-testid="segmentation-info-popover"
+      >
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+          <InfoOutlined className="text-[#ec9324]" sx={{ fontSize: 18 }} />
+          <span className="text-sm font-semibold text-gray-900">Details</span>
+        </div>
+        <div className="max-h-[360px] overflow-y-auto">
+          {rows.map((r, i) => (
+            <div
+              key={r.label}
+              className={`px-4 py-3 flex items-start gap-3 ${
+                i === 0 ? "" : "border-t border-gray-100"
+              }`}
+              data-testid={`segmentation-info-row-${i}`}
+            >
+              <div className="w-9 h-9 rounded-full bg-[#ec9324]/10 text-[#ec9324] flex items-center justify-center flex-shrink-0 mt-0.5">
+                {r.label === "Created By" ? (
+                  <Plus sx={{ fontSize: 18 }} />
+                ) : (
+                  <Pencil sx={{ fontSize: 16 }} />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                  Action
+                </div>
+                <div className="text-[13px] font-medium text-gray-900">{r.label}</div>
+
+                <div className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                  User
+                </div>
+                <div className="text-[13px] text-gray-900 truncate">{r.userName}</div>
+                {r.userEmail && (
+                  <div className="text-[11px] text-gray-500 truncate">{r.userEmail}</div>
+                )}
+
+                <div className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                  Date
+                </div>
+                <div className="text-[13px] text-gray-900">{r.date}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -456,15 +602,6 @@ function EmptyDetail({ onCreate, hasAny }) {
   );
 }
 
-function MetaField({ label, value, sub }) {
-  return (
-    <div>
-      <dt className="text-[11px] uppercase tracking-wide text-gray-500 font-medium">{label}</dt>
-      <dd className="mt-0.5 text-sm text-gray-900">{value}</dd>
-      {sub && <dd className="text-xs text-gray-500 truncate">{sub}</dd>}
-    </div>
-  );
-}
 
 function StatusPill({ status }) {
   const active = status !== "Inactive";
@@ -540,150 +677,5 @@ function SegmentationFormDialog({ open, onOpenChange, editing, form, setForm, on
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-
-// ============================================================ Tree editor dialog
-// A large, fullscreen-ish popup that hosts the D3 Collapsible Tree canvas.
-// Loaded when the user creates a segmentation OR clicks "Open Tree".
-function TreeEditorDialog({ seg, onClose, onSaved }) {
-  const [tree, setTree] = useState(null);
-  const [dirty, setDirty] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  // (Re)load whenever the target segmentation changes
-  useEffect(() => {
-    if (!seg) { setTree(null); setDirty(false); return; }
-    // Deep-clone so local edits don't mutate parent state
-    const base = seg.tree && typeof seg.tree === "object"
-      ? JSON.parse(JSON.stringify(seg.tree))
-      : { name: seg.name, children: [] };
-    // Make sure the root name always mirrors the segmentation name
-    base.name = seg.name;
-    setTree(base);
-    setDirty(false);
-  }, [seg]);
-
-  const handleTreeChange = (next) => {
-    setTree(next);
-    setDirty(true);
-  };
-
-  const handleSave = async () => {
-    if (!seg || !tree) return;
-    setSaving(true);
-    try {
-      const r = await api.patch(`/segmentations/${seg.id}`, { tree });
-      notify.success("Tree saved");
-      setDirty(false);
-      await onSaved?.(r.data);
-      onClose();
-    } catch (e) {
-      notify.error(formatApiError(e, "Failed to save tree"));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const requestClose = async () => {
-    if (!dirty) { onClose(); return; }
-    const ok = await confirmDialog({
-      title: "Discard changes?",
-      description: "You have unsaved changes to the tree. Close anyway?",
-      confirmLabel: "Discard",
-      tone: "destructive",
-    });
-    if (ok) onClose();
-  };
-
-  if (!seg) return null;
-
-  return (
-    <div
-      className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8 animate-in fade-in duration-150"
-      onMouseDown={(e) => { if (e.target === e.currentTarget) requestClose(); }}
-      data-testid="segmentation-tree-dialog"
-    >
-      <div className="relative w-full max-w-[1200px] h-[85vh] bg-white rounded-lg shadow-2xl border border-gray-200 flex flex-col animate-in zoom-in-95 duration-200">
-        {/* Header */}
-        <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-3 flex-shrink-0">
-          <div className="w-9 h-9 rounded-lg bg-[#ec9324]/10 text-[#ec9324] flex items-center justify-center flex-shrink-0">
-            <AccountTree sx={{ fontSize: 20 }} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-base font-bold text-gray-900 truncate" data-testid="tree-dialog-title">
-              {seg.name}
-            </h2>
-            <p className="text-xs text-gray-500 truncate">
-              Click a label to select. Hit the orange&nbsp;
-              <span className="font-semibold text-[#ec9324]">+ Child</span>&nbsp;
-              chip to grow deeper, or the blue&nbsp;
-              <span className="font-semibold text-[#0ea5e9]">+ Peer</span>&nbsp;
-              chip (Level&nbsp;2+) to add a sibling — a new node appears right
-              on the canvas with a cursor ready. Double-click any label to
-              rename.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Button
-              onClick={handleSave}
-              disabled={saving || !dirty}
-              className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9"
-              data-testid="tree-dialog-save"
-            >
-              <Save sx={{ fontSize: 16 }} className="mr-1.5" />
-              {saving ? "Saving…" : "Save"}
-            </Button>
-            <button
-              onClick={requestClose}
-              className="p-1.5 rounded text-gray-400 hover:text-gray-800 hover:bg-gray-100"
-              aria-label="Close"
-              data-testid="tree-dialog-close"
-            >
-              <X sx={{ fontSize: 18 }} />
-            </button>
-          </div>
-        </div>
-
-        {/* Canvas */}
-        <div className="flex-1 min-h-0 overflow-hidden bg-gradient-to-br from-white to-gray-50">
-          {tree && (
-            <CollapsibleTree
-              data={tree}
-              onChange={handleTreeChange}
-              editable
-            />
-          )}
-        </div>
-
-        {/* Footer legend */}
-        <div className="px-5 py-2.5 border-t border-gray-100 text-[11px] text-gray-500 flex items-center gap-4 flex-shrink-0">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#ec9324] inline-block" />
-            Has children (click to collapse)
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-white border-2 border-[#ec9324] inline-block" />
-            Leaf node
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block px-1.5 py-0.5 rounded-full bg-[#ec9324] text-white text-[9px] font-bold leading-none">+ Child</span>
-            deeper level
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block px-1.5 py-0.5 rounded-full bg-[#0ea5e9] text-white text-[9px] font-bold leading-none">+ Peer</span>
-            same level (sibling)
-          </span>
-          <span className="ml-auto">
-            {dirty ? (
-              <span className="text-amber-600 font-medium">● Unsaved changes</span>
-            ) : (
-              <span className="text-gray-400">All changes saved</span>
-            )}
-          </span>
-        </div>
-      </div>
-    </div>
   );
 }

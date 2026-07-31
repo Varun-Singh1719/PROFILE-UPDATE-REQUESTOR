@@ -1,5 +1,8 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
 import * as d3 from "d3";
+import ZoomInIcon from "@mui/icons-material/ZoomIn";
+import ZoomOutIcon from "@mui/icons-material/ZoomOut";
+import CenterFocusStrong from "@mui/icons-material/CenterFocusStrong";
 
 /**
  * CollapsibleTree — React wrapper around the classic
@@ -20,10 +23,19 @@ import * as d3 from "d3";
  *     current name (rename).
  *   • Click a node's ORANGE circle → collapse/expand its subtree.
  */
-export default function CollapsibleTree({ data, onChange, editable = false }) {
+export default function CollapsibleTree({
+  data,
+  onChange,
+  editable = false,
+  defaultExpandDepth = Infinity,
+  showToolbar = true,
+}) {
   const svgRef = useRef(null);
   const containerRef = useRef(null);
   const selectedIdRef = useRef(null);
+  const zoomBehaviorRef = useRef(null);
+  const didInitialFitRef = useRef(false);
+  const fitToViewRef = useRef(null); // set inside useLayoutEffect
 
   // Local mirror of the incoming `data` — we mutate this scratchpad on
   // every add / rename / cancel, and only sync back to the parent via
@@ -38,6 +50,8 @@ export default function CollapsibleTree({ data, onChange, editable = false }) {
     if (data) {
       setViewData(JSON.parse(JSON.stringify(data)));
       setEditingPath(null);
+      // A brand-new dataset should get a fresh initial fit.
+      didInitialFitRef.current = false;
     }
   }, [data]);
 
@@ -203,12 +217,15 @@ export default function CollapsibleTree({ data, onChange, editable = false }) {
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
 
-    // Layout constants
+    // Layout constants — tightened for high-density hierarchies. dx is
+    // vertical spacing between siblings; dy is horizontal step between
+    // depth levels. Values must stay large enough to accommodate the
+    // Peer-chip (below a selected node) + a moderately-long label.
     const marginTop = 20;
     const marginBottom = 20;
     const marginLeft = 40;
-    const nodeRadius = 6;
-    const dx = 60; // vertical spacing between siblings (roomy for peer chip)
+    const nodeRadius = 5;
+    const dx = 26; // vertical spacing between siblings (compact)
 
     const dataClone = JSON.parse(JSON.stringify(viewData));
     const root = d3.hierarchy(dataClone);
@@ -217,9 +234,19 @@ export default function CollapsibleTree({ data, onChange, editable = false }) {
     root.each((d) => {
       d.id = idCounter++;
       d._children = d.children;
+      // Collapse anything past the caller-specified default depth so a
+      // freshly-opened large tree doesn't drown the viewport. The chevron
+      // stays available on the node (click to expand).
+      if (
+        Number.isFinite(defaultExpandDepth) &&
+        d.depth >= defaultExpandDepth &&
+        d.children
+      ) {
+        d.children = null;
+      }
     });
 
-    const dy = 240;
+    const dy = 200;
     const treeLayout = d3.tree().nodeSize([dx, dy]);
     // Horizontal cubic bezier link generator (source on the LEFT, target
     // on the RIGHT). We drive it with adjusted endpoints so the line
@@ -291,22 +318,13 @@ export default function CollapsibleTree({ data, onChange, editable = false }) {
 
       treeLayout(root);
 
-      let top = root, bot = root;
-      root.eachBefore((n) => {
-        if (n.x < top.x) top = n;
-        if (n.x > bot.x) bot = n;
-      });
-      const contentH = (bot.x - top.x) + marginTop + marginBottom;
       const cw = container.clientWidth || 1000;
       const ch = container.clientHeight || 600;
 
+      // Use standard SVG coordinates (no viewBox distortion). d3.zoom
+      // controls the pan+zoom transform on gRoot.
       svg.attr("viewBox", `0 0 ${cw} ${ch}`)
-        .attr("preserveAspectRatio", "none");
-
-      const yShift = Math.max(marginTop, (ch - contentH) / 2) - top.x;
-      gRoot.transition()
-        .duration(duration)
-        .attr("transform", `translate(${marginLeft},${yShift})`);
+        .attr("preserveAspectRatio", "xMidYMid meet");
 
       const transition = svg.transition().duration(duration);
 
@@ -574,25 +592,201 @@ export default function CollapsibleTree({ data, onChange, editable = false }) {
       }
     });
 
+    // ---------------------------------------------- Zoom + pan (d3.zoom)
+    // Filter clicks so single-click on chips/circles/labels still work —
+    // dragging starts only on the background canvas (empty area) or the
+    // link paths. Wheel is always allowed (wheel + no ctrl → pan; wheel +
+    // ctrl → zoom, matching the trackpad pinch gesture browsers emit).
+    const zoomBehavior = d3.zoom()
+      .scaleExtent([0.15, 3])
+      .filter((evt) => {
+        // Always allow wheel (we translate the semantics below).
+        if (evt.type === "wheel") return true;
+        // Ignore touchscreen pinches until we need them
+        if (evt.type === "touchstart" || evt.type === "touchmove") return true;
+        // For mousedown/pointerdown: only start dragging on the SVG
+        // background OR link paths. Clicks on nodes (labels, circles,
+        // chips) must NOT initiate a drag.
+        const t = evt.target;
+        if (!t) return true;
+        if (t === svgRef.current) return true;
+        // Allow drag on links (they have class 'seg-link')
+        if (t.classList && t.classList.contains("seg-link")) return true;
+        return false;
+      })
+      .on("zoom", (event) => {
+        gRoot.attr("transform", event.transform.toString());
+      });
+
+    // Custom wheel handling: two-finger trackpad pan (delta w/o ctrl) →
+    // translate; pinch (delta w/ ctrl) → zoom. d3.zoom already treats
+    // ctrl+wheel as zoom by default, but by default plain wheel is also
+    // zoom. We override so plain wheel = pan.
+    svg.on("wheel.pan", (event) => {
+      if (event.ctrlKey || event.metaKey) return; // let default zoom fire
+      event.preventDefault();
+      const current = d3.zoomTransform(svgRef.current);
+      const next = current.translate(-event.deltaX / current.k, -event.deltaY / current.k);
+      svg.call(zoomBehavior.transform, next);
+    }, { passive: false });
+
+    svg.call(zoomBehavior).on("dblclick.zoom", null); // preserve dbl-click rename
+
+    zoomBehaviorRef.current = zoomBehavior;
+
+    // --- Fit-to-view: compute the bounding box of visible nodes/labels
+    // and centre + scale so the whole thing fits inside the container.
+    const fitToView = (animate = true) => {
+      const cw = container.clientWidth || 1000;
+      const ch = container.clientHeight || 600;
+
+      // Bounding box: use tree layout coords (`d.y` horizontal, `d.x` vertical).
+      // Include label widths on the right so the deepest labels never clip.
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      root.descendants().forEach((d) => {
+        const lw = labelWidthById.get(d.id) != null
+          ? labelWidthById.get(d.id)
+          : approxLabelW(d);
+        const left = d.y - nodeRadius - 4;
+        const right = d.y + 12 + lw + 8;
+        const top = d.x - 16;
+        const bot = d.x + 16;
+        if (left < minY) minY = left;
+        if (right > maxY) maxY = right;
+        if (top < minX) minX = top;
+        if (bot > maxX) maxX = bot;
+      });
+      if (!isFinite(minX)) return;
+
+      const contentW = (maxY - minY);
+      const contentH = (maxX - minX);
+      // Pad container edges a little
+      const padX = 24;
+      const padY = 20;
+      const scaleX = (cw - padX * 2) / Math.max(1, contentW);
+      const scaleY = (ch - padY * 2) / Math.max(1, contentH);
+      const k = Math.min(1.0, scaleX, scaleY); // never upscale past 1
+      const tx = padX + (cw - padX * 2 - contentW * k) / 2 - minY * k;
+      const ty = padY + (ch - padY * 2 - contentH * k) / 2 - minX * k;
+      const target = d3.zoomIdentity.translate(tx, ty).scale(k);
+      const selection = animate ? svg.transition().duration(260) : svg;
+      selection.call(zoomBehavior.transform, target);
+    };
+    fitToViewRef.current = fitToView;
+
     update(root);
+
+    // Kick an initial fit AFTER labels have been measured (first RAF)
+    // so `labelWidthById` is populated before we compute the bbox.
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        if (!didInitialFitRef.current) {
+          fitToView(false);
+          didInitialFitRef.current = true;
+        }
+      });
+    });
+
+    // ---------------------------------------------- keyboard arrow-key pan
+    const onKeyDown = (evt) => {
+      if (!container.contains(document.activeElement) && document.activeElement !== container) return;
+      // Do not intercept when typing inside the inline editor
+      if (evt.target && evt.target.tagName === "INPUT") return;
+      const step = evt.shiftKey ? 80 : 40;
+      let dxKey = 0, dyKey = 0;
+      switch (evt.key) {
+        case "ArrowLeft":  dxKey =  step; break;
+        case "ArrowRight": dxKey = -step; break;
+        case "ArrowUp":    dyKey =  step; break;
+        case "ArrowDown":  dyKey = -step; break;
+        case "0":          if (fitToViewRef.current) { evt.preventDefault(); fitToViewRef.current(true); } return;
+        case "+":
+        case "=":          if (zoomBehaviorRef.current) { evt.preventDefault(); svg.transition().duration(180).call(zoomBehaviorRef.current.scaleBy, 1.25); } return;
+        case "-":
+        case "_":          if (zoomBehaviorRef.current) { evt.preventDefault(); svg.transition().duration(180).call(zoomBehaviorRef.current.scaleBy, 1 / 1.25); } return;
+        default: return;
+      }
+      evt.preventDefault();
+      const current = d3.zoomTransform(svgRef.current);
+      svg.call(zoomBehavior.translateBy, dxKey / current.k, dyKey / current.k);
+    };
+    container.addEventListener("keydown", onKeyDown);
 
     const ro = new ResizeObserver(() => update(root));
     ro.observe(container);
-    return () => ro.disconnect();
-  }, [viewData, editable, editingPath]);
+    return () => {
+      ro.disconnect();
+      container.removeEventListener("keydown", onKeyDown);
+    };
+  }, [viewData, editable, editingPath, defaultExpandDepth]);
+
+  // -------------------------------------------- toolbar callbacks
+  const zoomIn = useCallback(() => {
+    if (!zoomBehaviorRef.current || !svgRef.current) return;
+    d3.select(svgRef.current).transition().duration(180)
+      .call(zoomBehaviorRef.current.scaleBy, 1.25);
+  }, []);
+  const zoomOut = useCallback(() => {
+    if (!zoomBehaviorRef.current || !svgRef.current) return;
+    d3.select(svgRef.current).transition().duration(180)
+      .call(zoomBehaviorRef.current.scaleBy, 1 / 1.25);
+  }, []);
+  const fit = useCallback(() => {
+    if (fitToViewRef.current) fitToViewRef.current(true);
+  }, []);
 
   return (
     <div
       ref={containerRef}
-      className="w-full h-full overflow-hidden bg-white relative"
+      tabIndex={0}
+      className="w-full h-full overflow-hidden bg-white relative outline-none focus:ring-0"
+      data-testid="segmentation-tree-container"
     >
       <svg
         ref={svgRef}
         width="100%"
         height="100%"
-        style={{ font: "13px Inter, system-ui, sans-serif", display: "block" }}
+        style={{ font: "13px Inter, system-ui, sans-serif", display: "block", cursor: "grab" }}
         data-testid="segmentation-tree-svg"
       />
+      {showToolbar && (
+        <div
+          className="absolute top-3 right-3 z-10 flex flex-col bg-white rounded-md shadow-sm border border-gray-200 overflow-hidden"
+          data-testid="segmentation-tree-toolbar"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={zoomIn}
+            title="Zoom in (+)"
+            aria-label="Zoom in"
+            data-testid="tree-zoom-in"
+            className="p-1.5 hover:bg-gray-100 text-gray-700 border-b border-gray-100"
+          >
+            <ZoomInIcon sx={{ fontSize: 18 }} />
+          </button>
+          <button
+            type="button"
+            onClick={zoomOut}
+            title="Zoom out (−)"
+            aria-label="Zoom out"
+            data-testid="tree-zoom-out"
+            className="p-1.5 hover:bg-gray-100 text-gray-700 border-b border-gray-100"
+          >
+            <ZoomOutIcon sx={{ fontSize: 18 }} />
+          </button>
+          <button
+            type="button"
+            onClick={fit}
+            title="Fit to screen (0)"
+            aria-label="Fit to screen"
+            data-testid="tree-zoom-fit"
+            className="p-1.5 hover:bg-gray-100 text-gray-700"
+          >
+            <CenterFocusStrong sx={{ fontSize: 18 }} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
