@@ -2,7 +2,7 @@
 
 **Test Date:** July 29, 2026  
 **Tester:** Testing Agent (Automated)  
-**Environment:** https://crm-module-1.preview.emergentagent.com  
+**Environment:** https://segment-builder-3.preview.emergentagent.com  
 **Test Approach:** FAST-PATH Impersonation (Direct JWT minting via /api/auth/impersonate)
 
 ---
