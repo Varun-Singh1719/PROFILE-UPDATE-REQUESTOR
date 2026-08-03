@@ -491,7 +491,9 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
         />
       </div>
 
-      {/* Compact footer legend + save status (mirrors the previous modal) */}
+      {/* Compact footer legend + save status. The "+ Sub-Segment" and
+          "+ Sibling" chip legends are only relevant when the user can
+          actually add nodes — hide them outside edit mode (Aug 2026). */}
       <div className="px-5 py-2 border-t border-gray-100 bg-white text-[11px] text-gray-500 flex items-center gap-4 flex-wrap flex-shrink-0">
         <span className="inline-flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-[#ec9324] inline-block" />
@@ -501,14 +503,20 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
           <span className="w-2.5 h-2.5 rounded-full bg-white border-2 border-[#ec9324] inline-block" />
           Leaf node
         </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block px-1.5 py-0.5 rounded-full bg-[#ec9324] text-white text-[9px] font-bold leading-none">+ Sub-Segment</span>
-          deeper level
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block px-1.5 py-0.5 rounded-full bg-[#0ea5e9] text-white text-[9px] font-bold leading-none">+ Sibling</span>
-          same level
-        </span>
+        {treeEditMode && (
+          <>
+            <span className="inline-flex items-center gap-1.5" data-testid="legend-sub-segment">
+              <span className="inline-block px-1.5 py-0.5 rounded-full bg-[#ec9324] text-white text-[9px] font-bold leading-none">+ Sub-Segment</span>
+              deeper level
+            </span>
+            <span className="inline-flex items-center gap-1.5" data-testid="legend-sibling">
+              {/* Sibling chip legend — outlined orange (same color coding
+                  as the "In Progress" status pill in Profix All Requests). */}
+              <span className="inline-block px-1.5 py-0.5 rounded-full bg-white border border-[#ec9324] text-[#ec9324] text-[9px] font-bold leading-none">+ Sibling</span>
+              same level
+            </span>
+          </>
+        )}
         <span className="ml-auto text-[11px]">
           {saveState === "saving" && <span className="text-amber-600 font-medium">Saving…</span>}
           {saveState === "dirty" && <span className="text-amber-600 font-medium">● Unsaved changes</span>}
@@ -594,7 +602,7 @@ function SegmentationInfoPopover({ row }) {
       </PopoverTrigger>
       <PopoverContent
         align="end"
-        className="w-[440px] p-0 overflow-hidden"
+        className="w-[560px] max-w-[92vw] p-0 overflow-hidden"
         data-testid="segmentation-info-popover"
       >
         {/* Description block (formerly rendered in the top bar) */}
@@ -619,25 +627,36 @@ function SegmentationInfoPopover({ row }) {
           )}
         </div>
 
-        {/* Details — pivot table */}
-        <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2 bg-gray-50">
-          <InfoOutlined className="text-[#ec9324]" sx={{ fontSize: 18 }} />
-          <span className="text-sm font-semibold text-gray-900">Details</span>
+        {/* Details — pivot table. Tighter spacing (px-4 py-2) plus a
+            wider popover keeps every row on a SINGLE line — no more
+            wrapping of "Created / Updated By" or "EMP-0001". */}
+        <div className="px-4 py-2 border-b border-gray-100 flex items-center gap-2 bg-gray-50">
+          <InfoOutlined className="text-[#ec9324]" sx={{ fontSize: 16 }} />
+          <span className="text-[13px] font-semibold text-gray-900">Details</span>
         </div>
         <div className="max-h-[360px] overflow-auto" data-testid="segmentation-info-details">
-          <table className="w-full text-[12px]" data-testid="segmentation-details-table">
+          <table
+            className="w-full text-[12px] table-fixed"
+            data-testid="segmentation-details-table"
+          >
+            <colgroup>
+              <col style={{ width: "120px" }} />
+              <col />
+              <col style={{ width: "96px" }} />
+              <col style={{ width: "148px" }} />
+            </colgroup>
             <thead className="bg-gray-50 text-gray-500">
               <tr className="text-left">
-                <th className="px-3 py-2 font-semibold uppercase tracking-wide text-[10px]">
+                <th className="px-3 py-1.5 font-semibold uppercase tracking-wide text-[10px] whitespace-nowrap">
                   Action
                 </th>
-                <th className="px-3 py-2 font-semibold uppercase tracking-wide text-[10px]">
+                <th className="px-3 py-1.5 font-semibold uppercase tracking-wide text-[10px] whitespace-nowrap">
                   User
                 </th>
-                <th className="px-3 py-2 font-semibold uppercase tracking-wide text-[10px]">
+                <th className="px-3 py-1.5 font-semibold uppercase tracking-wide text-[10px] whitespace-nowrap">
                   Emp ID
                 </th>
-                <th className="px-3 py-2 font-semibold uppercase tracking-wide text-[10px]">
+                <th className="px-3 py-1.5 font-semibold uppercase tracking-wide text-[10px] whitespace-nowrap">
                   Date / Time
                 </th>
               </tr>
@@ -649,30 +668,32 @@ function SegmentationInfoPopover({ row }) {
                   className={i === 0 ? "" : "border-t border-gray-100"}
                   data-testid={`segmentation-details-row-${i}`}
                 >
-                  <td className="px-3 py-2 align-top">
+                  <td className="px-3 py-2 align-middle whitespace-nowrap">
                     <span className="inline-flex items-center gap-1.5 font-medium text-gray-900">
-                      <span className="w-6 h-6 rounded-full bg-[#ec9324]/10 text-[#ec9324] flex items-center justify-center">
+                      <span className="w-5 h-5 rounded-full bg-[#ec9324]/10 text-[#ec9324] flex items-center justify-center flex-shrink-0">
                         {r.action === "Created By" ? (
-                          <Plus sx={{ fontSize: 14 }} />
+                          <Plus sx={{ fontSize: 12 }} />
                         ) : (
-                          <Pencil sx={{ fontSize: 12 }} />
+                          <Pencil sx={{ fontSize: 11 }} />
                         )}
                       </span>
                       {r.action}
                     </span>
                   </td>
-                  <td className="px-3 py-2 align-top">
-                    <div className="text-gray-900 font-medium">{r.userName}</div>
+                  <td className="px-3 py-2 align-middle">
+                    <div className="text-gray-900 font-medium truncate">
+                      {r.userName}
+                    </div>
                     {r.userEmail && (
-                      <div className="text-[11px] text-gray-500 truncate max-w-[140px]">
+                      <div className="text-[11px] text-gray-500 truncate">
                         {r.userEmail}
                       </div>
                     )}
                   </td>
-                  <td className="px-3 py-2 align-top text-gray-800 font-mono text-[11.5px]">
+                  <td className="px-3 py-2 align-middle text-gray-800 font-mono text-[11.5px] whitespace-nowrap">
                     {r.empId}
                   </td>
-                  <td className="px-3 py-2 align-top text-gray-800 whitespace-nowrap">
+                  <td className="px-3 py-2 align-middle text-gray-800 whitespace-nowrap">
                     {r.date}
                   </td>
                 </tr>

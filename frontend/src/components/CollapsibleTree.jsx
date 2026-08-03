@@ -771,13 +771,17 @@ export default function CollapsibleTree({
       chip.append("rect")
         .attr("width", chipW).attr("height", chipH)
         .attr("rx", chipH / 2).attr("ry", chipH / 2)
-        .attr("fill", mode === "add-peer" ? "#0ea5e9" : "#ec9324")
-        .attr("stroke", mode === "add-peer" ? "#0284c7" : "#d4811f")
-        .attr("stroke-width", 1);
+        // "+ Sibling" now uses the "In Progress"-style outlined orange
+        // (white fill + orange text/border) — same color coding as the
+        // Profix All Requests "In Progress" status pill. "+ Sub-Segment"
+        // stays solid orange so the two chips remain visually distinct.
+        .attr("fill", mode === "add-peer" ? "#ffffff" : "#ec9324")
+        .attr("stroke", mode === "add-peer" ? "#ec9324" : "#d4811f")
+        .attr("stroke-width", mode === "add-peer" ? 1.5 : 1);
       chip.append("text")
         .attr("x", chipW / 2).attr("y", chipH / 2 + 4)
         .attr("text-anchor", "middle")
-        .attr("fill", "white")
+        .attr("fill", mode === "add-peer" ? "#ec9324" : "white")
         .style("font-size", "11px")
         .style("font-weight", "600")
         .style("font-family", "Inter, system-ui, sans-serif")
