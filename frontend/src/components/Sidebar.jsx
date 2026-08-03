@@ -73,6 +73,7 @@ const NAV_CONFIG = [
     kind: "group", label: CRM_MODULE_LABEL, icon: Diversity3,
     children: [
       { to: "/crm/segmentations", label: "Segmentations", icon: PieChart },
+      { to: "/crm/client-contacts", label: "Client Contacts", icon: BookUser },
     ],
   },
   {
