@@ -1,274 +1,317 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <title>Segmentation Links · Edit</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  body { font-family: Inter, system-ui, sans-serif; background:#f9fafb; }
-  .brand { color:#ec9324; }
-  .brand-bg { background:#ec9324; }
-  .brand-bg-soft { background:rgba(236,147,36,0.10); }
-  .brand-border { border-color:#ec9324; }
-  .item { transition: all .15s ease; cursor:pointer; }
-  .item:hover { background:#fff7ed; border-color:#ec9324; }
-  .item.selected {
-    background:#fff7ed; border-color:#ec9324; box-shadow:0 0 0 3px rgba(236,147,36,0.15);
+  html, body { font-family: 'Inter', system-ui, sans-serif; background:#faf7f2; }
+  .glass {
+    background: rgba(255,255,255,0.55);
+    backdrop-filter: blur(28px) saturate(1.5);
+    -webkit-backdrop-filter: blur(28px) saturate(1.5);
+    border: 1px solid rgba(255,255,255,0.75);
+    box-shadow: 0 8px 24px rgba(15,23,42,0.06);
   }
-  .item.linked { border-color:#ec9324; background:#fff7ed; }
-  .item.unlinked-hint { opacity:.55; }
-  .item.candidate { background:#fefce8; border-color:#eab308; }
-  .conn { pointer-events: none; }
-  .conn path { fill:none; }
-  .conn path.line { stroke:#ec9324; stroke-width:1.8; opacity:0.85; }
-  .conn path.line.selected { stroke-width:2.6; opacity:1; }
-  .conn path.dashed { stroke:#a3a3a3; stroke-width:1.6; stroke-dasharray:5,4; opacity:.9; }
-  .badge { font-size:10px; padding:2px 6px; border-radius:999px; background:#f3f4f6; color:#374151; font-weight:600; letter-spacing:.02em; }
+  .card {
+    background:#ffffff; border:1px solid #f1e5d3; border-radius:14px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.02), 0 12px 32px -8px rgba(236,147,36,0.08);
+  }
+  .chip-mck {
+    display:inline-flex; align-items:center; gap:4px; padding:2px 4px 2px 6px;
+    border-radius:999px; font-size:11px; font-weight:600; line-height:1;
+    background: linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);
+    color:#fff; letter-spacing:.01em;
+    box-shadow: 0 1px 2px rgba(99,102,241,0.35);
+    white-space:nowrap;
+  }
+  .chip-mck .dot { width:5px; height:5px; border-radius:999px; background:#c7d2fe; }
+  .chip-mck .x {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:14px; height:14px; border-radius:999px;
+    background:rgba(255,255,255,0.25); margin-left:2px; cursor:pointer;
+    transition: all .15s ease;
+  }
+  .chip-mck .x:hover { background:rgba(255,255,255,0.45); }
+  .chip-pending {
+    display:inline-flex; align-items:center; gap:4px; padding:2px 4px 2px 6px;
+    border-radius:999px; font-size:11px; font-weight:600; line-height:1;
+    background:#fef3c7; color:#92400e; border:1px dashed #f59e0b;
+  }
+  .chip-add {
+    display:inline-flex; align-items:center; gap:3px; padding:3px 8px;
+    border-radius:999px; font-size:11px; font-weight:600; line-height:1;
+    background:#fff; color:#4b5563; border:1px dashed #d1d5db;
+    cursor:pointer; transition: all .15s ease;
+  }
+  .chip-add:hover { border-color:#6366f1; color:#6366f1; background:#eef2ff; }
+
+  .node { transition: background .15s ease; padding:6px 8px; border-radius:10px; margin: -6px -8px; }
+  .node:hover { background:#fef3e2; }
+  .node.selected { background:#fff5e6; box-shadow: 0 0 0 2px #ec9324 inset; }
+
+  ::-webkit-scrollbar { width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb { background:#e5e7eb; border-radius:999px; }
+
+  /* Combobox popover (mock) */
+  .popover {
+    position:absolute; z-index:30;
+    background: #ffffff; border:1px solid #e5e7eb; border-radius:12px;
+    box-shadow: 0 20px 40px -8px rgba(0,0,0,0.15), 0 8px 16px -4px rgba(0,0,0,0.06);
+    width: 340px;
+    overflow:hidden;
+  }
+  .popover .row { display:flex; align-items:center; gap:8px; padding:8px 12px; cursor:pointer; }
+  .popover .row:hover { background:#f9fafb; }
+  .popover .row.selected { background:#eef2ff; }
+  .kbd { display:inline-flex; align-items:center; justify-content:center; min-width:16px; height:16px; padding:0 4px; border-radius:4px; background:#f3f4f6; color:#6b7280; font-size:10px; font-weight:600; border:1px solid #e5e7eb; }
 </style>
 </head>
 <body class="min-h-screen">
-  <!-- Top bar -->
-  <div class="h-14 bg-white border-b border-gray-200 flex items-center px-4 gap-3">
-    <div class="flex items-center gap-2">
-      <span class="w-8 h-8 rounded-lg brand-bg-soft brand flex items-center justify-center font-bold">S</span>
-      <span class="font-semibold text-gray-900">Segmentations</span>
-    </div>
-    <nav class="ml-6 flex items-center gap-1 text-sm">
-      <a class="px-3 py-1.5 rounded-md text-gray-600 hover:bg-gray-100">Segmentations</a>
-      <a class="px-3 py-1.5 rounded-md text-white brand-bg font-medium">Links</a>
-    </nav>
-    <div class="ml-auto flex items-center gap-2">
-      <span class="text-xs text-gray-500">Admin User</span>
-      <div class="w-8 h-8 rounded-full brand-bg text-white flex items-center justify-center text-xs font-semibold">AU</div>
-    </div>
-  </div>
 
-  <!-- Page header -->
-  <div class="px-6 pt-5 pb-2 flex items-end gap-4">
+<!-- App top bar -->
+<div class="h-14 bg-white border-b border-gray-100 flex items-center px-5 gap-3">
+  <div class="flex items-center gap-2">
+    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-[#ec9324] to-[#f59e0b] text-white flex items-center justify-center font-bold shadow-sm">S</div>
+    <span class="font-semibold text-gray-900">Segmentations</span>
+  </div>
+  <nav class="ml-8 flex items-center gap-1 text-sm">
+    <a class="px-3 py-1.5 rounded-md text-gray-600 hover:bg-gray-50">Segmentations</a>
+    <a class="px-3 py-1.5 rounded-md bg-gray-900 text-white font-medium">Links</a>
+  </nav>
+  <div class="ml-auto flex items-center gap-3">
+    <span class="text-xs text-gray-500">Admin User</span>
+    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-[#ec9324] to-[#d97706] text-white flex items-center justify-center text-xs font-semibold">AU</div>
+  </div>
+</div>
+
+<div class="px-6 pt-4 pb-6">
+  <!-- Header -->
+  <div class="flex items-end gap-6 mb-4">
     <div>
-      <div class="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">Cross-Segmentation Mapping</div>
-      <h1 class="text-xl font-bold text-gray-900">Segmentation Links <span class="ml-2 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide rounded-full px-1.5 py-0.5 border brand-border brand-bg-soft brand">Editing</span></h1>
-      <p class="text-xs text-gray-500 mt-0.5">Click a segment on the left, then click one or more segments on the right to link them. Links save on <span class="font-semibold">Save changes</span>.</p>
+      <div class="text-[10px] uppercase tracking-widest text-[#ec9324] font-bold">Cross-Segmentation</div>
+      <div class="flex items-center gap-3 mt-0.5">
+        <h1 class="text-2xl font-bold text-gray-900">Segmentation Links</h1>
+        <span class="text-[11px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/30">Editing</span>
+      </div>
     </div>
+
+    <div class="flex items-center gap-3 ml-4">
+      <div class="glass rounded-xl px-3 py-1.5 flex items-center gap-2">
+        <span class="w-6 h-6 rounded-md bg-gradient-to-br from-[#ec9324] to-[#f59e0b] text-white flex items-center justify-center text-[10px] font-bold">IR</span>
+        <div class="text-left">
+          <div class="text-[9px] uppercase tracking-wider text-gray-500 font-semibold leading-none">Base</div>
+          <div class="text-[13px] font-semibold text-gray-900 leading-tight">Infollion Research</div>
+        </div>
+      </div>
+      <svg width="34" height="18" viewBox="0 0 34 18"><path d="M2 9 h30" stroke="url(#g2)" stroke-width="2" stroke-linecap="round"/><path d="M27 4 l5 5 -5 5" stroke="url(#g2)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="g2" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ec9324"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs></svg>
+      <div class="glass rounded-xl px-3 py-1.5 flex items-center gap-2">
+        <span class="w-6 h-6 rounded-md bg-gradient-to-br from-[#6366f1] to-[#8b5cf6] text-white flex items-center justify-center text-[10px] font-bold">MC</span>
+        <div class="text-left">
+          <div class="text-[9px] uppercase tracking-wider text-gray-500 font-semibold leading-none">Linking</div>
+          <div class="text-[13px] font-semibold text-gray-900 leading-tight">McKinsey</div>
+        </div>
+      </div>
+    </div>
+
     <div class="ml-auto flex items-center gap-2">
-      <div class="text-xs text-gray-500 mr-2">
-        <span class="text-emerald-600 font-semibold">+ 3</span>
-        <span class="text-red-600 font-semibold ml-2">− 1</span>
-        <span class="text-gray-500 ml-2">pending</span>
+      <div class="glass rounded-xl px-3 py-2 flex items-center gap-3">
+        <div class="text-[11px]">
+          <span class="text-emerald-600 font-bold">+4</span>
+          <span class="text-red-600 font-bold ml-1.5">−1</span>
+          <span class="text-gray-500 ml-1.5">pending</span>
+        </div>
       </div>
-      <button class="px-3 py-1.5 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
-      <button class="px-3 py-1.5 brand-bg text-white rounded-md text-sm font-medium hover:opacity-90">Save changes</button>
+      <button class="rounded-xl px-4 py-2 border border-gray-300 text-gray-700 text-sm font-semibold hover:bg-gray-50">Cancel</button>
+      <button class="rounded-xl px-4 py-2 bg-gradient-to-br from-[#ec9324] to-[#d97706] text-white text-sm font-semibold shadow-md hover:opacity-95">Save changes</button>
     </div>
   </div>
 
-  <!-- Pair pickers + toolbox -->
-  <div class="px-6 pt-3 pb-4 flex items-center gap-3">
-    <div class="flex items-center gap-2 border border-gray-200 rounded-lg bg-white px-3 py-1.5 shadow-sm">
-      <span class="badge">SOURCE</span>
-      <span class="font-semibold text-gray-900 text-sm">Infollion Research</span>
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-    </div>
-    <svg width="24" height="20" viewBox="0 0 24 20" fill="none" stroke="#ec9324" stroke-width="2"><path d="M2 10 h20"/><path d="M18 6 l4 4 -4 4"/></svg>
-    <div class="flex items-center gap-2 border border-gray-200 rounded-lg bg-white px-3 py-1.5 shadow-sm">
-      <span class="badge">TARGET</span>
-      <span class="font-semibold text-gray-900 text-sm">McKinsey</span>
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+  <div class="card relative overflow-hidden" style="min-height:640px;">
+
+    <!-- Floating header -->
+    <div class="absolute top-4 left-4 z-20 glass rounded-lg px-2.5 py-1.5 flex items-center gap-2">
+      <div class="w-6 h-6 rounded-md bg-[#ec9324]/15 text-[#ec9324] flex items-center justify-center">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2v10l7 4"/></svg>
+      </div>
+      <span class="text-[13px] font-semibold text-gray-900">Infollion Research · Level 2</span>
+      <span class="ml-2 text-[10px] font-semibold uppercase tracking-wider text-[#ec9324] bg-[#ec9324]/10 px-1.5 py-0.5 rounded border border-[#ec9324]/30">Editing</span>
     </div>
 
-    <div class="ml-6 flex items-center gap-3 text-[11px] text-gray-500">
-      <span class="inline-flex items-center gap-1"><span class="w-4 h-0.5 brand-bg"></span> Saved link</span>
-      <span class="inline-flex items-center gap-1">
-        <svg width="20" height="4" viewBox="0 0 20 4"><path d="M0 2 L20 2" stroke="#a3a3a3" stroke-dasharray="5,4" stroke-width="1.6" fill="none"/></svg>
-        Pending link
-      </span>
-      <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-yellow-400"></span> Selected on left</span>
+    <!-- Hint -->
+    <div class="absolute top-4 right-4 z-20 glass rounded-lg px-3 py-1.5 text-[11px] text-gray-600 flex items-center gap-2">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+      Click <span class="chip-add !py-0.5 mx-0.5" style="pointer-events:none;">+ Add</span> next to a name to link a McKinsey segment
     </div>
 
-    <div class="ml-auto flex items-center gap-2 text-xs text-gray-500">
-      <input class="border border-gray-200 rounded-md px-2 py-1 text-xs w-48" placeholder="Search segments…"/>
-      <button class="px-2 py-1 border border-gray-200 rounded-md flex items-center gap-1">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-        Auto-suggest by name
-      </button>
+    <!-- Body -->
+    <div class="pt-24 pb-16 pl-10 pr-10">
+      <div class="flex items-start gap-8">
+        <!-- Root -->
+        <div class="flex-shrink-0 pt-72">
+          <div class="flex items-center gap-2">
+            <div class="w-4 h-4 rounded-full bg-[#ec9324] shadow-lg ring-4 ring-[#ec9324]/20"></div>
+            <div class="text-[16px] font-bold text-gray-900">Infollion Research</div>
+          </div>
+        </div>
+
+        <!-- connectors -->
+        <div class="relative" style="width:120px; min-height:660px;">
+          <svg viewBox="0 0 120 720" preserveAspectRatio="none" class="absolute inset-0 w-full h-full">
+            <g fill="none" stroke="#e7d3b0" stroke-width="1.5" opacity="0.85">
+              <path d="M0,360 C 60,360 60,30 120,30"/>
+              <path d="M0,360 C 60,360 60,80 120,80"/>
+              <path d="M0,360 C 60,360 60,130 120,130"/>
+              <path d="M0,360 C 60,360 60,180 120,180"/>
+              <path d="M0,360 C 60,360 60,230 120,230"/>
+              <path d="M0,360 C 60,360 60,280 120,280"/>
+              <path d="M0,360 C 60,360 60,330 120,330"/>
+              <path d="M0,360 C 60,360 60,380 120,380"/>
+              <path d="M0,360 C 60,360 60,430 120,430"/>
+              <path d="M0,360 C 60,360 60,480 120,480"/>
+              <path d="M0,360 C 60,360 60,530 120,530"/>
+              <path d="M0,360 C 60,360 60,580 120,580"/>
+              <path d="M0,360 C 60,360 60,630 120,630"/>
+              <path d="M0,360 C 60,360 60,680 120,680"/>
+            </g>
+          </svg>
+        </div>
+
+        <!-- Rows -->
+        <div class="flex-1 space-y-1.5 relative">
+          <div class="node flex items-center gap-3">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] ring-2 ring-white shadow-sm"></span>
+            <span class="text-[14px] font-medium text-gray-900 min-w-[220px]">Agriculture</span>
+            <span class="chip-mck"><span class="dot"></span>Agriculture <span class="x">✕</span></span>
+            <span class="chip-add">+ Add</span>
+          </div>
+          <div class="node flex items-center gap-3">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] ring-2 ring-white shadow-sm"></span>
+            <span class="text-[14px] font-medium text-gray-900 min-w-[220px]">Automotive</span>
+            <span class="chip-mck"><span class="dot"></span>Automotive &amp; Assembly <span class="x">✕</span></span>
+            <span class="chip-pending">+ Aerospace &amp; Defense <span class="ml-0.5">·</span> pending</span>
+            <span class="chip-add">+ Add</span>
+          </div>
+
+          <!-- SELECTED node with popover open -->
+          <div class="node selected relative flex items-center gap-3 z-10">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] ring-2 ring-white shadow-sm"></span>
+            <span class="text-[14px] font-bold text-gray-900 min-w-[220px]">BFSI</span>
+            <span class="chip-mck"><span class="dot"></span>Financial Services <span class="x">✕</span></span>
+            <span class="chip-mck"><span class="dot"></span>Insurance <span class="x">✕</span></span>
+            <span class="chip-mck"><span class="dot"></span>Wealth and Asset Management <span class="x">✕</span></span>
+            <span class="chip-pending">+ Private Capital <span class="ml-0.5">·</span> pending</span>
+            <span class="chip-add" style="border-style:solid; color:#6366f1; border-color:#6366f1; background:#eef2ff;">+ Add link</span>
+
+            <!-- Popover -->
+            <div class="popover" style="top: 40px; left: 380px;">
+              <div class="px-3 py-2 border-b border-gray-100 flex items-center gap-2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-400"><circle cx="11" cy="11" r="8"/><path d="M21 21l-3.5-3.5"/></svg>
+                <input class="text-[13px] outline-none flex-1 placeholder-gray-400" placeholder="Search McKinsey L2…" value="pri"/>
+                <span class="kbd">↑</span><span class="kbd">↓</span><span class="kbd">↵</span>
+              </div>
+              <div class="max-h-[220px] overflow-auto">
+                <div class="row selected">
+                  <span class="w-4 h-4 rounded border-2 border-[#6366f1] bg-[#6366f1] flex items-center justify-center text-white text-[10px]">✓</span>
+                  <span class="text-[13px] font-medium text-gray-900">Private Capital</span>
+                  <span class="ml-auto text-[10px] text-gray-400">Financial Services (parent-adjacent)</span>
+                </div>
+                <div class="row">
+                  <span class="w-4 h-4 rounded border-2 border-gray-300"></span>
+                  <span class="text-[13px] text-gray-800">Private Equity</span>
+                  <span class="ml-auto text-[10px] text-gray-400">nested under Private Capital</span>
+                </div>
+                <div class="row">
+                  <span class="w-4 h-4 rounded border-2 border-gray-300"></span>
+                  <span class="text-[13px] text-gray-800">Principal Investment</span>
+                </div>
+              </div>
+              <div class="px-3 py-2 border-t border-gray-100 flex items-center justify-between bg-gray-50">
+                <div class="text-[11px] text-gray-500">
+                  <span class="font-semibold text-emerald-700">Auto-suggest:</span>
+                  4 obvious name matches remaining
+                </div>
+                <button class="text-[11px] font-semibold text-[#6366f1] hover:underline">Add all suggested</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="node flex items-center gap-3">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] ring-2 ring-white shadow-sm"></span>
+            <span class="text-[14px] font-medium text-gray-900 min-w-[220px]">Chemicals</span>
+            <span class="chip-mck"><span class="dot"></span>Chemicals <span class="x">✕</span></span>
+            <span class="chip-add">+ Add</span>
+          </div>
+          <div class="node flex items-center gap-3">
+            <span class="w-2.5 h-2.5 rounded-full bg-white border-2 border-[#ec9324]"></span>
+            <span class="text-[14px] text-gray-500 min-w-[220px]">Commercial and Professional Services</span>
+            <span class="chip-add" style="color:#6366f1; border-color:#6366f1;">+ Add link</span>
+          </div>
+          <div class="node flex items-center gap-3">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] ring-2 ring-white shadow-sm"></span>
+            <span class="text-[14px] font-medium text-gray-900 min-w-[220px]">Consumer Discretionary</span>
+            <span class="chip-mck"><span class="dot"></span>Consumer Packaged Goods <span class="x">✕</span></span>
+            <span class="chip-mck"><span class="dot"></span>Retail <span class="x">✕</span></span>
+            <span class="chip-mck"><span class="dot"></span>Travel <span class="x">✕</span></span>
+            <span class="chip-add">+ Add</span>
+          </div>
+          <div class="node flex items-center gap-3">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] ring-2 ring-white shadow-sm"></span>
+            <span class="text-[14px] font-medium text-gray-900 min-w-[220px]">Consumer Staples - Food &amp; Beverages</span>
+            <span class="chip-mck"><span class="dot"></span>Consumer Packaged Goods <span class="x">✕</span></span>
+            <span class="chip-mck"><span class="dot"></span>Agriculture <span class="x">✕</span></span>
+            <span class="chip-add">+ Add</span>
+          </div>
+          <div class="node flex items-center gap-3">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] ring-2 ring-white shadow-sm"></span>
+            <span class="text-[14px] font-medium text-gray-900 min-w-[220px]">Education</span>
+            <span class="chip-mck"><span class="dot"></span>Education <span class="x">✕</span></span>
+            <span class="chip-add">+ Add</span>
+          </div>
+          <div class="node flex items-center gap-3">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] ring-2 ring-white shadow-sm"></span>
+            <span class="text-[14px] font-medium text-gray-900 min-w-[220px]">Engineering and Capital Goods</span>
+            <span class="chip-mck"><span class="dot"></span>Engineering, Construction &amp; Building Materials <span class="x">✕</span></span>
+            <span class="chip-mck"><span class="dot"></span>Industrials <span class="x">✕</span></span>
+            <span class="chip-add">+ Add</span>
+          </div>
+          <div class="node flex items-center gap-3">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] ring-2 ring-white shadow-sm"></span>
+            <span class="text-[14px] font-medium text-gray-900 min-w-[220px]">Healthcare System and Services</span>
+            <span class="chip-mck"><span class="dot"></span>Healthcare <span class="x">✕</span></span>
+            <span class="chip-mck"><span class="dot"></span>Life Sciences <span class="x">✕</span></span>
+            <span class="chip-add">+ Add</span>
+          </div>
+          <div class="node flex items-center gap-3">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] ring-2 ring-white shadow-sm"></span>
+            <span class="text-[14px] font-medium text-gray-900 min-w-[220px]">Information Technology</span>
+            <span class="chip-mck"><span class="dot"></span>Technology, Media &amp; Telecommunications <span class="x">✕</span></span>
+            <span class="chip-mck"><span class="dot"></span>Semiconductors <span class="x">✕</span></span>
+            <span class="chip-add">+ Add</span>
+          </div>
+          <div class="node flex items-center gap-3">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] ring-2 ring-white shadow-sm"></span>
+            <span class="text-[14px] font-medium text-gray-900 min-w-[220px]">Real Estate</span>
+            <span class="chip-mck"><span class="dot"></span>Real Estate <span class="x">✕</span></span>
+            <span class="chip-mck"><span class="dot"></span>Infrastructure <span class="x">✕</span></span>
+            <span class="chip-add">+ Add</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer stats -->
+    <div class="absolute bottom-0 left-0 right-0 border-t border-gray-100 px-4 py-2.5 flex items-center gap-3 text-[11px] text-gray-600 bg-gradient-to-b from-white to-[#fefaf3]">
+      <span class="chip-mck !py-0.5 !text-[9px]">MC</span>
+      <span class="font-semibold text-gray-800">4 new</span><span>·</span>
+      <span class="font-semibold text-red-700">1 removed</span><span>·</span>
+      <span>28 unchanged</span>
+      <span class="ml-auto text-gray-500">Draft — nothing saved until you click <span class="text-[#ec9324] font-semibold">Save changes</span></span>
     </div>
   </div>
-
-  <!-- Main editor -->
-  <div class="px-6 pb-6">
-    <div class="bg-white border border-gray-200 rounded-xl shadow-sm relative overflow-hidden" style="min-height:560px;">
-      <!-- Column headers -->
-      <div class="grid grid-cols-2 border-b border-gray-100">
-        <div class="px-5 py-3 flex items-center gap-2">
-          <div>
-            <div class="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">Infollion Research · Level 2</div>
-            <div class="text-sm font-bold text-gray-900">26 segments</div>
-          </div>
-          <span class="ml-auto text-[11px] text-gray-500">Click a segment to select</span>
-        </div>
-        <div class="px-5 py-3 border-l border-gray-100 flex items-center gap-2">
-          <div>
-            <div class="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">McKinsey · Level 2</div>
-            <div class="text-sm font-bold text-gray-900">29 segments</div>
-          </div>
-          <span class="ml-auto text-[11px] brand font-medium">Then click one or more here to link</span>
-        </div>
-      </div>
-
-      <!-- Two columns + SVG overlay -->
-      <div class="relative grid grid-cols-2">
-        <!-- Left column -->
-        <div class="py-2 px-4 space-y-1.5">
-          <div class="item linked border-l-4 border-gray-200 rounded-md px-3 py-2 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full brand-bg"></span>
-            <span class="text-[13px] font-medium text-gray-900">Agriculture</span>
-            <span class="ml-auto text-[10px] brand font-semibold">1 link</span>
-          </div>
-          <div class="item linked border-l-4 border-gray-200 rounded-md px-3 py-2 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full brand-bg"></span>
-            <span class="text-[13px] font-medium text-gray-900">Automotive</span>
-            <span class="ml-auto text-[10px] brand font-semibold">1 link</span>
-          </div>
-          <!-- Currently selected -->
-          <div class="item selected linked border-l-4 rounded-md px-3 py-2 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-yellow-400"></span>
-            <span class="text-[13px] font-bold text-gray-900">BFSI</span>
-            <span class="ml-auto text-[10px] brand font-semibold">3 links</span>
-          </div>
-          <div class="item linked border-l-4 border-gray-200 rounded-md px-3 py-2 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full brand-bg"></span>
-            <span class="text-[13px] font-medium text-gray-900">Chemicals</span>
-            <span class="ml-auto text-[10px] brand font-semibold">1 link</span>
-          </div>
-          <div class="item unlinked-hint border-l-4 border-gray-200 rounded-md px-3 py-2 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-gray-300"></span>
-            <span class="text-[13px] text-gray-700">Commercial and Professional Services</span>
-            <span class="ml-auto text-[10px] text-gray-400 font-medium">no links</span>
-          </div>
-          <div class="item linked border-l-4 border-gray-200 rounded-md px-3 py-2 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full brand-bg"></span>
-            <span class="text-[13px] font-medium text-gray-900">Consumer Discretionary</span>
-            <span class="ml-auto text-[10px] brand font-semibold">1 link</span>
-          </div>
-          <div class="item linked border-l-4 border-gray-200 rounded-md px-3 py-2 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full brand-bg"></span>
-            <span class="text-[13px] font-medium text-gray-900">Consumer Staples - Food & Beverages</span>
-            <span class="ml-auto text-[10px] brand font-semibold">1 link</span>
-          </div>
-          <div class="item linked border-l-4 border-gray-200 rounded-md px-3 py-2 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full brand-bg"></span>
-            <span class="text-[13px] font-medium text-gray-900">Education</span>
-            <span class="ml-auto text-[10px] brand font-semibold">1 link</span>
-          </div>
-          <div class="item linked border-l-4 border-gray-200 rounded-md px-3 py-2 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full brand-bg"></span>
-            <span class="text-[13px] font-medium text-gray-900">Healthcare System and Services</span>
-            <span class="ml-auto text-[10px] brand font-semibold">1 link</span>
-          </div>
-          <div class="item linked border-l-4 border-gray-200 rounded-md px-3 py-2 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full brand-bg"></span>
-            <span class="text-[13px] font-medium text-gray-900">Information Technology</span>
-            <span class="ml-auto text-[10px] brand font-semibold">1 link</span>
-          </div>
-          <div class="item linked border-l-4 border-gray-200 rounded-md px-3 py-2 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full brand-bg"></span>
-            <span class="text-[13px] font-medium text-gray-900">Real Estate</span>
-            <span class="ml-auto text-[10px] brand font-semibold">1 link</span>
-          </div>
-        </div>
-
-        <!-- Right column -->
-        <div class="py-2 px-4 space-y-1.5 border-l border-gray-100">
-          <div class="item unlinked-hint rounded-md px-3 py-2 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-gray-300"></span>
-            <span class="text-[13px] text-gray-700">Aerospace & Defense</span>
-          </div>
-          <div class="item linked rounded-md px-3 py-2 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full brand-bg"></span>
-            <span class="text-[13px] font-medium text-gray-900">Agriculture</span>
-            <span class="ml-auto text-[10px] text-gray-400">← Agriculture</span>
-          </div>
-          <div class="item linked rounded-md px-3 py-2 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full brand-bg"></span>
-            <span class="text-[13px] font-medium text-gray-900">Automotive & Assembly</span>
-            <span class="ml-auto text-[10px] text-gray-400">← Automotive</span>
-          </div>
-          <div class="item linked rounded-md px-3 py-2 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full brand-bg"></span>
-            <span class="text-[13px] font-medium text-gray-900">Chemicals</span>
-            <span class="ml-auto text-[10px] text-gray-400">← Chemicals</span>
-          </div>
-          <div class="item linked rounded-md px-3 py-2 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full brand-bg"></span>
-            <span class="text-[13px] font-medium text-gray-900">Consumer Packaged Goods</span>
-            <span class="ml-auto text-[10px] text-gray-400">← Consumer Discretionary, Consumer Staples</span>
-          </div>
-          <div class="item linked rounded-md px-3 py-2 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full brand-bg"></span>
-            <span class="text-[13px] font-medium text-gray-900">Education</span>
-            <span class="ml-auto text-[10px] text-gray-400">← Education</span>
-          </div>
-          <!-- linked to selected BFSI -->
-          <div class="item linked rounded-md px-3 py-2 flex items-center gap-2 selected">
-            <span class="w-2 h-2 rounded-full brand-bg"></span>
-            <span class="text-[13px] font-bold text-gray-900">Financial Services</span>
-            <span class="ml-auto text-[10px] brand font-semibold">✕ unlink</span>
-          </div>
-          <div class="item linked rounded-md px-3 py-2 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full brand-bg"></span>
-            <span class="text-[13px] font-medium text-gray-900">Healthcare</span>
-            <span class="ml-auto text-[10px] text-gray-400">← Healthcare System</span>
-          </div>
-          <!-- candidate (auto-suggested) -->
-          <div class="item candidate rounded-md px-3 py-2 flex items-center gap-2 border">
-            <span class="w-2 h-2 rounded-full bg-yellow-500"></span>
-            <span class="text-[13px] font-medium text-gray-900">Insurance</span>
-            <span class="ml-auto text-[10px] font-semibold text-yellow-700">+ link to BFSI</span>
-          </div>
-          <div class="item linked rounded-md px-3 py-2 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full brand-bg"></span>
-            <span class="text-[13px] font-medium text-gray-900">Real Estate</span>
-            <span class="ml-auto text-[10px] text-gray-400">← Real Estate</span>
-          </div>
-          <div class="item linked rounded-md px-3 py-2 flex items-center gap-2 selected">
-            <span class="w-2 h-2 rounded-full brand-bg"></span>
-            <span class="text-[13px] font-bold text-gray-900">Wealth and Asset Management</span>
-            <span class="ml-auto text-[10px] brand font-semibold">✕ unlink</span>
-          </div>
-          <div class="item linked rounded-md px-3 py-2 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full brand-bg"></span>
-            <span class="text-[13px] font-medium text-gray-900">Technology, Media & Telecommunications</span>
-            <span class="ml-auto text-[10px] text-gray-400">← Information Technology</span>
-          </div>
-        </div>
-
-        <!-- SVG connecting lines overlay: only lines for selected (BFSI) node -->
-        <svg class="conn absolute inset-0 w-full h-full" viewBox="0 0 1000 560" preserveAspectRatio="none">
-          <!-- non-selected saved links (subtle) -->
-          <path class="line" d="M420,44 C500,44 500,86 580,86" opacity="0.3"/>
-          <path class="line" d="M420,84 C500,84 500,126 580,126" opacity="0.3"/>
-          <path class="line" d="M420,166 C500,166 500,206 580,206" opacity="0.3"/>
-          <path class="line" d="M420,246 C500,246 500,246 580,246" opacity="0.3"/>
-          <path class="line" d="M420,286 C500,286 500,246 580,246" opacity="0.3"/>
-          <path class="line" d="M420,326 C500,326 500,286 580,286" opacity="0.3"/>
-          <path class="line" d="M420,366 C500,366 500,326 580,326" opacity="0.3"/>
-          <path class="line" d="M420,406 C500,406 500,486 580,486" opacity="0.3"/>
-          <path class="line" d="M420,446 C500,446 500,446 580,446" opacity="0.3"/>
-
-          <!-- SELECTED: BFSI's saved links -->
-          <path class="line selected" d="M420,124 C500,124 500,286 580,286"/>
-          <path class="line selected" d="M420,124 C500,124 500,486 580,486"/>
-          <!-- pending new link (dashed) -->
-          <path class="dashed" d="M420,124 C500,124 500,366 580,366"/>
-        </svg>
-      </div>
-
-      <!-- Footer stats -->
-      <div class="border-t border-gray-100 px-5 py-2 flex items-center gap-4 text-[11px] text-gray-500 bg-gray-50">
-        <span><span class="brand font-semibold">BFSI</span> selected · currently mapped to <span class="brand font-semibold">Financial Services</span>, <span class="brand font-semibold">Wealth and Asset Management</span></span>
-        <span class="text-yellow-700 ml-2">+ pending: Insurance</span>
-        <span class="ml-auto text-gray-400">Nothing saved yet — click <b>Save changes</b> to persist</span>
-      </div>
-    </div>
-  </div>
+</div>
 </body>
 </html>
