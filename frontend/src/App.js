@@ -32,6 +32,7 @@ import RequestWorkstationPage from "./pages/RequestWorkstationPage";
 import PendingApprovalsPage from "./pages/PendingApprovalsPage";
 import BookingsPage from "./pages/BookingsPage";
 import SegmentationsPage from "./pages/SegmentationsPage";
+import ClientContactsPage from "./pages/ClientContactsPage";
 import ProfilePage from "./pages/ProfilePage";
 import WMOverallPreview from "./pages/WMOverallPreview";
 import Loader2 from "@mui/icons-material/Autorenew";
@@ -150,6 +151,8 @@ function App() {
             
             {/* CRM (label to be finalised later) — currently accessible to any Super Admin / Admin */}
             <Route path="/crm/segmentations" element={<ProtectedRoute roles={ADMIN_ROLES}><SegmentationsPage /></ProtectedRoute>} />
+            <Route path="/crm/client-contacts" element={<ProtectedRoute roles={ADMIN_ROLES}><ClientContactsPage /></ProtectedRoute>} />
+            <Route path="/crm/client-contacts/:id" element={<ProtectedRoute roles={ADMIN_ROLES}><ClientContactsPage /></ProtectedRoute>} />
             
             {/* Legacy redirect */}
             <Route path="/desk-booking" element={<Navigate to="/workspace-manager/floor-layout" replace />} />

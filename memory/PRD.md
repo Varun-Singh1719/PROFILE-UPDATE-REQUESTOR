@@ -1,6 +1,22 @@
 # Infollion Utilities — PRD
 
 
+## CRM → Client Contacts — spec-verbatim rev-2 (Aug 3 2026)
+- New route registered: `/crm/client-contacts` (list) + `/crm/client-contacts/:id` (detail) in `App.js`. Sidebar link already existed.
+- `frontend/src/pages/ClientContactsPage.jsx` completely rewritten:
+  - Uses `Layout` shell (dropped the stub `PageContainer`) so it matches every other admin page.
+  - Toolbar now has: `DeferredSearchInput` + `Client Name` SingleSelect filter (chip-style, L1 segments) + Sort dropdown (5 options: Newest / Oldest / Name A→Z / Name Z→A / ID ascending) + paginated card grid (12 / 24 / 48 / 96 per page, using the shared `Pagination` component).
+  - Industry (L2 multi-select) now uses **`MultiSelectFilter` in `searchInTrigger` mode** — same UX as Manage → Teams → Add Team Member — with removable chips rendered below the trigger. Auto-clears industries when the Client Name changes to keep the L2 subset valid.
+  - Previous Work Experience Start Date / End Date use a new **`MonthYearPicker`** (two side-by-side Month + Year `<select>` dropdowns). End Date supports a "Present" option. Values are persisted as `"MMM YYYY"` strings so the existing backend schema (`start_month_year`, `end_month_year: Optional[str]`) needed no changes.
+  - Card view redone to match the reference screenshot: bold Name + orange initials pill, ID row, meta rows (Client Name / Designation / Base Location), 4-metric row (Revenue / Calls / Serviced / Projects — placeholders), bottom icon bar with Edit / View / Email / Phone / LinkedIn / Delete. Email + Phone icons show the full value via a shadcn Radix `Tooltip` on hover (`TooltipProvider` wraps the page).
+  - Detail (View) page keeps the header Edit button, shows all fields, plus `Last Project Receiving Date` + `Last Call Date` placeholders and an `Activity Summary` section powered by the shared **`DateFilter`** — same look/feel as ProfiX's Created At filter, all 4 modes exposed (Between / On / Before / After). Default range = last 6 months (helper `getLast6MonthsRange`). All four metric cards visibly pulse to 50% opacity when the filter changes so the UX contract ("range change → all 4 metrics refresh together") is visible even though the calc pipeline is still a placeholder.
+- New file: `frontend/src/components/MonthYearPicker.jsx` — 90 lines, no external deps, testids `{prefix}-month` / `{prefix}-year`.
+- Backend `routers/client_contacts.py` was already complete from Phase 1 — no changes needed. Its `?client_name=<L1>` query param drives the new Client Name filter chip on the list page.
+- `.env` files were missing on this fresh container; restored `/app/backend/.env` (MongoDB Atlas `cluster0.vmgql1i.mongodb.net` / `DB_NAME=app_db` / user `sakshamsinghal_db_user` per user-supplied credentials) and `/app/frontend/.env` (REACT_APP_BACKEND_URL). Regenerated JWT_SECRET + FERNET_KEY. Login verified end-to-end for `admin@ticketing.com / Admin@123`.
+- Testing agent NOT deployed per user instruction. Verified visually via playwright screenshots: list view, create dialog (with Month/Year selects visible), detail view with Activity Summary + DateFilter popup showing all four modes and dual calendars.
+
+
+
 ## Employees Activation / Deactivation + 24h Session (Jul 30 2026)
 - **Manage → Employees confirmation dialog**: the row-level status Switch on `/admin/contacts` now opens a confirmation modal ("Are you sure you want to activate/deactivate user {Employee Name}?") before hitting `PATCH /contacts/{id}`. Yes triggers the API call, No cancels. Deactivate path uses a red confirm button + hint "A deactivated user will not be able to log in."; Activate path uses the brand orange.
 - **Deactivated login block**: `POST /api/auth/login` and `POST /api/auth/google-session` return **HTTP 403 `{"detail":"User profile Deactivated"}`** when `contacts.status != "Active"`. The frontend surfaces the string verbatim (toast + inline `error`).
