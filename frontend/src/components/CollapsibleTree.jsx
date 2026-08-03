@@ -981,15 +981,21 @@ export default function CollapsibleTree({
     // root sits at logical (0,0) which does not move on collapse/expand,
     // so keeping the current zoom transform gives a stable viewport.
     //
-    // Collapse All → collapse every branch below depth 1 (Level 1 view:
-    // root + its direct children remain visible; everything deeper is
-    // hidden into _children so it can be re-expanded).
+    // NOTE on Level numbering — this codebase uses the taxonomy's
+    // 1-indexed labels (the header reads "Root injected as Level 1"):
+    //   • User's Level 1 = d3 depth 0 (root only)
+    //   • User's Level 2 = d3 depth 1 (root + direct children)
+    //   • etc.
+    //
+    // Collapse All → collapse to Level 1 (only the root remains visible;
+    // every node with descendants gets its children moved to _children
+    // so they can be re-expanded).
     //
     // Expand All → walk every node and restore its _children back into
     // children — reveals the full tree to the max depth available.
     const collapseAll = () => {
       root.each((d) => {
-        if (d.depth >= 1 && d.children) {
+        if (d.children) {
           if (!d._children) d._children = d.children;
           d.children = null;
         }

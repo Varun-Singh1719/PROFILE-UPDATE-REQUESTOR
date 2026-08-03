@@ -439,7 +439,7 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
           data={seedTree}
           onChange={handleTreeChange}
           editable
-          defaultExpandDepth={2}
+          defaultExpandDepth={1}
         />
       </div>
 
