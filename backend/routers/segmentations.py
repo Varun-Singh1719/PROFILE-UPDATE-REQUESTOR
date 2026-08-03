@@ -77,10 +77,56 @@ class SegmentationUpdate(BaseModel):
 
 # ---------- helpers ----------
 def _actor_stub(user: dict) -> dict:
+    """Denormalized actor block persisted on segmentation docs.
+
+    We include emp_id at write-time so historical rows carry a snapshot,
+    and additionally enrich on read (via _enrich_actor) so renaming an
+    employee or backfilling an emp_id is reflected in the UI without
+    requiring a re-save of every segmentation.
+    """
     return {
         "id": user.get("id"),
         "name": user.get("name"),
         "email": user.get("email"),
+        "emp_id": user.get("emp_id"),
+    }
+
+
+async def _emp_id_map_for(ids: List[str]) -> dict:
+    """Look up emp_id / name / email for a batch of contact IDs.
+
+    Returns { contact_id: {"emp_id": ..., "name": ..., "email": ...} }.
+    Ids missing from the collection are silently skipped.
+    """
+    ids = [i for i in (ids or []) if i]
+    if not ids:
+        return {}
+    cursor = db.contacts.find(
+        {"id": {"$in": ids}},
+        {"_id": 0, "id": 1, "emp_id": 1, "name": 1, "email": 1},
+    )
+    out: dict = {}
+    async for c in cursor:
+        out[c.get("id")] = {
+            "emp_id": c.get("emp_id"),
+            "name": c.get("name"),
+            "email": c.get("email"),
+        }
+    return out
+
+
+def _enrich_actor(actor: Optional[dict], contact_map: dict) -> Optional[dict]:
+    """Merge fresh emp_id / name from the contacts collection into an
+    actor stub. Falls back to the persisted values when the contact has
+    since been deleted."""
+    if not actor:
+        return actor
+    fresh = contact_map.get(actor.get("id")) or {}
+    return {
+        "id": actor.get("id"),
+        "name": fresh.get("name") or actor.get("name"),
+        "email": fresh.get("email") or actor.get("email"),
+        "emp_id": fresh.get("emp_id") or actor.get("emp_id"),
     }
 
 
@@ -88,6 +134,23 @@ def _serialize(doc: dict) -> dict:
     if not doc:
         return doc
     doc = {k: v for k, v in doc.items() if k != "_id"}
+    return doc
+
+
+async def _enrich_doc(doc: dict) -> dict:
+    """Populate emp_id / current name on created_by & updated_by so the
+    UI's Details pivot table always shows up-to-date employee info even
+    for segmentations created before emp_id was persisted."""
+    if not doc:
+        return doc
+    cb = doc.get("created_by") or {}
+    ub = doc.get("updated_by") or {}
+    ids = [cb.get("id"), ub.get("id")]
+    contact_map = await _emp_id_map_for(ids)
+    if cb:
+        doc["created_by"] = _enrich_actor(cb, contact_map)
+    if ub:
+        doc["updated_by"] = _enrich_actor(ub, contact_map)
     return doc
 
 
@@ -109,8 +172,22 @@ async def list_segmentations(
                 {"description": {"$regex": q, "$options": "i"}},
             ]
     cursor = db[COLL].find(query).sort("created_on", -1)
-    rows = [_serialize(d) async for d in cursor]
-    return {"rows": rows, "total": len(rows)}
+    rows_raw = [_serialize(d) async for d in cursor]
+
+    # Batch-enrich all actor stubs in one contacts query.
+    ids: list = []
+    for r in rows_raw:
+        for k in ("created_by", "updated_by"):
+            a = r.get(k) or {}
+            if a.get("id"):
+                ids.append(a["id"])
+    contact_map = await _emp_id_map_for(list(set(ids)))
+    for r in rows_raw:
+        if r.get("created_by"):
+            r["created_by"] = _enrich_actor(r["created_by"], contact_map)
+        if r.get("updated_by"):
+            r["updated_by"] = _enrich_actor(r["updated_by"], contact_map)
+    return {"rows": rows_raw, "total": len(rows_raw)}
 
 
 @api_router.get("/segmentations/{seg_id}")
@@ -118,7 +195,7 @@ async def get_segmentation(seg_id: str, user=Depends(get_current_user)):
     doc = await db[COLL].find_one({"id": seg_id})
     if not doc:
         raise HTTPException(404, "Segmentation not found")
-    return _serialize(doc)
+    return await _enrich_doc(_serialize(doc))
 
 
 @api_router.post("/segmentations")
@@ -146,7 +223,7 @@ async def create_segmentation(body: SegmentationCreate, user=Depends(get_current
         "updated_on": now,
     }
     await db[COLL].insert_one(doc)
-    return _serialize(doc)
+    return await _enrich_doc(_serialize(doc))
 
 
 @api_router.patch("/segmentations/{seg_id}")
@@ -173,14 +250,14 @@ async def update_segmentation(seg_id: str, body: SegmentationUpdate, user=Depend
         updates["tree"] = body.tree
 
     if not updates:
-        return _serialize(existing)
+        return await _enrich_doc(_serialize(existing))
 
     updates["updated_by"] = _actor_stub(user)
     updates["updated_on"] = now_iso()
 
     await db[COLL].update_one({"id": seg_id}, {"$set": updates})
     doc = await db[COLL].find_one({"id": seg_id})
-    return _serialize(doc)
+    return await _enrich_doc(_serialize(doc))
 
 
 @api_router.delete("/segmentations/{seg_id}")

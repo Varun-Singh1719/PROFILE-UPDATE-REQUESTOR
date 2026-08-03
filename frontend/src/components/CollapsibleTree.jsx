@@ -5,8 +5,6 @@ import ZoomOutIcon from "@mui/icons-material/ZoomOut";
 import CenterFocusStrong from "@mui/icons-material/CenterFocusStrong";
 import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
 import UnfoldLessIcon from "@mui/icons-material/UnfoldLess";
-import EditIcon from "@mui/icons-material/Edit";
-import CheckIcon from "@mui/icons-material/Check";
 
 // Toolbar icon button — matches the Notification Bell visual pattern:
 // pill-shaped hover target, dark tooltip that fades in on hover, orange
@@ -69,13 +67,13 @@ const ToolButton = ({ onClick, icon, label, testid, position, active = false }) 
  *
  * Interactions (editable=true):
  *   • Click a node's label → select it (blue ring). If it's Level 2+ a
- *     BLUE "+ Peer" chip appears below the node.  All selected nodes
- *     (including root) get an ORANGE "+ Child" chip after the label.
- *   • Click "+ Child" → a new empty node is inserted right there and the
+ *     BLUE "+ Sibling" chip appears below the node.  All selected nodes
+ *     (including root) get an ORANGE "+ Sub-Segment" chip after the label.
+ *   • Click "+ Sub-Segment" → a new empty node is inserted right there and the
  *     cursor lands INSIDE a text input rendered on that node (via SVG
  *     foreignObject). Enter = commit, blur = commit, Esc/blank = cancel
  *     (removes the placeholder). NO popup, no modal.
- *   • Click "+ Peer" → same, but the new node is inserted as a sibling
+ *   • Click "+ Sibling" → same, but the new node is inserted as a sibling
  *     below the selected node.
  *   • Double-click a label → same inline editor, prepopulated with the
  *     current name (rename).
@@ -755,7 +753,10 @@ export default function CollapsibleTree({
 
     // ------------------------------------------ chips
     function drawChip(g, label, x, y, mode, hNode) {
-      const chipW = label.length <= 8 ? 68 : 82;
+      // Width scales with label length. "+ Sub-Segment" (13 chars incl.
+      // dash) and "+ Sibling" (9 chars) are wider than the previous
+      // "+ Child" / "+ Peer" so we bump the pill sizes accordingly.
+      const chipW = label.length <= 8 ? 68 : label.length <= 10 ? 90 : 118;
       const chipH = 20;
       const chip = g.append("g")
         .attr("class", mode === "add-peer" ? "seg-add-peer-chip" : "seg-add-chip")
@@ -800,11 +801,13 @@ export default function CollapsibleTree({
         const labelNode = labelSel.node();
         const bbox = labelNode ? labelNode.getBBox() : { x: 12, width: 60 };
 
-        const childChipCX = labelOnLeft(d) ? 50 : bbox.x + bbox.width + 44;
-        drawChip(g, "+ Child", childChipCX, 0, "add-child", d);
+        // "+ Sub-Segment" pill is wider (~118px) so shift it further from
+        // the label so it doesn't overlap.
+        const childChipCX = labelOnLeft(d) ? 65 : bbox.x + bbox.width + 68;
+        drawChip(g, "+ Sub-Segment", childChipCX, 0, "add-child", d);
 
         if (d.depth >= 1) {
-          drawChip(g, "+ Peer", 0, 26, "add-peer", d);
+          drawChip(g, "+ Sibling", 0, 26, "add-peer", d);
         }
       });
     }
@@ -1166,18 +1169,15 @@ export default function CollapsibleTree({
 
     // ResizeObserver — the container may resize AFTER the initial mount
     // (e.g. flex layout settling when the user navigates back from
-    // another page). We always re-run update() to recompute the layout
-    // against the current container width/height. If the user has NOT
-    // manually zoomed/panned yet, we ALSO refit so the tree stays
-    // centred at the settled dimensions instead of stuck at whatever
-    // size the container was during the initial mount.
+    // another page). We re-run update() to recompute the layout against
+    // the current container width/height, but we DO NOT auto-refit any
+    // more: per user request (Aug 2026) that auto-refit was yanking the
+    // tree back to the top-left every time the surrounding layout
+    // changed size ("auto refresh" symptom). The viewport now stays
+    // exactly where the user left it, and they can always press the
+    // "Fit to screen" toolbar button (or the "0" key) to recentre.
     const ro = new ResizeObserver(() => {
       update(root);
-      if (!hasUserInteractedRef.current) {
-        // Skip animation for these silent refits — they run during
-        // layout settling and animating them is visually jarring.
-        fitToView(false);
-      }
     });
     ro.observe(container);
     return () => {
@@ -1230,25 +1230,17 @@ export default function CollapsibleTree({
           data-testid="segmentation-tree-toolbar"
           onMouseDown={(e) => e.stopPropagation()}
         >
-          {onEditableToggle && (
-            <ToolButton
-              onClick={() => onEditableToggle(!editable)}
-              icon={editable
-                ? <CheckIcon sx={{ fontSize: 18 }} />
-                : <EditIcon sx={{ fontSize: 18 }} />
-              }
-              label={editable ? "Done editing" : "Edit tree"}
-              testid="tree-edit-toggle"
-              position="top"
-              active={editable}
-            />
-          )}
+          {/* NOTE (Aug 2026): the previous "Edit tree" toggle that used to
+              live at the top of this toolbar has been REMOVED — the top
+              bar's single Edit pencil (in SegmentationsPage) is now the
+              only entry point for both name/description edits and tree
+              edits (see spec). */}
           <ToolButton
             onClick={zoomIn}
             icon={<ZoomInIcon sx={{ fontSize: 18 }} />}
             label="Zoom in"
             testid="tree-zoom-in"
-            position={onEditableToggle ? "middle" : "top"}
+            position="top"
           />
           <ToolButton
             onClick={zoomOut}

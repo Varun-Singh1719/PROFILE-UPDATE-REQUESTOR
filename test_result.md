@@ -825,9 +825,114 @@ metadata:
 
 test_plan:
   current_focus:
-    - "CRM Segmentations — Inline editing tree (Jul 31 2026)"
+    - "CRM Segmentation — Renames + UI cleanup (Aug 3 2026)"
   stuck_tasks: []
   test_all: false
+
+
+crm_segmentations_aug3_2026:
+  - task: "CRM Segmentation — Aug 3 2026 UI cleanup (Sibling/Sub-Segment rename, merged edit button, pivot Details, Emp ID enrichment)"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/CollapsibleTree.jsx, frontend/src/pages/SegmentationsPage.jsx, backend/routers/segmentations.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            USER REQUEST (Aug 3 2026):
+              a. Remove auto-refresh that was pulling the tree chart to the
+                 top-left corner after some time.
+              b. Rename "Peer" → "Sibling" everywhere.
+              c. Rename "Child" → "Sub-Segment" everywhere.
+              d. Merge the two Edit buttons (tree chart edit + name/description
+                 edit) into ONE, remove the Edit button from the right-side
+                 zoom toolbar, and keep only the one in the top bar.
+              e. Show the button name in a hover tooltip on the top-bar
+                 buttons — same UX/UI as the Notification Bell.
+              f. Remove Description from the top bar; show it inside the (i)
+                 popover, followed by a "Details" section.
+              g. Change Details into a pivot table with columns
+                 Action / User / Emp ID / Date-Time.
+              h. Use provided MongoDB Atlas cluster (cluster0.vmgql1i.mongodb.net)
+                 with app_db database.
+
+            IMPLEMENTATION:
+
+            Backend (backend/routers/segmentations.py):
+              • _actor_stub now includes emp_id at write time.
+              • Added _emp_id_map_for(ids) — batch contact lookup.
+              • Added _enrich_actor(actor, contact_map) — merges fresh emp_id
+                and name/email from the contacts collection into the actor
+                stub on read (so historical rows also carry Emp ID).
+              • list_segmentations / get_segmentation / create / patch — all
+                enrich created_by & updated_by before returning.
+
+            Frontend (frontend/src/components/CollapsibleTree.jsx):
+              • Removed the toolbar Edit toggle button ("Edit tree" /
+                "Done editing"). The onEditableToggle prop is still accepted
+                for API compat but unused inside the toolbar.
+              • Renamed chip labels: "+ Child" → "+ Sub-Segment",
+                "+ Peer" → "+ Sibling". Widened the pill sizes to fit the
+                longer text.
+              • ResizeObserver no longer auto-refits the viewport — it only
+                re-runs update() to recompute the layout for the new size.
+                This kills the "tree keeps snapping back to the top-left"
+                symptom. Users can still recentre via the Fit-to-screen
+                toolbar button or the "0" key.
+              • Removed unused EditIcon/CheckIcon imports.
+
+            Frontend (frontend/src/pages/SegmentationsPage.jsx):
+              • Removed the description block from the top-bar header.
+              • Header now uses a single Edit pencil button in the top-right
+                cluster that toggles treeEditMode. Icon flips to a Check
+                (green background) when active, plus an "EDITING" pill next
+                to the status.
+              • While in tree edit mode, the segmentation name (previously
+                a static h2) becomes a button (dashed underline, hover-orange)
+                that opens the Name/Description dialog when clicked.
+              • IconAction wrapper now carries a dark hover-tooltip pill
+                (fades in on group-hover, positioned below the button) —
+                same visual language as the Notification Bell.
+              • SegmentationInfoPopover completely rewritten:
+                   1. Description block (formerly in top bar).
+                   2. "Details" section header.
+                   3. Pivot table with 4 columns:
+                          Action (Created By / Updated By),
+                          User (Name + email under it),
+                          Emp ID (mono),
+                          Date / Time (fmtDateTime).
+              • Legend text refreshed to Sub-Segment / Sibling.
+
+            DATABASE:
+              /app/backend/.env now points at the user-provided Atlas
+              cluster (cluster0.vmgql1i.mongodb.net / app_db). Backend
+              successfully connects and login flow verified end-to-end via
+              curl + browser.
+
+            VERIFICATION (main agent, playwright screenshots):
+              1. Segmentations page loads correctly with new legend
+                 ("Has sub-segments", "+ Sub-Segment", "+ Sibling").
+              2. Top-bar buttons show tooltips on hover ("Info", "Edit",
+                 "Delete", "Done editing" when active).
+              3. Info popover shows Description text first, then Details
+                 pivot table with 4 columns — Emp ID EMP-0001 populated
+                 for both Created By and Updated By rows (verified via
+                 backend enrichment).
+              4. Edit toggle turns pencil into a Check + adds "EDITING"
+                 pill. In edit mode the title has a dashed underline —
+                 clicking it opens the Name & Description dialog.
+              5. Selecting a Level-2+ node in edit mode shows both
+                 "+ Sub-Segment" (orange) and "+ Sibling" (blue) chips.
+              6. Right-side toolbar no longer has the Edit tree button —
+                 only Zoom In / Zoom Out / Fit / Expand All / Collapse All.
+              7. Tree remains at user's pan/zoom position across container
+                 resize (no more auto-refresh to top-left corner).
+
+            NOT tested by testing agent — user explicitly instructed
+            "do not deploy testing agent without my approval".
 
 
 crm_segmentations_inline_editing_jul31_2026:

@@ -20,6 +20,7 @@ import MoreVertical from "@mui/icons-material/MoreVert";
 import Circle from "@mui/icons-material/FiberManualRecord";
 import AccountTree from "@mui/icons-material/AccountTreeOutlined";
 import InfoOutlined from "@mui/icons-material/InfoOutlined";
+import Check from "@mui/icons-material/CheckOutlined";
 import CollapsibleTree from "../components/CollapsibleTree";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
@@ -399,34 +400,74 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
       className="flex-1 min-h-0 flex flex-col bg-gray-50"
       data-testid="segmentation-detail-panel"
     >
-      {/* Header — name / status + action cluster (Info · Edit · Delete) */}
-      <div className="px-6 py-4 bg-white border-b border-gray-200 flex items-start gap-4 flex-shrink-0">
+      {/* Header — name / status + action cluster (Info · Edit · Delete).
+          Per spec (Aug 2026): description no longer lives in the header —
+          it has been moved into the (i) Info popover, right above the
+          Details pivot table. */}
+      <div className="px-6 py-4 bg-white border-b border-gray-200 flex items-center gap-4 flex-shrink-0">
         <div className="w-11 h-11 rounded-lg bg-[#ec9324]/10 text-[#ec9324] flex items-center justify-center flex-shrink-0">
           <PieChart sx={{ fontSize: 22 }} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-lg font-bold text-gray-900 truncate" data-testid="segmentation-detail-title">
-              {row.name}
-            </h2>
+            {treeEditMode ? (
+              // In edit mode the segmentation name becomes a click target
+              // that opens the Name & Description dialog. Wrapped in a
+              // subtle dashed underline + hover ring so users can see it
+              // is now interactive.
+              <button
+                type="button"
+                onClick={onEdit}
+                data-testid="segmentation-detail-title"
+                title="Edit name & description"
+                className="text-lg font-bold text-gray-900 truncate max-w-full text-left
+                           border-b border-dashed border-[#ec9324] hover:text-[#ec9324]
+                           focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40 rounded-sm px-0.5"
+              >
+                {row.name}
+              </button>
+            ) : (
+              <h2
+                className="text-lg font-bold text-gray-900 truncate"
+                data-testid="segmentation-detail-title"
+              >
+                {row.name}
+              </h2>
+            )}
             <StatusPill status={row.status} />
+            {treeEditMode && (
+              <span
+                data-testid="segmentation-editing-badge"
+                className="ml-1 inline-flex items-center gap-1 text-[10px] font-semibold uppercase
+                           tracking-wide rounded-full px-2 py-0.5 border border-[#ec9324]/40
+                           bg-[#ec9324]/10 text-[#ec9324]"
+              >
+                Editing
+              </span>
+            )}
           </div>
-          {row.description ? (
-            <p className="mt-0.5 text-xs text-gray-600 line-clamp-2">{row.description}</p>
-          ) : (
-            <p className="mt-0.5 text-xs text-gray-400 italic">No description</p>
-          )}
         </div>
 
         <div className="flex items-center gap-1 flex-shrink-0">
           <SegmentationInfoPopover row={row} />
+          {/* Single Edit button now toggles tree edit mode. When active
+              the pencil turns into a check-mark to signal "Done". While
+              in edit mode, clicking the segmentation name (see above)
+              opens the Name/Description dialog. */}
           <IconAction
-            onClick={onEdit}
-            title="Edit"
+            onClick={() => setTreeEditMode(!treeEditMode)}
+            title={treeEditMode ? "Done editing" : "Edit"}
             testid="segmentation-detail-edit"
-            className="text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+            className={treeEditMode
+              ? "text-[#ec9324] bg-[#ec9324]/10 hover:bg-[#ec9324]/20"
+              : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+            }
+            active={treeEditMode}
           >
-            <Pencil sx={{ fontSize: 18 }} />
+            {treeEditMode
+              ? <Check sx={{ fontSize: 18 }} />
+              : <Pencil sx={{ fontSize: 18 }} />
+            }
           </IconAction>
           <IconAction
             onClick={onDelete}
@@ -454,19 +495,19 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
       <div className="px-5 py-2 border-t border-gray-100 bg-white text-[11px] text-gray-500 flex items-center gap-4 flex-wrap flex-shrink-0">
         <span className="inline-flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-[#ec9324] inline-block" />
-          Has children (click to collapse)
+          Has sub-segments (click to collapse)
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-white border-2 border-[#ec9324] inline-block" />
           Leaf node
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block px-1.5 py-0.5 rounded-full bg-[#ec9324] text-white text-[9px] font-bold leading-none">+ Child</span>
+          <span className="inline-block px-1.5 py-0.5 rounded-full bg-[#ec9324] text-white text-[9px] font-bold leading-none">+ Sub-Segment</span>
           deeper level
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block px-1.5 py-0.5 rounded-full bg-[#0ea5e9] text-white text-[9px] font-bold leading-none">+ Peer</span>
-          same level (sibling)
+          <span className="inline-block px-1.5 py-0.5 rounded-full bg-[#0ea5e9] text-white text-[9px] font-bold leading-none">+ Sibling</span>
+          same level
         </span>
         <span className="ml-auto text-[11px]">
           {saveState === "saving" && <span className="text-amber-600 font-medium">Saving…</span>}
@@ -480,37 +521,53 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
 }
 
 // Tiny icon-button wrapper — consistent hover / focus ring with the rest
-// of the top bar. Mirrors the NotificationBell trigger visually.
-function IconAction({ children, onClick, title, testid, className = "" }) {
+// of the top bar. Mirrors the NotificationBell trigger visually AND
+// carries a dark hover-tooltip pill that fades in (same UX as the bell).
+// The tooltip is positioned BELOW the button so it doesn't clip against
+// the page header.
+function IconAction({ children, onClick, title, testid, className = "", active = false }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      title={title}
       aria-label={title}
+      aria-pressed={active}
       data-testid={testid}
-      className={`inline-flex items-center justify-center w-9 h-9 rounded-full transition-colors ${className}`}
+      className={`group relative inline-flex items-center justify-center w-9 h-9 rounded-full transition-colors ${className}`}
     >
       {children}
+      {/* Hover tooltip — dark pill, fades in on group-hover. Same visual
+          language as the Notification Bell tooltip. */}
+      <span
+        className="pointer-events-none absolute top-full mt-1.5 left-1/2 -translate-x-1/2
+                   px-2 py-1 bg-gray-900 text-white text-[11px] font-medium
+                   rounded whitespace-nowrap opacity-0 group-hover:opacity-100
+                   transition-opacity duration-150 z-50 shadow-lg"
+      >
+        {title}
+      </span>
     </button>
   );
 }
 
 // Info (ⓘ) popover — same visual pattern as the top-bar NotificationBell.
-// Shows Created By / Created On and Updated By / Updated On.
+// Shows the segmentation description first, then a "Details" pivot
+// table with 4 columns: Action, User (Name), Emp ID and Date / Time.
 function SegmentationInfoPopover({ row }) {
   const [open, setOpen] = useState(false);
-  const rows = [
+  const detailRows = [
     {
-      label: "Created By",
+      action: "Created By",
       userName: row.created_by?.name || "—",
       userEmail: row.created_by?.email || "",
+      empId: row.created_by?.emp_id || "—",
       date: fmtDateTime(row.created_on),
     },
     {
-      label: "Updated By",
+      action: "Updated By",
       userName: row.updated_by?.name || "—",
       userEmail: row.updated_by?.email || "",
+      empId: row.updated_by?.emp_id || "—",
       date: fmtDateTime(row.updated_on),
     },
   ];
@@ -520,59 +577,108 @@ function SegmentationInfoPopover({ row }) {
         <button
           type="button"
           data-testid="segmentation-detail-info"
-          title="Details"
-          aria-label="Details"
-          className="inline-flex items-center justify-center w-9 h-9 rounded-full text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+          aria-label="Info"
+          className="group relative inline-flex items-center justify-center w-9 h-9 rounded-full text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
         >
           <InfoOutlined sx={{ fontSize: 20 }} />
+          {/* Hover tooltip — same UX as the Notification Bell */}
+          <span
+            className="pointer-events-none absolute top-full mt-1.5 left-1/2 -translate-x-1/2
+                       px-2 py-1 bg-gray-900 text-white text-[11px] font-medium
+                       rounded whitespace-nowrap opacity-0 group-hover:opacity-100
+                       transition-opacity duration-150 z-50 shadow-lg"
+          >
+            Info
+          </span>
         </button>
       </PopoverTrigger>
       <PopoverContent
         align="end"
-        className="w-[340px] p-0 overflow-hidden"
+        className="w-[440px] p-0 overflow-hidden"
         data-testid="segmentation-info-popover"
       >
-        <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+        {/* Description block (formerly rendered in the top bar) */}
+        <div className="px-4 py-3 border-b border-gray-100">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 mb-1">
+            Description
+          </div>
+          {row.description ? (
+            <p
+              className="text-[13px] text-gray-800 whitespace-pre-wrap"
+              data-testid="segmentation-info-description"
+            >
+              {row.description}
+            </p>
+          ) : (
+            <p
+              className="text-[13px] text-gray-400 italic"
+              data-testid="segmentation-info-description-empty"
+            >
+              No description
+            </p>
+          )}
+        </div>
+
+        {/* Details — pivot table */}
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2 bg-gray-50">
           <InfoOutlined className="text-[#ec9324]" sx={{ fontSize: 18 }} />
           <span className="text-sm font-semibold text-gray-900">Details</span>
         </div>
-        <div className="max-h-[360px] overflow-y-auto">
-          {rows.map((r, i) => (
-            <div
-              key={r.label}
-              className={`px-4 py-3 flex items-start gap-3 ${
-                i === 0 ? "" : "border-t border-gray-100"
-              }`}
-              data-testid={`segmentation-info-row-${i}`}
-            >
-              <div className="w-9 h-9 rounded-full bg-[#ec9324]/10 text-[#ec9324] flex items-center justify-center flex-shrink-0 mt-0.5">
-                {r.label === "Created By" ? (
-                  <Plus sx={{ fontSize: 18 }} />
-                ) : (
-                  <Pencil sx={{ fontSize: 16 }} />
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+        <div className="max-h-[360px] overflow-auto" data-testid="segmentation-info-details">
+          <table className="w-full text-[12px]" data-testid="segmentation-details-table">
+            <thead className="bg-gray-50 text-gray-500">
+              <tr className="text-left">
+                <th className="px-3 py-2 font-semibold uppercase tracking-wide text-[10px]">
                   Action
-                </div>
-                <div className="text-[13px] font-medium text-gray-900">{r.label}</div>
-
-                <div className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                </th>
+                <th className="px-3 py-2 font-semibold uppercase tracking-wide text-[10px]">
                   User
-                </div>
-                <div className="text-[13px] text-gray-900 truncate">{r.userName}</div>
-                {r.userEmail && (
-                  <div className="text-[11px] text-gray-500 truncate">{r.userEmail}</div>
-                )}
-
-                <div className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                  Date
-                </div>
-                <div className="text-[13px] text-gray-900">{r.date}</div>
-              </div>
-            </div>
-          ))}
+                </th>
+                <th className="px-3 py-2 font-semibold uppercase tracking-wide text-[10px]">
+                  Emp ID
+                </th>
+                <th className="px-3 py-2 font-semibold uppercase tracking-wide text-[10px]">
+                  Date / Time
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {detailRows.map((r, i) => (
+                <tr
+                  key={r.action}
+                  className={i === 0 ? "" : "border-t border-gray-100"}
+                  data-testid={`segmentation-details-row-${i}`}
+                >
+                  <td className="px-3 py-2 align-top">
+                    <span className="inline-flex items-center gap-1.5 font-medium text-gray-900">
+                      <span className="w-6 h-6 rounded-full bg-[#ec9324]/10 text-[#ec9324] flex items-center justify-center">
+                        {r.action === "Created By" ? (
+                          <Plus sx={{ fontSize: 14 }} />
+                        ) : (
+                          <Pencil sx={{ fontSize: 12 }} />
+                        )}
+                      </span>
+                      {r.action}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    <div className="text-gray-900 font-medium">{r.userName}</div>
+                    {r.userEmail && (
+                      <div className="text-[11px] text-gray-500 truncate max-w-[140px]">
+                        {r.userEmail}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 align-top text-gray-800 font-mono text-[11.5px]">
+                    {r.empId}
+                  </td>
+                  <td className="px-3 py-2 align-top text-gray-800 whitespace-nowrap">
+                    {r.date}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </PopoverContent>
     </Popover>
