@@ -1121,6 +1121,26 @@ export default function CollapsibleTree({
 
     update(root);
 
+    // ---- Initial-fit / settle window --------------------------------
+    //
+    // The container's dimensions are frequently NOT at their final size
+    // when useLayoutEffect first runs — flex parents settle, scrollbars
+    // pop in/out, MUI's sidebar collapses, etc. If we lock in the
+    // viewport at t=0 the tree ends up wedged in a corner (Aug 3 2026
+    // bug: "default view shifts to top-right").
+    //
+    // Strategy:
+    //   • Auto-fit repeatedly for the first ~1.5s after mount OR until
+    //     the user pans / zooms, whichever comes first — this keeps the
+    //     tree centred while the layout settles.
+    //   • After the settle window closes (or the user starts panning),
+    //     we STOP auto-fitting. This preserves the fix for the earlier
+    //     "auto-refresh yanks the tree to a corner" complaint.
+    const SETTLE_MS = 1500;
+    const mountedAt = performance.now();
+    const isSettleWindow = () =>
+      !hasUserInteractedRef.current && performance.now() - mountedAt < SETTLE_MS;
+
     // Kick an initial fit AFTER labels have been measured (first RAF)
     // so `labelWidthById` is populated before we compute the bbox.
     window.requestAnimationFrame(() => {
@@ -1168,19 +1188,33 @@ export default function CollapsibleTree({
     container.addEventListener("keydown", onKeyDown);
 
     // ResizeObserver — the container may resize AFTER the initial mount
-    // (e.g. flex layout settling when the user navigates back from
-    // another page). We re-run update() to recompute the layout against
-    // the current container width/height, but we DO NOT auto-refit any
-    // more: per user request (Aug 2026) that auto-refit was yanking the
-    // tree back to the top-left every time the surrounding layout
-    // changed size ("auto refresh" symptom). The viewport now stays
-    // exactly where the user left it, and they can always press the
-    // "Fit to screen" toolbar button (or the "0" key) to recentre.
+    // (flex layout settling, sidebar toggle, scrollbar appearing, etc).
+    // We always re-run update() so the tree is laid out for the new
+    // container size. We ALSO auto-fit — but ONLY during the 1.5s
+    // "settle window" after mount AND only if the user hasn't panned
+    // or zoomed yet. That combination gives us:
+    //   • A reliably centred default view (initial fit corrects itself
+    //     as the container finalises its size).
+    //   • No "auto-refresh yanking the tree into a corner" once the
+    //     user is actually looking at / interacting with the chart.
+    let settleFitTimeout = null;
     const ro = new ResizeObserver(() => {
       update(root);
+      if (isSettleWindow()) {
+        // Debounce: wait for the current burst of resize events to
+        // finish before fitting so we use the FINAL settled size, not
+        // an intermediate one.
+        if (settleFitTimeout) clearTimeout(settleFitTimeout);
+        settleFitTimeout = setTimeout(() => {
+          if (!hasUserInteractedRef.current) {
+            fitToView(false);
+          }
+        }, 80);
+      }
     });
     ro.observe(container);
     return () => {
+      if (settleFitTimeout) clearTimeout(settleFitTimeout);
       ro.disconnect();
       container.removeEventListener("keydown", onKeyDown);
     };
