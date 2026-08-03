@@ -825,9 +825,127 @@ metadata:
 
 test_plan:
   current_focus:
-    - "CRM Segmentation — Renames + UI cleanup (Aug 3 2026)"
+    - "CRM Segmentation — Tree UX pass (Aug 3 2026)"
   stuck_tasks: []
   test_all: false
+
+
+crm_segmentation_tree_ux_aug3_2026:
+  - task: "CRM Segmentation — Tree UX pass (alpha sort, link fix, chip layout, orange ring, depth colours)"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/CollapsibleTree.jsx, frontend/src/pages/SegmentationsPage.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            USER-REPORTED BUGS (Aug 3 2026):
+              1. Tree order feels random — user wants children auto-sorted A → Z at every level.
+              2. Linking bezier lines overlap sibling labels when a parent has a wide fan-out
+                 (BFSI → 8 children; the down-going curves cross Consumer Staples / Chemicals /
+                 Metals & Mining / etc. labels on the middle column).
+              3. Edit-mode "+ Sub-Segment" and "+ Sibling" chips overlap adjacent text and the
+                 outgoing link lines (screenshot: Real Estate + BFSI's expanded subtree).
+              4. Selection halo colour is blue — should be orange to match the app palette.
+              5. Every depth level should carry its own soft colour so deep hierarchies are
+                 readable at a glance.
+
+            FIX SUMMARY (all in frontend/src/components/CollapsibleTree.jsx):
+
+              (1) sortDeep(node) helper — recursively sorts every level's children by name
+                  (case-insensitive localeCompare). Blank names sink to the end so an
+                  in-flight rename doesn't shuffle mid-keystroke.
+                  • Applied inside useState initializer (initial mount).
+                  • Applied inside useEffect([data]) (when parent hands us new data).
+                  • Applied inside startAddChild / startAddPeer AFTER pushing the new
+                    blank node — then indexOfBlankChild() re-locates the just-inserted
+                    node so the inline editor path is correct.
+                  • Applied inside commitEdit's rename branch so a rename that changes
+                    a node's alphabetical position re-orders siblings instantly.
+
+              (2) linkPath control points shifted to 75% of the way toward the TARGET
+                  (was 50% via d3.linkHorizontal). That makes the initial ~75% of every
+                  outgoing link a nearly-flat horizontal run from the source — all links
+                  from a many-children parent share that run, so nothing crosses sibling
+                  labels. Only the final ~25% carries the vertical S-curve into the
+                  target column.
+
+              (3) dx bumped 26 → 32 (extra 6px between rows).
+                  Chip layout rewritten:
+                     • "+ Sub-Segment" positioned to the RIGHT of the label, y=-16.
+                     • "+ Sibling"     positioned to the RIGHT of the label, y=+16.
+                  Both chips now sit in the vertical gutter BETWEEN rows so they
+                  cannot overlap other rows' labels.
+                  A white backdrop rect is drawn behind each chip to visually mask
+                  any link that happens to pass under it.
+
+              (4) Selection ring recoloured:
+                     stroke #3b82f6 (blue) → #ec9324 (orange).
+                     fill  rgba(59,130,246,0.08) → rgba(236,147,36,0.10).
+
+              (5) DEPTH_COLORS palette applied to circles' fill+stroke:
+                     [0] #ec9324 orange (root)
+                     [1] #0ea5e9 sky
+                     [2] #22c55e green
+                     [3] #a855f7 purple
+                     [4] #ef4444 red
+                     [5] #14b8a6 teal
+                     [6] #f59e0b amber
+                     [7] #6366f1 indigo
+                     cycles modulo array length for arbitrarily deep trees.
+                     Nodes WITH children use the depth colour as solid fill;
+                     leaves use white fill + depth-coloured stroke.
+
+            VERIFICATION (main agent, playwright screenshots — testing agent still needed):
+               a. Infollion Research default view — children rendered alphabetically
+                  (Agriculture → Automotive → BFSI → Chemicals → … → To Be Added L0),
+                  Level-1 nodes now sky-blue instead of orange.
+               b. Expanding BFSI — its 8 children (Banking, Consumer Finance/Lending,
+                  Financial Services, Fintech, Insurance, Insurtech,
+                  Non-Banking Financial Services, Regtech) show in alphabetical order
+                  and Level-2 nodes are green. Outgoing links stay clear of
+                  Chemicals / Consumer Staples / Metals and Mining / etc. — no more
+                  bezier over label overlap.
+               c. Edit mode + click on "Real Estate" — orange ring around the circle;
+                  "+ Sub-Segment" pill sits above the label, "+ Sibling" below it,
+                  both centered on the label's right edge, no overlap with any
+                  neighbouring row.
+
+            TESTING PROTOCOL:
+              This is the FIRST time the testing agent is being consulted for this
+              feature. Frontend testing agent should:
+               (A) Login as admin@ticketing.com / Admin@123.
+               (B) Navigate to /crm/segmentations.
+               (C) Verify default view of "Infollion Research" is:
+                   • Level-1 children in alphabetical order (Agriculture first,
+                     "To Be Added L0" last).
+                   • Root circle orange, Level-1 circles sky-blue (#0ea5e9).
+                   • No sub-segment / sibling legend chips in the footer legend.
+               (D) Click on the "BFSI" circle (not the label — the small circle on
+                   the left of the label) to expand its children.
+                   • Its 8 children must render in alphabetical order.
+                   • Circles must be green (#22c55e).
+                   • Verify by DOM inspection that no path.seg-link element
+                     visually overlaps any text.seg-label element other than its
+                     own source & target.
+               (E) Toggle edit mode via the top-left glass panel's pencil icon.
+                   Click on "Real Estate" label to select it.
+                   • The selection ring must be ORANGE (stroke=#ec9324).
+                   • Two chips must appear: g.seg-add-chip (fill=#ec9324) ABOVE,
+                     g.seg-add-peer-chip (fill=#ffffff, stroke=#ec9324) BELOW.
+                   • Their transforms must place them so neither one overlaps
+                     other rows' labels (measured bounding boxes should not
+                     intersect).
+               (F) In edit mode, click "+ Sub-Segment" on the root, type
+                   "ZZZ Test" + Enter. Verify:
+                   • The new node appears in the correct alphabetical position
+                     (after all existing children starting with A-Y).
+               (G) Regression: switch to another segmentation (Inline QA) — its
+                   children (Enterprise, SMB-Renamed, Fortune 500 as a child of
+                   Enterprise) should also be alphabetical at every level.
 
 
 crm_segmentations_aug3_2026:

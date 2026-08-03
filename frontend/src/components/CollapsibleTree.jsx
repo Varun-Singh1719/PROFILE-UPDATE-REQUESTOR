@@ -118,16 +118,37 @@ export default function CollapsibleTree({
 
   // Local mirror of the incoming `data` — we mutate this scratchpad on
   // every add / rename / cancel, and only sync back to the parent via
-  // onChange after each committed action.
-  const [viewData, setViewData] = useState(() =>
-    data ? JSON.parse(JSON.stringify(data)) : { name: "", children: [] }
-  );
+  // onChange after each committed action. Sorted A → Z from the outset.
+  const [viewData, setViewData] = useState(() => {
+    if (!data) return { name: "", children: [] };
+    const cloned = JSON.parse(JSON.stringify(data));
+    // Inline sort — sortDeep is declared further down but hoists via
+    // function scope only for `function` declarations, so we inline the
+    // sort here to keep the initial render alphabetical.
+    const sort = (node) => {
+      if (!node || !Array.isArray(node.children)) return;
+      node.children.sort((a, b) => {
+        const an = (a?.name || "").trim();
+        const bn = (b?.name || "").trim();
+        if (!an && bn) return 1;
+        if (an && !bn) return -1;
+        return an.toLowerCase().localeCompare(bn.toLowerCase());
+      });
+      node.children.forEach(sort);
+    };
+    sort(cloned);
+    return cloned;
+  });
 
   // Whenever the parent hands us a new `data` prop we reset the local
-  // scratchpad and drop any in-flight edit.
+  // scratchpad and drop any in-flight edit. The incoming tree is
+  // alphabetically sorted so the view is A → Z from the very first
+  // render (Aug 2026 requirement).
   useEffect(() => {
     if (data) {
-      setViewData(JSON.parse(JSON.stringify(data)));
+      const cloned = JSON.parse(JSON.stringify(data));
+      sortDeep(cloned);
+      setViewData(cloned);
       setEditingPath(null);
       // A brand-new dataset should get a fresh initial fit AND treat the
       // canvas as un-touched (so the ResizeObserver auto-refits while
@@ -135,6 +156,7 @@ export default function CollapsibleTree({
       didInitialFitRef.current = false;
       hasUserInteractedRef.current = false;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
   // Path (array of children indices) of the currently-editing node.
@@ -143,6 +165,36 @@ export default function CollapsibleTree({
 
   // -------------------------------------------- helpers
   const deepClone = (o) => JSON.parse(JSON.stringify(o));
+
+  // Sort every level's children alphabetically (A → Z, case-insensitive).
+  // Nodes with a blank name (freshly-inserted placeholders being edited
+  // inline) are kept at the END of their group so the on-canvas editor
+  // doesn't jump around while the user is still typing.
+  const sortDeep = (node) => {
+    if (!node || !Array.isArray(node.children)) return node;
+    node.children.sort((a, b) => {
+      const an = (a?.name || "").trim();
+      const bn = (b?.name || "").trim();
+      // Blank names sink to the bottom so an in-flight rename doesn't
+      // shuffle the layout mid-keystroke.
+      if (!an && bn) return 1;
+      if (an && !bn) return -1;
+      return an.toLowerCase().localeCompare(bn.toLowerCase());
+    });
+    node.children.forEach(sortDeep);
+    return node;
+  };
+
+  // Locate the index of a freshly-inserted (blank-name) child inside a
+  // just-sorted parent. sortDeep parks blank entries at the end, so this
+  // returns the LAST-index blank child.
+  const indexOfBlankChild = (parent) => {
+    if (!parent?.children?.length) return -1;
+    for (let i = parent.children.length - 1; i >= 0; i--) {
+      if (!(parent.children[i]?.name || "").trim()) return i;
+    }
+    return -1;
+  };
 
   const pathOfHNode = (h) => {
     // Walk up the d3.hierarchy node, computing the child index at each
@@ -190,8 +242,14 @@ export default function CollapsibleTree({
       if (!t) return prev;
       t.children = Array.isArray(t.children) ? t.children : [];
       t.children.push({ name: "" });
-      // Focus the freshly-inserted node in the *next* layout tick.
-      setEditingPath([...targetPath, t.children.length - 1]);
+      sortDeep(next);
+      // Blank child sinks to the end after sort — locate it and set the
+      // inline editor path to that position.
+      const parent = targetPath.length === 0 ? next : findByPath(next, targetPath);
+      const blankIdx = indexOfBlankChild(parent);
+      if (blankIdx >= 0) {
+        setEditingPath([...targetPath, blankIdx]);
+      }
       return next;
     });
   }, []);
@@ -200,14 +258,21 @@ export default function CollapsibleTree({
     const targetPath = pathOfHNode(hNode);
     if (!targetPath || targetPath.length === 0) return;
     const parentPath = targetPath.slice(0, -1);
-    const insertAt = targetPath[targetPath.length - 1] + 1;
     setViewData((prev) => {
       const next = deepClone(prev);
       const parent = parentPath.length === 0 ? next : findByPath(next, parentPath);
       if (!parent) return prev;
       parent.children = Array.isArray(parent.children) ? parent.children : [];
-      parent.children.splice(insertAt, 0, { name: "" });
-      setEditingPath([...parentPath, insertAt]);
+      parent.children.push({ name: "" });
+      sortDeep(next);
+      // Same trick — blank sibling parked at end, so locate its position
+      // and route the inline editor there.
+      const refreshedParent =
+        parentPath.length === 0 ? next : findByPath(next, parentPath);
+      const blankIdx = indexOfBlankChild(refreshedParent);
+      if (blankIdx >= 0) {
+        setEditingPath([...parentPath, blankIdx]);
+      }
       return next;
     });
   }, []);
@@ -255,6 +320,9 @@ export default function CollapsibleTree({
         const next = deepClone(prev);
         const node = findByPath(next, path);
         if (node) node.name = trimmed;
+        // Rename may change alphabetical position — re-sort so the
+        // whole tree stays A → Z.
+        sortDeep(next);
         emit(next);
         return next;
       });
@@ -307,12 +375,34 @@ export default function CollapsibleTree({
     // Layout constants — tightened for high-density hierarchies. dx is
     // vertical spacing between siblings; dy is horizontal step between
     // depth levels. Values must stay large enough to accommodate the
-    // Peer-chip (below a selected node) + a moderately-long label.
+    // Layout constants — tightened for high-density hierarchies. dx is
+    // vertical spacing between siblings; dy is horizontal step between
+    // depth levels. Bumped to 32 (Aug 2026) so the on-canvas "+ Sibling"
+    // chip has room to float below the label without overlapping the
+    // next row's text.
     const marginTop = 20;
     const marginBottom = 20;
     const marginLeft = 40;
     const nodeRadius = 5;
-    const dx = 26; // vertical spacing between siblings (compact)
+    const dx = 32; // vertical spacing between siblings
+
+    // Soft palette used to colour each depth level (Aug 2026 spec:
+    // "colour each depth level with a soft palette so deep hierarchies
+    // stay readable at a glance"). Depth 0 (root) stays orange to match
+    // the brand accent; every subsequent level cycles through the
+    // palette. Cycled with modulo so arbitrarily deep trees always get
+    // a colour.
+    const DEPTH_COLORS = [
+      "#ec9324", // 0 root — brand orange
+      "#0ea5e9", // 1 — sky
+      "#22c55e", // 2 — green
+      "#a855f7", // 3 — purple
+      "#ef4444", // 4 — red
+      "#14b8a6", // 5 — teal
+      "#f59e0b", // 6 — amber
+      "#6366f1", // 7 — indigo
+    ];
+    const depthColor = (d) => DEPTH_COLORS[(d?.depth || 0) % DEPTH_COLORS.length];
 
     const dataClone = JSON.parse(JSON.stringify(viewData));
     const root = d3.hierarchy(dataClone);
@@ -430,7 +520,14 @@ export default function CollapsibleTree({
       }
     }
 
-    // Build a link path that starts AFTER the source's label.
+    // Build a link path that starts AFTER the source's label AND keeps
+    // its curve concentrated near the TARGET end of the horizontal
+    // span. When a parent has many children (BFSI-style fan-out) the
+    // classic mid-anchored bezier draws long diagonal curves through
+    // sibling text — moving the control points 75% of the way toward
+    // the target makes the initial ~75% of every outgoing link SHARE
+    // the same nearly-flat run from source, so nothing crosses over
+    // adjacent siblings' labels. (Aug 2026 fix.)
     const linkPath = (link) => {
       const src = link.source;
       const tgt = link.target;
@@ -438,10 +535,9 @@ export default function CollapsibleTree({
       const gapBeforeCircle = 8;    // gap between line end and target circle
       const srcHoriz = src.y + 12 + measuredW(src) + gapBeforeStart;
       const tgtHoriz = tgt.y - gapBeforeCircle;
-      return bezier({
-        source: { y: srcHoriz, x: src.x },
-        target: { y: tgtHoriz, x: tgt.x },
-      });
+      const span = tgtHoriz - srcHoriz;
+      const controlX = srcHoriz + span * 0.75;
+      return `M${srcHoriz},${src.x} C${controlX},${src.x} ${controlX},${tgt.x} ${tgtHoriz},${tgt.x}`;
     };
 
     // Path lookup for the current hierarchy (uses d.data references).
@@ -603,8 +699,12 @@ export default function CollapsibleTree({
       nodeEnter.append("circle")
         .attr("class", "seg-circle")
         .attr("r", nodeRadius)
-        .attr("fill", (d) => (hasKids(d) ? "#ec9324" : "#fff"))
-        .attr("stroke", "#ec9324")
+        // Depth-based colour palette so each level is visually distinct.
+        // Nodes WITH sub-segments = solid fill; leaves = white fill,
+        // coloured stroke — both use the same depth colour so a branch
+        // reads at a glance.
+        .attr("fill", (d) => (hasKids(d) ? depthColor(d) : "#fff"))
+        .attr("stroke", (d) => depthColor(d))
         .attr("stroke-width", 2)
         // Single-click on the circle = toggle expand/collapse WITH anchor
         // preservation. Double-click = smooth focus/zoom onto the node.
@@ -692,7 +792,8 @@ export default function CollapsibleTree({
         .attr("stroke-opacity", 1);
 
       nodeUpdate.select("circle.seg-circle")
-        .attr("fill", (d) => (hasKids(d) ? "#ec9324" : "#fff"));
+        .attr("fill", (d) => (hasKids(d) ? depthColor(d) : "#fff"))
+        .attr("stroke", (d) => depthColor(d));
 
       node.exit().transition(transition).remove()
         .attr("transform", () => `translate(${source.y},${source.x})`)
@@ -746,18 +847,22 @@ export default function CollapsibleTree({
         .insert("circle", "circle.seg-circle")
         .attr("class", "seg-select-ring")
         .attr("r", nodeRadius + 5)
-        .attr("fill", "rgba(59,130,246,0.08)")
-        .attr("stroke", "#3b82f6")
-        .attr("stroke-width", 1.5);
+        // Selection halo colour: brand orange (was blue pre-Aug 2026 —
+        // spec now requires orange so the halo matches the app palette).
+        .attr("fill", "rgba(236,147,36,0.10)")
+        .attr("stroke", "#ec9324")
+        .attr("stroke-width", 1.75);
     }
 
     // ------------------------------------------ chips
+    // Chip layout constants — chosen so the pill fits inside the extra
+    // whitespace that the (bumped-to-32) sibling separation leaves
+    // between rows. A solid white backdrop is added first so any
+    // stray link that passes behind is masked.
     function drawChip(g, label, x, y, mode, hNode) {
-      // Width scales with label length. "+ Sub-Segment" (13 chars incl.
-      // dash) and "+ Sibling" (9 chars) are wider than the previous
-      // "+ Child" / "+ Peer" so we bump the pill sizes accordingly.
       const chipW = label.length <= 8 ? 68 : label.length <= 10 ? 90 : 118;
       const chipH = 20;
+      const backdropPad = 3;
       const chip = g.append("g")
         .attr("class", mode === "add-peer" ? "seg-add-peer-chip" : "seg-add-chip")
         .attr("data-mode", mode)
@@ -768,12 +873,21 @@ export default function CollapsibleTree({
           if (mode === "add-peer") handlersRef.current.startAddPeer(hNode);
           else handlersRef.current.startAddChild(hNode);
         });
+      // Solid white backdrop so the chip visually masks any underlying
+      // link/text that happens to sit at the chip's position.
+      chip.append("rect")
+        .attr("class", "seg-chip-backdrop")
+        .attr("x", -backdropPad).attr("y", -backdropPad)
+        .attr("width", chipW + backdropPad * 2)
+        .attr("height", chipH + backdropPad * 2)
+        .attr("rx", (chipH + backdropPad * 2) / 2)
+        .attr("ry", (chipH + backdropPad * 2) / 2)
+        .attr("fill", "#ffffff")
+        .attr("stroke", "none");
       chip.append("rect")
         .attr("width", chipW).attr("height", chipH)
         .attr("rx", chipH / 2).attr("ry", chipH / 2)
-        // "+ Sibling" now uses the "In Progress"-style outlined orange
-        // (white fill + orange text/border) — same color coding as the
-        // Profix All Requests "In Progress" status pill. "+ Sub-Segment"
+        // "+ Sibling" uses "In Progress"-style outlined orange; "+ Sub-Segment"
         // stays solid orange so the two chips remain visually distinct.
         .attr("fill", mode === "add-peer" ? "#ffffff" : "#ec9324")
         .attr("stroke", mode === "add-peer" ? "#ec9324" : "#d4811f")
@@ -805,13 +919,23 @@ export default function CollapsibleTree({
         const labelNode = labelSel.node();
         const bbox = labelNode ? labelNode.getBBox() : { x: 12, width: 60 };
 
-        // "+ Sub-Segment" pill is wider (~118px) so shift it further from
-        // the label so it doesn't overlap.
-        const childChipCX = labelOnLeft(d) ? 65 : bbox.x + bbox.width + 68;
-        drawChip(g, "+ Sub-Segment", childChipCX, 0, "add-child", d);
+        // Chip layout (Aug 2026):
+        //   • X-axis: chip sits to the RIGHT of the label (well past the
+        //     circle so it never covers its own node).
+        //   • Y-axis: chips are pushed into the vertical gap BETWEEN
+        //     rows — Sub-Segment ABOVE (y=-16) and Sibling BELOW (y=+16).
+        //     With dx=32 the ±16 offset lands exactly in the gutter
+        //     between adjacent labels (which span roughly ±7), so the
+        //     chips never overlap neighbouring rows' text.
+        const gapAfterLabel = 10;
+        const subSegChipW = 118;
+        const subSegChipCX = bbox.x + bbox.width + gapAfterLabel + subSegChipW / 2;
+        drawChip(g, "+ Sub-Segment", subSegChipCX, -16, "add-child", d);
 
         if (d.depth >= 1) {
-          drawChip(g, "+ Sibling", 0, 26, "add-peer", d);
+          const sibChipW = 90;
+          const sibChipCX = bbox.x + bbox.width + gapAfterLabel + sibChipW / 2;
+          drawChip(g, "+ Sibling", sibChipCX, 16, "add-peer", d);
         }
       });
     }
