@@ -116,12 +116,64 @@ function levelTwoOptions(segRows, clientName) {
     .map((n) => ({ value: n, label: n }));
 }
 
-// Default filter for Activity Summary — last 6 months, Between mode.
-function getLast6MonthsRange() {
+// Default filter for Activity Summary — last 12 months, Between mode.
+function getLast12MonthsRange() {
   const to = new Date();
   const from = new Date();
-  from.setMonth(from.getMonth() - 6);
+  // 11 months back → gives 12 columns inclusive (current + 11 previous).
+  from.setMonth(from.getMonth() - 11);
+  from.setDate(1);
   return { field: "date", mode: "between", from, to };
+}
+
+// Build the ordered list of month "keys" (YYYY-MM) spanned by a DateFilter
+// value, honouring all four modes (between / on / before / after). Caps at
+// 36 months so a pathological range doesn't render a 500-column table.
+function monthsInRange(filter) {
+  const MAX = 36;
+  const today = new Date();
+  let from, to;
+  const mode = filter?.mode || "between";
+  if (mode === "on") {
+    if (!filter.from) return [];
+    from = new Date(filter.from);
+    to = new Date(filter.from);
+  } else if (mode === "before") {
+    if (!filter.from) return [];
+    to = new Date(filter.from);
+    from = new Date(to);
+    from.setMonth(from.getMonth() - 11);
+  } else if (mode === "after") {
+    if (!filter.from) return [];
+    from = new Date(filter.from);
+    to = new Date(today);
+    if (to < from) to = from;
+    // Cap at 12 months forward if the range is unbounded going forward.
+    const cap = new Date(from);
+    cap.setMonth(cap.getMonth() + 11);
+    if (to > cap) to = cap;
+  } else {
+    // between
+    if (!filter?.from || !filter?.to) return [];
+    from = new Date(filter.from);
+    to = new Date(filter.to);
+    if (to < from) [from, to] = [to, from];
+  }
+  const out = [];
+  const cur = new Date(from.getFullYear(), from.getMonth(), 1);
+  const end = new Date(to.getFullYear(), to.getMonth(), 1);
+  while (cur <= end && out.length < MAX) {
+    const y = cur.getFullYear();
+    const m = cur.getMonth();
+    out.push({
+      key: `${y}-${String(m + 1).padStart(2, "0")}`,
+      label: cur.toLocaleDateString(undefined, { month: "short", year: "2-digit" }),
+      year: y,
+      month: m + 1,
+    });
+    cur.setMonth(cur.getMonth() + 1);
+  }
+  return out;
 }
 
 // Client-side sort of rows returned by /client-contacts.
@@ -889,7 +941,7 @@ function ClientContactDetail({ contactId }) {
   const [saving, setSaving] = useState(false);
 
   // Activity summary DateFilter (default = last 6 months, Between mode)
-  const [activityFilter, setActivityFilter] = useState(getLast6MonthsRange());
+  const [activityFilter, setActivityFilter] = useState(getLast12MonthsRange());
 
   const load = async () => {
     setLoading(true);
@@ -971,8 +1023,7 @@ function ClientContactDetail({ contactId }) {
   return (
     <TooltipProvider delayDuration={150}>
       <Layout title="Client Contact">
-        <div className="px-6 pt-4 pb-8 space-y-4 max-w-6xl">
-          {/* Back link */}
+        <div className="px-6 pt-4 pb-8 space-y-4 w-full">          {/* Back link */}
           <button
             onClick={() => navigate("/crm/client-contacts")}
             className="text-xs text-gray-500 hover:text-[#ec9324] flex items-center gap-1"
@@ -1036,6 +1087,10 @@ function ClientContactDetail({ contactId }) {
               <Pencil sx={{ fontSize: 15 }} /> Edit
             </button>
           </div>
+
+          {/* Total-till-date chips — placeholder counts, wired later when the
+              calc pipeline lands. Sits between the name-bar and Industries.  */}
+          <TotalTillDateChips totals={row.totals_till_date} />
 
           {/* Industries */}
           {row.industries?.length > 0 && (
@@ -1140,20 +1195,57 @@ function ClientContactDetail({ contactId }) {
   );
 }
 
-// ================================================================ Activity Summary
-function ActivitySummary({ filter, onFilterChange }) {
-  // NOTE: metric values are placeholders. When the backend calc pipeline
-  // is added later, this component will re-fetch on `filter` change and
-  // populate the values below. The filter change ALREADY drives the
-  // "all four metrics refresh together" UX contract.
+// ================================================================ Activity Summary (pivot table)
+// Rows:    Projects / Serviced / Calls / Revenue
+// Columns: one per month spanned by the DateFilter range, followed by "Total".
+// Cells:   0 by default (placeholder until the backend calc pipeline lands).
+//          If a real `data` object is passed (shape:
+//          { projects: { "YYYY-MM": n, … }, serviced: {…}, calls: {…}, revenue: {…} })
+//          those numbers replace the zeros — missing months are still shown as 0.
+function ActivitySummary({ filter, onFilterChange, data = null }) {
   const [refreshing, setRefreshing] = useState(false);
+  const months = useMemo(() => monthsInRange(filter), [filter]);
 
   useEffect(() => {
-    // Simulate a "refresh all four metrics" pulse when the filter changes.
     setRefreshing(true);
     const t = setTimeout(() => setRefreshing(false), 350);
     return () => clearTimeout(t);
   }, [filter?.field, filter?.mode, filter?.from, filter?.to]);
+
+  const ROWS = [
+    { key: "projects", label: "Projects", accent: "orange" },
+    { key: "serviced", label: "Serviced", accent: "emerald" },
+    { key: "calls",    label: "Calls",    accent: "blue" },
+    { key: "revenue",  label: "Revenue",  accent: "purple", isMoney: true },
+  ];
+
+  const getCell = (rowKey, monthKey) => {
+    // Placeholder pipeline: `data` will populate real numbers later.
+    const v = data && data[rowKey] ? data[rowKey][monthKey] : 0;
+    return Number.isFinite(v) ? v : 0;
+  };
+
+  const rowTotal = (rowKey) =>
+    months.reduce((sum, m) => sum + getCell(rowKey, m.key), 0);
+
+  const fmtCell = (v, isMoney) => {
+    if (!v) return isMoney ? "$0" : "0";
+    if (isMoney) return `$${v.toLocaleString()}`;
+    return v.toLocaleString();
+  };
+
+  const accentTextCls = {
+    orange: "text-[#ec9324]",
+    emerald: "text-emerald-700",
+    blue: "text-blue-700",
+    purple: "text-purple-700",
+  };
+  const accentDotCls = {
+    orange: "bg-[#ec9324]",
+    emerald: "bg-emerald-500",
+    blue: "bg-blue-500",
+    purple: "bg-purple-500",
+  };
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
@@ -1163,7 +1255,9 @@ function ActivitySummary({ filter, onFilterChange }) {
             Activity Summary
           </div>
           <div className="text-sm text-gray-800 font-semibold">
-            Last 6 Months (default)
+            {months.length > 0
+              ? `${months.length} month${months.length === 1 ? "" : "s"} · ${months[0].label} → ${months[months.length - 1].label}`
+              : "Last 12 Months (default)"}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -1176,35 +1270,130 @@ function ActivitySummary({ filter, onFilterChange }) {
           />
         </div>
       </div>
-      <div className={`grid grid-cols-2 md:grid-cols-4 gap-3 transition-opacity ${refreshing ? "opacity-50" : "opacity-100"}`}>
-        <MetricBig label="Projects" value="—" accent="orange" />
-        <MetricBig label="Serviced" value="—" accent="emerald" />
-        <MetricBig label="Calls" value="—" accent="blue" />
-        <MetricBig label="Revenue" value="—" accent="purple" />
+
+      <div
+        className={`border border-gray-200 rounded-lg overflow-hidden transition-opacity ${refreshing ? "opacity-40" : "opacity-100"}`}
+        data-testid="cc-activity-pivot"
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200">
+                <th className="sticky left-0 bg-gray-50 z-10 px-4 py-2.5 text-left text-[10px] font-bold text-gray-600 uppercase tracking-wider border-r border-gray-200 min-w-[140px]">
+                  Metric
+                </th>
+                {months.map((m) => (
+                  <th
+                    key={m.key}
+                    className="px-3 py-2.5 text-right text-[10px] font-bold text-gray-600 uppercase tracking-wider min-w-[70px] whitespace-nowrap"
+                  >
+                    {m.label}
+                  </th>
+                ))}
+                <th className="px-4 py-2.5 text-right text-[10px] font-bold text-[#ec9324] uppercase tracking-wider bg-[#ec9324]/5 border-l border-[#ec9324]/20 min-w-[90px] whitespace-nowrap">
+                  Total
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {ROWS.map((r, idx) => {
+                const total = rowTotal(r.key);
+                return (
+                  <tr
+                    key={r.key}
+                    className={`${idx % 2 === 1 ? "bg-gray-50/40" : ""} border-b border-gray-100 last:border-b-0`}
+                    data-testid={`cc-activity-row-${r.key}`}
+                  >
+                    <td className={`sticky left-0 ${idx % 2 === 1 ? "bg-gray-50/40" : "bg-white"} z-10 px-4 py-2.5 font-semibold ${accentTextCls[r.accent] || "text-gray-800"} border-r border-gray-200`}>
+                      <span className="flex items-center gap-2">
+                        <span className={`inline-block w-1.5 h-1.5 rounded-full ${accentDotCls[r.accent]}`} />
+                        {r.label}
+                      </span>
+                    </td>
+                    {months.map((m) => {
+                      const v = getCell(r.key, m.key);
+                      const zero = !v;
+                      return (
+                        <td
+                          key={m.key}
+                          className={`px-3 py-2.5 text-right tabular-nums ${zero ? "text-gray-300" : "text-gray-800 font-medium"}`}
+                        >
+                          {fmtCell(v, r.isMoney)}
+                        </td>
+                      );
+                    })}
+                    <td className={`px-4 py-2.5 text-right font-bold tabular-nums ${accentTextCls[r.accent] || "text-gray-900"} bg-[#ec9324]/5 border-l border-[#ec9324]/20 whitespace-nowrap`}>
+                      {fmtCell(total, r.isMoney)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
-      <div className="mt-3 text-[11px] text-gray-400 italic">
-        Values are placeholders — the calculation pipeline will be enabled in a later phase. The range filter above already refreshes all four metrics simultaneously.
+
+      <div className="mt-3 text-[11px] text-gray-400 italic flex items-center justify-between flex-wrap gap-2">
+        <span>
+          Cell values are placeholders — the calculation pipeline will be enabled in a later phase.
+          Months with no activity show <span className="font-mono">0</span>.
+        </span>
+        <span className="text-gray-500">Default range: <b className="text-gray-700">Last 12 Months</b></span>
       </div>
     </div>
   );
 }
 
-function MetricBig({ label, value, accent = "gray" }) {
-  const bg =
-    accent === "orange" ? "bg-[#ec9324]/10 text-[#ec9324] border-[#ec9324]/30" :
-    accent === "emerald" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-    accent === "blue" ? "bg-blue-50 text-blue-700 border-blue-200" :
-    accent === "purple" ? "bg-purple-50 text-purple-700 border-purple-200" :
-    "bg-gray-100 text-gray-700 border-gray-200";
+// ================================================================ Total-till-date chips
+// Small pill-style summary that sits between the header card and Industries
+// section on the detail page. `totals` may be null → falls back to 0 for
+// every metric (placeholder until the calc pipeline lands).
+function TotalTillDateChips({ totals = null }) {
+  const items = [
+    { key: "projects", label: "Projects", accent: "orange",  isMoney: false },
+    { key: "serviced", label: "Serviced", accent: "emerald", isMoney: false },
+    { key: "calls",    label: "Calls",    accent: "blue",    isMoney: false },
+    { key: "revenue",  label: "Revenue",  accent: "purple",  isMoney: true  },
+  ];
+  const val = (k) => {
+    const v = totals?.[k];
+    return Number.isFinite(v) ? v : 0;
+  };
+  const fmt = (v, money) => {
+    if (!v) return money ? "$0" : "0";
+    return money ? `$${v.toLocaleString()}` : v.toLocaleString();
+  };
+  const scheme = {
+    orange:  "border-[#ec9324]/30 bg-[#ec9324]/5   text-[#ec9324] ring-[#ec9324]/10",
+    emerald: "border-emerald-200  bg-emerald-50    text-emerald-700 ring-emerald-100",
+    blue:    "border-blue-200     bg-blue-50       text-blue-700    ring-blue-100",
+    purple:  "border-purple-200   bg-purple-50     text-purple-700  ring-purple-100",
+  };
   return (
-    <div className={`rounded-lg border ${bg} px-4 py-3 text-center`}>
-      <div className="text-2xl font-bold">{value}</div>
-      <div className="text-[10px] uppercase tracking-wider font-semibold mt-1 opacity-80">
-        {label}
-      </div>
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="cc-total-chips">
+      {items.map((i) => (
+        <div
+          key={i.key}
+          className={`rounded-xl border ring-1 ring-inset px-4 py-3 flex items-center justify-between gap-3 shadow-sm ${scheme[i.accent]}`}
+          data-testid={`cc-total-chip-${i.key}`}
+        >
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-wider font-semibold opacity-90">
+              {i.label}
+            </div>
+            <div className="text-[10px] uppercase tracking-wider opacity-60">
+              Total till date
+            </div>
+          </div>
+          <div className="text-2xl font-bold tabular-nums">
+            {fmt(val(i.key), i.isMoney)}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
+
 
 
 // ================================================================ Helpers (bulk upload)

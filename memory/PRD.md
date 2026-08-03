@@ -1,6 +1,28 @@
 # Infollion Utilities — PRD
 
 
+## CRM → Client Contact Detail — Pivot table + full-width polish (Aug 3 2026 rev-3)
+- **Detail-page layout fix**: dropped `max-w-6xl` on the outer container so the page now spans the full viewport width (removed the big empty gutter on the right). Sections stretch edge-to-edge with the existing `px-6` container padding.
+- **Total-till-date chips** — new `TotalTillDateChips` component sits between the name/header card and the Industries card. Four coloured pill-cards (orange Projects / emerald Serviced / blue Calls / purple Revenue) each showing `TOTAL TILL DATE · {value}`. Values default to `0` (`$0` for Revenue) until the calc pipeline lands; will pick up real numbers automatically when the detail response starts including `totals_till_date`. Test-ids: `cc-total-chips`, `cc-total-chip-projects` / `-serviced` / `-calls` / `-revenue`.
+- **Activity Summary → pivot table**: rewrote the summary section.
+  - **Rows** (4): Projects (orange), Serviced (emerald), Calls (blue), Revenue (purple). Each row label carries its accent-coloured dot.
+  - **Columns**: one per month spanned by the DateFilter range, followed by a **Total** column with an orange highlight background.
+  - **Missing months show `0`** (or `$0` for Revenue) exactly as requested. Non-zero cells render bold; zero cells render in light grey (`text-gray-300`) so the sparse-vs-dense pattern is visible at a glance.
+  - **Default range** changed from Last 6 Months to **Last 12 Months** (`getLast12MonthsRange`, 12 columns inclusive of the current month).
+  - Sticky first column (Metric names) so users can scroll the months horizontally on narrow screens without losing context.
+  - Handles all 4 filter modes via new `monthsInRange(filter)` helper:
+      * `between` — every month from `from` to `to`
+      * `on`      — the single month containing `from`
+      * `before`  — 12 months ending at `from`
+      * `after`   — 12 months starting from `from` (capped at 12 to stop unbounded ranges)
+    Cap of 36 columns overall so a pathological range doesn't render a 500-column table.
+  - Section header dynamically summarises the active range as e.g. "12 months · Sep 25 → Aug 26"; a footer label reaffirms "Default range: **Last 12 Months**".
+  - Test-ids: `cc-activity-pivot`, `cc-activity-row-projects` / `-serviced` / `-calls` / `-revenue`, and the existing `cc-activity-date-filter-*` still work.
+  - Accepts an optional `data` prop of shape `{ projects: {"YYYY-MM": n}, serviced: {…}, calls: {…}, revenue: {…} }` — when the backend calc pipeline is added later, wiring is a one-liner (`<ActivitySummary … data={row.activity} />`) and every "0" cell will populate automatically.
+- Verified via playwright screenshots at 1600×1000: default view (Sep 25 → Aug 26, 12 columns) and "Before Sep 01 2025" mode (Oct 24 → Sep 25, 12 columns) — both re-render instantly on filter change with 4 rows × 12 months × 1 total column.
+
+
+
 ## CRM → Client Contacts — Duplicate Detection + Bulk Import/Export (Aug 3 2026)
 - **Duplicate detection on create + edit**:
   - `POST /api/client-contacts` and `PATCH /api/client-contacts/{id}` now return **HTTP 409 `DUPLICATE_CLIENT_CONTACT`** with a `duplicates: [...]` payload (each row carries `display_id`, `name`, `email`, `phone`, `client_name`, `designation`, `match_on: ["email"|"phone"]`) when the submitted email or phone collides with any existing contact.
