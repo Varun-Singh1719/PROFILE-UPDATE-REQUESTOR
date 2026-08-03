@@ -386,23 +386,9 @@ export default function CollapsibleTree({
     const nodeRadius = 5;
     const dx = 32; // vertical spacing between siblings
 
-    // Soft palette used to colour each depth level (Aug 2026 spec:
-    // "colour each depth level with a soft palette so deep hierarchies
-    // stay readable at a glance"). Depth 0 (root) stays orange to match
-    // the brand accent; every subsequent level cycles through the
-    // palette. Cycled with modulo so arbitrarily deep trees always get
-    // a colour.
-    const DEPTH_COLORS = [
-      "#ec9324", // 0 root — brand orange
-      "#0ea5e9", // 1 — sky
-      "#22c55e", // 2 — green
-      "#a855f7", // 3 — purple
-      "#ef4444", // 4 — red
-      "#14b8a6", // 5 — teal
-      "#f59e0b", // 6 — amber
-      "#6366f1", // 7 — indigo
-    ];
-    const depthColor = (d) => DEPTH_COLORS[(d?.depth || 0) % DEPTH_COLORS.length];
+    // Depth colours reverted to brand orange at every level
+    // (user feedback: multi-colour palette looked gross).
+    const depthColor = () => "#ec9324";
 
     const dataClone = JSON.parse(JSON.stringify(viewData));
     const root = d3.hierarchy(dataClone);
@@ -855,52 +841,73 @@ export default function CollapsibleTree({
     }
 
     // ------------------------------------------ chips
-    // Chip layout constants — chosen so the pill fits inside the extra
-    // whitespace that the (bumped-to-32) sibling separation leaves
-    // between rows. A solid white backdrop is added first so any
-    // stray link that passes behind is masked.
-    function drawChip(g, label, x, y, mode, hNode) {
-      const chipW = label.length <= 8 ? 68 : label.length <= 10 ? 90 : 118;
-      const chipH = 20;
-      const backdropPad = 3;
-      const chip = g.append("g")
-        .attr("class", mode === "add-peer" ? "seg-add-peer-chip" : "seg-add-chip")
-        .attr("data-mode", mode)
-        .attr("transform", `translate(${x - chipW / 2},${y - chipH / 2})`)
+    // COMPACT ICON BUTTONS (Aug 2026 fix): the previous "+ Sub-Segment"
+    // and "+ Sibling" pill chips were too wide and consistently overlapped
+    // adjacent labels/links. Replaced with small 22×22 circular icon
+    // buttons that fit inside the row's own gutter:
+    //   • Sub-Segment  →  solid orange circle with white "→+" glyph,
+    //                     positioned to the RIGHT of the label.
+    //   • Sibling      →  white circle with orange border and "↓+" glyph,
+    //                     positioned BELOW the label.
+    // Hover shows a dark tooltip ("Add sub-segment" / "Add sibling").
+    // Icons are small enough that they never intrude on other rows.
+    function drawIconButton(g, kind, cx, cy, hNode) {
+      const isSibling = kind === "add-peer";
+      const btnR = 11;
+      const btn = g.append("g")
+        .attr("class", isSibling ? "seg-add-peer-chip" : "seg-add-chip")
+        .attr("data-mode", isSibling ? "add-peer" : "add-child")
+        .attr("transform", `translate(${cx},${cy})`)
         .attr("cursor", "pointer")
         .on("click", (evt) => {
           evt.stopPropagation();
-          if (mode === "add-peer") handlersRef.current.startAddPeer(hNode);
+          if (isSibling) handlersRef.current.startAddPeer(hNode);
           else handlersRef.current.startAddChild(hNode);
         });
-      // Solid white backdrop so the chip visually masks any underlying
-      // link/text that happens to sit at the chip's position.
-      chip.append("rect")
-        .attr("class", "seg-chip-backdrop")
-        .attr("x", -backdropPad).attr("y", -backdropPad)
-        .attr("width", chipW + backdropPad * 2)
-        .attr("height", chipH + backdropPad * 2)
-        .attr("rx", (chipH + backdropPad * 2) / 2)
-        .attr("ry", (chipH + backdropPad * 2) / 2)
+      // White backdrop halo so the button's crisp edge reads clearly
+      // over any link line that may pass behind.
+      btn.append("circle")
+        .attr("r", btnR + 2)
         .attr("fill", "#ffffff")
         .attr("stroke", "none");
-      chip.append("rect")
-        .attr("width", chipW).attr("height", chipH)
-        .attr("rx", chipH / 2).attr("ry", chipH / 2)
-        // "+ Sibling" uses "In Progress"-style outlined orange; "+ Sub-Segment"
-        // stays solid orange so the two chips remain visually distinct.
-        .attr("fill", mode === "add-peer" ? "#ffffff" : "#ec9324")
-        .attr("stroke", mode === "add-peer" ? "#ec9324" : "#d4811f")
-        .attr("stroke-width", mode === "add-peer" ? 1.5 : 1);
-      chip.append("text")
-        .attr("x", chipW / 2).attr("y", chipH / 2 + 4)
+      btn.append("circle")
+        .attr("r", btnR)
+        .attr("fill", isSibling ? "#ffffff" : "#ec9324")
+        .attr("stroke", "#ec9324")
+        .attr("stroke-width", isSibling ? 1.75 : 1);
+      // Plus glyph — white on orange fill, orange on white fill.
+      const glyphColor = isSibling ? "#ec9324" : "#ffffff";
+      btn.append("line")
+        .attr("x1", -5).attr("y1", 0).attr("x2", 5).attr("y2", 0)
+        .attr("stroke", glyphColor).attr("stroke-width", 2)
+        .attr("stroke-linecap", "round")
+        .style("pointer-events", "none");
+      btn.append("line")
+        .attr("x1", 0).attr("y1", -5).attr("x2", 0).attr("y2", 5)
+        .attr("stroke", glyphColor).attr("stroke-width", 2)
+        .attr("stroke-linecap", "round")
+        .style("pointer-events", "none");
+      // Hover tooltip — dark pill.
+      const tt = btn.append("g")
+        .attr("class", "seg-chip-tooltip")
+        .style("opacity", 0)
+        .style("pointer-events", "none");
+      const ttText = isSibling ? "Add sibling" : "Add sub-segment";
+      const ttW = ttText.length * 6.2 + 12;
+      tt.append("rect")
+        .attr("x", -ttW / 2).attr("y", btnR + 6)
+        .attr("width", ttW).attr("height", 20)
+        .attr("rx", 4).attr("ry", 4)
+        .attr("fill", "#111827");
+      tt.append("text")
+        .attr("x", 0).attr("y", btnR + 20)
         .attr("text-anchor", "middle")
-        .attr("fill", mode === "add-peer" ? "#ec9324" : "white")
-        .style("font-size", "11px")
-        .style("font-weight", "600")
-        .style("font-family", "Inter, system-ui, sans-serif")
-        .style("pointer-events", "none")
-        .text(label);
+        .attr("fill", "#ffffff")
+        .style("font-size", "10.5px")
+        .style("font-weight", "500")
+        .text(ttText);
+      btn.on("mouseenter", () => tt.transition().duration(120).style("opacity", 1));
+      btn.on("mouseleave", () => tt.transition().duration(120).style("opacity", 0));
     }
 
     function renderAddChips() {
@@ -919,23 +926,17 @@ export default function CollapsibleTree({
         const labelNode = labelSel.node();
         const bbox = labelNode ? labelNode.getBBox() : { x: 12, width: 60 };
 
-        // Chip layout (Aug 2026):
-        //   • X-axis: chip sits to the RIGHT of the label (well past the
-        //     circle so it never covers its own node).
-        //   • Y-axis: chips are pushed into the vertical gap BETWEEN
-        //     rows — Sub-Segment ABOVE (y=-16) and Sibling BELOW (y=+16).
-        //     With dx=32 the ±16 offset lands exactly in the gutter
-        //     between adjacent labels (which span roughly ±7), so the
-        //     chips never overlap neighbouring rows' text.
-        const gapAfterLabel = 10;
-        const subSegChipW = 118;
-        const subSegChipCX = bbox.x + bbox.width + gapAfterLabel + subSegChipW / 2;
-        drawChip(g, "+ Sub-Segment", subSegChipCX, -16, "add-child", d);
+        // Icon-button layout — tight, low-profile:
+        //   Sub-Segment button — right of label, same Y row.
+        //   Sibling button      — just below label (y = +14) so it sits
+        //                         inside the row's own gutter.
+        const gapAfterLabel = 16;
+        const subX = bbox.x + bbox.width + gapAfterLabel;
+        drawIconButton(g, "add-child", subX, 0, d);
 
         if (d.depth >= 1) {
-          const sibChipW = 90;
-          const sibChipCX = bbox.x + bbox.width + gapAfterLabel + sibChipW / 2;
-          drawChip(g, "+ Sibling", sibChipCX, 16, "add-peer", d);
+          const sibX = bbox.x + bbox.width + gapAfterLabel;
+          drawIconButton(g, "add-peer", sibX, 14, d);
         }
       });
     }
@@ -1249,36 +1250,46 @@ export default function CollapsibleTree({
 
     update(root);
 
-    // ---- Initial-fit / settle window --------------------------------
+    // ---- INITIAL fit — multi-attempt, hard-locked after 900ms --------
     //
-    // The container's dimensions are frequently NOT at their final size
-    // when useLayoutEffect first runs — flex parents settle, scrollbars
-    // pop in/out, MUI's sidebar collapses, etc. If we lock in the
-    // viewport at t=0 the tree ends up wedged in a corner (Aug 3 2026
-    // bug: "default view shifts to top-right").
+    // Runs a handful of fit attempts spaced across the first ~900ms of
+    // mount so the FINAL container dimensions win the day (flex layout
+    // often needs 100-500ms to fully settle on the very first paint).
+    // Each attempt uses the CURRENT container size — later ones
+    // naturally correct any earlier off-centre fit that happened while
+    // the container was still growing.
     //
-    // Strategy:
-    //   • Auto-fit repeatedly for the first ~1.5s after mount OR until
-    //     the user pans / zooms, whichever comes first — this keeps the
-    //     tree centred while the layout settles.
-    //   • After the settle window closes (or the user starts panning),
-    //     we STOP auto-fitting. This preserves the fix for the earlier
-    //     "auto-refresh yanks the tree to a corner" complaint.
-    const SETTLE_MS = 1500;
-    const mountedAt = performance.now();
-    const isSettleWindow = () =>
-      !hasUserInteractedRef.current && performance.now() - mountedAt < SETTLE_MS;
-
-    // Kick an initial fit AFTER labels have been measured (first RAF)
-    // so `labelWidthById` is populated before we compute the bbox.
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        if (!didInitialFitRef.current) {
-          fitToView(false);
-          didInitialFitRef.current = true;
-        }
-      });
-    });
+    // Hard guarantees:
+    //   • After the 900ms window closes we set didInitialFitRef=true
+    //     and NEVER auto-fit again — no ResizeObserver-triggered
+    //     re-centre, no "auto-refresh yank" as the user reported.
+    //   • If the user pans/zooms at any point we stop auto-fitting
+    //     immediately (respects the user's viewport).
+    //   • The Fit-to-screen toolbar button still recentres on demand.
+    const attemptInitialFit = (isFinal) => {
+      if (didInitialFitRef.current) return;
+      if (hasUserInteractedRef.current) {
+        didInitialFitRef.current = true; // stop future attempts
+        return;
+      }
+      const cw = container.clientWidth;
+      const ch = container.clientHeight;
+      if (cw < 100 || ch < 100) {
+        // Container not laid out yet — skip; the next attempt may catch
+        // up. If this is the FINAL attempt we still lock so ResizeObs
+        // never fires a fit later.
+        if (isFinal) didInitialFitRef.current = true;
+        return;
+      }
+      fitToView(false);
+      if (isFinal) didInitialFitRef.current = true;
+    };
+    const initialFitTimers = [
+      setTimeout(() => attemptInitialFit(false), 100),
+      setTimeout(() => attemptInitialFit(false), 250),
+      setTimeout(() => attemptInitialFit(false), 500),
+      setTimeout(() => attemptInitialFit(true), 900), // FINAL — locks
+    ];
 
     // ---------------------------------------------- keyboard arrow-key pan
     const onKeyDown = (evt) => {
@@ -1315,34 +1326,18 @@ export default function CollapsibleTree({
     };
     container.addEventListener("keydown", onKeyDown);
 
-    // ResizeObserver — the container may resize AFTER the initial mount
-    // (flex layout settling, sidebar toggle, scrollbar appearing, etc).
-    // We always re-run update() so the tree is laid out for the new
-    // container size. We ALSO auto-fit — but ONLY during the 1.5s
-    // "settle window" after mount AND only if the user hasn't panned
-    // or zoomed yet. That combination gives us:
-    //   • A reliably centred default view (initial fit corrects itself
-    //     as the container finalises its size).
-    //   • No "auto-refresh yanking the tree into a corner" once the
-    //     user is actually looking at / interacting with the chart.
-    let settleFitTimeout = null;
+    // ResizeObserver — the container may resize after mount (flex
+    // layout settling, sidebar toggle, scrollbar appearing…). We only
+    // re-run update() so the layout is recomputed for the new size —
+    // we do NOT trigger any fit here. After the initial 900ms window
+    // (see attemptInitialFit above) the tree stays exactly where the
+    // user left it. No auto-refresh, ever.
     const ro = new ResizeObserver(() => {
       update(root);
-      if (isSettleWindow()) {
-        // Debounce: wait for the current burst of resize events to
-        // finish before fitting so we use the FINAL settled size, not
-        // an intermediate one.
-        if (settleFitTimeout) clearTimeout(settleFitTimeout);
-        settleFitTimeout = setTimeout(() => {
-          if (!hasUserInteractedRef.current) {
-            fitToView(false);
-          }
-        }, 80);
-      }
     });
     ro.observe(container);
     return () => {
-      if (settleFitTimeout) clearTimeout(settleFitTimeout);
+      initialFitTimers.forEach((t) => clearTimeout(t));
       ro.disconnect();
       container.removeEventListener("keydown", onKeyDown);
     };

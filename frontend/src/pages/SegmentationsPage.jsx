@@ -507,14 +507,16 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
         {treeEditMode && (
           <>
             <span className="inline-flex items-center gap-1.5" data-testid="legend-sub-segment">
-              <span className="inline-block px-1.5 py-0.5 rounded-full bg-[#ec9324] text-white text-[9px] font-bold leading-none">+ Sub-Segment</span>
-              deeper level
+              {/* Small solid-orange "+" icon — matches the on-canvas
+                  "Add sub-segment" button. */}
+              <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-[#ec9324] text-white text-[10px] font-bold leading-none">+</span>
+              Add sub-segment
             </span>
             <span className="inline-flex items-center gap-1.5" data-testid="legend-sibling">
-              {/* Sibling chip legend — outlined orange (same color coding
-                  as the "In Progress" status pill in Profix All Requests). */}
-              <span className="inline-block px-1.5 py-0.5 rounded-full bg-white border border-[#ec9324] text-[#ec9324] text-[9px] font-bold leading-none">+ Sibling</span>
-              same level
+              {/* Small outlined-orange "+" icon — matches the on-canvas
+                  "Add sibling" button. */}
+              <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-white border border-[#ec9324] text-[#ec9324] text-[10px] font-bold leading-none">+</span>
+              Add sibling
             </span>
           </>
         )}
