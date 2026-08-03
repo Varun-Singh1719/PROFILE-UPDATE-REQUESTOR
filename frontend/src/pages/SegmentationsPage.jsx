@@ -21,6 +21,7 @@ import Circle from "@mui/icons-material/FiberManualRecord";
 import AccountTree from "@mui/icons-material/AccountTreeOutlined";
 import InfoOutlined from "@mui/icons-material/InfoOutlined";
 import Check from "@mui/icons-material/CheckOutlined";
+import CloseIcon from "@mui/icons-material/CloseOutlined";
 import CollapsibleTree from "../components/CollapsibleTree";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
@@ -329,71 +330,124 @@ export default function SegmentationsPage() {
 
 // ============================================================ Sub-components
 function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
-  // -------- Auto-saving tree state ----------
-  // We hold a local scratchpad of the tree so on-canvas edits (add / rename /
-  // reorder) don't need a modal Save button — they're auto-persisted with a
-  // small debounce. `saveState` drives the tiny status text in the header.
-  const [saveState, setSaveState] = useState("saved"); // "saved" | "saving" | "dirty" | "error"
-
-  // The right-side tree is VIEW-ONLY by default. Chips (+Child / +Peer) and
-  // inline rename only appear once the user explicitly enters edit mode via
-  // the pencil icon in the tree toolbar (top-right of the canvas). Turning
-  // edit mode OFF also cancels any in-flight inline edit.
+  // Aug 3 2026 rewrite — DRAFT MODE:
+  //   • Non-edit mode: tree shows the persisted `row.tree` verbatim.
+  //   • Edit mode: user manipulates a LOCAL DRAFT tree (draftTree).
+  //     Nothing is written to the backend until the user presses
+  //     "Save" and confirms via the Review Changes dialog. "Cancel"
+  //     throws the draft away and restores the persisted tree.
   const [treeEditMode, setTreeEditMode] = useState(false);
-  const pendingTreeRef = useRef(null);
-  const saveTimerRef = useRef(null);
-  const lastSavedTreeRef = useRef(null);
+  const [draftTree, setDraftTree] = useState(null);       // active while editing
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  // { added: [name], renamed: [{from, to}], deleted: [{name, subCount}] }
+  const [pendingChanges, setPendingChanges] = useState(null);
 
-  // Reset local state when we switch to a different segmentation.
+  // Reset draft state whenever the user switches segmentations.
   useEffect(() => {
-    pendingTreeRef.current = null;
-    lastSavedTreeRef.current = null;
-    setSaveState("saved");
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = null;
-    }
+    setTreeEditMode(false);
+    setDraftTree(null);
+    setReviewOpen(false);
+    setPendingChanges(null);
   }, [row.id]);
 
-  const doSave = async () => {
-    const tree = pendingTreeRef.current;
-    if (!tree) return;
-    pendingTreeRef.current = null;
-    setSaveState("saving");
-    try {
-      const r = await api.patch(`/segmentations/${row.id}`, { tree });
-      lastSavedTreeRef.current = tree;
-      setSaveState("saved");
-      // Refresh the outer list silently to update updated_by/updated_on
-      onTreeSaved?.(r.data);
-    } catch (e) {
-      setSaveState("error");
-      notify.error(formatApiError(e, "Failed to save tree"));
-    }
-  };
-
-  const handleTreeChange = (next) => {
-    // Root name must always mirror the segmentation name (safety net).
-    if (next && typeof next === "object") next.name = row.name;
-    pendingTreeRef.current = next;
-    setSaveState("dirty");
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(doSave, 600); // debounce
-  };
-
-  // Seed the tree data (defensively): stitch together `row.tree` with the
-  // current segmentation name at the root.
+  // Seed the persisted tree (read-only source of truth).
   const seedTree = useMemo(() => {
     const base = row.tree && typeof row.tree === "object"
       ? JSON.parse(JSON.stringify(row.tree))
       : { name: row.name, children: [] };
     base.name = row.name;
     return base;
-    // We deliberately depend on row.id (not row.tree) so the tree component
-    // only remounts when the user switches segmentations — collapsing /
-    // expanding a node shouldn't reset the whole canvas.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [row.id]);
+  }, [row.id, row.tree]);
+
+  // ------ Enter / exit edit mode ------
+  const enterEditMode = () => {
+    // Clone the persisted tree into a working draft.
+    setDraftTree(JSON.parse(JSON.stringify(seedTree)));
+    setTreeEditMode(true);
+  };
+  const cancelEdit = () => {
+    setDraftTree(null);
+    setTreeEditMode(false);
+    setReviewOpen(false);
+    setPendingChanges(null);
+  };
+
+  // ------ Diff draft vs. persisted for the review dialog ------
+  const computeChanges = (before, after) => {
+    // Walk both trees and collect Added / Renamed / Deleted.
+    // We match nodes by their path (index-of-child at each level) — this
+    // matches the pathOf() semantics inside CollapsibleTree.
+    const added = [];
+    const renamed = [];
+    const deleted = [];
+    const countDescendants = (n) => {
+      if (!n || !Array.isArray(n.children)) return 0;
+      let c = n.children.length;
+      n.children.forEach((k) => { c += countDescendants(k); });
+      return c;
+    };
+    // Map children by name for a stable diff at each level.
+    const walk = (b, a) => {
+      const bKids = (b && b.children) || [];
+      const aKids = (a && a.children) || [];
+      const bByName = new Map(bKids.map((k) => [k.name, k]));
+      const aByName = new Map(aKids.map((k) => [k.name, k]));
+      // added
+      aKids.forEach((k) => { if (!bByName.has(k.name)) added.push(k.name); });
+      // deleted
+      bKids.forEach((k) => {
+        if (!aByName.has(k.name)) {
+          deleted.push({ name: k.name, subCount: countDescendants(k) });
+        }
+      });
+      // recurse for common names
+      aKids.forEach((k) => {
+        if (bByName.has(k.name)) walk(bByName.get(k.name), k);
+      });
+    };
+    walk(before, after);
+    // Renames are difficult without stable IDs — for MVP we detect rename
+    // as an "added + deleted" pair on the SAME parent path when counts match.
+    // Simplest heuristic: pair one deletion with one addition when both
+    // exist at the same level. (Left as-is for now — advanced diff can
+    // come later.)
+    return { added, renamed, deleted };
+  };
+
+  const openReview = () => {
+    const changes = computeChanges(seedTree, draftTree);
+    setPendingChanges(changes);
+    setReviewOpen(true);
+  };
+
+  const confirmSave = async () => {
+    if (!draftTree) return;
+    setSaving(true);
+    try {
+      const toSave = JSON.parse(JSON.stringify(draftTree));
+      toSave.name = row.name; // safety net
+      const r = await api.patch(`/segmentations/${row.id}`, { tree: toSave });
+      notify.success("Tree saved");
+      setDraftTree(null);
+      setTreeEditMode(false);
+      setReviewOpen(false);
+      setPendingChanges(null);
+      onTreeSaved?.(r.data);
+    } catch (e) {
+      notify.error(formatApiError(e, "Failed to save tree"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // While in edit mode CollapsibleTree drives its local viewData via
+  // this handler — we simply mirror the current draft.
+  const handleTreeChange = (next) => {
+    if (next && typeof next === "object") next.name = row.name;
+    setDraftTree(next);
+  };
 
   return (
     <div
@@ -407,17 +461,17 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
           UI. This gives the tree the full viewport height for content. */}
       <div className="flex-1 min-h-0 relative bg-white" data-testid="segmentation-tree-panel">
         <CollapsibleTree
-          data={seedTree}
+          key={treeEditMode ? `edit-${row.id}` : `view-${row.id}-${row.updated_on || ""}`}
+          data={treeEditMode ? draftTree : seedTree}
           onChange={handleTreeChange}
           editable={treeEditMode}
           onEditableToggle={setTreeEditMode}
           defaultExpandDepth={1}
         />
 
-        {/* Floating glass panel — Name + Status + Editing pill +
-            Info / Edit / Delete actions. Positioned identically to the
-            zoom toolbar on the RIGHT side so both panels share the
-            same visual language. */}
+        {/* Floating glass panel — Name + Info / Save / Cancel / Delete.
+            (Aug 3 2026: Active status pill removed; Save/Cancel added
+            in edit mode; auto-save disabled.) */}
         <div
           className="absolute top-3 left-3 z-10 flex items-center gap-2
                      bg-white/40 backdrop-blur-xl backdrop-saturate-150
@@ -450,7 +504,6 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
               {row.name}
             </span>
           )}
-          <StatusPill status={row.status} />
           {treeEditMode && (
             <span
               data-testid="segmentation-editing-badge"
@@ -461,25 +514,38 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
               Editing
             </span>
           )}
-          {/* Vertical divider */}
           <div className="w-px h-6 bg-black/10 mx-1" />
           <div className="flex items-center gap-0.5">
             <SegmentationInfoPopover row={row} />
-            <IconAction
-              onClick={() => setTreeEditMode(!treeEditMode)}
-              title={treeEditMode ? "Done editing" : "Edit"}
-              testid="segmentation-detail-edit"
-              className={treeEditMode
-                ? "text-[#ec9324] bg-[#ec9324]/15 hover:bg-[#ec9324]/25"
-                : "text-gray-700 hover:bg-white/60 hover:text-[#ec9324]"
-              }
-              active={treeEditMode}
-            >
-              {treeEditMode
-                ? <Check sx={{ fontSize: 18 }} />
-                : <Pencil sx={{ fontSize: 18 }} />
-              }
-            </IconAction>
+            {treeEditMode ? (
+              <>
+                <IconAction
+                  onClick={openReview}
+                  title="Save"
+                  testid="segmentation-detail-save"
+                  className="text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                >
+                  <Check sx={{ fontSize: 18 }} />
+                </IconAction>
+                <IconAction
+                  onClick={cancelEdit}
+                  title="Cancel"
+                  testid="segmentation-detail-cancel"
+                  className="text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                >
+                  <CloseIcon sx={{ fontSize: 18 }} />
+                </IconAction>
+              </>
+            ) : (
+              <IconAction
+                onClick={enterEditMode}
+                title="Edit"
+                testid="segmentation-detail-edit"
+                className="text-gray-700 hover:bg-white/60 hover:text-[#ec9324]"
+              >
+                <Pencil sx={{ fontSize: 18 }} />
+              </IconAction>
+            )}
             <IconAction
               onClick={onDelete}
               title="Delete"
@@ -491,6 +557,15 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
           </div>
         </div>
       </div>
+
+      {/* Review Changes dialog */}
+      <ReviewChangesDialog
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
+        changes={pendingChanges}
+        onConfirm={confirmSave}
+        saving={saving}
+      />
 
       {/* Compact footer legend + save status. The "+ Sub-Segment" and
           "+ Sibling" chip legends are only relevant when the user can
@@ -507,24 +582,21 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
         {treeEditMode && (
           <>
             <span className="inline-flex items-center gap-1.5" data-testid="legend-sub-segment">
-              {/* Small solid-orange "+" icon — matches the on-canvas
-                  "Add sub-segment" button. */}
               <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-[#ec9324] text-white text-[10px] font-bold leading-none">+</span>
               Add sub-segment
             </span>
-            <span className="inline-flex items-center gap-1.5" data-testid="legend-sibling">
-              {/* Small outlined-orange "+" icon — matches the on-canvas
-                  "Add sibling" button. */}
-              <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-white border border-[#ec9324] text-[#ec9324] text-[10px] font-bold leading-none">+</span>
-              Add sibling
+            <span className="inline-flex items-center gap-1.5" data-testid="legend-delete">
+              <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-white border border-red-500 text-red-600 text-[10px] font-bold leading-none">
+                <Trash2 sx={{ fontSize: 10 }} />
+              </span>
+              Delete
             </span>
           </>
         )}
         <span className="ml-auto text-[11px]">
-          {saveState === "saving" && <span className="text-amber-600 font-medium">Saving…</span>}
-          {saveState === "dirty" && <span className="text-amber-600 font-medium">● Unsaved changes</span>}
-          {saveState === "saved" && <span className="text-gray-400">All changes saved</span>}
-          {saveState === "error" && <span className="text-red-600 font-medium">Save failed</span>}
+          {treeEditMode && (
+            <span className="text-amber-600 font-medium">Draft — click Save to publish</span>
+          )}
         </span>
       </div>
     </div>
@@ -749,6 +821,86 @@ function StatusPill({ status }) {
       <Circle sx={{ fontSize: 7 }} />
       {active ? "Active" : "Inactive"}
     </span>
+  );
+}
+
+function ReviewChangesDialog({ open, onOpenChange, changes, onConfirm, saving }) {
+  const added = changes?.added || [];
+  const deleted = changes?.deleted || [];
+  const total = added.length + deleted.length;
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md" data-testid="review-changes-dialog">
+        <DialogHeader>
+          <DialogTitle>Review Changes</DialogTitle>
+        </DialogHeader>
+        {total === 0 ? (
+          <div className="py-6 text-center text-sm text-gray-500" data-testid="review-empty">
+            No changes to save.
+          </div>
+        ) : (
+          <div className="space-y-3 max-h-[400px] overflow-auto pr-1">
+            {added.length > 0 && (
+              <div data-testid="review-added">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 mb-1.5">
+                  Added ({added.length})
+                </div>
+                <ul className="space-y-1">
+                  {added.map((n, i) => (
+                    <li
+                      key={"a" + i}
+                      className="text-[13px] px-2 py-1 rounded bg-emerald-50 text-emerald-900 border border-emerald-200"
+                    >
+                      + {n}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {deleted.length > 0 && (
+              <div data-testid="review-deleted">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-red-700 mb-1.5">
+                  Deleted ({deleted.length})
+                </div>
+                <ul className="space-y-1">
+                  {deleted.map((d, i) => (
+                    <li
+                      key={"d" + i}
+                      className="text-[13px] px-2 py-1 rounded bg-red-50 text-red-900 border border-red-200"
+                    >
+                      − {d.name}
+                      {d.subCount > 0 && (
+                        <span className="text-[11px] text-red-600 ml-1">
+                          (with {d.subCount} sub-segment{d.subCount === 1 ? "" : "s"})
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={saving}
+            data-testid="review-changes-cancel"
+          >
+            Back to editing
+          </Button>
+          <Button
+            onClick={onConfirm}
+            disabled={saving || total === 0}
+            data-testid="review-changes-confirm"
+            className="bg-[#ec9324] hover:bg-[#d4811f] text-white"
+          >
+            {saving ? "Saving…" : "Save changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

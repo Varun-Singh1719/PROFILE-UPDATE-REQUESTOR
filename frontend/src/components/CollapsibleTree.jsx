@@ -283,6 +283,53 @@ export default function CollapsibleTree({
     setEditingPath(p);
   }, []);
 
+  // Delete-confirmation dialog state.
+  // `pendingDelete` = { hNode, path, name, subCount } | null.
+  const [pendingDelete, setPendingDelete] = useState(null);
+
+  // Count all descendants of a node (used in the delete confirmation
+  // message: "Do you wanna proceed with Deleting X & its N sub-segments?").
+  const countDescendants = (n) => {
+    if (!n || !Array.isArray(n.children)) return 0;
+    let c = n.children.length;
+    n.children.forEach((k) => { c += countDescendants(k); });
+    return c;
+  };
+
+  const requestDelete = useCallback((hNode) => {
+    const p = pathOfHNode(hNode);
+    if (!p || p.length === 0) return; // never delete the root
+    setPendingDelete({
+      path: p,
+      name: hNode?.data?.name || "",
+      subCount: countDescendants(hNode?.data),
+    });
+  }, []);
+
+  const cancelDelete = useCallback(() => setPendingDelete(null), []);
+  const confirmDelete = useCallback(() => {
+    setPendingDelete((current) => {
+      if (!current) return null;
+      const { path } = current;
+      setViewData((prev) => {
+        const next = deepClone(prev);
+        const parentPath = path.slice(0, -1);
+        const idx = path[path.length - 1];
+        const parent =
+          parentPath.length === 0 ? next : findByPath(next, parentPath);
+        if (parent && Array.isArray(parent.children)) {
+          parent.children.splice(idx, 1);
+          if (parent.children.length === 0) delete parent.children;
+        }
+        sortDeep(next);
+        emit(next);
+        return next;
+      });
+      selectedIdRef.current = null;
+      return null;
+    });
+  }, [emit]);
+
   // commit / cancel are called from within the D3-managed input's event
   // handlers. They MUST rebuild via `setViewData(prev => …)` so we always
   // work off the freshest scratchpad.
@@ -357,7 +404,7 @@ export default function CollapsibleTree({
   // Latest handler refs so d3 handlers created in useLayoutEffect can
   // always reach the freshest closures.
   const handlersRef = useRef({});
-  handlersRef.current = { startAddChild, startAddPeer, startRename, commitEdit, cancelEdit };
+  handlersRef.current = { startAddChild, startAddPeer, startRename, commitEdit, cancelEdit, requestDelete };
 
   // Timer used to distinguish a single click (toggle expand/collapse)
   // from a double click (focus/zoom-to-node) on a node circle. Persists
@@ -841,58 +888,62 @@ export default function CollapsibleTree({
     }
 
     // ------------------------------------------ chips
-    // COMPACT ICON BUTTONS (Aug 2026 fix): the previous "+ Sub-Segment"
-    // and "+ Sibling" pill chips were too wide and consistently overlapped
-    // adjacent labels/links. Replaced with small 22×22 circular icon
-    // buttons that fit inside the row's own gutter:
-    //   • Sub-Segment  →  solid orange circle with white "→+" glyph,
-    //                     positioned to the RIGHT of the label.
-    //   • Sibling      →  white circle with orange border and "↓+" glyph,
-    //                     positioned BELOW the label.
-    // Hover shows a dark tooltip ("Add sub-segment" / "Add sibling").
-    // Icons are small enough that they never intrude on other rows.
+    // COMPACT ICON BUTTONS. Three variants:
+    //   • kind="add-child" → solid orange, white "+" glyph → adds sub-segment
+    //   • kind="delete"    → white circle, red border, red trash glyph → delete node
     function drawIconButton(g, kind, cx, cy, hNode) {
-      const isSibling = kind === "add-peer";
+      const isDelete = kind === "delete";
       const btnR = 11;
+      const cls = isDelete ? "seg-delete-chip" : "seg-add-chip";
+      const dataMode = isDelete ? "delete" : "add-child";
       const btn = g.append("g")
-        .attr("class", isSibling ? "seg-add-peer-chip" : "seg-add-chip")
-        .attr("data-mode", isSibling ? "add-peer" : "add-child")
+        .attr("class", cls)
+        .attr("data-mode", dataMode)
         .attr("transform", `translate(${cx},${cy})`)
         .attr("cursor", "pointer")
         .on("click", (evt) => {
           evt.stopPropagation();
-          if (isSibling) handlersRef.current.startAddPeer(hNode);
+          if (isDelete) handlersRef.current.requestDelete(hNode);
           else handlersRef.current.startAddChild(hNode);
         });
-      // White backdrop halo so the button's crisp edge reads clearly
-      // over any link line that may pass behind.
       btn.append("circle")
         .attr("r", btnR + 2)
         .attr("fill", "#ffffff")
         .attr("stroke", "none");
       btn.append("circle")
         .attr("r", btnR)
-        .attr("fill", isSibling ? "#ffffff" : "#ec9324")
-        .attr("stroke", "#ec9324")
-        .attr("stroke-width", isSibling ? 1.75 : 1);
-      // Plus glyph — white on orange fill, orange on white fill.
-      const glyphColor = isSibling ? "#ec9324" : "#ffffff";
-      btn.append("line")
-        .attr("x1", -5).attr("y1", 0).attr("x2", 5).attr("y2", 0)
-        .attr("stroke", glyphColor).attr("stroke-width", 2)
-        .attr("stroke-linecap", "round")
-        .style("pointer-events", "none");
-      btn.append("line")
-        .attr("x1", 0).attr("y1", -5).attr("x2", 0).attr("y2", 5)
-        .attr("stroke", glyphColor).attr("stroke-width", 2)
-        .attr("stroke-linecap", "round")
-        .style("pointer-events", "none");
-      // Hover tooltip — dark pill.
+        .attr("fill", isDelete ? "#ffffff" : "#ec9324")
+        .attr("stroke", isDelete ? "#dc2626" : "#ec9324")
+        .attr("stroke-width", isDelete ? 1.75 : 1);
+      if (isDelete) {
+        // Simple trash glyph: rounded lid + body rectangle.
+        btn.append("path")
+          .attr("d", "M -4,-3 L 4,-3 M -3,-3 L -3,4 Q -3,5 -2,5 L 2,5 Q 3,5 3,4 L 3,-3 M -1,-3 L -1,-5 L 1,-5 L 1,-3")
+          .attr("fill", "none")
+          .attr("stroke", "#dc2626")
+          .attr("stroke-width", 1.4)
+          .attr("stroke-linecap", "round")
+          .attr("stroke-linejoin", "round")
+          .style("pointer-events", "none");
+      } else {
+        const glyphColor = "#ffffff";
+        btn.append("line")
+          .attr("x1", -5).attr("y1", 0).attr("x2", 5).attr("y2", 0)
+          .attr("stroke", glyphColor).attr("stroke-width", 2)
+          .attr("stroke-linecap", "round")
+          .style("pointer-events", "none");
+        btn.append("line")
+          .attr("x1", 0).attr("y1", -5).attr("x2", 0).attr("y2", 5)
+          .attr("stroke", glyphColor).attr("stroke-width", 2)
+          .attr("stroke-linecap", "round")
+          .style("pointer-events", "none");
+      }
+      // Hover tooltip.
       const tt = btn.append("g")
         .attr("class", "seg-chip-tooltip")
         .style("opacity", 0)
         .style("pointer-events", "none");
-      const ttText = isSibling ? "Add sibling" : "Add sub-segment";
+      const ttText = isDelete ? "Delete" : "Add sub-segment";
       const ttW = ttText.length * 6.2 + 12;
       tt.append("rect")
         .attr("x", -ttW / 2).attr("y", btnR + 6)
@@ -913,6 +964,7 @@ export default function CollapsibleTree({
     function renderAddChips() {
       gNode.selectAll("g.seg-add-chip").remove();
       gNode.selectAll("g.seg-add-peer-chip").remove();
+      gNode.selectAll("g.seg-delete-chip").remove();
       if (!editable) return;
       // Never show chips on the node that's currently being edited — the
       // input would fight for space.
@@ -926,17 +978,19 @@ export default function CollapsibleTree({
         const labelNode = labelSel.node();
         const bbox = labelNode ? labelNode.getBBox() : { x: 12, width: 60 };
 
-        // Icon-button layout — tight, low-profile:
-        //   Sub-Segment button — right of label, same Y row.
-        //   Sibling button      — just below label (y = +14) so it sits
-        //                         inside the row's own gutter.
+        // (Aug 3 2026) Sibling button removed — user adds siblings via
+        // the PARENT node's "Add sub-segment" button. Only two icon
+        // buttons remain on a selected node:
+        //   • Add sub-segment (orange +) — available on every node
+        //     including the root.
+        //   • Delete           (red trash) — depth >= 1 only (root
+        //     itself cannot be deleted from within the tree editor).
         const gapAfterLabel = 16;
+        const btnSpacing = 28;
         const subX = bbox.x + bbox.width + gapAfterLabel;
         drawIconButton(g, "add-child", subX, 0, d);
-
         if (d.depth >= 1) {
-          const sibX = bbox.x + bbox.width + gapAfterLabel;
-          drawIconButton(g, "add-peer", sibX, 14, d);
+          drawIconButton(g, "delete", subX + btnSpacing, 0, d);
         }
       });
     }
@@ -1427,6 +1481,63 @@ export default function CollapsibleTree({
             testid="tree-collapse-all"
             position="bottom"
           />
+        </div>
+      )}
+      {/* Delete-confirmation dialog. Message includes the node name AND
+          the count of its sub-segments (from Aug 3 2026 spec). */}
+      {pendingDelete && (
+        <div
+          data-testid="tree-delete-confirm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={cancelDelete}
+        >
+          <div
+            className="bg-white rounded-lg shadow-2xl max-w-md w-[92%] p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold text-gray-900 mb-2">
+              Confirm delete
+            </h3>
+            <p className="text-sm text-gray-700 leading-relaxed">
+              {pendingDelete.subCount > 0 ? (
+                <>
+                  Do you wanna proceed with Deleting{" "}
+                  <span className="font-semibold text-gray-900">
+                    {pendingDelete.name}
+                  </span>{" "}
+                  &amp; its {pendingDelete.subCount} sub-segment
+                  {pendingDelete.subCount === 1 ? "" : "s"}?
+                </>
+              ) : (
+                <>
+                  Do you wanna proceed with Deleting{" "}
+                  <span className="font-semibold text-gray-900">
+                    {pendingDelete.name}
+                  </span>
+                  ?
+                </>
+              )}
+            </p>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={cancelDelete}
+                data-testid="tree-delete-cancel"
+                className="px-3 py-1.5 rounded-md border border-gray-300 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                data-testid="tree-delete-confirm-yes"
+                className="px-3 py-1.5 rounded-md bg-red-600 text-white text-sm font-medium hover:bg-red-700"
+              >
+                Yes
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
