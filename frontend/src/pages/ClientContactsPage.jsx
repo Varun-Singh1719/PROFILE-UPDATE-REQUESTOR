@@ -27,12 +27,17 @@ import {
 import {
   Tooltip, TooltipContent, TooltipTrigger, TooltipProvider,
 } from "../components/ui/tooltip";
+import {
+  Popover, PopoverTrigger, PopoverContent,
+} from "../components/ui/popover";
 import SingleSelect from "../components/SingleSelect";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import DateFilter from "../components/DateFilter";
 import Pagination from "../components/Pagination";
 import DeferredSearchInput from "../components/DeferredSearchInput";
 import MonthYearPicker from "../components/MonthYearPicker";
+import ISDPicker from "../components/ISDPicker";
+import { DEFAULT_ISD } from "../lib/isdCodes";
 import notify from "../lib/notify";
 import api, { API, formatApiError } from "../lib/api";
 import { confirm as confirmDialog } from "../lib/dialog";
@@ -41,6 +46,7 @@ import { __busyBridge } from "../context/BusyContext";
 import Plus from "@mui/icons-material/AddOutlined";
 import Mail from "@mui/icons-material/EmailOutlined";
 import Phone from "@mui/icons-material/PhoneOutlined";
+import PhoneCall from "@mui/icons-material/PermPhoneMsgOutlined";
 import Pencil from "@mui/icons-material/EditOutlined";
 import Eye from "@mui/icons-material/VisibilityOutlined";
 import Trash from "@mui/icons-material/DeleteOutlined";
@@ -69,6 +75,7 @@ const EMPTY_FORM = {
   name: "",
   email: "",
   phone: "",
+  phone_isd: DEFAULT_ISD,
   client_name: "",
   designation: "",
   base_location: "",
@@ -76,6 +83,20 @@ const EMPTY_FORM = {
   industries: [],
   previous_work_experience: [],
 };
+
+// If a legacy record stores phone as "+91 9999900000" (ISD baked into the
+// phone string), split it into { phone_isd, phone } on the fly so the edit
+// dialog renders cleanly. Never mutates the caller — returns a new pair.
+function splitLegacyPhone(row) {
+  const isd = row?.phone_isd || "";
+  const p = String(row?.phone || "").trim();
+  if (isd || !p) return { phone_isd: isd || DEFAULT_ISD, phone: p };
+  // "+CC digits" — pick up to 4 leading "+digits" tokens as the ISD.
+  const m = p.match(/^\+(\d{1,4})\s*(.*)$/);
+  if (m) return { phone_isd: `+${m[1]}`, phone: (m[2] || "").replace(/\D/g, "") };
+  // No leading '+', keep as-is.
+  return { phone_isd: DEFAULT_ISD, phone: p.replace(/\D/g, "") };
+}
 
 const SORT_OPTIONS = [
   { value: "newest", label: "Newest first" },
@@ -275,10 +296,12 @@ function ClientContactsList() {
   };
   const openEdit = (row) => {
     setEditing(row);
+    const { phone_isd, phone } = splitLegacyPhone(row);
     setForm({
       name: row.name || "",
       email: row.email || "",
-      phone: row.phone || "",
+      phone,
+      phone_isd,
       client_name: row.client_name || "",
       designation: row.designation || "",
       base_location: row.base_location || "",
@@ -496,28 +519,47 @@ function ClientContactsList() {
 function ContactCard({ row, onView, onEdit, onDelete }) {
   const initials = (row.name || "?").trim().split(/\s+/)
     .map((s) => s[0]).join("").slice(0, 2).toUpperCase();
+  // Handles both new (phone_isd + phone) and legacy ("+91 9999900000" in phone).
+  const fullPhone = (() => {
+    if (!row.phone) return "";
+    if (row.phone_isd) return `${row.phone_isd} ${row.phone}`.trim();
+    return String(row.phone).trim();
+  })();
 
   return (
     <div
       className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-[#ec9324]/40 transition-all p-4 flex flex-col"
       data-testid={`client-contact-card-${row.display_id}`}
     >
-      {/* Header — name + orange initials pill */}
+      {/* Header — initials, name, contact + linkedin icons, no ID row here */}
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h3
-            className="text-[15px] font-bold text-gray-900 truncate leading-tight cursor-pointer hover:text-[#ec9324]"
-            onClick={onView}
-            data-testid={`client-contact-name-${row.display_id}`}
-          >
-            {row.name}
-          </h3>
-          <div className="text-[11px] text-gray-500 mt-0.5">
-            <span>ID: <span className="font-mono text-gray-700">{row.display_id}</span></span>
+        <div className="min-w-0 flex-1 flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-full bg-[#ec9324] text-white flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-sm">
+            {initials}
           </div>
-        </div>
-        <div className="w-9 h-9 rounded-full bg-[#ec9324] text-white flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-sm">
-          {initials}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <h3
+                className="text-[15px] font-bold text-gray-900 truncate leading-tight cursor-pointer hover:text-[#ec9324] min-w-0"
+                onClick={onView}
+                data-testid={`client-contact-name-${row.display_id}`}
+              >
+                {row.name}
+              </h3>
+              <LinkedInIconBtn
+                url={row.linkedin_url}
+                testId={`client-contact-linkedin-${row.display_id}`}
+              />
+              <CopyableContactIcon
+                email={row.email}
+                phone={fullPhone}
+                testId={`client-contact-contactinfo-${row.display_id}`}
+              />
+            </div>
+            <div className="text-[11px] text-gray-500 mt-0.5">
+              ID: <span className="font-mono text-gray-700">{row.display_id}</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -528,15 +570,16 @@ function ContactCard({ row, onView, onEdit, onDelete }) {
         <MetaRow label="Base Location" value={row.base_location} />
       </div>
 
-      {/* Metrics row */}
+      {/* Metrics row — all in orange (single accent) */}
       <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-4 gap-1 text-center">
-        <MetricMini value="—" label="Revenue" accent="orange" />
-        <MetricMini value="—" label="Calls" />
-        <MetricMini value="—" label="Serviced" />
         <MetricMini value="—" label="Projects" />
+        <MetricMini value="—" label="Serviced" />
+        <MetricMini value="—" label="Calls" />
+        <MetricMini value="—" label="Revenue" />
       </div>
 
-      {/* Bottom action bar */}
+      {/* Bottom action bar — just Edit / View / Delete now
+          (email/phone/linkedin moved to the header) */}
       <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
         <ActionIcon label="Edit" onClick={onEdit} testId={`client-contact-edit-${row.display_id}`}>
           <Pencil sx={{ fontSize: 16 }} />
@@ -544,47 +587,6 @@ function ContactCard({ row, onView, onEdit, onDelete }) {
         <ActionIcon label="View" onClick={onView} testId={`client-contact-view-${row.display_id}`}>
           <Eye sx={{ fontSize: 16 }} />
         </ActionIcon>
-        {row.email ? (
-          <ActionIcon
-            label={row.email}
-            as="a"
-            href={`mailto:${row.email}`}
-            testId={`client-contact-mail-${row.display_id}`}
-          >
-            <Mail sx={{ fontSize: 16 }} />
-          </ActionIcon>
-        ) : (
-          <ActionIcon label="No email on file" disabled>
-            <Mail sx={{ fontSize: 16 }} />
-          </ActionIcon>
-        )}
-        {row.phone ? (
-          <ActionIcon
-            label={row.phone}
-            as="a"
-            href={`tel:${row.phone}`}
-            testId={`client-contact-phone-${row.display_id}`}
-          >
-            <Phone sx={{ fontSize: 16 }} />
-          </ActionIcon>
-        ) : (
-          <ActionIcon label="No phone on file" disabled>
-            <Phone sx={{ fontSize: 16 }} />
-          </ActionIcon>
-        )}
-        {row.linkedin_url && (
-          <ActionIcon
-            label="Open LinkedIn"
-            as="a"
-            href={row.linkedin_url}
-            target="_blank"
-            rel="noreferrer"
-            testId={`client-contact-linkedin-${row.display_id}`}
-            tone="linkedin"
-          >
-            <LinkedIn sx={{ fontSize: 16 }} />
-          </ActionIcon>
-        )}
         <div className="flex-1" />
         <ActionIcon
           label="Delete"
@@ -599,6 +601,169 @@ function ContactCard({ row, onView, onEdit, onDelete }) {
   );
 }
 
+// ---------- header-icon: combined email+phone with copyable popover ----------
+function CopyableContactIcon({ email, phone, testId }) {
+  const [open, setOpen] = useState(false);
+  const has = !!(email || phone);
+  const tooltipLabel = has ? "Available" : "Not Available";
+  const iconBg = has
+    ? "bg-green-100 text-green-600 hover:bg-green-200"
+    : "bg-gray-100 text-gray-400";
+
+  // If nothing to show, keep the tooltip but no popover.
+  if (!has) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${iconBg}`}
+            data-testid={testId}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <PhoneCall sx={{ fontSize: 14 }} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="bg-gray-900 text-white">
+          {tooltipLabel}
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${iconBg}`}
+              data-testid={testId}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <PhoneCall sx={{ fontSize: 14 }} />
+            </button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        {!open && (
+          <TooltipContent side="top" className="bg-gray-900 text-white">
+            {tooltipLabel}
+          </TooltipContent>
+        )}
+      </Tooltip>
+      <PopoverContent
+        side="bottom"
+        align="start"
+        className="w-72 p-2"
+        onClick={(e) => e.stopPropagation()}
+        data-testid={`${testId}-popover`}
+      >
+        <div className="space-y-1">
+          {phone && (
+            <CopyRow
+              icon={<Phone sx={{ fontSize: 16 }} />}
+              value={phone}
+              hoverLabel="Copy mobile number"
+              successLabel="Mobile number copied"
+              testId={`${testId}-copy-phone`}
+            />
+          )}
+          {email && (
+            <CopyRow
+              icon={<Mail sx={{ fontSize: 16 }} />}
+              value={email}
+              hoverLabel="Copy email address"
+              successLabel="Email copied"
+              testId={`${testId}-copy-email`}
+            />
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function CopyRow({ icon, value, hoverLabel, successLabel, testId }) {
+  const [copied, setCopied] = useState(false);
+  const doCopy = async (e) => {
+    e.stopPropagation();
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        // Fallback for older browsers / non-secure origins.
+        const ta = document.createElement("textarea");
+        ta.value = value;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setCopied(true);
+      notify.success(successLabel);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (_) {
+      notify.error("Could not copy to clipboard");
+    }
+  };
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={doCopy}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50 transition-colors text-left"
+          data-testid={testId}
+        >
+          <span className="w-7 h-7 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0">
+            {icon}
+          </span>
+          <span className="font-medium truncate flex-1 min-w-0">{value}</span>
+          {copied && (
+            <span className="text-[10px] font-semibold text-green-600 uppercase tracking-wider flex-shrink-0">Copied</span>
+          )}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="bg-gray-900 text-white">
+        {hoverLabel}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+// ---------- header-icon: LinkedIn (blue when available, grey when not) ----------
+function LinkedInIconBtn({ url, testId }) {
+  const has = !!url;
+  const bg = has
+    ? "bg-[#0a66c2] text-white hover:bg-[#084d94]"
+    : "bg-gray-200 text-white cursor-not-allowed";
+  const handleClick = (e) => {
+    e.stopPropagation();
+    if (has) window.open(url, "_blank", "noopener,noreferrer");
+  };
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={handleClick}
+          disabled={!has}
+          className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${bg}`}
+          data-testid={testId}
+        >
+          <LinkedIn sx={{ fontSize: 14 }} />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="bg-gray-900 text-white">
+        {has ? "Click to Open" : "Not Available"}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 function MetaRow({ label, value }) {
   return (
     <div className="flex items-start gap-2">
@@ -608,15 +773,11 @@ function MetaRow({ label, value }) {
   );
 }
 
-function MetricMini({ value, label, accent = "gray" }) {
-  const color =
-    accent === "orange" ? "text-[#ec9324]" :
-    accent === "emerald" ? "text-emerald-600" :
-    accent === "blue" ? "text-blue-600" :
-    "text-gray-800";
+function MetricMini({ value, label }) {
+  // Single orange accent for all four metrics (per spec — no rainbow).
   return (
     <div>
-      <div className={`text-base font-bold ${color}`}>{value}</div>
+      <div className="text-base font-bold text-[#ec9324]">{value}</div>
       <div className="text-[10px] uppercase tracking-wide text-gray-500 mt-0.5">{label}</div>
     </div>
   );
@@ -727,11 +888,20 @@ function ContactFormDialog({
               />
             </Field>
             <Field label="Phone No.">
-              <Input
-                value={form.phone}
-                onChange={(e) => patch("phone", e.target.value)}
-                placeholder="+91 …"
-              />
+              <div className="grid grid-cols-[110px_1fr] gap-2">
+                <ISDPicker
+                  value={form.phone_isd || DEFAULT_ISD}
+                  onChange={(dial) => patch("phone_isd", dial)}
+                  testId="cc-phone-isd"
+                />
+                <Input
+                  value={form.phone}
+                  onChange={(e) => patch("phone", e.target.value.replace(/[^0-9]/g, ""))}
+                  placeholder="Mobile number"
+                  inputMode="numeric"
+                  data-testid="cc-phone"
+                />
+              </div>
             </Field>
             <Field label="Client Name (Level 1)">
               <SingleSelect
@@ -967,10 +1137,12 @@ function ClientContactDetail({ contactId }) {
   );
 
   const openEdit = () => {
+    const { phone_isd, phone } = splitLegacyPhone(row);
     setForm({
       name: row.name || "",
       email: row.email || "",
-      phone: row.phone || "",
+      phone,
+      phone_isd,
       client_name: row.client_name || "",
       designation: row.designation || "",
       base_location: row.base_location || "",
@@ -1059,7 +1231,7 @@ function ClientContactDetail({ contactId }) {
                 )}
                 {row.phone && (
                   <span className="flex items-center gap-1">
-                    <Phone sx={{ fontSize: 14 }} /> {row.phone}
+                    <Phone sx={{ fontSize: 14 }} /> {row.phone_isd ? `${row.phone_isd} ` : ""}{row.phone}
                   </span>
                 )}
                 {row.base_location && (
@@ -1214,9 +1386,9 @@ function ActivitySummary({ filter, onFilterChange, data = null }) {
 
   const ROWS = [
     { key: "projects", label: "Projects", accent: "orange" },
-    { key: "serviced", label: "Serviced", accent: "emerald" },
-    { key: "calls",    label: "Calls",    accent: "blue" },
-    { key: "revenue",  label: "Revenue",  accent: "purple", isMoney: true },
+    { key: "serviced", label: "Serviced", accent: "orange" },
+    { key: "calls",    label: "Calls",    accent: "orange" },
+    { key: "revenue",  label: "Revenue",  accent: "orange", isMoney: true },
   ];
 
   const getCell = (rowKey, monthKey) => {
@@ -1350,10 +1522,10 @@ function ActivitySummary({ filter, onFilterChange, data = null }) {
 // every metric (placeholder until the calc pipeline lands).
 function TotalTillDateChips({ totals = null }) {
   const items = [
-    { key: "projects", label: "Projects", accent: "orange",  isMoney: false },
-    { key: "serviced", label: "Serviced", accent: "emerald", isMoney: false },
-    { key: "calls",    label: "Calls",    accent: "blue",    isMoney: false },
-    { key: "revenue",  label: "Revenue",  accent: "purple",  isMoney: true  },
+    { key: "projects", label: "Projects", isMoney: false },
+    { key: "serviced", label: "Serviced", isMoney: false },
+    { key: "calls",    label: "Calls",    isMoney: false },
+    { key: "revenue",  label: "Revenue",  isMoney: true  },
   ];
   const val = (k) => {
     const v = totals?.[k];
@@ -1363,18 +1535,14 @@ function TotalTillDateChips({ totals = null }) {
     if (!v) return money ? "$0" : "0";
     return money ? `$${v.toLocaleString()}` : v.toLocaleString();
   };
-  const scheme = {
-    orange:  "border-[#ec9324]/30 bg-[#ec9324]/5   text-[#ec9324] ring-[#ec9324]/10",
-    emerald: "border-emerald-200  bg-emerald-50    text-emerald-700 ring-emerald-100",
-    blue:    "border-blue-200     bg-blue-50       text-blue-700    ring-blue-100",
-    purple:  "border-purple-200   bg-purple-50     text-purple-700  ring-purple-100",
-  };
+  // Single orange colour scheme for all four chips (per spec).
+  const scheme = "border-[#ec9324]/30 bg-[#ec9324]/5 text-[#ec9324] ring-[#ec9324]/10";
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="cc-total-chips">
       {items.map((i) => (
         <div
           key={i.key}
-          className={`rounded-xl border ring-1 ring-inset px-4 py-3 flex items-center justify-between gap-3 shadow-sm ${scheme[i.accent]}`}
+          className={`rounded-xl border ring-1 ring-inset px-4 py-3 flex items-center justify-between gap-3 shadow-sm ${scheme}`}
           data-testid={`cc-total-chip-${i.key}`}
         >
           <div className="min-w-0">
@@ -1466,7 +1634,7 @@ function DuplicateWarningDialog({ state, onClose, onSaveAnyway, saving }) {
                     )}
                     {d.phone && (
                       <span className={`flex items-center gap-1 ${d.match_on?.includes("phone") ? "text-amber-800 font-semibold" : ""}`}>
-                        <Phone sx={{ fontSize: 12 }} /> {d.phone}
+                        <Phone sx={{ fontSize: 12 }} /> {d.phone_isd ? `${d.phone_isd} ` : ""}{d.phone}
                       </span>
                     )}
                     {d.client_name && (

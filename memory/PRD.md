@@ -1,6 +1,35 @@
 # Infollion Utilities — PRD
 
 
+## CRM → Client Contacts — Card + Form + Colour polish (Aug 3 2026 rev-4)
+- **Single-orange colour scheme** — killed the "rainbow" from earlier rev.
+  - `TotalTillDateChips` now uses one orange scheme for all four chips (Projects / Serviced / Calls / Revenue).
+  - `ActivitySummary` pivot: every row (dot + label text + Total column value) is orange. The Total column background stays orange-tinted.
+  - `MetricMini` on the card is orange for all four metrics.
+- **Phone number split** — Add/Edit dialog now uses the shared `ISDPicker` + a numeric-only `Input`, exactly like Manage → Teams → Add Contact (Employee). Backend `ClientContactBase` / `ClientContactUpdate` gained an `Optional[str] phone_isd` field; bulk-upload template got a dedicated `ISD` column. A small `splitLegacyPhone(row)` helper auto-splits legacy `"+91 9876543210"` values into `{ phone_isd: "+91", phone: "9876543210" }` when opening the edit dialog so old records render cleanly. `DEFAULT_ISD` (`+91`) is used as the fallback.
+- **Card view redesign** (per screenshots supplied):
+  - Initials pill moves left; **name is now on the top-left**, followed by a small **LinkedIn icon** and a **combined phone-msg icon** immediately after the name. ID row sits below the name.
+  - **New `CopyableContactIcon` component** (uses MUI `PermPhoneMsgOutlined` icon = envelope-with-phone-receiver hybrid, matching your screenshot 1). States:
+    - **Green pill** when either email or phone is available → hover tooltip **"Available"**.
+    - **Grey pill** when neither is available → hover tooltip **"Not Available"**, no popover.
+    - **Click** (when green) → Radix `Popover` opens with clickable rows for phone and email (matches screenshot 2). Each row has an icon + value.
+    - **Hover a row** → dark tooltip **"Copy mobile number"** / **"Copy email address"** (matches screenshot 3). **Click a row** → copies to clipboard via `navigator.clipboard.writeText`, shows a green "COPIED" flash + `notify.success` toast, then auto-hides.
+  - **New `LinkedInIconBtn` component** — small round pill with the MUI `LinkedIn` icon:
+    - **Blue (`#0a66c2`) + white icon** when URL is present → tooltip **"Click to Open"**. Click → `window.open(url, "_blank", "noopener,noreferrer")`.
+    - **Grey + white icon** when no URL → tooltip **"Not Available"**, click is a no-op (`disabled`).
+  - Card bottom action bar reduced to Edit / View / Delete (email / phone / linkedin removed since they moved to the header row).
+- **Detail-page header** — phone display now prefixes the ISD (`+91 9999900000`).
+- **DuplicateWarningDialog** — the existing-record card now also shows the ISD prefix before the phone digits.
+
+Verified via 8 playwright screenshots at 1600×1000:
+  1. Card list with two rows — one green (John Doe) + one grey (Empty Contact) — plus "Not Available" tooltip on the grey icon.
+  2. Combined popover open on the green card showing `+91 9999900000` and `john@acme.com`.
+  3. "Copy mobile number" tooltip on hover.
+  4. Edit dialog with `ISDPicker` (`+91 IN`) split cleanly from mobile digits (legacy `+91 9999900000` auto-split into `+91` + `9999900000`).
+  5. Detail page — 4 orange total-till-date chips + pivot rows all-orange.
+
+
+
 ## CRM → Client Contact Detail — Pivot table + full-width polish (Aug 3 2026 rev-3)
 - **Detail-page layout fix**: dropped `max-w-6xl` on the outer container so the page now spans the full viewport width (removed the big empty gutter on the right). Sections stretch edge-to-edge with the existing `px-6` container padding.
 - **Total-till-date chips** — new `TotalTillDateChips` component sits between the name/header card and the Industries card. Four coloured pill-cards (orange Projects / emerald Serviced / blue Calls / purple Revenue) each showing `TOTAL TILL DATE · {value}`. Values default to `0` (`$0` for Revenue) until the calc pipeline lands; will pick up real numbers automatically when the detail response starts including `totals_till_date`. Test-ids: `cc-total-chips`, `cc-total-chip-projects` / `-serviced` / `-calls` / `-revenue`.

@@ -91,7 +91,7 @@ async def _find_duplicates(
     hits: list = []
     async for d in db[COLL].find(
         q,
-        {"_id": 0, "id": 1, "display_id": 1, "name": 1, "email": 1, "phone": 1, "client_name": 1, "designation": 1},
+        {"_id": 0, "id": 1, "display_id": 1, "name": 1, "email": 1, "phone": 1, "phone_isd": 1, "client_name": 1, "designation": 1},
     ).limit(50):
         match_on: list[str] = []
         if ne and (d.get("email") or "").strip().lower() == ne:
@@ -117,6 +117,7 @@ class ClientContactBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=160)
     email: Optional[str] = Field(None, max_length=200)
     phone: Optional[str] = Field(None, max_length=40)
+    phone_isd: Optional[str] = Field(None, max_length=8)
     client_name: Optional[str] = Field(None, max_length=200)
     designation: Optional[str] = Field(None, max_length=200)
     base_location: Optional[str] = Field(None, max_length=160)
@@ -141,6 +142,7 @@ class ClientContactUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=160)
     email: Optional[str] = Field(None, max_length=200)
     phone: Optional[str] = Field(None, max_length=40)
+    phone_isd: Optional[str] = Field(None, max_length=8)
     client_name: Optional[str] = Field(None, max_length=200)
     designation: Optional[str] = Field(None, max_length=200)
     base_location: Optional[str] = Field(None, max_length=160)

@@ -77,6 +77,7 @@ logger = logging.getLogger(__name__)
 TEMPLATE_HEADERS = [
     "Name",
     "Email",
+    "ISD",
     "Phone",
     "Client Name",
     "Designation",
@@ -92,7 +93,8 @@ SAMPLE_ROWS = [
     [
         "Priya Sharma",
         "priya.sharma@boston-consulting.com",
-        "+91 9876543210",
+        "+91",
+        "9876543210",
         "McKinsey",
         "Partner",
         "Mumbai, IN",
@@ -102,7 +104,8 @@ SAMPLE_ROWS = [
     [
         "Rahul Menon",
         "rahul.menon@acme.com",
-        "+91 9812345678",
+        "+91",
+        "9812345678",
         "Infollion Research",
         "Vice President — Strategy",
         "Bengaluru, IN",
@@ -171,7 +174,7 @@ async def download_cc_sample_template(
         for col_idx, val in enumerate(row, start=1):
             ws.cell(row=row_idx, column=col_idx, value=val)
 
-    widths = [22, 32, 16, 22, 26, 20, 40, 34]
+    widths = [22, 32, 8, 16, 22, 26, 20, 40, 34]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
     ws.freeze_panes = "A2"
@@ -182,7 +185,8 @@ async def download_cc_sample_template(
         ("Field", "Required?", "Notes"),
         ("Name", "Yes", "Full name of the client contact."),
         ("Email", "No", "Standard email format. Must be unique across the whole client-contact directory."),
-        ("Phone", "No", "Any format. Must be unique (digits are compared, formatting is ignored)."),
+        ("ISD", "No", "Country dial-code — e.g. '+91', '+1'. Defaults to '+91' if left blank."),
+        ("Phone", "No", "Digits only (or any format). Must be unique — formatting is ignored, we dedup on the trailing 10 digits."),
         ("Client Name", "No", "Must exactly match an existing Segmentation (Level 1) name — e.g. 'McKinsey', 'Infollion Research'. Rows with an unknown Client Name are rejected."),
         ("Designation", "No", "Free text — e.g. 'Partner', 'Director'."),
         ("Base Location", "No", "Free text — e.g. 'Mumbai, IN'."),
@@ -329,6 +333,7 @@ async def bulk_upload_client_contacts(
 
         name = _cell_text(d.get("Name"))
         email = _cell_text(d.get("Email"))
+        phone_isd = _cell_text(d.get("ISD"))
         phone = _cell_text(d.get("Phone"))
         client_name = _cell_text(d.get("Client Name"))
         designation = _cell_text(d.get("Designation"))
@@ -421,6 +426,7 @@ async def bulk_upload_client_contacts(
             "name": name,
             "email": email or None,
             "phone": phone or None,
+            "phone_isd": phone_isd or None,
             "client_name": resolved_client,
             "designation": designation or None,
             "base_location": base_location or None,
