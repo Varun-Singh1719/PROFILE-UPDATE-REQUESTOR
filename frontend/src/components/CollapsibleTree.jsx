@@ -792,55 +792,43 @@ export default function CollapsibleTree({
 
     // ---------------------------------------------- Zoom + pan (d3.zoom)
     //
-    // Pinch-to-zoom (Mac trackpad + Windows precision trackpads + Ctrl+
-    // wheel on any OS) is delivered by browsers as a `wheel` event with
-    // `event.ctrlKey === true` (synthesized — the physical ctrl key is
-    // usually NOT down). We route pinch to d3-zoom (which does proper
-    // cursor-anchored scaling) and route plain two-finger scroll to a
-    // separate `wheel.pan` handler (translation only).
+    // ANY wheel event → zoom around the cursor. This includes:
+    //   • Mac trackpad pinch (wheel + synthetic ctrlKey=true)
+    //   • Mac trackpad two-finger vertical scroll (wheel, no ctrlKey)
+    //   • Windows precision trackpad pinch (wheel + ctrlKey=true)
+    //   • Regular mouse wheel + Ctrl+wheel
+    // The cursor position is ALWAYS the zoom anchor — d3-zoom's built-in
+    // wheeled() handler captures d3.pointer(event, this) and adjusts x/y
+    // so the pixel under the cursor stays fixed while k changes.
     //
-    // Cross-browser/OS normalization:
-    //   • Chrome / Safari on macOS trackpad pinch → deltaMode=0 (px),
-    //     deltaY tiny (±1..±20), ctrlKey=true.
-    //   • Firefox on macOS trackpad pinch → deltaMode=1 (lines),
-    //     deltaY tiny, ctrlKey=true.
-    //   • Windows precision trackpad → deltaMode=0, ctrlKey=true.
-    //   • Ctrl + physical mouse wheel → deltaMode=0, deltaY large
-    //     (±100+), ctrlKey=true.
-    // We normalize deltaY to pixels first, then apply a fixed 0.003x
-    // gain — same feel on every OS, every browser.
+    // Cross-browser/OS normalization: browsers report deltaY in
+    // deltaMode 0 (px), 1 (lines) or 2 (pages). We normalize to px and
+    // apply a fixed 0.003 gain — same feel on every OS/browser, whether
+    // it's Chrome, Safari, Firefox, on macOS, Windows, or Linux, whether
+    // it's a physical mouse wheel or a trackpad gesture.
     //
-    // d3-zoom's default wheelDelta multiplies by 10x when ctrlKey is
-    // true, which is way too aggressive for trackpad pinch and causes
-    // the "jumping" symptom. Our custom wheelDelta below is smooth.
+    // We DELIBERATELY drop the ctrlKey 10x multiplier that d3-zoom
+    // uses by default — that was causing the "jumping / not smooth"
+    // symptom on Mac trackpad pinch.
     //
-    // Cursor as anchor: we let d3-zoom's built-in wheeled() handler
-    // do the (proven) math. It captures `d3.pointer(event, this)` as
-    // the anchor, computes new k via wheelDelta, and adjusts x/y so
-    // the pixel under the cursor stays fixed. We NEVER recompute the
-    // transform ourselves during a pinch — only k changes, x/y are
-    // pure anchor compensation.
-    //
-    // Filter clicks so single-click on chips/circles/labels still work
-    // — drag pan starts only on the background canvas (empty area) or
-    // link paths.
+    // Pan: drag on the SVG background or on link paths. Clicks on nodes
+    // (labels, circles, chips) MUST NOT initiate a drag.
     const zoomBehavior = d3.zoom()
       .scaleExtent([0.1, 4])
       .wheelDelta((evt) => {
-        // Only respond to pinch. Plain wheel → wheel.pan handler.
-        if (!(evt.ctrlKey || evt.metaKey)) return 0;
         // Normalize deltaY to pixels regardless of browser/OS.
         let dy = evt.deltaY;
         if (evt.deltaMode === 1) dy *= 16;      // lines → ~px
         else if (evt.deltaMode === 2) dy *= 400; // pages → ~px
-        // 0.003 → ~3x d3's non-ctrl base step. Smooth, continuous
-        // Figma/Miro-style zoom curve. Same on every OS/browser.
+        // 0.003 → smooth Figma/Miro-style zoom curve. Same rate whether
+        // the event is a pinch (ctrlKey=true) or a plain scroll — no
+        // artificial 10x multiplier on ctrlKey.
         return -dy * 0.003;
       })
       .filter((evt) => {
-        // Wheel: only allow d3-zoom to handle pinch. Plain wheel is
-        // translated to pan by wheel.pan (registered below).
-        if (evt.type === "wheel") return evt.ctrlKey || evt.metaKey;
+        // Wheel: always allow — d3-zoom handles both pinch and plain
+        // wheel as cursor-anchored zoom.
+        if (evt.type === "wheel") return true;
         // Ignore touchscreen pinches until we need them
         if (evt.type === "touchstart" || evt.type === "touchmove") return true;
         // For mousedown/pointerdown: only start dragging on the SVG
@@ -856,23 +844,6 @@ export default function CollapsibleTree({
       .on("zoom", (event) => {
         gRoot.attr("transform", event.transform.toString());
       });
-
-    // Plain two-finger trackpad scroll (no ctrl/meta) → pan only.
-    // Pinch (ctrl/meta + wheel) is intentionally NOT handled here —
-    // it falls through to d3-zoom's wheeled() handler which does the
-    // cursor-anchored scale.
-    svg.on("wheel.pan", (event) => {
-      if (event.ctrlKey || event.metaKey) return; // pinch → d3-zoom
-      event.preventDefault();
-      const current = d3.zoomTransform(svgRef.current);
-      // Normalize deltaX/deltaY to pixels for consistent pan speed.
-      let dx = event.deltaX;
-      let dy = event.deltaY;
-      if (event.deltaMode === 1) { dx *= 16; dy *= 16; }
-      else if (event.deltaMode === 2) { dx *= 400; dy *= 400; }
-      const next = current.translate(-dx / current.k, -dy / current.k);
-      svg.call(zoomBehavior.transform, next);
-    }, { passive: false });
 
     svg.call(zoomBehavior).on("dblclick.zoom", null); // preserve dbl-click rename
 
