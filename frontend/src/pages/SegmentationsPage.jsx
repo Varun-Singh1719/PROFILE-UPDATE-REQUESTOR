@@ -333,6 +333,12 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
   // reorder) don't need a modal Save button — they're auto-persisted with a
   // small debounce. `saveState` drives the tiny status text in the header.
   const [saveState, setSaveState] = useState("saved"); // "saved" | "saving" | "dirty" | "error"
+
+  // The right-side tree is VIEW-ONLY by default. Chips (+Child / +Peer) and
+  // inline rename only appear once the user explicitly enters edit mode via
+  // the pencil icon in the tree toolbar (top-right of the canvas). Turning
+  // edit mode OFF also cancels any in-flight inline edit.
+  const [treeEditMode, setTreeEditMode] = useState(false);
   const pendingTreeRef = useRef(null);
   const saveTimerRef = useRef(null);
   const lastSavedTreeRef = useRef(null);
@@ -438,7 +444,8 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
         <CollapsibleTree
           data={seedTree}
           onChange={handleTreeChange}
-          editable
+          editable={treeEditMode}
+          onEditableToggle={setTreeEditMode}
           defaultExpandDepth={1}
         />
       </div>

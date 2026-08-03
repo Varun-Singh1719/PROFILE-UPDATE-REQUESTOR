@@ -5,6 +5,8 @@ import ZoomOutIcon from "@mui/icons-material/ZoomOut";
 import CenterFocusStrong from "@mui/icons-material/CenterFocusStrong";
 import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
 import UnfoldLessIcon from "@mui/icons-material/UnfoldLess";
+import EditIcon from "@mui/icons-material/Edit";
+import CheckIcon from "@mui/icons-material/Check";
 
 // Toolbar icon button — matches the Notification Bell visual pattern:
 // pill-shaped hover target, dark tooltip that fades in on hover, orange
@@ -15,7 +17,7 @@ import UnfoldLessIcon from "@mui/icons-material/UnfoldLess";
 // The tooltip is portalled OUT of the panel (positioned to the LEFT of
 // the button) so the panel's rounded corners + subtle border don't need
 // `overflow-hidden` — which would clip the tooltip.
-const ToolButton = ({ onClick, icon, label, testid, position }) => {
+const ToolButton = ({ onClick, icon, label, testid, position, active = false }) => {
   // position ∈ { "top", "middle", "bottom", "solo" } — used to round
   // the outer corners of the first / last button so the panel keeps
   // its rounded-lg outline without needing overflow-hidden.
@@ -26,18 +28,21 @@ const ToolButton = ({ onClick, icon, label, testid, position }) => {
   const divider = position === "bottom" || position === "solo"
     ? ""
     : "border-b border-white/50";
+  const base = active
+    ? "text-[#ec9324] bg-[#ec9324]/15"
+    : "text-gray-700 hover:text-[#ec9324] hover:bg-white/60";
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={label}
+      aria-pressed={active}
       title={label}
       data-testid={testid}
       className={
         "group relative inline-flex items-center justify-center " +
-        "w-9 h-9 text-gray-700 transition-colors " +
-        "hover:text-[#ec9324] hover:bg-white/60 " +
-        `${round} ${divider}`
+        "w-9 h-9 transition-colors " +
+        `${base} ${round} ${divider}`
       }
     >
       {icon}
@@ -80,6 +85,7 @@ export default function CollapsibleTree({
   data,
   onChange,
   editable = false,
+  onEditableToggle,
   defaultExpandDepth = Infinity,
   showToolbar = true,
 }) {
@@ -104,6 +110,13 @@ export default function CollapsibleTree({
   // viewport does not jump / recenter, matching the spec.
   const collapseAllRef = useRef(null);
   const expandAllRef = useRef(null);
+  // Tracks whether the user has manually zoomed / panned since the last
+  // fresh mount. Used to decide whether to auto-refit on container
+  // resize (e.g. the flex layout finishing settling after we navigate
+  // back to the page): before any interaction we refit so the tree is
+  // always centred; after the user has moved the viewport we preserve
+  // their pan/zoom.
+  const hasUserInteractedRef = useRef(false);
 
   // Local mirror of the incoming `data` — we mutate this scratchpad on
   // every add / rename / cancel, and only sync back to the parent via
@@ -118,8 +131,11 @@ export default function CollapsibleTree({
     if (data) {
       setViewData(JSON.parse(JSON.stringify(data)));
       setEditingPath(null);
-      // A brand-new dataset should get a fresh initial fit.
+      // A brand-new dataset should get a fresh initial fit AND treat the
+      // canvas as un-touched (so the ResizeObserver auto-refits while
+      // the flex layout settles).
       didInitialFitRef.current = false;
+      hasUserInteractedRef.current = false;
     }
   }, [data]);
 
@@ -604,11 +620,32 @@ export default function CollapsibleTree({
           }
           clickTimerRef.current = setTimeout(() => {
             clickTimerRef.current = null;
-            // Capture the clicked node's logical position BEFORE mutating
-            // so we can pin its screen pixel across the layout change.
-            const anchor = { node: d, oldX: d.x, oldY: d.y };
-            d.children = d.children ? null : d._children;
-            update(d, evt, { anchor });
+            // Toggle expand/collapse — ALWAYS one level at a time.
+            //   • Collapse: stash current children into _children, hide.
+            //   • Expand : reveal _children, and force each revealed
+            //              child to appear as a leaf by stashing ITS
+            //              children into _children too. That guarantees
+            //              a single-level expansion regardless of what
+            //              state the subtree was in previously (e.g.
+            //              after an Expand All → collapseAll cycle).
+            if (d.children) {
+              d._children = d.children;
+              d.children = null;
+            } else if (d._children) {
+              d.children = d._children;
+              d.children.forEach((c) => {
+                if (c.children && c.children.length) {
+                  if (!c._children) c._children = c.children;
+                  c.children = null;
+                }
+              });
+            }
+            // Re-layout WITHOUT anchor (fitToView will take over the
+            // viewport). This behaves like a "focus on newly revealed
+            // content" — the tree re-fits so the just-opened branch is
+            // fully visible without the user having to zoom out.
+            update(d, evt);
+            fitToView(true);
           }, 220);
         })
         .on("dblclick", (evt, d) => {
@@ -913,6 +950,14 @@ export default function CollapsibleTree({
         if (t.classList && t.classList.contains("seg-link")) return true;
         return false;
       })
+      .on("start", (event) => {
+        // Any user-driven zoom/pan (wheel, drag, pinch, touch) counts
+        // as interaction — after this we stop auto-refitting on
+        // container resize, so the user's viewport is preserved.
+        // Programmatic transitions have event.sourceEvent === null and
+        // do NOT flip the flag.
+        if (event.sourceEvent) hasUserInteractedRef.current = true;
+      })
       .on("zoom", (event) => {
         gRoot.attr("transform", event.transform.toString());
       });
@@ -1019,17 +1064,35 @@ export default function CollapsibleTree({
     //   • User's Level 2 = d3 depth 1 (root + direct children)
     //   • etc.
     //
-    // Collapse All → collapse to Level 1 (only the root remains visible;
-    // every node with descendants gets its children moved to _children
-    // so they can be re-expanded).
+    // Collapse All → collapse to Level 2 (root + its direct children remain
+    // visible; every node from Level 2 downward has its children moved
+    // to _children so they can be re-expanded).
     //
     // Expand All → walk every node and restore its _children back into
     // children — reveals the full tree to the max depth available.
+    //
+    // IMPORTANT: d3's `root.each()` uses `d.children` to descend. If we
+    // set `d.children = null` inside the callback, subsequent descendants
+    // are never visited. That produced a subtle bug where Collapse All
+    // only touched Level 2 — Level 3+ nodes kept their .children set,
+    // and later clicking a Level 2 to expand revealed two levels at once
+    // (Level 3 + Level 4). We now use a custom recursive walk that
+    // follows BOTH `.children` and `._children`, so every hidden or
+    // visible descendant is normalised to the "one level at a time"
+    // invariant.
+    const walkAllDeep = (d, fn) => {
+      fn(d);
+      const kids = d._children || d.children;
+      if (kids && kids.length) kids.forEach((k) => walkAllDeep(k, fn));
+    };
     const collapseAll = () => {
-      root.each((d) => {
-        if (d.children) {
-          if (!d._children) d._children = d.children;
-          d.children = null;
+      walkAllDeep(root, (d) => {
+        if (d.depth >= 1) {
+          const kids = d.children || d._children;
+          if (kids && kids.length) {
+            d._children = kids;
+            d.children = null;
+          }
         }
       });
       update(root);
@@ -1040,7 +1103,7 @@ export default function CollapsibleTree({
       fitToView(true);
     };
     const expandAll = () => {
-      root.each((d) => {
+      walkAllDeep(root, (d) => {
         if (d._children && !d.children) {
           d.children = d._children;
         }
@@ -1101,7 +1164,21 @@ export default function CollapsibleTree({
     };
     container.addEventListener("keydown", onKeyDown);
 
-    const ro = new ResizeObserver(() => update(root));
+    // ResizeObserver — the container may resize AFTER the initial mount
+    // (e.g. flex layout settling when the user navigates back from
+    // another page). We always re-run update() to recompute the layout
+    // against the current container width/height. If the user has NOT
+    // manually zoomed/panned yet, we ALSO refit so the tree stays
+    // centred at the settled dimensions instead of stuck at whatever
+    // size the container was during the initial mount.
+    const ro = new ResizeObserver(() => {
+      update(root);
+      if (!hasUserInteractedRef.current) {
+        // Skip animation for these silent refits — they run during
+        // layout settling and animating them is visually jarring.
+        fitToView(false);
+      }
+    });
     ro.observe(container);
     return () => {
       ro.disconnect();
@@ -1153,12 +1230,25 @@ export default function CollapsibleTree({
           data-testid="segmentation-tree-toolbar"
           onMouseDown={(e) => e.stopPropagation()}
         >
+          {onEditableToggle && (
+            <ToolButton
+              onClick={() => onEditableToggle(!editable)}
+              icon={editable
+                ? <CheckIcon sx={{ fontSize: 18 }} />
+                : <EditIcon sx={{ fontSize: 18 }} />
+              }
+              label={editable ? "Done editing" : "Edit tree"}
+              testid="tree-edit-toggle"
+              position="top"
+              active={editable}
+            />
+          )}
           <ToolButton
             onClick={zoomIn}
             icon={<ZoomInIcon sx={{ fontSize: 18 }} />}
             label="Zoom in"
             testid="tree-zoom-in"
-            position="top"
+            position={onEditableToggle ? "middle" : "top"}
           />
           <ToolButton
             onClick={zoomOut}
