@@ -22,7 +22,7 @@ import Layout from "../components/Layout";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "../components/ui/dialog";
 import {
   Tooltip, TooltipContent, TooltipTrigger, TooltipProvider,
@@ -34,8 +34,9 @@ import Pagination from "../components/Pagination";
 import DeferredSearchInput from "../components/DeferredSearchInput";
 import MonthYearPicker from "../components/MonthYearPicker";
 import notify from "../lib/notify";
-import api, { formatApiError } from "../lib/api";
+import api, { API, formatApiError } from "../lib/api";
 import { confirm as confirmDialog } from "../lib/dialog";
+import { __busyBridge } from "../context/BusyContext";
 
 import Plus from "@mui/icons-material/AddOutlined";
 import Mail from "@mui/icons-material/EmailOutlined";
@@ -48,6 +49,14 @@ import Business from "@mui/icons-material/BusinessOutlined";
 import Place from "@mui/icons-material/PlaceOutlined";
 import BackArrow from "@mui/icons-material/ArrowBackOutlined";
 import Close from "@mui/icons-material/Close";
+import Upload from "@mui/icons-material/CloudUploadOutlined";
+import FileDown from "@mui/icons-material/DownloadOutlined";
+import FileSpreadsheet from "@mui/icons-material/DescriptionOutlined";
+import History from "@mui/icons-material/HistoryOutlined";
+import Loader2 from "@mui/icons-material/Autorenew";
+import CheckCircle2 from "@mui/icons-material/CheckCircleOutlineOutlined";
+import AlertTriangle from "@mui/icons-material/WarningAmberOutlined";
+import AlertOctagon from "@mui/icons-material/ReportGmailerrorredOutlined";
 
 // -------- constants --------
 const EMPTY_WORK = {
@@ -158,6 +167,14 @@ function ClientContactsList() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
 
+  // Duplicate detection dialog
+  const [dupState, setDupState] = useState(null);
+  //  ↑ null | { duplicates: [...], pendingForce: true }
+
+  // Bulk upload / history modals
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
   const l1Options = useMemo(() => levelOneOptions(segments), [segments]);
   const l2Options = useMemo(
     () => levelTwoOptions(segments, form.client_name),
@@ -220,24 +237,39 @@ function ClientContactsList() {
     setDialogOpen(true);
   };
 
-  const onSave = async () => {
+  const onSave = async (opts = {}) => {
     if (!form.name.trim()) {
       notify.error("Name is required");
       return;
     }
     setSaving(true);
+    const forceParam = opts.force ? "?force=true" : "";
     try {
       const payload = { ...form };
       if (editing) {
-        await api.patch(`/client-contacts/${editing.id}`, payload);
+        await api.patch(`/client-contacts/${editing.id}${forceParam}`, payload);
         notify.success("Client contact updated");
       } else {
-        await api.post(`/client-contacts`, payload);
+        await api.post(`/client-contacts${forceParam}`, payload);
         notify.success("Client contact created");
       }
+      setDupState(null);
       setDialogOpen(false);
       load();
     } catch (e) {
+      // Backend returns HTTP 409 with detail.code === "DUPLICATE_CLIENT_CONTACT"
+      // and a `duplicates: [...]` list. Show the dialog and let the user pick
+      // between "Save anyway" (force=true) and "Cancel".
+      const detail = e?.response?.data?.detail;
+      if (
+        e?.response?.status === 409 &&
+        detail &&
+        detail.code === "DUPLICATE_CLIENT_CONTACT" &&
+        Array.isArray(detail.duplicates)
+      ) {
+        setDupState({ duplicates: detail.duplicates });
+        return;
+      }
       notify.error(formatApiError(e, "Failed to save client contact"));
     } finally {
       setSaving(false);
@@ -267,13 +299,31 @@ function ClientContactsList() {
         title="Client Contacts"
         contentClassName="w-full px-4 pt-4 pb-3 flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden"
         actions={
-          <Button
-            onClick={openCreate}
-            className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9"
-            data-testid="client-contact-add-btn"
-          >
-            <Plus sx={{ fontSize: 16 }} className="mr-1.5" /> Client Contact
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setHistoryOpen(true)}
+              className="h-9 border-gray-300 text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324]"
+              data-testid="cc-upload-history-btn"
+            >
+              <History sx={{ fontSize: 16 }} className="mr-1.5" /> Upload History
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setBulkOpen(true)}
+              className="h-9 border-[#ec9324] text-[#ec9324] hover:bg-[#ec9324]/10"
+              data-testid="cc-open-bulk-upload-btn"
+            >
+              <Upload sx={{ fontSize: 16 }} className="mr-1.5" /> Upload Contacts
+            </Button>
+            <Button
+              onClick={openCreate}
+              className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9"
+              data-testid="client-contact-add-btn"
+            >
+              <Plus sx={{ fontSize: 16 }} className="mr-1.5" /> Client Contact
+            </Button>
+          </div>
         }
       >
         {/* Toolbar */}
@@ -358,7 +408,7 @@ function ClientContactsList() {
 
         <ContactFormDialog
           open={dialogOpen}
-          onOpenChange={setDialogOpen}
+          onOpenChange={(o) => { setDialogOpen(o); if (!o) setDupState(null); }}
           editing={editing}
           form={form}
           setForm={setForm}
@@ -366,6 +416,24 @@ function ClientContactsList() {
           l2Options={l2Options}
           onSubmit={onSave}
           saving={saving}
+        />
+
+        <DuplicateWarningDialog
+          state={dupState}
+          onClose={() => setDupState(null)}
+          onSaveAnyway={() => onSave({ force: true })}
+          saving={saving}
+        />
+
+        <BulkUploadModal
+          open={bulkOpen}
+          onClose={() => setBulkOpen(false)}
+          onComplete={() => load()}
+        />
+
+        <UploadHistoryModal
+          open={historyOpen}
+          onClose={() => setHistoryOpen(false)}
         />
       </Layout>
     </TooltipProvider>
@@ -860,15 +928,29 @@ function ClientContactDetail({ contactId }) {
     });
     setDialogOpen(true);
   };
-  const onSave = async () => {
+  // Duplicate detection state (mirrors the list-page flow).
+  const [dupState, setDupState] = useState(null);
+
+  const onSave = async (opts = {}) => {
     if (!form.name.trim()) { notify.error("Name is required"); return; }
     setSaving(true);
+    const forceParam = opts.force ? "?force=true" : "";
     try {
-      const r = await api.patch(`/client-contacts/${contactId}`, form);
+      const r = await api.patch(`/client-contacts/${contactId}${forceParam}`, form);
       setRow(r.data);
+      setDupState(null);
       setDialogOpen(false);
       notify.success("Saved");
     } catch (e) {
+      const detail = e?.response?.data?.detail;
+      if (
+        e?.response?.status === 409 &&
+        detail?.code === "DUPLICATE_CLIENT_CONTACT" &&
+        Array.isArray(detail.duplicates)
+      ) {
+        setDupState({ duplicates: detail.duplicates });
+        return;
+      }
       notify.error(formatApiError(e, "Failed to save"));
     } finally {
       setSaving(false);
@@ -1037,13 +1119,20 @@ function ClientContactDetail({ contactId }) {
 
         <ContactFormDialog
           open={dialogOpen}
-          onOpenChange={setDialogOpen}
+          onOpenChange={(o) => { setDialogOpen(o); if (!o) setDupState(null); }}
           editing={row}
           form={form}
           setForm={setForm}
           l1Options={l1Options}
           l2Options={l2Options}
           onSubmit={onSave}
+          saving={saving}
+        />
+
+        <DuplicateWarningDialog
+          state={dupState}
+          onClose={() => setDupState(null)}
+          onSaveAnyway={() => onSave({ force: true })}
           saving={saving}
         />
       </Layout>
@@ -1114,5 +1203,544 @@ function MetricBig({ label, value, accent = "gray" }) {
         {label}
       </div>
     </div>
+  );
+}
+
+
+// ================================================================ Helpers (bulk upload)
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    try { document.body.removeChild(a); } catch (_) { /* noop */ }
+    URL.revokeObjectURL(url);
+  }, 150);
+}
+
+function authedFetch(path, opts = {}) {
+  const token = localStorage.getItem("access_token") || "";
+  return fetch(`${API}${path}`, {
+    ...opts,
+    headers: {
+      ...(opts.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+}
+
+// ================================================================ Duplicate Warning Dialog
+function DuplicateWarningDialog({ state, onClose, onSaveAnyway, saving }) {
+  const open = !!state;
+  const dups = state?.duplicates || [];
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl" data-testid="cc-duplicate-dialog">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-amber-800">
+            <AlertTriangle sx={{ fontSize: 20 }} className="text-amber-500" />
+            Possible duplicate found
+          </DialogTitle>
+          <DialogDescription>
+            {dups.length === 1
+              ? "A client contact with the same email or phone already exists in the directory. Please review before saving."
+              : `${dups.length} client contacts with the same email or phone already exist in the directory. Please review before saving.`}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="border border-amber-200 bg-amber-50/40 rounded-lg overflow-hidden">
+          <div className="bg-amber-100/60 px-3 py-2 text-[11px] font-semibold text-amber-800 uppercase tracking-wide flex items-center justify-between">
+            <span>Existing records</span>
+            <span className="normal-case text-[10px] text-amber-700 font-medium">Matched on: email / phone</span>
+          </div>
+          <div className="max-h-60 overflow-y-auto divide-y divide-amber-100">
+            {dups.map((d) => (
+              <div key={d.id} className="p-3 flex items-start gap-3" data-testid={`cc-dup-row-${d.display_id}`}>
+                <div className="w-8 h-8 rounded-md bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                  #{d.display_id}
+                </div>
+                <div className="min-w-0 flex-1 text-sm">
+                  <div className="font-semibold text-gray-900 truncate">
+                    {d.name}
+                    {d.designation && <span className="text-gray-500 font-normal"> · {d.designation}</span>}
+                  </div>
+                  <div className="text-[12px] text-gray-600 flex items-center flex-wrap gap-x-4 gap-y-0.5 mt-0.5">
+                    {d.email && (
+                      <span className={`flex items-center gap-1 ${d.match_on?.includes("email") ? "text-amber-800 font-semibold" : ""}`}>
+                        <Mail sx={{ fontSize: 12 }} /> {d.email}
+                      </span>
+                    )}
+                    {d.phone && (
+                      <span className={`flex items-center gap-1 ${d.match_on?.includes("phone") ? "text-amber-800 font-semibold" : ""}`}>
+                        <Phone sx={{ fontSize: 12 }} /> {d.phone}
+                      </span>
+                    )}
+                    {d.client_name && (
+                      <span className="flex items-center gap-1 text-gray-500">
+                        <Business sx={{ fontSize: 12 }} /> {d.client_name}
+                      </span>
+                    )}
+                  </div>
+                  {d.match_on?.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {d.match_on.map((m) => (
+                        <span key={m} className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-800 font-semibold">
+                          {m.toUpperCase()} MATCH
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="text-xs text-gray-500 italic">
+          If this is genuinely a different person (same phone shared by two contacts, generic support email, etc.) you can still save it — otherwise cancel and update the existing record instead.
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button
+            onClick={onSaveAnyway}
+            disabled={saving}
+            className="bg-amber-600 hover:bg-amber-700 text-white"
+            data-testid="cc-dup-save-anyway"
+          >
+            {saving ? "Saving…" : "Save anyway"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ================================================================ Bulk Upload Modal
+function BulkUploadModal({ open, onClose, onComplete }) {
+  const [file, setFile] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [result, setResult] = useState(null);
+
+  const reset = () => { setFile(null); setProgress(0); setResult(null); setUploading(false); };
+  const close = () => { reset(); onClose(); };
+
+  const pickFile = (f) => {
+    if (!f) return;
+    const lower = f.name.toLowerCase();
+    if (!lower.endsWith(".xlsx") && !lower.endsWith(".csv")) {
+      notify.error("Only .xlsx or .csv files are supported");
+      return;
+    }
+    setFile(f);
+    setResult(null);
+  };
+
+  const onDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer.files?.[0];
+    pickFile(f);
+  };
+
+  const downloadTemplate = async (fmt = "xlsx") => {
+    const busyToken = __busyBridge.start("Downloading template…");
+    try {
+      const r = await authedFetch(`/client-contacts/sample-template?format=${fmt}`);
+      if (!r.ok) {
+        let detail = `HTTP ${r.status}`;
+        try { const j = await r.json(); if (j?.detail) detail = j.detail; } catch (_) { /* not JSON */ }
+        notify.error(`Could not download template: ${detail}`);
+        return;
+      }
+      const blob = await r.blob();
+      downloadBlob(blob, `client_contacts_upload_template.${fmt}`);
+    } catch (e) {
+      notify.error(`Could not download template: ${e?.message || "network error"}`);
+    } finally {
+      __busyBridge.stop(busyToken);
+    }
+  };
+
+  const startUpload = () => {
+    if (!file) return;
+    setUploading(true);
+    setProgress(0);
+    const busyToken = __busyBridge.start("Uploading client contacts…");
+    const xhr = new XMLHttpRequest();
+    const token = localStorage.getItem("access_token") || "";
+    xhr.open("POST", `${API}/client-contacts/bulk-upload`);
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.upload.onprogress = (ev) => {
+      if (ev.lengthComputable) setProgress(Math.round((ev.loaded / ev.total) * 100));
+    };
+    const finish = () => { __busyBridge.stop(busyToken); };
+    xhr.onload = () => {
+      setUploading(false);
+      setProgress(100);
+      finish();
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          setResult(data);
+          notify.success(`Upload complete — ${data.success} succeeded, ${data.failed} failed`);
+          onComplete?.();
+        } else {
+          notify.error(data?.detail || "Upload failed");
+        }
+      } catch {
+        notify.error("Upload failed");
+      }
+    };
+    xhr.onerror = () => { setUploading(false); finish(); notify.error("Network error during upload"); };
+    const fd = new FormData();
+    fd.append("file", file);
+    xhr.send(fd);
+  };
+
+  const downloadErrorReport = async () => {
+    if (!result?.upload_id) return;
+    try {
+      const r = await authedFetch(`/client-contacts/upload-history/${result.upload_id}/error-report.xlsx`);
+      if (!r.ok) { notify.error("Could not download error report"); return; }
+      const blob = await r.blob();
+      downloadBlob(blob, `cc_error_report_${result.filename || "upload"}.xlsx`);
+    } catch (_) { notify.error("Could not download error report"); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && close()}>
+      <DialogContent className="max-w-3xl overflow-hidden" data-testid="cc-bulk-upload-dialog">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Upload sx={{ fontSize: 18 }} className="text-[#ec9324]" /> Upload Client Contacts
+          </DialogTitle>
+          <DialogDescription className="sr-only">Upload client contacts from a CSV or Excel file</DialogDescription>
+        </DialogHeader>
+
+        {!result && (
+          <div className="space-y-4 min-w-0">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button" variant="outline" onClick={() => downloadTemplate("csv")}
+                  className="border-[#ec9324] text-[#ec9324] hover:bg-[#ec9324]/10"
+                  data-testid="cc-download-sample-template-csv-btn"
+                >
+                  <FileDown sx={{ fontSize: 14 }} className="mr-2" /> CSV Template
+                </Button>
+                <Button
+                  type="button" variant="outline" onClick={() => downloadTemplate("xlsx")}
+                  className="border-[#ec9324] text-[#ec9324] hover:bg-[#ec9324]/10"
+                  data-testid="cc-download-sample-template-btn"
+                >
+                  <FileSpreadsheet sx={{ fontSize: 14 }} className="mr-2" /> XLSX Template
+                </Button>
+              </div>
+              <span className="text-xs text-gray-500">Max ~500 rows</span>
+            </div>
+
+            {/* Example rows — horizontal scroll on tight widths */}
+            <div className="border border-gray-200 rounded-lg overflow-hidden min-w-0">
+              <div className="bg-gray-50 px-3 py-2 text-[11px] font-semibold text-gray-600 uppercase tracking-wide">
+                Example rows
+              </div>
+              <div className="overflow-x-auto min-w-0">
+                <table className="text-[11px] min-w-full w-max">
+                  <thead className="bg-gray-100 text-gray-700">
+                    <tr>
+                      {["Name","Email","Phone","Client Name","Designation","Base Location","LinkedIn URL","Industries"].map((h) => (
+                        <th key={h} className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="text-gray-700">
+                    <tr className="border-t border-gray-100">
+                      <td className="px-2 py-1.5 whitespace-nowrap">Priya Sharma</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">priya.sharma@boston-consulting.com</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">+91 9876543210</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">McKinsey</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">Partner</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">Mumbai, IN</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">https://linkedin.com/in/priya-sharma-cxo</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">Financial Services; Insurance</td>
+                    </tr>
+                    <tr className="border-t border-gray-100">
+                      <td className="px-2 py-1.5 whitespace-nowrap">Rahul Menon</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">rahul.menon@acme.com</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">+91 9812345678</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">Infollion Research</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">Vice President — Strategy</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">Bengaluru, IN</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">https://linkedin.com/in/rahul-menon</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">BFSI; Chemicals</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={onDrop}
+              onClick={() => document.getElementById("cc-bulk-upload-input")?.click()}
+              className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
+                dragOver ? "border-[#ec9324] bg-[#ec9324]/5" : "border-gray-300 hover:border-[#ec9324]"
+              }`}
+              data-testid="cc-upload-dropzone"
+            >
+              <Upload sx={{ fontSize: 32 }} className="mx-auto text-gray-400 mb-2" />
+              <div className="text-sm font-medium text-gray-700">
+                {file ? file.name : "Drag & drop your .csv or .xlsx file here"}
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                {file ? `${(file.size / 1024).toFixed(1)} KB` : "or click to browse"}
+              </div>
+              <input
+                id="cc-bulk-upload-input" type="file"
+                accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                className="hidden" onChange={(e) => pickFile(e.target.files?.[0])}
+                data-testid="cc-upload-file-input"
+              />
+            </div>
+
+            <div className="rounded-lg border border-blue-100 bg-blue-50/40 px-3 py-2 text-[11px] text-blue-800 flex items-start gap-2">
+              <AlertOctagon sx={{ fontSize: 14 }} className="mt-[1px] text-blue-500" />
+              <div>
+                Rows sharing an email or phone with an existing contact are rejected so the directory stays clean.
+                <b> Client Name</b> must exactly match a Segmentation (Level 1) name. Unknown <b>Industries</b> are dropped and reported per row.
+              </div>
+            </div>
+
+            {uploading && (
+              <div data-testid="cc-upload-progress" className="space-y-1">
+                <div className="flex justify-between text-xs text-gray-600">
+                  <span>Uploading…</span><span>{progress}%</span>
+                </div>
+                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-[#ec9324] transition-all" style={{ width: `${progress}%` }} />
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={close} disabled={uploading}>Cancel</Button>
+              <Button
+                onClick={startUpload}
+                disabled={!file || uploading}
+                className="bg-[#ec9324] hover:bg-[#d4811f] text-white"
+                data-testid="cc-start-upload-btn"
+              >
+                {uploading
+                  ? (<><Loader2 sx={{ fontSize: 14 }} className="mr-2 animate-spin" />Uploading…</>)
+                  : (<><Upload sx={{ fontSize: 14 }} className="mr-2" />Upload</>)}
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+
+        {result && (
+          <div className="space-y-4" data-testid="cc-upload-result">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-gray-900" data-testid="cc-upload-total">{result.total}</div>
+                <div className="text-xs text-gray-500 uppercase tracking-wider">Total</div>
+              </div>
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-green-700 flex items-center justify-center gap-1" data-testid="cc-upload-success">
+                  <CheckCircle2 sx={{ fontSize: 20 }} /> {result.success}
+                </div>
+                <div className="text-xs text-green-600 uppercase tracking-wider">Success</div>
+              </div>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-red-700 flex items-center justify-center gap-1" data-testid="cc-upload-failed">
+                  <AlertTriangle sx={{ fontSize: 20 }} /> {result.failed}
+                </div>
+                <div className="text-xs text-red-600 uppercase tracking-wider">Failed</div>
+              </div>
+            </div>
+
+            <div className="text-xs text-gray-500">
+              Status: <span className="font-medium text-gray-700">{result.status}</span> · File: <span className="font-mono">{result.filename}</span>
+            </div>
+
+            {result.failed > 0 && (
+              <>
+                <div className="border border-red-100 rounded-lg overflow-hidden">
+                  <div className="bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 flex items-center justify-between">
+                    <span>Error preview ({Math.min(result.errors.length, 10)} of {result.failed})</span>
+                    {result.has_more_errors && <span className="text-red-600">Download full report below</span>}
+                  </div>
+                  <div className="max-h-48 overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-50 text-gray-600">
+                        <tr>
+                          <th className="px-2 py-1 text-left">Row</th>
+                          <th className="px-2 py-1 text-left">Name</th>
+                          <th className="px-2 py-1 text-left">Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(result.errors || []).slice(0, 10).map((e, i) => (
+                          <tr key={i} className="border-t border-gray-100">
+                            <td className="px-2 py-1 text-gray-600 font-mono">{e.row}</td>
+                            <td className="px-2 py-1 text-gray-700">{e.name || "—"}</td>
+                            <td className="px-2 py-1 text-red-700">{e.reason}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <Button
+                  variant="outline" onClick={downloadErrorReport}
+                  className="border-red-300 text-red-700 hover:bg-red-50 w-full"
+                  data-testid="cc-download-error-report-btn"
+                >
+                  <FileDown sx={{ fontSize: 14 }} className="mr-2" /> Download Error Report (.xlsx)
+                </Button>
+              </>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={reset} data-testid="cc-upload-another-btn">Upload Another</Button>
+              <Button onClick={close} className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="cc-close-upload-result-btn">Done</Button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ================================================================ Upload History Modal
+function UploadHistoryModal({ open, onClose }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [total, setTotal] = useState(0);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await api.get("/client-contacts/upload-history", { params: { page_size: 50 } });
+      setItems(r.data.items || []);
+      setTotal(r.data.total || 0);
+    } catch (e) {
+      notify.error("Could not load upload history");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { if (open) load(); /* eslint-disable-next-line */ }, [open]);
+
+  const downloadErrorReport = async (id, filename) => {
+    try {
+      const r = await authedFetch(`/client-contacts/upload-history/${id}/error-report.xlsx`);
+      if (!r.ok) { notify.error("Could not download error report"); return; }
+      const blob = await r.blob();
+      downloadBlob(blob, `cc_error_report_${(filename || "upload").replace(/\.(xlsx|csv)$/i, "")}.xlsx`);
+    } catch (_) { notify.error("Could not download error report"); }
+  };
+
+  const statusPill = (s) => {
+    const map = {
+      Completed: "bg-green-100 text-green-700 border-green-200",
+      Partial: "bg-amber-100 text-amber-700 border-amber-200",
+      Failed: "bg-red-100 text-red-700 border-red-200",
+      Empty: "bg-gray-100 text-gray-600 border-gray-200",
+    };
+    return <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold border ${map[s] || map.Empty}`}>{s}</span>;
+  };
+
+  const fmtWhen = (iso) => {
+    if (!iso) return "—";
+    try {
+      return new Date(iso).toLocaleString(undefined, {
+        day: "2-digit", month: "short", year: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      });
+    } catch { return iso; }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-4xl" data-testid="cc-upload-history-dialog">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <History sx={{ fontSize: 18 }} className="text-[#ec9324]" /> Upload History
+          </DialogTitle>
+          <DialogDescription>
+            Past bulk-upload sessions. Click the Report button to download the per-row error report.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          <div className="max-h-[55vh] overflow-y-auto">
+            <table className="w-full text-sm" data-testid="cc-upload-history-table">
+              <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-bold tracking-wider border-b border-gray-200 sticky top-0 z-10">
+                <tr>
+                  <th className="px-4 py-3 text-left">File</th>
+                  <th className="px-4 py-3 text-left">Uploaded By</th>
+                  <th className="px-4 py-3 text-left">When</th>
+                  <th className="px-4 py-3 text-right">Total</th>
+                  <th className="px-4 py-3 text-right">Success</th>
+                  <th className="px-4 py-3 text-right">Failed</th>
+                  <th className="px-4 py-3 text-left">Status</th>
+                  <th className="px-4 py-3 text-right">Errors</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && (
+                  <tr><td colSpan={8} className="text-center py-8 text-gray-400">
+                    <Loader2 sx={{ fontSize: 18 }} className="inline animate-spin mr-2" /> Loading…
+                  </td></tr>
+                )}
+                {!loading && items.length === 0 && (
+                  <tr><td colSpan={8} className="text-center py-8 text-gray-400">No uploads yet</td></tr>
+                )}
+                {!loading && items.map((u) => (
+                  <tr key={u.id} className="border-b border-gray-100 hover:bg-gray-50/80" data-testid={`cc-upload-row-${u.id}`}>
+                    <td className="px-3 py-2 font-mono text-xs text-gray-700 max-w-[220px] truncate" title={u.filename}>{u.filename}</td>
+                    <td className="px-3 py-2 text-gray-700">{u.uploaded_by?.name || "—"}</td>
+                    <td className="px-3 py-2 text-gray-500 text-xs">{fmtWhen(u.uploaded_at)}</td>
+                    <td className="px-3 py-2 text-right text-gray-700">{u.total_rows}</td>
+                    <td className="px-3 py-2 text-right text-green-700 font-medium">{u.success_count}</td>
+                    <td className="px-3 py-2 text-right text-red-700 font-medium">{u.failed_count}</td>
+                    <td className="px-3 py-2">{statusPill(u.status)}</td>
+                    <td className="px-3 py-2 text-right">
+                      {u.failed_count > 0 ? (
+                        <Button
+                          size="sm" variant="outline"
+                          onClick={() => downloadErrorReport(u.id, u.filename)}
+                          className="border-red-300 text-red-700 hover:bg-red-50 h-7"
+                          data-testid={`cc-download-error-${u.id}`}
+                        >
+                          <FileDown sx={{ fontSize: 12 }} className="mr-1" /> Report
+                        </Button>
+                      ) : <span className="text-gray-300 text-xs">—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="text-xs text-gray-500">{total} upload{total === 1 ? "" : "s"} total</div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

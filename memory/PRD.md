@@ -1,6 +1,39 @@
 # Infollion Utilities — PRD
 
 
+## CRM → Client Contacts — Duplicate Detection + Bulk Import/Export (Aug 3 2026)
+- **Duplicate detection on create + edit**:
+  - `POST /api/client-contacts` and `PATCH /api/client-contacts/{id}` now return **HTTP 409 `DUPLICATE_CLIENT_CONTACT`** with a `duplicates: [...]` payload (each row carries `display_id`, `name`, `email`, `phone`, `client_name`, `designation`, `match_on: ["email"|"phone"]`) when the submitted email or phone collides with any existing contact.
+  - Match logic: email is lower-cased/trimmed; phone uses `_phone_key` (trailing 10 digits) so `+91 9876543210` == `9876543210` == `919876543210`.
+  - Frontend shows a new `DuplicateWarningDialog` (amber, testid `cc-duplicate-dialog`) listing every conflicting record with its `EMAIL MATCH` / `PHONE MATCH` pill. Two actions: **Cancel** (default) and **Save anyway** which re-submits with `?force=true`.
+  - Bonus: new `GET /api/client-contacts/check-duplicate?email=&phone=&exclude_id=` for future live-typing hints — not yet wired into the form.
+
+- **Bulk Upload / Upload History** — mirrors Employee bulk-upload (`ContactListPage.jsx` + `contact_uploads.py`) 1:1:
+  - New backend router `backend/routers/client_contact_uploads.py` registered in `server.py` **before** `client_contacts.py` (order matters — the dynamic `/client-contacts/{contact_id}` would otherwise swallow the static routes). Endpoints:
+    - `GET  /api/client-contacts/sample-template?format=csv|xlsx` — styled orange-header .xlsx with 2 sample rows + Instructions sheet, or a comment-embedded .csv variant.
+    - `POST /api/client-contacts/bulk-upload`                    — accepts `.xlsx` / `.csv`, validates every row (name required, email format, in-file + against-DB uniqueness on email+phone, Client Name must match an existing Segmentation, unknown Industries are dropped and reported as a warning), partial-inserts every valid row via the same `_next_display_id` counter as single-create so numeric IDs stay consecutive.
+    - `GET  /api/client-contacts/upload-history`                 — paginated past-sessions list.
+    - `GET  /api/client-contacts/upload-history/{id}`            — one session with embedded errors.
+    - `GET  /api/client-contacts/upload-history/{id}/error-report.xlsx` — Excel error report (Row / Contact Name / Error Reason + Upload Info sheet).
+  - New Mongo collection: `client_contact_uploads` (same shape as `contact_uploads`).
+  - Audit logged as `client_contact.bulk_upload` via the existing `log_audit` helper.
+
+- **Frontend additions (`ClientContactsPage.jsx`)**:
+  - Two new toolbar buttons: **Upload History** (grey outline, `data-testid="cc-upload-history-btn"`) and **Upload Contacts** (orange outline, `data-testid="cc-open-bulk-upload-btn"`), sitting next to the primary "+ Client Contact" button.
+  - `BulkUploadModal` — CSV / XLSX template download buttons, live example-rows table (8 columns), drag-drop dropzone (`cc-upload-dropzone`), XHR progress bar, success/failed/total summary, inline error preview (first 10), and per-session error-report download.
+  - `UploadHistoryModal` — sortable table of past sessions (file, uploaded-by, when, totals, status pill, download-report button per row).
+  - `DuplicateWarningDialog` — described above.
+  - Reused helpers: `downloadBlob`, `authedFetch` (added inline; identical to the Employee page). `API` and `__busyBridge` imports added.
+
+- **Testing agent NOT deployed** per user instruction. Verified end-to-end via playwright + backend curl:
+  - Sample template → downloaded (6.6 KB XLSX).
+  - Bulk upload of a 3-row CSV → returned `{total:3, success:2, failed:1, status:"Partial"}` with the duplicate-email row rejected (row 4: "Email already exists in the client-contact directory").
+  - Upload History correctly lists the just-completed session with a red **Report** button.
+  - Duplicate detection dialog fires on single-create when trying to reuse John Doe's email — shows the `#1042 · John Doe · Partner` card with a green **EMAIL MATCH** pill, and Save-anyway succeeds with `?force=true`.
+  - Phone dedup verified across ISD-code variations (`+91 9876543210` matches `9876543210`).
+
+
+
 ## CRM → Client Contacts — spec-verbatim rev-2 (Aug 3 2026)
 - New route registered: `/crm/client-contacts` (list) + `/crm/client-contacts/:id` (detail) in `App.js`. Sidebar link already existed.
 - `frontend/src/pages/ClientContactsPage.jsx` completely rewritten:
