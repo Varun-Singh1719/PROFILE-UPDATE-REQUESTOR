@@ -6,7 +6,7 @@ Quick smoke check for legacy permission endpoints
 import requests
 import sys
 
-BASE_URL = "https://d3-segment-anchor.preview.emergentagent.com/api"
+BASE_URL = "https://crm-segmentation.preview.emergentagent.com/api"
 SUPER_ADMIN_EMAIL = "admin@ticketing.com"
 SUPER_ADMIN_PASSWORD = "Admin@123"
 
