@@ -400,87 +400,11 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
       className="flex-1 min-h-0 flex flex-col bg-gray-50"
       data-testid="segmentation-detail-panel"
     >
-      {/* Header — name / status + action cluster (Info · Edit · Delete).
-          Per spec (Aug 2026): description no longer lives in the header —
-          it has been moved into the (i) Info popover, right above the
-          Details pivot table. */}
-      <div className="px-6 py-4 bg-white border-b border-gray-200 flex items-center gap-4 flex-shrink-0">
-        <div className="w-11 h-11 rounded-lg bg-[#ec9324]/10 text-[#ec9324] flex items-center justify-center flex-shrink-0">
-          <PieChart sx={{ fontSize: 22 }} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            {treeEditMode ? (
-              // In edit mode the segmentation name becomes a click target
-              // that opens the Name & Description dialog. Wrapped in a
-              // subtle dashed underline + hover ring so users can see it
-              // is now interactive.
-              <button
-                type="button"
-                onClick={onEdit}
-                data-testid="segmentation-detail-title"
-                title="Edit name & description"
-                className="text-lg font-bold text-gray-900 truncate max-w-full text-left
-                           border-b border-dashed border-[#ec9324] hover:text-[#ec9324]
-                           focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40 rounded-sm px-0.5"
-              >
-                {row.name}
-              </button>
-            ) : (
-              <h2
-                className="text-lg font-bold text-gray-900 truncate"
-                data-testid="segmentation-detail-title"
-              >
-                {row.name}
-              </h2>
-            )}
-            <StatusPill status={row.status} />
-            {treeEditMode && (
-              <span
-                data-testid="segmentation-editing-badge"
-                className="ml-1 inline-flex items-center gap-1 text-[10px] font-semibold uppercase
-                           tracking-wide rounded-full px-2 py-0.5 border border-[#ec9324]/40
-                           bg-[#ec9324]/10 text-[#ec9324]"
-              >
-                Editing
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <SegmentationInfoPopover row={row} />
-          {/* Single Edit button now toggles tree edit mode. When active
-              the pencil turns into a check-mark to signal "Done". While
-              in edit mode, clicking the segmentation name (see above)
-              opens the Name/Description dialog. */}
-          <IconAction
-            onClick={() => setTreeEditMode(!treeEditMode)}
-            title={treeEditMode ? "Done editing" : "Edit"}
-            testid="segmentation-detail-edit"
-            className={treeEditMode
-              ? "text-[#ec9324] bg-[#ec9324]/10 hover:bg-[#ec9324]/20"
-              : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-            }
-            active={treeEditMode}
-          >
-            {treeEditMode
-              ? <Check sx={{ fontSize: 18 }} />
-              : <Pencil sx={{ fontSize: 18 }} />
-            }
-          </IconAction>
-          <IconAction
-            onClick={onDelete}
-            title="Delete"
-            testid="segmentation-detail-delete"
-            className="text-red-500 hover:bg-red-50 hover:text-red-700"
-          >
-            <Trash2 sx={{ fontSize: 18 }} />
-          </IconAction>
-        </div>
-      </div>
-
-      {/* Right-side Tree View Panel */}
+      {/* Tree panel takes the ENTIRE space below the app's top bar
+          (Aug 2026 spec): no more separate white "row" header — the
+          segmentation name + Info/Edit/Delete cluster now float on top
+          of the tree canvas as a glass panel, mirroring the zoom toolbar
+          UI. This gives the tree the full viewport height for content. */}
       <div className="flex-1 min-h-0 relative bg-white" data-testid="segmentation-tree-panel">
         <CollapsibleTree
           data={seedTree}
@@ -489,6 +413,83 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
           onEditableToggle={setTreeEditMode}
           defaultExpandDepth={1}
         />
+
+        {/* Floating glass panel — Name + Status + Editing pill +
+            Info / Edit / Delete actions. Positioned identically to the
+            zoom toolbar on the RIGHT side so both panels share the
+            same visual language. */}
+        <div
+          className="absolute top-3 left-3 z-10 flex items-center gap-2
+                     bg-white/40 backdrop-blur-xl backdrop-saturate-150
+                     border border-white/70 ring-1 ring-black/5
+                     rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.10)]
+                     px-2 py-1"
+          data-testid="segmentation-glass-header"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div className="w-7 h-7 rounded-md bg-[#ec9324]/15 text-[#ec9324] flex items-center justify-center flex-shrink-0">
+            <PieChart sx={{ fontSize: 16 }} />
+          </div>
+          {treeEditMode ? (
+            <button
+              type="button"
+              onClick={onEdit}
+              data-testid="segmentation-detail-title"
+              title="Edit name & description"
+              className="text-[14px] font-semibold text-gray-900 truncate max-w-[280px] text-left
+                         border-b border-dashed border-[#ec9324] hover:text-[#ec9324]
+                         focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40 rounded-sm px-0.5"
+            >
+              {row.name}
+            </button>
+          ) : (
+            <span
+              className="text-[14px] font-semibold text-gray-900 truncate max-w-[280px]"
+              data-testid="segmentation-detail-title"
+            >
+              {row.name}
+            </span>
+          )}
+          <StatusPill status={row.status} />
+          {treeEditMode && (
+            <span
+              data-testid="segmentation-editing-badge"
+              className="inline-flex items-center gap-1 text-[9.5px] font-semibold uppercase
+                         tracking-wide rounded-full px-1.5 py-0.5 border border-[#ec9324]/40
+                         bg-[#ec9324]/10 text-[#ec9324]"
+            >
+              Editing
+            </span>
+          )}
+          {/* Vertical divider */}
+          <div className="w-px h-6 bg-black/10 mx-1" />
+          <div className="flex items-center gap-0.5">
+            <SegmentationInfoPopover row={row} />
+            <IconAction
+              onClick={() => setTreeEditMode(!treeEditMode)}
+              title={treeEditMode ? "Done editing" : "Edit"}
+              testid="segmentation-detail-edit"
+              className={treeEditMode
+                ? "text-[#ec9324] bg-[#ec9324]/15 hover:bg-[#ec9324]/25"
+                : "text-gray-700 hover:bg-white/60 hover:text-[#ec9324]"
+              }
+              active={treeEditMode}
+            >
+              {treeEditMode
+                ? <Check sx={{ fontSize: 18 }} />
+                : <Pencil sx={{ fontSize: 18 }} />
+              }
+            </IconAction>
+            <IconAction
+              onClick={onDelete}
+              title="Delete"
+              testid="segmentation-detail-delete"
+              className="text-red-500 hover:bg-red-50 hover:text-red-700"
+            >
+              <Trash2 sx={{ fontSize: 18 }} />
+            </IconAction>
+          </div>
+        </div>
       </div>
 
       {/* Compact footer legend + save status. The "+ Sub-Segment" and
@@ -646,17 +647,17 @@ function SegmentationInfoPopover({ row }) {
               <col style={{ width: "148px" }} />
             </colgroup>
             <thead className="bg-gray-50 text-gray-500">
-              <tr className="text-left">
-                <th className="px-3 py-1.5 font-semibold uppercase tracking-wide text-[10px] whitespace-nowrap">
+              <tr>
+                <th className="px-3 py-1.5 font-semibold uppercase tracking-wide text-[10px] whitespace-nowrap text-center">
                   Action
                 </th>
-                <th className="px-3 py-1.5 font-semibold uppercase tracking-wide text-[10px] whitespace-nowrap">
+                <th className="px-3 py-1.5 font-semibold uppercase tracking-wide text-[10px] whitespace-nowrap text-center">
                   User
                 </th>
-                <th className="px-3 py-1.5 font-semibold uppercase tracking-wide text-[10px] whitespace-nowrap">
+                <th className="px-3 py-1.5 font-semibold uppercase tracking-wide text-[10px] whitespace-nowrap text-center">
                   Emp ID
                 </th>
-                <th className="px-3 py-1.5 font-semibold uppercase tracking-wide text-[10px] whitespace-nowrap">
+                <th className="px-3 py-1.5 font-semibold uppercase tracking-wide text-[10px] whitespace-nowrap text-center">
                   Date / Time
                 </th>
               </tr>
@@ -684,11 +685,6 @@ function SegmentationInfoPopover({ row }) {
                     <div className="text-gray-900 font-medium truncate">
                       {r.userName}
                     </div>
-                    {r.userEmail && (
-                      <div className="text-[11px] text-gray-500 truncate">
-                        {r.userEmail}
-                      </div>
-                    )}
                   </td>
                   <td className="px-3 py-2 align-middle text-gray-800 font-mono text-[11.5px] whitespace-nowrap">
                     {r.empId}
