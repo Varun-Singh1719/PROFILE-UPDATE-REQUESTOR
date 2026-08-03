@@ -7,35 +7,55 @@ import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
 import UnfoldLessIcon from "@mui/icons-material/UnfoldLess";
 
 // Toolbar icon button — matches the Notification Bell visual pattern:
-// circular hover target, dark tooltip that fades in on hover, orange
+// pill-shaped hover target, dark tooltip that fades in on hover, orange
 // text/tint when the cursor is on the button. Defined at module scope
 // (outside CollapsibleTree) so React doesn't re-create the component
 // type on every parent render.
-const ToolButton = ({ onClick, icon, label, testid, isLast = false }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    aria-label={label}
-    title={label}
-    data-testid={testid}
-    className={
-      "group relative inline-flex items-center justify-center " +
-      "w-8 h-8 text-gray-700 transition-colors " +
-      "hover:text-[#ec9324] hover:bg-[#ec9324]/10 " +
-      (isLast ? "" : "border-b border-white/40")
-    }
-  >
-    {icon}
-    <span
-      className="pointer-events-none absolute right-full mr-2 top-1/2 -translate-y-1/2
-                 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium
-                 rounded whitespace-nowrap opacity-0 group-hover:opacity-100
-                 transition-opacity z-50 shadow-lg"
+//
+// The tooltip is portalled OUT of the panel (positioned to the LEFT of
+// the button) so the panel's rounded corners + subtle border don't need
+// `overflow-hidden` — which would clip the tooltip.
+const ToolButton = ({ onClick, icon, label, testid, position }) => {
+  // position ∈ { "top", "middle", "bottom", "solo" } — used to round
+  // the outer corners of the first / last button so the panel keeps
+  // its rounded-lg outline without needing overflow-hidden.
+  const round =
+    position === "top" ? "rounded-t-lg" :
+    position === "bottom" ? "rounded-b-lg" :
+    position === "solo" ? "rounded-lg" : "";
+  const divider = position === "bottom" || position === "solo"
+    ? ""
+    : "border-b border-white/50";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      data-testid={testid}
+      className={
+        "group relative inline-flex items-center justify-center " +
+        "w-9 h-9 text-gray-700 transition-colors " +
+        "hover:text-[#ec9324] hover:bg-white/60 " +
+        `${round} ${divider}`
+      }
     >
-      {label}
-    </span>
-  </button>
-);
+      {icon}
+      {/* Tooltip — Notification-Bell pattern (dark pill, fade-in on
+          group-hover). Positioned to the LEFT of the button (right-full)
+          because the toolbar sits on the RIGHT edge of the canvas —
+          tooltip going right would clip against the viewport. */}
+      <span
+        className="pointer-events-none absolute right-full mr-2 top-1/2 -translate-y-1/2
+                   px-2 py-1 bg-gray-900 text-white text-[11px] font-medium
+                   rounded whitespace-nowrap opacity-0 group-hover:opacity-100
+                   transition-opacity duration-150 z-50 shadow-lg"
+      >
+        {label}
+      </span>
+    </button>
+  );
+};
 
 /**
  * CollapsibleTree — React wrapper around the classic
@@ -363,8 +383,16 @@ export default function CollapsibleTree({
     // The link source is drawn AFTER the source label ends; the link target
     // is drawn just BEFORE the next circle. Column-to-column advance is
     // therefore  labelPad + labelW + startGap + endGap + safety.
-    const depthAdvance = (labelW) =>
-      COL_LABEL_PAD + labelW + COL_GAP_START + COL_GAP_END + COL_SAFETY;
+    //
+    // Extra breathing room for the L1 → L2 transition: the root fans out
+    // to every top-level category, so 10+ bezier links share a single
+    // source point. Without extra horizontal space they visually pile up
+    // on top of each other near the root. We add EXTRA_L1_L2_ADVANCE to
+    // the very first column advance only — subsequent columns already
+    // have per-depth widths sized to the widest label at that depth.
+    const EXTRA_L1_L2_ADVANCE = 120;
+    const depthAdvance = (labelW, extra = 0) =>
+      COL_LABEL_PAD + labelW + COL_GAP_START + COL_GAP_END + COL_SAFETY + extra;
 
     // Compute per-depth max label width (using visible descendants only)
     // and cumulative column X. Recomputed on every update() because
@@ -380,7 +408,11 @@ export default function CollapsibleTree({
       });
       const maxDepth = root.height; // 0 for a lone root
       for (let dd = 1; dd <= maxDepth; dd++) {
-        colX[dd] = colX[dd - 1] + depthAdvance(maxByDepth.get(dd - 1) || 0);
+        // Add EXTRA_L1_L2_ADVANCE only for the first hop (depth 0 → 1) so
+        // the root's outbound fan-out has room to breathe. Every other
+        // column keeps the tight, label-width-fitted advance.
+        const extra = dd === 1 ? EXTRA_L1_L2_ADVANCE : 0;
+        colX[dd] = colX[dd - 1] + depthAdvance(maxByDepth.get(dd - 1) || 0, extra);
       }
     }
 
@@ -1001,6 +1033,11 @@ export default function CollapsibleTree({
         }
       });
       update(root);
+      // Auto-fit: after a bulk collapse the tree footprint changes
+      // dramatically, so we resize + centre it to the viewport. Both
+      // update() and fitToView() start their own transitions and animate
+      // in parallel.
+      fitToView(true);
     };
     const expandAll = () => {
       root.each((d) => {
@@ -1009,6 +1046,9 @@ export default function CollapsibleTree({
         }
       });
       update(root);
+      // Auto-fit for the same reason as collapseAll — the fully-expanded
+      // tree usually needs a lower zoom level to fit on screen.
+      fitToView(true);
     };
     collapseAllRef.current = collapseAll;
     expandAllRef.current = expandAll;
@@ -1107,8 +1147,9 @@ export default function CollapsibleTree({
       {showToolbar && (
         <div
           className="absolute top-3 right-3 z-10 flex flex-col
-                     bg-white/60 backdrop-blur-md ring-1 ring-white/50
-                     border border-white/40 rounded-lg shadow-lg overflow-hidden"
+                     bg-white/40 backdrop-blur-xl backdrop-saturate-150
+                     border border-white/70 ring-1 ring-black/5
+                     rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.10)]"
           data-testid="segmentation-tree-toolbar"
           onMouseDown={(e) => e.stopPropagation()}
         >
@@ -1117,31 +1158,35 @@ export default function CollapsibleTree({
             icon={<ZoomInIcon sx={{ fontSize: 18 }} />}
             label="Zoom in"
             testid="tree-zoom-in"
+            position="top"
           />
           <ToolButton
             onClick={zoomOut}
             icon={<ZoomOutIcon sx={{ fontSize: 18 }} />}
             label="Zoom out"
             testid="tree-zoom-out"
+            position="middle"
           />
           <ToolButton
             onClick={fit}
             icon={<CenterFocusStrong sx={{ fontSize: 18 }} />}
             label="Fit to screen"
             testid="tree-zoom-fit"
+            position="middle"
           />
           <ToolButton
             onClick={expandAll}
             icon={<UnfoldMoreIcon sx={{ fontSize: 18 }} />}
             label="Expand All"
             testid="tree-expand-all"
+            position="middle"
           />
           <ToolButton
             onClick={collapseAll}
             icon={<UnfoldLessIcon sx={{ fontSize: 18 }} />}
             label="Collapse All"
             testid="tree-collapse-all"
-            isLast
+            position="bottom"
           />
         </div>
       )}
