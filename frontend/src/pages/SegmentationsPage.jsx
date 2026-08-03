@@ -376,9 +376,17 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
 
   // ------ Diff draft vs. persisted for the review dialog ------
   const computeChanges = (before, after) => {
-    // Walk both trees and collect Added / Renamed / Deleted.
-    // We match nodes by their path (index-of-child at each level) — this
-    // matches the pathOf() semantics inside CollapsibleTree.
+    // Walk both trees in parallel and, at each parent, compare children
+    // by name. A child that exists in AFTER but not BEFORE = added; a
+    // child in BEFORE but not AFTER = deleted; a common name recurses.
+    //
+    // Rename detection: for each parent level where BOTH added and
+    // deleted lists are non-empty, we compute a structural signature
+    // (recursive sorted subtree names) for every entry. Any add whose
+    // signature matches a delete's is promoted to a "renamed" pair
+    // and removed from both add/delete lists. This catches the common
+    // "user typed Chemical → Chemicals" case cleanly without touching
+    // pure adds / deletes.
     const added = [];
     const renamed = [];
     const deleted = [];
@@ -388,31 +396,66 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
       n.children.forEach((k) => { c += countDescendants(k); });
       return c;
     };
-    // Map children by name for a stable diff at each level.
+    // Deterministic structural signature — only cares about SUBTREE
+    // shape + child names (recursive). A rename changes THIS node's
+    // name but leaves its subtree signature untouched.
+    const subtreeSig = (n) => {
+      if (!n) return "";
+      const kids = Array.isArray(n.children) ? n.children.slice() : [];
+      kids.sort((a, b) => (a?.name || "").localeCompare(b?.name || ""));
+      return "[" + kids.map((k) => (k?.name || "") + subtreeSig(k)).join("|") + "]";
+    };
+
     const walk = (b, a) => {
       const bKids = (b && b.children) || [];
       const aKids = (a && a.children) || [];
       const bByName = new Map(bKids.map((k) => [k.name, k]));
       const aByName = new Map(aKids.map((k) => [k.name, k]));
-      // added
-      aKids.forEach((k) => { if (!bByName.has(k.name)) added.push(k.name); });
-      // deleted
+
+      // First pass — collect adds/deletes at THIS level.
+      const localAdds = [];
+      const localDels = [];
+      aKids.forEach((k) => { if (!bByName.has(k.name)) localAdds.push(k); });
       bKids.forEach((k) => {
-        if (!aByName.has(k.name)) {
+        if (!aByName.has(k.name)) localDels.push(k);
+      });
+
+      // Pair by matching signatures for rename detection.
+      const delsBySig = new Map();
+      localDels.forEach((d) => {
+        const s = subtreeSig(d);
+        if (!delsBySig.has(s)) delsBySig.set(s, []);
+        delsBySig.get(s).push(d);
+      });
+      const consumedAdds = new Set();
+      const consumedDels = new Set();
+      localAdds.forEach((addNode, idx) => {
+        const s = subtreeSig(addNode);
+        const bucket = delsBySig.get(s);
+        if (bucket && bucket.length > 0) {
+          const paired = bucket.shift();
+          consumedAdds.add(idx);
+          consumedDels.add(paired);
+          renamed.push({ from: paired.name, to: addNode.name });
+        }
+      });
+
+      // Whatever wasn't paired = a real add / delete.
+      localAdds.forEach((k, idx) => {
+        if (!consumedAdds.has(idx)) added.push(k.name);
+      });
+      localDels.forEach((k) => {
+        if (!consumedDels.has(k)) {
           deleted.push({ name: k.name, subCount: countDescendants(k) });
         }
       });
-      // recurse for common names
+
+      // Recurse into common children.
       aKids.forEach((k) => {
         if (bByName.has(k.name)) walk(bByName.get(k.name), k);
       });
     };
     walk(before, after);
-    // Renames are difficult without stable IDs — for MVP we detect rename
-    // as an "added + deleted" pair on the SAME parent path when counts match.
-    // Simplest heuristic: pair one deletion with one addition when both
-    // exist at the same level. (Left as-is for now — advanced diff can
-    // come later.)
     return { added, renamed, deleted };
   };
 
@@ -826,8 +869,9 @@ function StatusPill({ status }) {
 
 function ReviewChangesDialog({ open, onOpenChange, changes, onConfirm, saving }) {
   const added = changes?.added || [];
+  const renamed = changes?.renamed || [];
   const deleted = changes?.deleted || [];
-  const total = added.length + deleted.length;
+  const total = added.length + renamed.length + deleted.length;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md" data-testid="review-changes-dialog">
@@ -852,6 +896,25 @@ function ReviewChangesDialog({ open, onOpenChange, changes, onConfirm, saving })
                       className="text-[13px] px-2 py-1 rounded bg-emerald-50 text-emerald-900 border border-emerald-200"
                     >
                       + {n}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {renamed.length > 0 && (
+              <div data-testid="review-renamed">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-sky-700 mb-1.5">
+                  Renamed ({renamed.length})
+                </div>
+                <ul className="space-y-1">
+                  {renamed.map((r, i) => (
+                    <li
+                      key={"r" + i}
+                      className="text-[13px] px-2 py-1 rounded bg-sky-50 text-sky-900 border border-sky-200 flex items-center gap-2 flex-wrap"
+                    >
+                      <span className="line-through opacity-70">{r.from}</span>
+                      <span className="text-sky-500">→</span>
+                      <span className="font-semibold">{r.to}</span>
                     </li>
                   ))}
                 </ul>

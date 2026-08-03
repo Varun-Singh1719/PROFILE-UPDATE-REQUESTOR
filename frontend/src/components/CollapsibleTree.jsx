@@ -504,29 +504,30 @@ export default function CollapsibleTree({
 
     // ----------------------------------------------------------------
     // Dynamic per-depth column layout.
-    // d3.tree with nodeSize([dx, dy]) gives every depth the SAME horizontal
-    // step, which visibly breaks when labels are longer than dy: the
-    // outgoing link start ends up past the next column and appears to loop
-    // backward. To fix that at every level we assign each depth its own
-    // column width, sized to fit the widest label at that depth PLUS the
-    // gaps used by linkPath() (label-end gap + circle gap + small pad).
-    // The result: text/lines never crash between adjacent columns
-    // regardless of label length.
+    // Every column's width is sized to the widest label at that depth
+    // PLUS the fixed link-gap AND (in edit mode) a fixed BUTTON_ZONE so
+    // the on-canvas Add sub-segment / Delete icon buttons never sit on
+    // top of the outgoing link lines. (Aug 3 2026 fix.)
     // ----------------------------------------------------------------
     const COL_LABEL_PAD = 12;   // where label starts inside its column (matches text x=12)
-    const COL_GAP_START = 8;    // gap between label-end and link-start
     const COL_GAP_END   = 8;    // gap between link-end and next circle
     const COL_SAFETY    = 12;   // extra breathing room
-    // The link source is drawn AFTER the source label ends; the link target
-    // is drawn just BEFORE the next circle. Column-to-column advance is
-    // therefore  labelPad + labelW + startGap + endGap + safety.
+    // BUTTON_ZONE: reserved horizontal space AFTER the label for the two
+    // 22×22 icon buttons (+ Add sub-segment, then Delete) + hover halo.
+    // Only reserved when the tree is in EDIT mode — view mode stays tight.
+    // Two buttons at 22px each + 6px gap + 8px trailing = ~58px.
+    const BUTTON_ZONE   = editable ? 60 : 0;
+    // Gap between the label-end (or button-zone-end in edit mode) and
+    // the start of the outgoing link line. This is what depthAdvance
+    // uses AND what linkPath uses so they always agree.
+    const COL_GAP_START = BUTTON_ZONE + 12;
+
+    // The link source is drawn AFTER the source label + button zone; the
+    // link target is drawn just BEFORE the next circle.
     //
     // Extra breathing room for the L1 → L2 transition: the root fans out
-    // to every top-level category, so 10+ bezier links share a single
-    // source point. Without extra horizontal space they visually pile up
-    // on top of each other near the root. We add EXTRA_L1_L2_ADVANCE to
-    // the very first column advance only — subsequent columns already
-    // have per-depth widths sized to the widest label at that depth.
+    // to every top-level category (26+ children) so link curves need
+    // horizontal space to spread out.
     const EXTRA_L1_L2_ADVANCE = 120;
     const depthAdvance = (labelW, extra = 0) =>
       COL_LABEL_PAD + labelW + COL_GAP_START + COL_GAP_END + COL_SAFETY + extra;
@@ -553,24 +554,19 @@ export default function CollapsibleTree({
       }
     }
 
-    // Build a link path that starts AFTER the source's label AND keeps
-    // its curve concentrated near the TARGET end of the horizontal
-    // span. When a parent has many children (BFSI-style fan-out) the
-    // classic mid-anchored bezier draws long diagonal curves through
-    // sibling text — moving the control points 75% of the way toward
-    // the target makes the initial ~75% of every outgoing link SHARE
-    // the same nearly-flat run from source, so nothing crosses over
-    // adjacent siblings' labels. (Aug 2026 fix.)
+    // Build a link path that starts AFTER the source's label AND the
+    // reserved button zone (edit mode only). Uses a standard midpoint
+    // cubic bezier — control points at 50% of the horizontal span —
+    // which spreads out fan-out curves visually so a many-children
+    // parent doesn't produce a cluster of overlapping arcs.
     const linkPath = (link) => {
       const src = link.source;
       const tgt = link.target;
-      const gapBeforeStart = 8;     // gap between label end and line start
-      const gapBeforeCircle = 8;    // gap between line end and target circle
-      const srcHoriz = src.y + 12 + measuredW(src) + gapBeforeStart;
-      const tgtHoriz = tgt.y - gapBeforeCircle;
-      const span = tgtHoriz - srcHoriz;
-      const controlX = srcHoriz + span * 0.75;
-      return `M${srcHoriz},${src.x} C${controlX},${src.x} ${controlX},${tgt.x} ${tgtHoriz},${tgt.x}`;
+      // Link starts AFTER label AND button zone in edit mode.
+      const srcHoriz = src.y + 12 + measuredW(src) + BUTTON_ZONE + 8;
+      const tgtHoriz = tgt.y - COL_GAP_END;
+      const midX = (srcHoriz + tgtHoriz) / 2;
+      return `M${srcHoriz},${src.x} C${midX},${src.x} ${midX},${tgt.x} ${tgtHoriz},${tgt.x}`;
     };
 
     // Path lookup for the current hierarchy (uses d.data references).
