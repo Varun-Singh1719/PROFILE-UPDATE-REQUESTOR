@@ -3,6 +3,39 @@ import * as d3 from "d3";
 import ZoomInIcon from "@mui/icons-material/ZoomIn";
 import ZoomOutIcon from "@mui/icons-material/ZoomOut";
 import CenterFocusStrong from "@mui/icons-material/CenterFocusStrong";
+import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
+import UnfoldLessIcon from "@mui/icons-material/UnfoldLess";
+
+// Toolbar icon button — matches the Notification Bell visual pattern:
+// circular hover target, dark tooltip that fades in on hover, orange
+// text/tint when the cursor is on the button. Defined at module scope
+// (outside CollapsibleTree) so React doesn't re-create the component
+// type on every parent render.
+const ToolButton = ({ onClick, icon, label, testid, isLast = false }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-label={label}
+    title={label}
+    data-testid={testid}
+    className={
+      "group relative inline-flex items-center justify-center " +
+      "w-8 h-8 text-gray-700 transition-colors " +
+      "hover:text-[#ec9324] hover:bg-[#ec9324]/10 " +
+      (isLast ? "" : "border-b border-white/40")
+    }
+  >
+    {icon}
+    <span
+      className="pointer-events-none absolute right-full mr-2 top-1/2 -translate-y-1/2
+                 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium
+                 rounded whitespace-nowrap opacity-0 group-hover:opacity-100
+                 transition-opacity z-50 shadow-lg"
+    >
+      {label}
+    </span>
+  </button>
+);
 
 /**
  * CollapsibleTree — React wrapper around the classic
@@ -44,6 +77,13 @@ export default function CollapsibleTree({
   // keyboard shortcut so we always use the latest hierarchy.
   const focusNodeRef = useRef(null);
   const zoomAtPointRef = useRef(null); // (kFactor: number) => void
+  // Bound inside useLayoutEffect; called from toolbar buttons for the
+  // Collapse All / Expand All actions. They mutate the current d3
+  // hierarchy in-place (like the toggle click on a node) and re-run
+  // update() so the zoom transform (k, x, y) is fully preserved — the
+  // viewport does not jump / recenter, matching the spec.
+  const collapseAllRef = useRef(null);
+  const expandAllRef = useRef(null);
 
   // Local mirror of the incoming `data` — we mutate this scratchpad on
   // every add / rename / cancel, and only sync back to the parent via
@@ -935,6 +975,38 @@ export default function CollapsibleTree({
     };
     fitToViewRef.current = fitToView;
 
+    // -------- Collapse All / Expand All --------------------------------
+    // Both operate on the CURRENT d3 hierarchy in place (same pattern as
+    // the single-node toggle) and call update() WITHOUT an anchor — the
+    // root sits at logical (0,0) which does not move on collapse/expand,
+    // so keeping the current zoom transform gives a stable viewport.
+    //
+    // Collapse All → collapse every branch below depth 1 (Level 1 view:
+    // root + its direct children remain visible; everything deeper is
+    // hidden into _children so it can be re-expanded).
+    //
+    // Expand All → walk every node and restore its _children back into
+    // children — reveals the full tree to the max depth available.
+    const collapseAll = () => {
+      root.each((d) => {
+        if (d.depth >= 1 && d.children) {
+          if (!d._children) d._children = d.children;
+          d.children = null;
+        }
+      });
+      update(root);
+    };
+    const expandAll = () => {
+      root.each((d) => {
+        if (d._children && !d.children) {
+          d.children = d._children;
+        }
+      });
+      update(root);
+    };
+    collapseAllRef.current = collapseAll;
+    expandAllRef.current = expandAll;
+
     update(root);
 
     // Kick an initial fit AFTER labels have been measured (first RAF)
@@ -1005,6 +1077,12 @@ export default function CollapsibleTree({
   const fit = useCallback(() => {
     if (fitToViewRef.current) fitToViewRef.current(true);
   }, []);
+  const collapseAll = useCallback(() => {
+    if (collapseAllRef.current) collapseAllRef.current();
+  }, []);
+  const expandAll = useCallback(() => {
+    if (expandAllRef.current) expandAllRef.current();
+  }, []);
 
   return (
     <div
@@ -1022,40 +1100,43 @@ export default function CollapsibleTree({
       />
       {showToolbar && (
         <div
-          className="absolute top-3 right-3 z-10 flex flex-col bg-white rounded-md shadow-sm border border-gray-200 overflow-hidden"
+          className="absolute top-3 right-3 z-10 flex flex-col
+                     bg-white/60 backdrop-blur-md ring-1 ring-white/50
+                     border border-white/40 rounded-lg shadow-lg overflow-hidden"
           data-testid="segmentation-tree-toolbar"
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <button
-            type="button"
+          <ToolButton
             onClick={zoomIn}
-            title="Zoom in (+)"
-            aria-label="Zoom in"
-            data-testid="tree-zoom-in"
-            className="p-1.5 hover:bg-gray-100 text-gray-700 border-b border-gray-100"
-          >
-            <ZoomInIcon sx={{ fontSize: 18 }} />
-          </button>
-          <button
-            type="button"
+            icon={<ZoomInIcon sx={{ fontSize: 18 }} />}
+            label="Zoom in"
+            testid="tree-zoom-in"
+          />
+          <ToolButton
             onClick={zoomOut}
-            title="Zoom out (−)"
-            aria-label="Zoom out"
-            data-testid="tree-zoom-out"
-            className="p-1.5 hover:bg-gray-100 text-gray-700 border-b border-gray-100"
-          >
-            <ZoomOutIcon sx={{ fontSize: 18 }} />
-          </button>
-          <button
-            type="button"
+            icon={<ZoomOutIcon sx={{ fontSize: 18 }} />}
+            label="Zoom out"
+            testid="tree-zoom-out"
+          />
+          <ToolButton
             onClick={fit}
-            title="Fit to screen (0)"
-            aria-label="Fit to screen"
-            data-testid="tree-zoom-fit"
-            className="p-1.5 hover:bg-gray-100 text-gray-700"
-          >
-            <CenterFocusStrong sx={{ fontSize: 18 }} />
-          </button>
+            icon={<CenterFocusStrong sx={{ fontSize: 18 }} />}
+            label="Fit to screen"
+            testid="tree-zoom-fit"
+          />
+          <ToolButton
+            onClick={expandAll}
+            icon={<UnfoldMoreIcon sx={{ fontSize: 18 }} />}
+            label="Expand All"
+            testid="tree-expand-all"
+          />
+          <ToolButton
+            onClick={collapseAll}
+            icon={<UnfoldLessIcon sx={{ fontSize: 18 }} />}
+            label="Collapse All"
+            testid="tree-collapse-all"
+            isLast
+          />
         </div>
       )}
     </div>
