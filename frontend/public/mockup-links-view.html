@@ -1,321 +1,310 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<title>Segmentation Links · View</title>
+<meta charset="utf-8"/>
+<title>Segmentation Links · Sankey View</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  html, body { font-family: 'Inter', system-ui, sans-serif; background:#faf7f2; }
+  html,body { font-family:'Inter',system-ui,sans-serif; background:#0b0f19; color:#e5e7eb; }
   .glass {
-    background: rgba(255,255,255,0.55);
-    backdrop-filter: blur(28px) saturate(1.5);
-    -webkit-backdrop-filter: blur(28px) saturate(1.5);
-    border: 1px solid rgba(255,255,255,0.75);
-    box-shadow: 0 8px 24px rgba(15,23,42,0.06);
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(24px) saturate(1.6);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    border:1px solid rgba(255,255,255,0.08);
   }
-  .card {
-    background:#ffffff;
-    border:1px solid #f1e5d3;
-    border-radius:14px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.02), 0 12px 32px -8px rgba(236,147,36,0.08);
+  .glass-light {
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(24px) saturate(1.6);
+    border:1px solid rgba(255,255,255,0.7);
   }
-  .noise::before {
-    content:""; position:absolute; inset:0; pointer-events:none; opacity:.35;
-    background-image: radial-gradient(circle at 20% 20%, rgba(236,147,36,0.06), transparent 40%),
-                      radial-gradient(circle at 80% 30%, rgba(99,102,241,0.06), transparent 45%);
+  .glow-orange { box-shadow: 0 0 32px rgba(236,147,36,0.35); }
+  .glow-indigo { box-shadow: 0 0 32px rgba(99,102,241,0.35); }
+  .node-l  { fill:#ec9324; }
+  .node-r  { fill:#818cf8; }
+  .node-dim { opacity:.28; }
+  .ribbon {
+    stroke-linecap:round; fill:none;
+    transition: opacity .2s ease, stroke-width .2s ease;
   }
-  /* Chip styles */
-  .chip-mck {
-    display:inline-flex; align-items:center; gap:4px; padding:2px 8px 2px 6px;
-    border-radius:999px; font-size:11px; font-weight:600; line-height:1;
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-    color:#fff; letter-spacing:.01em;
-    box-shadow: 0 1px 2px rgba(99,102,241,0.35);
-    white-space:nowrap;
-    transition: all .15s ease;
-  }
-  .chip-mck:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(99,102,241,0.35); }
-  .chip-mck .dot {
-    width:5px; height:5px; border-radius:999px; background:#c7d2fe;
-  }
-  .chip-count { font-size:10px; opacity:.7; margin-left:2px; }
-  .chip-empty {
-    display:inline-flex; align-items:center; gap:4px; padding:2px 8px;
-    border:1px dashed #d1d5db; color:#9ca3af; border-radius:999px; font-size:10.5px; font-weight:500;
-  }
-  /* Node hover */
-  .node { transition: all .2s ease; }
-  .node:hover .node-label { color:#ec9324; }
-  .node-circle { transition: transform .2s ease; }
-  .node:hover .node-circle { transform: scale(1.15); }
-  /* Toolbar buttons */
-  .tool-btn {
-    width:32px; height:32px; display:flex; align-items:center; justify-content:center;
-    color:#4b5563;
-    transition: all .15s ease;
-  }
-  .tool-btn:hover { color:#ec9324; background:#fff7ed; }
-
-  /* Custom scroll */
-  ::-webkit-scrollbar { width:8px; height:8px; }
-  ::-webkit-scrollbar-thumb { background:#e5e7eb; border-radius:999px; }
-  ::-webkit-scrollbar-thumb:hover { background:#d1d5db; }
+  .ribbon.active { opacity:.95; }
+  .ribbon.dim    { opacity:.08; }
+  .label-l { text-anchor:end; fill:#f3f4f6; font-weight:500; font-size:13px; }
+  .label-r { text-anchor:start; fill:#f3f4f6; font-weight:500; font-size:13px; }
+  .label-l.selected, .label-r.selected { fill:#fff; font-weight:700; }
+  .label-l.dim, .label-r.dim { fill:#4b5563; }
+  .kbd { display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px; border-radius:5px; background:rgba(255,255,255,0.08); color:#cbd5e1; font-size:10.5px; font-weight:600; border:1px solid rgba(255,255,255,0.12); font-family:'Inter'; }
 </style>
 </head>
 <body class="min-h-screen">
 
-<!-- App top bar -->
-<div class="h-14 bg-white border-b border-gray-100 flex items-center px-5 gap-3">
+<!-- Top bar (dark) -->
+<div class="h-14 border-b border-white/5 flex items-center px-5 gap-3">
   <div class="flex items-center gap-2">
-    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-[#ec9324] to-[#f59e0b] text-white flex items-center justify-center font-bold shadow-sm">S</div>
-    <span class="font-semibold text-gray-900">Segmentations</span>
+    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-[#ec9324] to-[#f59e0b] text-white flex items-center justify-center font-bold shadow-lg glow-orange">S</div>
+    <span class="font-semibold text-white">Segmentations</span>
   </div>
   <nav class="ml-8 flex items-center gap-1 text-sm">
-    <a class="px-3 py-1.5 rounded-md text-gray-600 hover:bg-gray-50">Segmentations</a>
-    <a class="px-3 py-1.5 rounded-md bg-gray-900 text-white font-medium">Links</a>
+    <a class="px-3 py-1.5 rounded-md text-gray-300 hover:bg-white/5">Segmentations</a>
+    <a class="px-3 py-1.5 rounded-md bg-white/10 text-white font-medium border border-white/10">Links</a>
   </nav>
   <div class="ml-auto flex items-center gap-3">
-    <span class="text-xs text-gray-500">Admin User</span>
+    <span class="text-xs text-gray-400">Admin User</span>
     <div class="w-8 h-8 rounded-full bg-gradient-to-br from-[#ec9324] to-[#d97706] text-white flex items-center justify-center text-xs font-semibold">AU</div>
   </div>
 </div>
 
-<!-- Page workspace -->
-<div class="px-6 pt-4 pb-4">
-  <!-- Header row -->
-  <div class="flex items-end gap-6 mb-4">
-    <div>
-      <div class="text-[10px] uppercase tracking-widest text-[#ec9324] font-bold">Cross-Segmentation</div>
-      <div class="flex items-center gap-3 mt-0.5">
-        <h1 class="text-2xl font-bold text-gray-900">Segmentation Links</h1>
-        <span class="text-[11px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 bg-green-50 text-green-700 border border-green-200">Live</span>
+<!-- Header strip -->
+<div class="px-6 pt-5 pb-3 flex items-end gap-6">
+  <div>
+    <div class="text-[10px] uppercase tracking-widest text-[#f59e0b] font-bold">Cross-Segmentation</div>
+    <h1 class="text-2xl font-extrabold text-white mt-1 flex items-center gap-2">Segmentation Links
+      <span class="text-[10px] font-semibold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 rounded-full px-2 py-0.5">Live</span>
+    </h1>
+  </div>
+
+  <div class="glass rounded-xl px-3 py-1.5 flex items-center gap-3 ml-4">
+    <div class="flex items-center gap-2">
+      <span class="w-6 h-6 rounded-md bg-gradient-to-br from-[#ec9324] to-[#f59e0b] text-white flex items-center justify-center text-[10px] font-bold">IR</span>
+      <div>
+        <div class="text-[9px] uppercase tracking-wider text-gray-500 leading-none font-semibold">Base</div>
+        <div class="text-[13px] font-semibold text-white leading-tight">Infollion Research</div>
       </div>
     </div>
-
-    <!-- Pair selector -->
-    <div class="flex items-center gap-3 ml-4">
-      <button class="glass rounded-xl px-3 py-1.5 flex items-center gap-2 hover:shadow-md transition">
-        <span class="w-6 h-6 rounded-md bg-gradient-to-br from-[#ec9324] to-[#f59e0b] text-white flex items-center justify-center text-[10px] font-bold">IR</span>
-        <div class="text-left">
-          <div class="text-[9px] uppercase tracking-wider text-gray-500 font-semibold leading-none">Base</div>
-          <div class="text-[13px] font-semibold text-gray-900 leading-tight">Infollion Research</div>
-        </div>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-400 ml-1"><path d="M6 9l6 6 6-6"/></svg>
-      </button>
-
-      <svg width="34" height="18" viewBox="0 0 34 18"><path d="M2 9 h30" stroke="url(#g1)" stroke-width="2" stroke-linecap="round"/><path d="M27 4 l5 5 -5 5" stroke="url(#g1)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ec9324"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs></svg>
-
-      <button class="glass rounded-xl px-3 py-1.5 flex items-center gap-2 hover:shadow-md transition">
-        <span class="w-6 h-6 rounded-md bg-gradient-to-br from-[#6366f1] to-[#8b5cf6] text-white flex items-center justify-center text-[10px] font-bold">MC</span>
-        <div class="text-left">
-          <div class="text-[9px] uppercase tracking-wider text-gray-500 font-semibold leading-none">Linked</div>
-          <div class="text-[13px] font-semibold text-gray-900 leading-tight">McKinsey</div>
-        </div>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-400 ml-1"><path d="M6 9l6 6 6-6"/></svg>
-      </button>
-    </div>
-
-    <!-- Actions -->
-    <div class="ml-auto flex items-center gap-2">
-      <!-- Stats -->
-      <div class="glass rounded-xl px-4 py-2 flex items-center gap-4">
-        <div>
-          <div class="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Coverage</div>
-          <div class="text-lg font-bold text-gray-900 leading-tight">22<span class="text-sm text-gray-400">/26</span></div>
-        </div>
-        <div class="w-px h-8 bg-gray-200"></div>
-        <div>
-          <div class="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Links</div>
-          <div class="text-lg font-bold text-[#6366f1] leading-tight">38</div>
-        </div>
-        <div class="w-px h-8 bg-gray-200"></div>
-        <div>
-          <div class="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">1-to-many</div>
-          <div class="text-lg font-bold text-emerald-600 leading-tight">12</div>
-        </div>
+    <svg width="26" height="14"><path d="M2 7 h22" stroke="url(#g)" stroke-width="2" stroke-linecap="round"/><path d="M20 3 l4 4 -4 4" stroke="url(#g)" stroke-width="2" fill="none" stroke-linecap="round"/><defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#ec9324"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs></svg>
+    <div class="flex items-center gap-2">
+      <span class="w-6 h-6 rounded-md bg-gradient-to-br from-[#6366f1] to-[#8b5cf6] text-white flex items-center justify-center text-[10px] font-bold">MC</span>
+      <div>
+        <div class="text-[9px] uppercase tracking-wider text-gray-500 leading-none font-semibold">Linked</div>
+        <div class="text-[13px] font-semibold text-white leading-tight">McKinsey</div>
       </div>
-      <button class="rounded-xl px-4 py-2 bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 flex items-center gap-2">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
-        Edit Links
-      </button>
     </div>
   </div>
 
-  <!-- Canvas -->
-  <div class="card relative noise overflow-hidden" style="min-height:640px;">
-
-    <!-- Floating glass header -->
-    <div class="absolute top-4 left-4 z-20 glass rounded-lg px-2.5 py-1.5 flex items-center gap-2">
-      <div class="w-6 h-6 rounded-md bg-[#ec9324]/15 text-[#ec9324] flex items-center justify-center">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2v10l7 4"/></svg>
-      </div>
-      <span class="text-[13px] font-semibold text-gray-900">Infollion Research</span>
-      <span class="text-[10px] text-gray-500 font-medium">· 26 L2 segments</span>
+  <div class="ml-auto flex items-center gap-2">
+    <div class="glass rounded-xl px-4 py-2 flex items-center gap-4">
+      <div><div class="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Coverage</div><div class="text-lg font-extrabold text-white leading-tight">22<span class="text-sm text-gray-500">/26</span></div></div>
+      <div class="w-px h-8 bg-white/10"></div>
+      <div><div class="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Ribbons</div><div class="text-lg font-extrabold text-[#a5b4fc] leading-tight">38</div></div>
+      <div class="w-px h-8 bg-white/10"></div>
+      <div><div class="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Many-links</div><div class="text-lg font-extrabold text-emerald-400 leading-tight">12</div></div>
     </div>
-
-    <!-- Toolbar -->
-    <div class="absolute top-4 right-4 z-20 glass rounded-lg flex flex-col divide-y divide-gray-200/60">
-      <button class="tool-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-3.5-3.5M11 7v8M7 11h8"/></svg></button>
-      <button class="tool-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-3.5-3.5M7 11h8"/></svg></button>
-      <button class="tool-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l3-3h4M21 7l-3-3h-4M3 17l3 3h4M21 17l-3 3h-4"/></svg></button>
-      <button class="tool-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l7-7 7 7M5 15l7 7 7-7"/></svg></button>
-    </div>
-
-    <!-- Filter / search -->
-    <div class="absolute bottom-4 left-4 z-20 glass rounded-lg px-3 py-1.5 flex items-center gap-2">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-400"><circle cx="11" cy="11" r="8"/><path d="M21 21l-3.5-3.5"/></svg>
-      <input class="bg-transparent text-[12px] outline-none w-56 placeholder-gray-400" placeholder="Search Infollion or McKinsey…"/>
-      <span class="w-px h-4 bg-gray-200"></span>
-      <label class="inline-flex items-center gap-1.5 text-[11px] text-gray-600 cursor-pointer">
-        <input type="checkbox" class="rounded"/> Show unmapped only
-      </label>
-    </div>
-
-    <!-- Legend -->
-    <div class="absolute bottom-4 right-4 z-20 glass rounded-lg px-3 py-1.5 flex items-center gap-3 text-[11px] text-gray-600">
-      <span class="inline-flex items-center gap-1.5">
-        <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324]"></span>Infollion L2
-      </span>
-      <span class="inline-flex items-center gap-1.5">
-        <span class="chip-mck !py-0.5 !text-[9px]">MC</span>McKinsey link
-      </span>
-    </div>
-
-    <!-- TREE + CHIPS SVG-like render (using absolute positioned rows) -->
-    <div class="relative pt-24 pb-16 pl-10 pr-10">
-      <!-- Central layout mimicking the tree: root on left, L2s spread to the right, chips on each L2 -->
-      <div class="flex items-start gap-8">
-
-        <!-- Root node -->
-        <div class="flex-shrink-0 pt-72">
-          <div class="flex items-center gap-2">
-            <div class="w-4 h-4 rounded-full bg-[#ec9324] shadow-lg ring-4 ring-[#ec9324]/20"></div>
-            <div class="text-[16px] font-bold text-gray-900">Infollion Research</div>
-          </div>
-        </div>
-
-        <!-- SVG connector column -->
-        <div class="relative" style="width:120px; min-height:600px;">
-          <svg viewBox="0 0 120 700" preserveAspectRatio="none" class="absolute inset-0 w-full h-full">
-            <!-- Fan-out bezier lines from root (approx y=360) to each of 15 visible L2s at spaced ys -->
-            <g fill="none" stroke="#e7d3b0" stroke-width="1.5" opacity="0.85">
-              <path d="M0,360 C 60,360 60,30 120,30"/>
-              <path d="M0,360 C 60,360 60,70 120,70"/>
-              <path d="M0,360 C 60,360 60,110 120,110"/>
-              <path d="M0,360 C 60,360 60,150 120,150"/>
-              <path d="M0,360 C 60,360 60,190 120,190"/>
-              <path d="M0,360 C 60,360 60,230 120,230"/>
-              <path d="M0,360 C 60,360 60,270 120,270"/>
-              <path d="M0,360 C 60,360 60,310 120,310"/>
-              <path d="M0,360 C 60,360 60,350 120,350"/>
-              <path d="M0,360 C 60,360 60,390 120,390"/>
-              <path d="M0,360 C 60,360 60,430 120,430"/>
-              <path d="M0,360 C 60,360 60,470 120,470"/>
-              <path d="M0,360 C 60,360 60,510 120,510"/>
-              <path d="M0,360 C 60,360 60,550 120,550"/>
-              <path d="M0,360 C 60,360 60,590 120,590"/>
-            </g>
-          </svg>
-        </div>
-
-        <!-- L2 nodes with chips -->
-        <div class="flex-1 space-y-2.5">
-          <!-- Row template. Each row: dot + label + chips -->
-          <div class="node flex items-center gap-3">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] node-circle ring-2 ring-white shadow-sm"></span>
-            <span class="node-label text-[14px] font-medium text-gray-900 min-w-[220px]">Agriculture</span>
-            <span class="chip-mck"><span class="dot"></span>Agriculture</span>
-          </div>
-          <div class="node flex items-center gap-3">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] node-circle ring-2 ring-white shadow-sm"></span>
-            <span class="node-label text-[14px] font-medium text-gray-900 min-w-[220px]">Automotive</span>
-            <span class="chip-mck"><span class="dot"></span>Automotive &amp; Assembly</span>
-            <span class="chip-mck"><span class="dot"></span>Aerospace &amp; Defense</span>
-          </div>
-          <div class="node flex items-center gap-3">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] node-circle ring-2 ring-white shadow-sm"></span>
-            <span class="node-label text-[14px] font-medium text-gray-900 min-w-[220px]">BFSI</span>
-            <span class="chip-mck"><span class="dot"></span>Financial Services</span>
-            <span class="chip-mck"><span class="dot"></span>Insurance</span>
-            <span class="chip-mck"><span class="dot"></span>Wealth and Asset Management</span>
-            <span class="chip-mck"><span class="dot"></span>Private Capital</span>
-          </div>
-          <div class="node flex items-center gap-3">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] node-circle ring-2 ring-white shadow-sm"></span>
-            <span class="node-label text-[14px] font-medium text-gray-900 min-w-[220px]">Chemicals</span>
-            <span class="chip-mck"><span class="dot"></span>Chemicals</span>
-          </div>
-          <div class="node flex items-center gap-3">
-            <span class="w-2.5 h-2.5 rounded-full bg-white border-2 border-[#ec9324] node-circle"></span>
-            <span class="node-label text-[14px] text-gray-500 min-w-[220px]">Commercial and Professional Services</span>
-            <span class="chip-empty">no link yet</span>
-          </div>
-          <div class="node flex items-center gap-3">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] node-circle ring-2 ring-white shadow-sm"></span>
-            <span class="node-label text-[14px] font-medium text-gray-900 min-w-[220px]">Consumer Discretionary</span>
-            <span class="chip-mck"><span class="dot"></span>Consumer Packaged Goods</span>
-            <span class="chip-mck"><span class="dot"></span>Retail</span>
-            <span class="chip-mck"><span class="dot"></span>Travel</span>
-          </div>
-          <div class="node flex items-center gap-3">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] node-circle ring-2 ring-white shadow-sm"></span>
-            <span class="node-label text-[14px] font-medium text-gray-900 min-w-[220px]">Consumer Staples - Food &amp; Beverages</span>
-            <span class="chip-mck"><span class="dot"></span>Consumer Packaged Goods</span>
-            <span class="chip-mck"><span class="dot"></span>Agriculture</span>
-          </div>
-          <div class="node flex items-center gap-3">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] node-circle ring-2 ring-white shadow-sm"></span>
-            <span class="node-label text-[14px] font-medium text-gray-900 min-w-[220px]">Education</span>
-            <span class="chip-mck"><span class="dot"></span>Education</span>
-          </div>
-          <div class="node flex items-center gap-3">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] node-circle ring-2 ring-white shadow-sm"></span>
-            <span class="node-label text-[14px] font-medium text-gray-900 min-w-[220px]">Engineering and Capital Goods</span>
-            <span class="chip-mck"><span class="dot"></span>Engineering, Construction &amp; Building Materials</span>
-            <span class="chip-mck"><span class="dot"></span>Industrials</span>
-          </div>
-          <div class="node flex items-center gap-3">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] node-circle ring-2 ring-white shadow-sm"></span>
-            <span class="node-label text-[14px] font-medium text-gray-900 min-w-[220px]">Healthcare System and Services</span>
-            <span class="chip-mck"><span class="dot"></span>Healthcare</span>
-            <span class="chip-mck"><span class="dot"></span>Life Sciences</span>
-          </div>
-          <div class="node flex items-center gap-3">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] node-circle ring-2 ring-white shadow-sm"></span>
-            <span class="node-label text-[14px] font-medium text-gray-900 min-w-[220px]">Information Technology</span>
-            <span class="chip-mck"><span class="dot"></span>Technology, Media &amp; Telecommunications</span>
-            <span class="chip-mck"><span class="dot"></span>Semiconductors</span>
-          </div>
-          <div class="node flex items-center gap-3">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] node-circle ring-2 ring-white shadow-sm"></span>
-            <span class="node-label text-[14px] font-medium text-gray-900 min-w-[220px]">Logistics</span>
-            <span class="chip-mck"><span class="dot"></span>Logistics</span>
-          </div>
-          <div class="node flex items-center gap-3">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] node-circle ring-2 ring-white shadow-sm"></span>
-            <span class="node-label text-[14px] font-medium text-gray-900 min-w-[220px]">Metals and Mining</span>
-            <span class="chip-mck"><span class="dot"></span>Metals &amp; Mining</span>
-          </div>
-          <div class="node flex items-center gap-3">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] node-circle ring-2 ring-white shadow-sm"></span>
-            <span class="node-label text-[14px] font-medium text-gray-900 min-w-[220px]">Oil and Gas</span>
-            <span class="chip-mck"><span class="dot"></span>Oil &amp; Gas</span>
-            <span class="chip-mck"><span class="dot"></span>Electric Power &amp; Natural Gas</span>
-          </div>
-          <div class="node flex items-center gap-3">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324] node-circle ring-2 ring-white shadow-sm"></span>
-            <span class="node-label text-[14px] font-medium text-gray-900 min-w-[220px]">Real Estate</span>
-            <span class="chip-mck"><span class="dot"></span>Real Estate</span>
-            <span class="chip-mck"><span class="dot"></span>Infrastructure</span>
-          </div>
-        </div>
-      </div>
-    </div>
+    <button class="rounded-xl px-4 py-2 bg-gradient-to-br from-[#ec9324] to-[#d97706] text-white text-sm font-semibold shadow-lg glow-orange flex items-center gap-2">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+      Edit Links
+    </button>
   </div>
 </div>
 
+<!-- SANKEY CANVAS -->
+<div class="px-6 pb-6">
+  <div class="rounded-2xl relative overflow-hidden" style="min-height:720px; background: radial-gradient(1200px 600px at 20% 10%, rgba(236,147,36,0.10), transparent 60%), radial-gradient(1000px 600px at 90% 90%, rgba(99,102,241,0.12), transparent 55%), #0d1220; border:1px solid rgba(255,255,255,0.06);">
+
+    <!-- Legend / mode -->
+    <div class="absolute top-4 left-4 z-30 glass rounded-xl px-3 py-2 text-[11px] text-gray-300 flex items-center gap-3">
+      <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-[#ec9324]"></span> Infollion L2</span>
+      <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-[#818cf8]"></span> McKinsey L2</span>
+      <span class="text-gray-500">·</span>
+      <span class="inline-flex items-center gap-1.5">
+        <svg width="24" height="6"><path d="M0 3 C 8 3 16 3 24 3" stroke="url(#lg)" stroke-width="2" fill="none"/><defs><linearGradient id="lg" x1="0" x2="1"><stop offset="0" stop-color="#ec9324" stop-opacity=".8"/><stop offset="1" stop-color="#818cf8" stop-opacity=".8"/></linearGradient></defs></svg>
+        Ribbon = link
+      </span>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="absolute top-4 right-4 z-30 glass rounded-xl px-2 py-1.5 flex items-center gap-1">
+      <button class="w-8 h-8 flex items-center justify-center text-gray-300 hover:bg-white/10 rounded-md"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-3.5-3.5M11 7v8M7 11h8"/></svg></button>
+      <button class="w-8 h-8 flex items-center justify-center text-gray-300 hover:bg-white/10 rounded-md"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-3.5-3.5M7 11h8"/></svg></button>
+      <div class="w-px h-5 bg-white/10 mx-1"></div>
+      <button class="w-8 h-8 flex items-center justify-center text-gray-300 hover:bg-white/10 rounded-md"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg></button>
+      <button class="w-8 h-8 flex items-center justify-center text-white bg-white/10 rounded-md" title="Focus mode"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4l6 6M20 20l-6-6M20 4l-6 6M4 20l6-6"/></svg></button>
+    </div>
+
+    <!-- Search / palette hint -->
+    <div class="absolute bottom-4 left-4 z-30 glass rounded-xl px-3 py-1.5 flex items-center gap-2 text-gray-300">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-3.5-3.5"/></svg>
+      <input class="bg-transparent outline-none text-[12px] w-56 placeholder-gray-500" placeholder="Search or focus a segment…" />
+      <span class="kbd">⌘</span><span class="kbd">K</span>
+    </div>
+
+    <!-- Focused segment details -->
+    <div class="absolute bottom-4 right-4 z-30 glass rounded-xl px-4 py-2 flex items-center gap-3">
+      <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324]"></span>
+      <div>
+        <div class="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">Focused</div>
+        <div class="text-[13px] text-white font-semibold">BFSI</div>
+      </div>
+      <span class="w-px h-8 bg-white/10 mx-1"></span>
+      <div>
+        <div class="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">Maps to</div>
+        <div class="text-[13px] text-[#a5b4fc] font-semibold">4 McKinsey segments</div>
+      </div>
+    </div>
+
+    <!-- SANKEY SVG -->
+    <svg viewBox="0 0 1400 720" preserveAspectRatio="xMidYMid meet" class="w-full h-full block">
+      <defs>
+        <!-- gradient for ribbons -->
+        <linearGradient id="r-o1" x1="0" x2="1"><stop offset="0" stop-color="#ec9324" stop-opacity="0.9"/><stop offset="1" stop-color="#818cf8" stop-opacity="0.9"/></linearGradient>
+        <linearGradient id="r-o2" x1="0" x2="1"><stop offset="0" stop-color="#f59e0b" stop-opacity="0.9"/><stop offset="1" stop-color="#a78bfa" stop-opacity="0.9"/></linearGradient>
+        <linearGradient id="r-o3" x1="0" x2="1"><stop offset="0" stop-color="#fb923c" stop-opacity="0.9"/><stop offset="1" stop-color="#6366f1" stop-opacity="0.9"/></linearGradient>
+        <linearGradient id="r-o4" x1="0" x2="1"><stop offset="0" stop-color="#f97316" stop-opacity="0.9"/><stop offset="1" stop-color="#7c3aed" stop-opacity="0.9"/></linearGradient>
+        <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+
+      <!-- LEFT column: Infollion L2 (15 rows spaced) -->
+      <!-- Node bars are on left at x=430..438 -->
+      <!-- Row centers y at 55,95,135,...,655 (15 rows) -->
+
+      <!-- Column headers -->
+      <text x="430" y="34" class="label-l" fill="#94a3b8" font-size="10" letter-spacing="2">INFOLLION · L2</text>
+      <text x="960" y="34" class="label-r" fill="#94a3b8" font-size="10" letter-spacing="2">MCKINSEY · L2</text>
+
+      <!-- LEFT NODES (bars) -->
+      <g>
+        <rect x="430" y="47"  width="8" height="16" rx="3" class="node-l dim"/>
+        <rect x="430" y="87"  width="8" height="16" rx="3" class="node-l dim"/>
+        <!-- BFSI selected -->
+        <rect x="430" y="127" width="8" height="16" rx="3" class="node-l" filter="url(#glow)"/>
+        <rect x="430" y="167" width="8" height="16" rx="3" class="node-l dim"/>
+        <rect x="430" y="207" width="8" height="16" rx="3" class="node-l dim"/>
+        <rect x="430" y="247" width="8" height="16" rx="3" class="node-l dim"/>
+        <rect x="430" y="287" width="8" height="16" rx="3" class="node-l dim"/>
+        <rect x="430" y="327" width="8" height="16" rx="3" class="node-l dim"/>
+        <rect x="430" y="367" width="8" height="16" rx="3" class="node-l dim"/>
+        <rect x="430" y="407" width="8" height="16" rx="3" class="node-l dim"/>
+        <rect x="430" y="447" width="8" height="16" rx="3" class="node-l dim"/>
+        <rect x="430" y="487" width="8" height="16" rx="3" class="node-l dim"/>
+        <rect x="430" y="527" width="8" height="16" rx="3" class="node-l dim"/>
+        <rect x="430" y="567" width="8" height="16" rx="3" class="node-l dim"/>
+        <rect x="430" y="607" width="8" height="16" rx="3" class="node-l dim"/>
+      </g>
+
+      <!-- LEFT LABELS -->
+      <text x="418" y="60"  class="label-l dim">Agriculture</text>
+      <text x="418" y="100" class="label-l dim">Automotive</text>
+      <text x="418" y="140" class="label-l selected">BFSI</text>
+      <text x="418" y="180" class="label-l dim">Chemicals</text>
+      <text x="418" y="220" class="label-l dim">Commercial and Professional Services</text>
+      <text x="418" y="260" class="label-l dim">Consumer Discretionary</text>
+      <text x="418" y="300" class="label-l dim">Consumer Staples · Food &amp; Beverages</text>
+      <text x="418" y="340" class="label-l dim">Education</text>
+      <text x="418" y="380" class="label-l dim">Engineering and Capital Goods</text>
+      <text x="418" y="420" class="label-l dim">Healthcare System and Services</text>
+      <text x="418" y="460" class="label-l dim">Information Technology</text>
+      <text x="418" y="500" class="label-l dim">Logistics</text>
+      <text x="418" y="540" class="label-l dim">Metals and Mining</text>
+      <text x="418" y="580" class="label-l dim">Oil and Gas</text>
+      <text x="418" y="620" class="label-l dim">Real Estate</text>
+
+      <!-- RIGHT NODES (bars) at x=960..968 -->
+      <g>
+        <rect x="960" y="47"  width="8" height="16" rx="3" class="node-r dim"/>
+        <rect x="960" y="87"  width="8" height="16" rx="3" class="node-r dim"/>
+        <rect x="960" y="127" width="8" height="16" rx="3" class="node-r dim"/>
+        <rect x="960" y="167" width="8" height="16" rx="3" class="node-r dim"/>
+        <rect x="960" y="207" width="8" height="16" rx="3" class="node-r"/>
+        <rect x="960" y="247" width="8" height="16" rx="3" class="node-r"/>
+        <rect x="960" y="287" width="8" height="16" rx="3" class="node-r dim"/>
+        <rect x="960" y="327" width="8" height="16" rx="3" class="node-r"/>
+        <rect x="960" y="367" width="8" height="16" rx="3" class="node-r dim"/>
+        <rect x="960" y="407" width="8" height="16" rx="3" class="node-r dim"/>
+        <rect x="960" y="447" width="8" height="16" rx="3" class="node-r dim"/>
+        <rect x="960" y="487" width="8" height="16" rx="3" class="node-r"/>
+        <rect x="960" y="527" width="8" height="16" rx="3" class="node-r dim"/>
+        <rect x="960" y="567" width="8" height="16" rx="3" class="node-r dim"/>
+        <rect x="960" y="607" width="8" height="16" rx="3" class="node-r"/>
+      </g>
+
+      <!-- RIGHT LABELS -->
+      <text x="980" y="60"  class="label-r dim">Aerospace &amp; Defense</text>
+      <text x="980" y="100" class="label-r dim">Agriculture</text>
+      <text x="980" y="140" class="label-r dim">Automotive &amp; Assembly</text>
+      <text x="980" y="180" class="label-r dim">Chemicals</text>
+      <text x="980" y="220" class="label-r selected">Financial Services</text>
+      <text x="980" y="260" class="label-r selected">Insurance</text>
+      <text x="980" y="300" class="label-r dim">Consumer Packaged Goods</text>
+      <text x="980" y="340" class="label-r selected">Wealth and Asset Management</text>
+      <text x="980" y="380" class="label-r dim">Healthcare</text>
+      <text x="980" y="420" class="label-r dim">Life Sciences</text>
+      <text x="980" y="460" class="label-r dim">Technology, Media &amp; Telecommunications</text>
+      <text x="980" y="500" class="label-r selected">Private Capital</text>
+      <text x="980" y="540" class="label-r dim">Semiconductors</text>
+      <text x="980" y="580" class="label-r dim">Real Estate</text>
+      <text x="980" y="620" class="label-r dim">Infrastructure</text>
+
+      <!-- RIBBONS -->
+      <g stroke-width="5" class="ribbon">
+        <!-- DIM ribbons (background) -->
+        <path d="M438,55 C 700,55 700,55 960,55" stroke="url(#r-o1)" class="ribbon dim"/>
+        <path d="M438,95 C 700,95 700,135 960,135" stroke="url(#r-o2)" class="ribbon dim"/>
+        <path d="M438,95 C 700,95 700,55 960,55"  stroke="url(#r-o3)" class="ribbon dim"/>
+        <path d="M438,175 C 700,175 700,175 960,175" stroke="url(#r-o1)" class="ribbon dim"/>
+        <path d="M438,255 C 700,255 700,295 960,295" stroke="url(#r-o2)" class="ribbon dim"/>
+        <path d="M438,255 C 700,255 700,575 960,575" stroke="url(#r-o3)" class="ribbon dim"/>
+        <path d="M438,255 C 700,255 700,615 960,615" stroke="url(#r-o4)" class="ribbon dim"/>
+        <path d="M438,295 C 700,295 700,295 960,295" stroke="url(#r-o1)" class="ribbon dim"/>
+        <path d="M438,295 C 700,295 700,95 960,95"   stroke="url(#r-o2)" class="ribbon dim"/>
+        <path d="M438,335 C 700,335 700,215 960,215" stroke="url(#r-o1)" class="ribbon dim"/>
+        <path d="M438,375 C 700,375 700,455 960,455" stroke="url(#r-o1)" class="ribbon dim"/>
+        <path d="M438,375 C 700,375 700,415 960,415" stroke="url(#r-o2)" class="ribbon dim"/>
+        <path d="M438,415 C 700,415 700,375 960,375" stroke="url(#r-o1)" class="ribbon dim"/>
+        <path d="M438,415 C 700,415 700,415 960,415" stroke="url(#r-o2)" class="ribbon dim"/>
+        <path d="M438,455 C 700,455 700,455 960,455" stroke="url(#r-o1)" class="ribbon dim"/>
+        <path d="M438,455 C 700,455 700,535 960,535" stroke="url(#r-o2)" class="ribbon dim"/>
+        <path d="M438,495 C 700,495 700,375 960,375" stroke="url(#r-o1)" class="ribbon dim"/>
+        <path d="M438,535 C 700,535 700,575 960,575" stroke="url(#r-o1)" class="ribbon dim"/>
+        <path d="M438,575 C 700,575 700,155 960,155" stroke="url(#r-o1)" class="ribbon dim"/>
+        <path d="M438,575 C 700,575 700,55  960,55"  stroke="url(#r-o2)" class="ribbon dim"/>
+        <path d="M438,615 C 700,615 700,575 960,575" stroke="url(#r-o1)" class="ribbon dim"/>
+        <path d="M438,615 C 700,615 700,615 960,615" stroke="url(#r-o2)" class="ribbon dim"/>
+
+        <!-- ACTIVE ribbons — from BFSI (438,135) to Financial Services (960,215), Insurance (960,255), Wealth (960,335), Private Capital (960,495) -->
+        <path d="M438,135 C 700,135 700,215 960,215" stroke="url(#r-o1)" class="ribbon active" stroke-width="7" filter="url(#glow)"/>
+        <path d="M438,135 C 700,135 700,255 960,255" stroke="url(#r-o2)" class="ribbon active" stroke-width="7" filter="url(#glow)"/>
+        <path d="M438,135 C 700,135 700,335 960,335" stroke="url(#r-o3)" class="ribbon active" stroke-width="7" filter="url(#glow)"/>
+        <path d="M438,135 C 700,135 700,495 960,495" stroke="url(#r-o4)" class="ribbon active" stroke-width="7" filter="url(#glow)"/>
+      </g>
+
+      <!-- Highlighted node dot for BFSI (source) -->
+      <circle cx="434" cy="135" r="7" fill="#ec9324" filter="url(#glow)"/>
+      <!-- Target dots -->
+      <circle cx="964" cy="215" r="5" fill="#818cf8"/>
+      <circle cx="964" cy="255" r="5" fill="#818cf8"/>
+      <circle cx="964" cy="335" r="5" fill="#818cf8"/>
+      <circle cx="964" cy="495" r="5" fill="#818cf8"/>
+    </svg>
+
+    <!-- Side panel for hovered / selected -->
+    <div class="absolute top-1/2 right-6 -translate-y-1/2 z-30 glass rounded-2xl p-5 w-[280px]" style="box-shadow:0 20px 40px rgba(0,0,0,0.35);">
+      <div class="text-[10px] uppercase tracking-widest text-[#f59e0b] font-bold">Focused segment</div>
+      <div class="text-lg font-extrabold text-white mt-0.5 flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-[#ec9324]"></span> BFSI
+      </div>
+      <div class="text-[11px] text-gray-400 mt-1">Level 2 · Infollion Research</div>
+      <div class="mt-4">
+        <div class="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-2">Mapped McKinsey segments</div>
+        <ul class="space-y-1.5">
+          <li class="flex items-center gap-2 text-[12.5px] text-white">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#818cf8]"></span>Financial Services
+          </li>
+          <li class="flex items-center gap-2 text-[12.5px] text-white">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#818cf8]"></span>Insurance
+          </li>
+          <li class="flex items-center gap-2 text-[12.5px] text-white">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#818cf8]"></span>Wealth and Asset Management
+          </li>
+          <li class="flex items-center gap-2 text-[12.5px] text-white">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#818cf8]"></span>Private Capital
+          </li>
+        </ul>
+      </div>
+      <div class="mt-4 pt-4 border-t border-white/10 text-[11px] text-gray-400">
+        Also referenced by <span class="text-white font-semibold">0</span> other Infollion segments.
+      </div>
+    </div>
+
+  </div>
+</div>
 </body>
 </html>
