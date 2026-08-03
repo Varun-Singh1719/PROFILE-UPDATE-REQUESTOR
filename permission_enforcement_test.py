@@ -14,7 +14,7 @@ from playwright.async_api import async_playwright, expect
 import requests
 
 # Configuration
-BASE_URL = "https://crm-segmentation.preview.emergentagent.com"
+BASE_URL = "https://client-hub-system-2.preview.emergentagent.com"
 API_URL = f"{BASE_URL}/api"
 SUPER_ADMIN_EMAIL = "admin@ticketing.com"
 SUPER_ADMIN_PASSWORD = "Admin@123"

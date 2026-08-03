@@ -12,8 +12,8 @@ import time
 import requests
 from datetime import datetime
 
-BASE_API = "https://crm-segmentation.preview.emergentagent.com/api"
-BASE_UI = "https://crm-segmentation.preview.emergentagent.com"
+BASE_API = "https://client-hub-system-2.preview.emergentagent.com/api"
+BASE_UI = "https://client-hub-system-2.preview.emergentagent.com"
 
 # Super Admin credentials
 SA_EMAIL = "admin@ticketing.com"

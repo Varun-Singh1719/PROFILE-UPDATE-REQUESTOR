@@ -16,7 +16,7 @@ import sys
 from typing import Dict, List, Optional
 
 # Base configuration
-BASE_URL = "https://crm-segmentation.preview.emergentagent.com/api"
+BASE_URL = "https://client-hub-system-2.preview.emergentagent.com/api"
 SUPER_ADMIN_EMAIL = "admin@ticketing.com"
 SUPER_ADMIN_PASSWORD = "Admin@123"
 
