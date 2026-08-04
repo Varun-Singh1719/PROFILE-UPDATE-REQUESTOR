@@ -171,27 +171,21 @@ export default function ClientsPage() {
   // ---- pagination ----
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  return (
-    <Layout>
-      <div className="px-6 py-5">
-        {/* ============ HEADER (compact top bar) ============ */}
-        <div className="mb-5 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-orange-100 text-[#ec9324] flex items-center justify-center">
-              <BusinessCenter />
-            </div>
-            <h1 className="text-2xl font-semibold text-gray-900">Clients</h1>
-          </div>
+  // Action button rendered in the global top bar (parallel to notification bell + user avatar)
+  const topBarActions = (
+    <Button
+      onClick={openCreate}
+      className="bg-[#ec9324] hover:bg-[#d3811b] text-white h-9"
+      data-testid="new-client-btn"
+    >
+      <Plus sx={{ fontSize: 18, marginRight: "4px" }} />
+      New Client
+    </Button>
+  );
 
-          <Button
-            onClick={openCreate}
-            className="bg-[#ec9324] hover:bg-[#d3811b] text-white"
-            data-testid="new-client-btn"
-          >
-            <Plus sx={{ fontSize: 18, marginRight: "4px" }} />
-            New Client
-          </Button>
-        </div>
+  return (
+    <Layout title="Clients" actions={topBarActions}>
+      <div className="px-6 py-5">
 
         {/* ============ TOOLBAR ============ */}
         <div className="bg-white border border-gray-200 rounded-xl p-3 mb-4 flex flex-wrap items-center gap-2">
