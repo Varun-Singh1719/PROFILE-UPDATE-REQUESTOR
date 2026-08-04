@@ -267,3 +267,57 @@ async def delete_client(client_id: str, user=Depends(get_current_user)):
     if res.deleted_count == 0:
         raise HTTPException(404, "Client not found")
     return {"ok": True}
+
+
+# ------- Sync from Segmentations -------------------------------
+# Creates one Client per Segmentation that has no matching client yet
+# (case-insensitive name match). Excludes "Infollion Research" by name.
+# Default Type = "Corporations and Companies" for auto-created rows.
+_EXCLUDE_NAMES = {"infollion research"}
+
+
+@api_router.post("/clients/sync-from-segmentations")
+async def sync_from_segmentations(user=Depends(get_current_user)):
+    created: list = []
+    skipped_existing: list = []
+    skipped_excluded: list = []
+
+    async for seg in db["segmentations"].find({}):
+        name = (seg.get("name") or "").strip()
+        if not name:
+            continue
+        if name.lower() in _EXCLUDE_NAMES:
+            skipped_excluded.append(name)
+            continue
+        # If a matching client already exists, skip
+        existing = await db[COLL].find_one(
+            {"name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}}
+        )
+        if existing:
+            skipped_existing.append(name)
+            continue
+
+        now = now_iso()
+        doc = {
+            "id": str(uuid.uuid4()),
+            "display_id": await _next_display_id(),
+            "name": name,
+            "type": "Corporations and Companies",
+            "client_contact_count": 0,
+            "project_count": 0,
+            "serviced_count": 0,
+            "seeded_from_segmentation": True,  # marker so UI knows to seed random cells
+            "created_by": _actor(user),
+            "created_on": now,
+            "updated_by": _actor(user),
+            "updated_on": now,
+        }
+        await db[COLL].insert_one(doc)
+        created.append({"display_id": doc["display_id"], "name": name})
+
+    return {
+        "created": created,
+        "created_count": len(created),
+        "skipped_existing": skipped_existing,
+        "skipped_excluded": skipped_excluded,
+    }

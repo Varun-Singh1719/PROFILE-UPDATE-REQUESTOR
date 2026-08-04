@@ -143,16 +143,25 @@ export default function ClientDetailPage() {
 
   // ---- Pivot data ----
   const months = useMemo(() => monthsInRange(filter), [filter]);
-  // Rows = Level-2 nodes of the client's segmentation tree
+  // Rows = deepest / leaf nodes of the client's segmentation tree.
+  // Falls back to leaves so segmentations that only go one level deep
+  // (industry taxonomies like McKinsey) still populate the pivot.
   const l2Nodes = useMemo(() => {
     if (!seg?.segmentation?.tree) return [];
-    const nodes = [];
-    const walk = (node, depth) => {
-      if (depth === 2) nodes.push({ name: node.name, parent: node.__parent });
-      (node.children || []).forEach((c) => walk({ ...c, __parent: node.name }, depth + 1));
+    const leaves = [];
+    const walk = (node, parentName) => {
+      const kids = node.children || [];
+      if (!kids.length) {
+        if (parentName !== null) {
+          // exclude the root itself (depth 0). It always has a parentName after first descent.
+          leaves.push({ name: node.name, parent: parentName });
+        }
+        return;
+      }
+      kids.forEach((c) => walk(c, node.name));
     };
-    walk(seg.segmentation.tree, 0);
-    return nodes;
+    walk(seg.segmentation.tree, null);
+    return leaves;
   }, [seg]);
 
   // Top-bar action = Edit / Save / Cancel
@@ -266,6 +275,11 @@ export default function ClientDetailPage() {
               </div>
             </div>
 
+            {/* ============ TOTAL-TILL-DATE CHIPS ============ */}
+            <TotalTillDateChips
+              totals={buildTotals(seg?.exists ? row.id : null, l2Nodes)}
+            />
+
             {/* ============ SEGMENT SECTION ============ */}
             <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
               <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -365,18 +379,129 @@ export default function ClientDetailPage() {
                   Pick a valid date range to see the pivot.
                 </div>
               ) : (
-                <PivotTable l2Nodes={l2Nodes} months={months} />
+                <PivotTable l2Nodes={l2Nodes} months={months} clientId={row.id} />
               )}
 
               <div className="mt-3 text-[11px] text-gray-500 italic">
-                All cells are placeholders (0 / $0) until the activity calc pipeline is wired.
-                Values will refresh automatically when the DateFilter is changed.
+                All cells and totals are seeded pseudo-random placeholders until the activity
+                calc pipeline is wired. The same client + node + month combo always renders the
+                same value, so screenshots stay stable across reloads.
               </div>
             </div>
           </div>
         )}
       </div>
     </Layout>
+  );
+}
+
+// ============================================================
+// Deterministic seeded random helpers
+// ============================================================
+// Simple string-hash → 32-bit int, then mulberry32 PRNG so the same
+// (client, l2, month, metric) tuple always yields the same value.
+function _hash(str) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h >>> 0;
+}
+function _rand(seed) {
+  let s = seed >>> 0;
+  s = (s + 0x6D2B79F5) >>> 0;
+  let t = s;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+// Get a seeded random integer in [min, max] inclusive for a given tuple.
+function seededInt(clientId, l2, month, metric, min, max) {
+  if (!clientId) return 0;
+  const seed = _hash(`${clientId}|${l2}|${month}|${metric}`);
+  const r = _rand(seed);
+  return Math.floor(min + r * (max - min + 1));
+}
+// Value ranges per metric for the pivot cells
+const RANGES = {
+  contacts: [0, 4],
+  projects: [0, 3],
+  serviced: [0, 2],
+  calls:    [0, 12],
+  revenue:  [0, 25000], // dollars
+};
+
+// Build total-till-date sums across all L2 × months (seeded random).
+// We use months in the last 12 months window regardless of DateFilter so
+// "till date" stays stable while the pivot filter is interactive.
+function buildTotals(clientId, l2Nodes) {
+  if (!clientId || !l2Nodes?.length) return null;
+  const now = new Date();
+  const months = [];
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+  const t = { contacts: 0, projects: 0, serviced: 0, calls: 0, revenue: 0 };
+  l2Nodes.forEach((n) => {
+    months.forEach((m) => {
+      Object.keys(RANGES).forEach((k) => {
+        const [lo, hi] = RANGES[k];
+        t[k] += seededInt(clientId, n.name, m, k, lo, hi);
+      });
+    });
+  });
+  return t;
+}
+
+// ============================================================
+// Total-till-date chips (5) — same visual as Client Contacts detail
+// ============================================================
+function TotalTillDateChips({ totals = null }) {
+  const items = [
+    { key: "contacts", label: "Client Contacts", isMoney: false },
+    { key: "projects", label: "Projects",        isMoney: false },
+    { key: "serviced", label: "Serviced",        isMoney: false },
+    { key: "calls",    label: "Calls",           isMoney: false },
+    { key: "revenue",  label: "Revenue",         isMoney: true  },
+  ];
+  const val = (k) => {
+    const v = totals?.[k];
+    return Number.isFinite(v) ? v : 0;
+  };
+  const fmt = (v, money) => {
+    if (!v) return money ? "$0" : "0";
+    if (money) {
+      if (Math.abs(v) >= 1_000_000) return `$${(v / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+      if (Math.abs(v) >= 10_000)    return `$${(v / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+      return `$${v.toLocaleString()}`;
+    }
+    return v.toLocaleString();
+  };
+  const scheme = "border-[#ec9324]/30 bg-[#ec9324]/5 text-[#ec9324] ring-[#ec9324]/10";
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3" data-testid="client-total-chips">
+      {items.map((i) => (
+        <div
+          key={i.key}
+          className={`rounded-xl border ring-1 ring-inset px-4 py-3 flex items-center justify-between gap-3 shadow-sm ${scheme}`}
+          data-testid={`client-total-chip-${i.key}`}
+        >
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-wider font-semibold opacity-90">
+              {i.label}
+            </div>
+            <div className="text-[10px] uppercase tracking-wider opacity-60">
+              Total till date
+            </div>
+          </div>
+          <div className="text-2xl font-bold tabular-nums">
+            {fmt(val(i.key), i.isMoney)}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -403,10 +528,18 @@ const METRICS = [
   { key: "revenue",  label: "Rev", full: "Revenue", money: true },
 ];
 
-function PivotTable({ l2Nodes, months }) {
+function PivotTable({ l2Nodes, months, clientId }) {
   const fmt = (val, money) => {
     if (val === 0 || val === null || val === undefined) return money ? "$0" : "0";
-    return money ? `$${val}` : String(val);
+    if (money) {
+      if (Math.abs(val) >= 10_000) return `$${(val / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+      return `$${val.toLocaleString()}`;
+    }
+    return String(val);
+  };
+  const cellValue = (l2Name, monthKey, metricKey) => {
+    const [lo, hi] = RANGES[metricKey] || [0, 0];
+    return seededInt(clientId, l2Name, monthKey, metricKey, lo, hi);
   };
   return (
     <div className="border border-gray-200 rounded-lg overflow-auto max-h-[600px]">
@@ -460,7 +593,7 @@ function PivotTable({ l2Nodes, months }) {
               </td>
               {months.map((m) =>
                 METRICS.map((mt) => {
-                  const val = 0; // placeholder
+                  const val = cellValue(n.name, m.key, mt.key);
                   const zero = val === 0;
                   return (
                     <td
