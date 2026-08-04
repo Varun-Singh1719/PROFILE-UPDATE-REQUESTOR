@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import Layout from "../components/Layout";
 import api, { formatApiError } from "../lib/api";
 import { Button } from "../components/ui/button";
@@ -68,6 +69,42 @@ export default function SegmentationsPage() {
     }
   };
   useEffect(() => { load(); }, []);
+
+  // ---- Query-param triggers (from Client Detail page) ----
+  // ?new=1&name=X          → open create dialog pre-filled with the client name
+  // ?select=<segId|name>   → auto-select that segmentation in the sidebar
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const isNew = searchParams.get("new");
+    const prefName = searchParams.get("name");
+    if (isNew === "1") {
+      setEditing(null);
+      setForm({ name: prefName || "", description: "" });
+      setFormOpen(true);
+      // Strip params so a page refresh doesn't reopen the dialog
+      const cleaned = new URLSearchParams(searchParams);
+      cleaned.delete("new");
+      cleaned.delete("name");
+      setSearchParams(cleaned, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-select segmentation matching ?select=<name> once rows have loaded
+  useEffect(() => {
+    const sel = searchParams.get("select");
+    if (!sel || rows.length === 0) return;
+    const match = rows.find(
+      (r) => r.id === sel || (r.name || "").toLowerCase() === sel.toLowerCase()
+    );
+    if (match) {
+      setSelectedId(match.id);
+      const cleaned = new URLSearchParams(searchParams);
+      cleaned.delete("select");
+      setSearchParams(cleaned, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
 
   // ---- Filtered list ----
   const filtered = useMemo(() => {

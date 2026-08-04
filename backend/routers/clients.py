@@ -212,6 +212,29 @@ async def get_client(client_id: str, user=Depends(get_current_user)):
     return _with_placeholders(_serialize(doc))
 
 
+@api_router.get("/clients/{client_id}/segmentation")
+async def get_client_segmentation(client_id: str, user=Depends(get_current_user)):
+    """Return the segmentation whose name matches this client's name.
+
+    Response shape:
+      { exists: bool, segmentation: {...}|null }
+    """
+    client = await db[COLL].find_one({"id": client_id})
+    if not client:
+        raise HTTPException(404, "Client not found")
+    name = client.get("name") or ""
+    seg = await db["segmentations"].find_one({
+        "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}
+    })
+    if not seg:
+        return {"exists": False, "segmentation": None, "client_name": name}
+    return {
+        "exists": True,
+        "client_name": name,
+        "segmentation": {k: v for k, v in seg.items() if k != "_id"},
+    }
+
+
 @api_router.patch("/clients/{client_id}")
 async def update_client(
     client_id: str, payload: ClientUpdate, user=Depends(get_current_user)

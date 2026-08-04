@@ -21,6 +21,7 @@
  * toast for now).
  */
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import api, { formatApiError } from "../lib/api";
 import notify from "../lib/notify";
@@ -63,6 +64,7 @@ const EMPTY_FORM = { name: "", type: "" };
 
 // ============================================================
 export default function ClientsPage() {
+  const navigate = useNavigate();
   const [rows, setRows]         = useState([]);
   const [total, setTotal]       = useState(0);
   const [loading, setLoading]   = useState(true);
@@ -165,7 +167,7 @@ export default function ClientsPage() {
     }
   };
   const handleView = (row) => {
-    notify.info(`Detail view for "${row.name}" coming in the next phase.`);
+    navigate(`/crm/clients/${row.id}`);
   };
 
   // ---- pagination ----
