@@ -215,21 +215,18 @@ export default function SegmentationsPage() {
           className="w-[320px] min-w-[280px] max-w-[360px] bg-white border-l border-gray-200 flex flex-col"
           data-testid="segmentations-sidebar"
         >
-          {/* Collapse toggle above the segmentations bar (spec: small `>` chevron) */}
-          <div className="flex items-center justify-end px-2 py-1.5 border-b border-gray-100 bg-gray-50/60">
-            <button
-              type="button"
-              onClick={() => setSidebarCollapsed(true)}
-              data-testid="segmentations-sidebar-collapse"
-              title="Hide segmentations list"
-              className="w-6 h-6 rounded-md flex items-center justify-center text-gray-500 hover:bg-[#ec9324]/10 hover:text-[#ec9324]"
-            >
-              <ChevronRight sx={{ fontSize: 18 }} />
-            </button>
-          </div>
-
           <div className="px-4 py-4 border-b border-gray-100">
             <div className="flex items-center gap-2 mb-3">
+              {/* Collapse chevron — sits inline before the section icon */}
+              <button
+                type="button"
+                onClick={() => setSidebarCollapsed(true)}
+                data-testid="segmentations-sidebar-collapse"
+                title="Hide segmentations list"
+                className="w-5 h-5 rounded-md flex items-center justify-center text-gray-400 hover:bg-[#ec9324]/10 hover:text-[#ec9324] flex-shrink-0 -ml-1"
+              >
+                <ChevronRight sx={{ fontSize: 16 }} />
+              </button>
               <PieChart className="text-[#ec9324] flex-shrink-0" sx={{ fontSize: 20 }} />
               <span className="text-sm font-semibold text-gray-700">Segmentations</span>
               <span className="ml-auto text-xs text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">
