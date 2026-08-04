@@ -11179,3 +11179,187 @@ agent_communication:
         Report PASS/FAIL per scenario. Do not attempt to fix bugs.
 
 
+
+## [2026-08-04] Client Detail Polish + Segmentation Deep-Link Bug Fix
+user_problem_statement: |
+  User reported that on the Client Detail page for McKinsey, clicking the
+  green "Available" pill in the Segment section navigates to the
+  Segmentations page but opens the segmentation for **Sequoia India**
+  instead of McKinsey. Also asked for a set of UI polish items on the
+  client detail page and pivot table.
+
+frontend:
+  - task: "Client Detail → Available deep-link opens the RIGHT segmentation (bug fix)"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/SegmentationsPage.jsx (auto-select useEffect guard), frontend/src/pages/ClientDetailPage.jsx (goSegmentationExisting)"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Root cause: SegmentationsPage had two competing useEffects — one
+            reading ?select=<id> to set the correct segmentation, and one
+            "auto-select first row if selectedId is null". When the list
+            loaded, both fired in the same React commit; the "first row"
+            effect always overwrote the deep-link selection because it was
+            the second `setSelectedId` in the batch.
+            Fix: made the first-row auto-select bail out when
+            `searchParams.get("select")` is present, so the deep-link
+            handler owns the selection. Also added `searchParams` to the
+            dep array so the guard is dropped after the param is stripped.
+
+  - task: "Client Detail → UI polish (subtitle & L2-chips removed, tooltips added, pivot renames)"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/ClientDetailPage.jsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Applied all requested polish:
+            1. Removed subtitle "Matches a segmentation whose name equals
+               this client's name." from the Segment section.
+            2. Removed the Level-2 nodes chip preview block ("Level-2 nodes (29)
+               … + 9 more…").
+            3. Removed the "· open in Segmentations" caption on the Available
+               pill. Added native `title="Click to Open"` tooltip on both the
+               Available button AND the Add Segmentation button (same
+               UX pattern as the Notification Bell — plain `title=` attr).
+            4. Removed the "under McKinsey" (parent) row-hint from pivot
+               row labels.
+            5. Renamed section header "Activity Summary / Level-2 × Month
+               pivot (6 months)" → "Overview / 6 months · 29 segments".
+            6. Renamed pivot first-column header "Level 2" → "Segmentations".
+            7. Renamed metric sub-column labels: Cnt → CC, Prj → P,
+               Srv → S, Cal → C, Rev → $ (each has a native `title=`
+               tooltip that reveals the full name on hover).
+            8. Added a bordered "TOTAL" column group at the far right of the
+               pivot with 5 sub-columns (CC / P / S / C / $) — each row's
+               sum across all months. Also added a "TOTAL" row at the bottom
+               with column-wise sums plus a grand-total block on the right.
+            9. Raised the monthsInRange MAX from 24 to 72 so a 4-5 year
+               DateFilter selection doesn't get truncated. All summing is
+               memoised so the render stays snappy even for 60 months × 29
+               nodes = 1740 rows × 5 metric cells.
+
+  - task: "DateFilter modal — padding tightened"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/DateFilter.jsx"
+    stuck_count: 0
+    priority: "low"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            User reported the calendar modal has too much padding / empty
+            space. Reduced field-selector row from `px-8 pt-6 pb-5` → `px-5
+            pt-4 pb-3`, mode-tabs from `px-8 pt-6` → `px-5 pt-4`, calendar
+            body from `px-8 py-6` → `px-5 py-4`, footer from `px-8 py-4` →
+            `px-5 py-3`, and inner between-mode grid gap from `gap-8` →
+            `gap-5`.
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+
+test_plan:
+  current_focus:
+    - "Client Detail → Available deep-link opens the RIGHT segmentation (bug fix)"
+    - "Client Detail → UI polish (subtitle & L2-chips removed, tooltips added, pivot renames)"
+    - "DateFilter modal — padding tightened"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    - agent: "main"
+      message: |
+        Please verify the Client Detail page + deep-link fix. Credentials
+        in /app/memory/test_credentials.md; if the file is empty use
+        admin@ticketing.com / Admin@123.
+
+        Scenarios (all should PASS):
+
+        1. **BUG FIX — Available deep-link is correct**
+           A. Sign in → sidebar → CRM → Clients.
+           B. Click "McKinsey" (display_id 1006).
+           C. Client Detail page opens with title "McKinsey".
+           D. Scroll to Segment section. Confirm the green pill shows only
+              **"Available"** (no "· open in Segmentations" caption).
+           E. Hover the pill for ~1s. Native tooltip must show **"Click to Open"**.
+           F. Click the Available pill.
+           G. URL changes to `/crm/segmentations?select=<id>` briefly,
+              then strips to `/crm/segmentations`.
+           H. Verify the segmentation highlighted in the RIGHT sidebar is
+              **McKinsey**, NOT **Sequoia India**. This is the core bug fix.
+           I. The tree canvas on the left should render McKinsey's industries
+              (Aerospace & Defense, Agriculture, Automotive & Assembly, …).
+
+        2. **UI polish on Client Detail (use McKinsey again)**
+           A. Section header directly above the pivot must read
+              **"Overview"** with a second-line count like
+              **"6 months · 29 segments"**. It must NOT say "Activity Summary"
+              or "Level-2 × Month pivot".
+           B. The Segment section must NOT contain the paragraph
+              "Matches a segmentation whose name equals this client's name."
+           C. The Segment section must NOT contain the "Level-2 nodes (29)"
+              chip preview row.
+           D. In the pivot, the first (frozen) column header must be
+              **"Segmentations"** (not "Level 2").
+           E. Row labels must be the plain node name (e.g., "Aerospace & Defense")
+              with NO "under McKinsey" secondary line.
+           F. The 5 sub-column labels under each month must be exactly:
+              **CC · P · S · C · $** (not Cnt / Prj / Srv / Cal / Rev).
+           G. Hovering each sub-column header for ~1s must reveal the
+              native tooltip with the full name (Client Contacts / Projects
+              / Serviced / Calls / Revenue).
+           H. At the far right of the pivot header there must be a
+              **"TOTAL"** super-column with the same 5 sub-headers
+              CC/P/S/C/$. Each row's rightmost 5 orange cells are that
+              row's totals across all months. Values must be non-zero
+              (seeded random).
+           I. The bottom-most row of the pivot must be an orange
+              **"TOTAL"** row with a per-month column-wise sum plus a
+              grand-total block at the right.
+
+        3. **DateFilter — long-range does not crash + tighter padding**
+           A. From the Overview section, click the "Updated At …" DateFilter chip.
+           B. Modal opens. Verify padding feels tighter (visual sanity —
+              no huge margins around the two calendars, no gigantic gap
+              between the field-selector radio labels).
+           C. Set From = Jan 01 2022, To = today (~4.5 years). Apply.
+           D. Pivot re-renders with 55 months as super-columns. Confirm
+              the page does NOT hang, does NOT throw an uncaught error in
+              the console, and the "TOTAL" column at the far right still
+              renders.
+           E. Scroll the pivot table horizontally to confirm no visual
+              glitches.
+
+        4. **Add-Segmentation deep-link still works (Bridgewater has no matching segmentation)**
+           A. Back to /crm/clients, click "Bridgewater Associates" (display_id 1002).
+           B. Segment section shows the orange **"Add Segmentation"** button.
+           C. Click it. Land on /crm/segmentations with a "New Segmentation"
+              dialog OPEN, Name field pre-filled with **"Bridgewater Associates"**.
+           D. Close the dialog with Cancel. Query params are stripped from URL.
+
+        5. **Regression — nothing else on the page moved**
+           A. Header top-bar still shows the client's name as title with an
+              orange Edit button in the top bar (parallel to the notification
+              bell). Save / Cancel replace Edit when in edit mode.
+           B. 5 "Total till date" chips still show (Client Contacts, Projects,
+              Serviced, Calls, Revenue) with seeded totals for clients that have
+              a matching segmentation (e.g., McKinsey shows 707 / 530 / 333 /
+              2,074 / $4.3M).
+           C. Back-to-Clients link still works.
+
+        Report PASS / FAIL per scenario. Do not attempt to fix bugs; report
+        anything wrong back to me and I'll patch.

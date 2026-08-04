@@ -198,9 +198,9 @@ export default function DateFilter({
         )}
 
         {/* Date inputs + calendars */}
-        <div className={singleDate ? "px-8 py-6 pt-6" : "px-8 py-6"}>
+        <div className={singleDate ? "px-5 py-4" : "px-5 py-4"}>
           {mode === "between" ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
                 <DateInput label="From" value={draft?.from} onChange={(d) => setDraft({ ...draft, from: d })} />
                 <div className="mt-4">
@@ -242,7 +242,7 @@ export default function DateFilter({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-8 py-4 border-t border-gray-100 bg-gray-50/50">
+        <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50/50">
           <Button variant="outline" onClick={reset} data-testid={`${testId}-reset`} className="rounded-full px-6">
             Reset
           </Button>

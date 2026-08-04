@@ -41,7 +41,7 @@ function getLast6MonthsRange() {
   return { field: "date", mode: "between", from, to };
 }
 function monthsInRange(filter) {
-  const MAX = 24;
+  const MAX = 72; // support up to 6 years to stay ahead of a 4-5 year range
   const today = new Date();
   let from, to;
   const mode = filter?.mode || "between";
@@ -294,9 +294,6 @@ export default function ClientDetailPage() {
                     <div className="text-base font-semibold text-gray-900">
                       Segmentation for {row.name}
                     </div>
-                    <div className="text-[11px] text-gray-500 mt-0.5">
-                      Matches a segmentation whose name equals this client&apos;s name.
-                    </div>
                   </div>
                 </div>
 
@@ -304,18 +301,17 @@ export default function ClientDetailPage() {
                   <button
                     onClick={goSegmentationExisting}
                     data-testid="client-detail-segment-available"
+                    title="Click to Open"
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold hover:bg-emerald-100 transition-colors"
                   >
                     <Check sx={{ fontSize: 18 }} />
                     Available
-                    <span className="text-[11px] font-normal text-emerald-600 ml-1">
-                      · open in Segmentations
-                    </span>
                   </button>
                 ) : (
                   <button
                     onClick={goSegmentationAdd}
                     data-testid="client-detail-segment-add"
+                    title="Click to Open"
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#ec9324] text-white font-semibold hover:bg-[#d3811b] transition-colors"
                   >
                     <Plus sx={{ fontSize: 18 }} />
@@ -323,28 +319,6 @@ export default function ClientDetailPage() {
                   </button>
                 )}
               </div>
-
-              {/* When available, preview a few L2 nodes as chips */}
-              {seg?.exists && l2Nodes.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-2">
-                    Level-2 nodes ({l2Nodes.length})
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {l2Nodes.slice(0, 20).map((n, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border border-gray-200 bg-gray-50 text-gray-700">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                        {n.name}
-                      </span>
-                    ))}
-                    {l2Nodes.length > 20 && (
-                      <span className="text-[11px] text-gray-500 italic self-center">
-                        + {l2Nodes.length - 20} more…
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* ============ ACTIVITY PIVOT TABLE ============ */}
@@ -352,10 +326,10 @@ export default function ClientDetailPage() {
               <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
                 <div>
                   <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
-                    Activity Summary
+                    Overview
                   </div>
                   <div className="text-base font-semibold text-gray-900">
-                    Level-2 × Month pivot ({months.length} month{months.length === 1 ? "" : "s"})
+                    {months.length} month{months.length === 1 ? "" : "s"} · {l2Nodes.length} segment{l2Nodes.length === 1 ? "" : "s"}
                   </div>
                 </div>
                 <DateFilter
@@ -521,36 +495,67 @@ function MetaField({ label, value, mono }) {
 //   Columns: Months (each with 5 sub-columns for metrics)
 // ============================================================
 const METRICS = [
-  { key: "contacts", label: "Cnt", full: "Contacts" },
-  { key: "projects", label: "Prj", full: "Projects" },
-  { key: "serviced", label: "Srv", full: "Serviced" },
-  { key: "calls",    label: "Cal", full: "Calls" },
-  { key: "revenue",  label: "Rev", full: "Revenue", money: true },
+  { key: "contacts", label: "CC", full: "Client Contacts" },
+  { key: "projects", label: "P",  full: "Projects" },
+  { key: "serviced", label: "S",  full: "Serviced" },
+  { key: "calls",    label: "C",  full: "Calls" },
+  { key: "revenue",  label: "$",  full: "Revenue", money: true },
 ];
 
 function PivotTable({ l2Nodes, months, clientId }) {
   const fmt = (val, money) => {
     if (val === 0 || val === null || val === undefined) return money ? "$0" : "0";
     if (money) {
+      if (Math.abs(val) >= 1_000_000) return `$${(val / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
       if (Math.abs(val) >= 10_000) return `$${(val / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
       return `$${val.toLocaleString()}`;
     }
-    return String(val);
+    return val.toLocaleString();
   };
   const cellValue = (l2Name, monthKey, metricKey) => {
     const [lo, hi] = RANGES[metricKey] || [0, 0];
     return seededInt(clientId, l2Name, monthKey, metricKey, lo, hi);
   };
+
+  // ---- Precompute row totals, column totals, and grand total ----
+  // Cached so we don't re-hash the same (l2, month, metric) tuple multiple times.
+  const { rowTotalsByMetric, colTotalsByMetric, grandTotalsByMetric } = React.useMemo(() => {
+    const rowT = {}; // rowT[l2.name][metric] = sum across months
+    const colT = {}; // colT[monthKey][metric] = sum across l2 nodes
+    const gt   = {}; // gt[metric] = grand sum
+    METRICS.forEach((mt) => { gt[mt.key] = 0; });
+    l2Nodes.forEach((n) => {
+      rowT[n.name] = {};
+      METRICS.forEach((mt) => { rowT[n.name][mt.key] = 0; });
+    });
+    months.forEach((m) => {
+      colT[m.key] = {};
+      METRICS.forEach((mt) => { colT[m.key][mt.key] = 0; });
+    });
+    l2Nodes.forEach((n) => {
+      months.forEach((m) => {
+        METRICS.forEach((mt) => {
+          const v = cellValue(n.name, m.key, mt.key);
+          rowT[n.name][mt.key] += v;
+          colT[m.key][mt.key] += v;
+          gt[mt.key] += v;
+        });
+      });
+    });
+    return { rowTotalsByMetric: rowT, colTotalsByMetric: colT, grandTotalsByMetric: gt };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, l2Nodes, months]);
+
   return (
-    <div className="border border-gray-200 rounded-lg overflow-auto max-h-[600px]">
+    <div className="border border-gray-200 rounded-lg overflow-auto max-h-[640px]">
       <table className="min-w-full border-collapse text-[12px]">
         <thead className="sticky top-0 z-10 bg-white">
           <tr className="bg-gray-50">
             <th
               rowSpan={2}
-              className="sticky left-0 z-20 bg-gray-50 text-left px-3 py-2 border-b border-r border-gray-200 text-[10px] uppercase tracking-wider text-gray-500 font-semibold min-w-[200px]"
+              className="sticky left-0 z-20 bg-gray-50 text-left px-3 py-2 border-b border-r border-gray-200 text-[10px] uppercase tracking-wider text-gray-500 font-semibold min-w-[220px]"
             >
-              Level 2
+              Segmentations
             </th>
             {months.map((m) => (
               <th
@@ -561,19 +566,38 @@ function PivotTable({ l2Nodes, months, clientId }) {
                 {m.label}
               </th>
             ))}
+            <th
+              colSpan={METRICS.length}
+              className="text-center px-2 py-2 border-b border-l-2 border-gray-300 bg-orange-100/80 text-[10px] uppercase tracking-wider text-orange-800 font-bold"
+            >
+              Total
+            </th>
           </tr>
           <tr className="bg-white">
             {months.map((m) =>
               METRICS.map((mt) => (
                 <th
                   key={`${m.key}-${mt.key}`}
-                  className="text-center px-2 py-1.5 border-b border-gray-200 text-[9px] uppercase tracking-wider text-gray-500 font-semibold"
+                  className="text-center px-2 py-1.5 border-b border-gray-200 text-[10px] uppercase tracking-wider text-gray-500 font-semibold cursor-help"
                   title={mt.full}
                 >
                   {mt.label}
                 </th>
               ))
             )}
+            {/* Sub-headers for the Total group */}
+            {METRICS.map((mt) => (
+              <th
+                key={`total-${mt.key}`}
+                className={
+                  "text-center px-2 py-1.5 border-b bg-orange-100/60 text-[10px] uppercase tracking-wider text-orange-800 font-semibold cursor-help" +
+                  (mt.key === "contacts" ? " border-l-2 border-gray-300" : "")
+                }
+                title={mt.full}
+              >
+                {mt.label}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
@@ -587,9 +611,6 @@ function PivotTable({ l2Nodes, months, clientId }) {
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
                   {n.name}
                 </div>
-                {n.parent && (
-                  <div className="text-[10px] text-gray-400 pl-3">under {n.parent}</div>
-                )}
               </td>
               {months.map((m) =>
                 METRICS.map((mt) => {
@@ -609,8 +630,58 @@ function PivotTable({ l2Nodes, months, clientId }) {
                   );
                 })
               )}
+              {/* Row totals — one <td> per metric so they align with header sub-cols */}
+              {METRICS.map((mt) => (
+                <td
+                  key={`row-total-${mt.key}`}
+                  className={
+                    "text-center px-2 py-2 border-b text-[11px] font-bold text-orange-800 tabular-nums" +
+                    (mt.key === "contacts" ? " border-l-2 border-gray-300" : "")
+                  }
+                  style={{ background: ri % 2 ? "rgba(255,237,213,0.55)" : "rgba(255,237,213,0.35)" }}
+                >
+                  {fmt(rowTotalsByMetric[n.name]?.[mt.key] || 0, mt.money)}
+                </td>
+              ))}
             </tr>
           ))}
+
+          {/* Grand totals row */}
+          <tr className="bg-orange-100/60 border-t-2 border-orange-200">
+            <td
+              className="sticky left-0 z-10 bg-orange-100/60 px-3 py-2 text-right border-r border-gray-200 text-[11px] font-bold uppercase tracking-wider text-orange-800"
+            >
+              Total
+            </td>
+            {months.map((m) =>
+              METRICS.map((mt) => {
+                const val = colTotalsByMetric[m.key]?.[mt.key] || 0;
+                return (
+                  <td
+                    key={`${m.key}-${mt.key}`}
+                    className={
+                      "text-center px-2 py-2 text-[11px] font-bold text-orange-800 tabular-nums" +
+                      (mt.key === "revenue" ? " border-r border-orange-200" : "")
+                    }
+                  >
+                    {fmt(val, mt.money)}
+                  </td>
+                );
+              })
+            )}
+            {/* Grand totals — 5 separate cells */}
+            {METRICS.map((mt) => (
+              <td
+                key={`grand-${mt.key}`}
+                className={
+                  "bg-orange-200/80 text-center px-2 py-2 text-[11px] font-bold text-orange-900 tabular-nums" +
+                  (mt.key === "contacts" ? " border-l-2 border-gray-300" : "")
+                }
+              >
+                {fmt(grandTotalsByMetric[mt.key] || 0, mt.money)}
+              </td>
+            ))}
+          </tr>
         </tbody>
       </table>
     </div>

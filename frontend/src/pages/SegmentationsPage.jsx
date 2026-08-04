@@ -117,13 +117,17 @@ export default function SegmentationsPage() {
     );
   }, [rows, search]);
 
-  // Auto-select first row if nothing selected (or the selected one disappeared)
+  // Auto-select first row if nothing selected (or the selected one disappeared).
+  // IMPORTANT: skip this when the URL has a pending ?select= param — otherwise the
+  // deep-link auto-select (from Client Detail's "Available" button) races with this
+  // and always loses to rows[0].
   useEffect(() => {
     if (rows.length === 0) { setSelectedId(null); return; }
+    if (searchParams.get("select")) return; // deep-link handler owns selection
     if (!selectedId || !rows.find((r) => r.id === selectedId)) {
       setSelectedId(rows[0].id);
     }
-  }, [rows, selectedId]);
+  }, [rows, selectedId, searchParams]);
 
   const selected = useMemo(
     () => rows.find((r) => r.id === selectedId) || null,
