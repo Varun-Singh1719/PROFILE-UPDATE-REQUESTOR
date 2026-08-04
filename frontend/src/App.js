@@ -32,6 +32,7 @@ import RequestWorkstationPage from "./pages/RequestWorkstationPage";
 import PendingApprovalsPage from "./pages/PendingApprovalsPage";
 import BookingsPage from "./pages/BookingsPage";
 import SegmentationsPage from "./pages/SegmentationsPage";
+import ClientsPage from "./pages/ClientsPage";
 import SegmentationLinkMockupsPage from "./pages/SegmentationLinkMockupsPage";
 import ClientContactsPage from "./pages/ClientContactsPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -152,6 +153,7 @@ function App() {
             
             {/* CRM (label to be finalised later) — currently accessible to any Super Admin / Admin */}
             <Route path="/crm/segmentations" element={<ProtectedRoute roles={ADMIN_ROLES}><SegmentationsPage /></ProtectedRoute>} />
+            <Route path="/crm/clients" element={<ProtectedRoute roles={ADMIN_ROLES}><ClientsPage /></ProtectedRoute>} />
             <Route path="/crm/segmentation-link-mockups" element={<ProtectedRoute roles={ADMIN_ROLES}><SegmentationLinkMockupsPage /></ProtectedRoute>} />
             <Route path="/crm/client-contacts" element={<ProtectedRoute roles={ADMIN_ROLES}><ClientContactsPage /></ProtectedRoute>} />
             <Route path="/crm/client-contacts/:id" element={<ProtectedRoute roles={ADMIN_ROLES}><ClientContactsPage /></ProtectedRoute>} />

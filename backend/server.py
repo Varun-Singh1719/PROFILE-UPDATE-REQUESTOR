@@ -46,6 +46,7 @@ from routers import bookings as _bookings  # noqa: F401
 from routers import my_workspace as _my_workspace  # noqa: F401
 from routers import permissions_v3 as _permissions_v3  # noqa: F401
 from routers import segmentations as _segmentations  # noqa: F401
+from routers import clients as _clients  # noqa: F401
 from routers import client_contact_uploads as _client_contact_uploads  # noqa: F401  (must come BEFORE client_contacts so /client-contacts/sample-template etc. beat /client-contacts/{id})
 from routers import client_contacts as _client_contacts  # noqa: F401
 

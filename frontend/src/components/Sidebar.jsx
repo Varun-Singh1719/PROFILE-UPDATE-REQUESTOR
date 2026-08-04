@@ -12,6 +12,7 @@ import Mail from "@mui/icons-material/MailOutlined";
 import ChevronDown from "@mui/icons-material/KeyboardArrowDown";
 import ChevronRight from "@mui/icons-material/ChevronRight";
 import Briefcase from "@mui/icons-material/WorkOutlined";
+import BusinessCenter from "@mui/icons-material/BusinessCenterOutlined";
 import Settings from "@mui/icons-material/SettingsOutlined";
 import Shield from "@mui/icons-material/ShieldOutlined";
 import Armchair from "@mui/icons-material/Chair";
@@ -73,6 +74,7 @@ const NAV_CONFIG = [
     kind: "group", label: CRM_MODULE_LABEL, icon: Diversity3,
     children: [
       { to: "/crm/segmentations", label: "Segmentations", icon: PieChart },
+      { to: "/crm/clients", label: "Clients", icon: BusinessCenter },
       { to: "/crm/client-contacts", label: "Client Contacts", icon: BookUser },
     ],
   },
