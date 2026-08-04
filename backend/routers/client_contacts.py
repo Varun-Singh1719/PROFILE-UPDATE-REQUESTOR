@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
@@ -124,6 +124,14 @@ class ClientContactBase(BaseModel):
     previous_work_experience: Optional[List[WorkExperience]] = None
     linkedin_url: Optional[str] = Field(None, max_length=400)
     industries: Optional[List[str]] = None      # L2 segment names
+    # Metric placeholders — will be replaced by the real calc pipeline later.
+    # `totals_till_date` = { projects, serviced, calls, revenue } ints.
+    # `activity_by_month` = { projects: {"YYYY-MM": n}, serviced: {...}, ... }.
+    # `last_project_receiving_date` / `last_call_date` = ISO date strings.
+    totals_till_date: Optional[Dict[str, int]] = None
+    activity_by_month: Optional[Dict[str, Dict[str, int]]] = None
+    last_project_receiving_date: Optional[str] = Field(None, max_length=32)
+    last_call_date: Optional[str] = Field(None, max_length=32)
 
     @field_validator("name")
     @classmethod
@@ -149,6 +157,10 @@ class ClientContactUpdate(BaseModel):
     previous_work_experience: Optional[List[WorkExperience]] = None
     linkedin_url: Optional[str] = Field(None, max_length=400)
     industries: Optional[List[str]] = None
+    totals_till_date: Optional[Dict[str, int]] = None
+    activity_by_month: Optional[Dict[str, Dict[str, int]]] = None
+    last_project_receiving_date: Optional[str] = Field(None, max_length=32)
+    last_call_date: Optional[str] = Field(None, max_length=32)
 
 
 # ---------- helpers ----------

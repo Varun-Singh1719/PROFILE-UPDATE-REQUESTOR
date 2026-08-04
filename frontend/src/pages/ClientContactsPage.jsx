@@ -118,6 +118,21 @@ function fmtDate(iso) {
   }
 }
 
+// Compact metric formatter for the card mini-tiles.
+//   fmtMetric(12)                -> "12"
+//   fmtMetric(1450000, {money})  -> "$1.5M"
+//   fmtMetric(null)              -> "—"
+function fmtMetric(v, opts = {}) {
+  if (v === null || v === undefined || v === "" || !Number.isFinite(Number(v))) return "—";
+  const n = Number(v);
+  if (opts.money) {
+    if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+    if (Math.abs(n) >= 1_000)     return `$${(n / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+    return `$${n.toLocaleString()}`;
+  }
+  return n.toLocaleString();
+}
+
 // Level 1 = segmentation names (each Segmentation record IS a client).
 function levelOneOptions(segRows) {
   return (segRows || [])
@@ -570,12 +585,13 @@ function ContactCard({ row, onView, onEdit, onDelete }) {
         <MetaRow label="Base Location" value={row.base_location} />
       </div>
 
-      {/* Metrics row — all in orange (single accent) */}
+      {/* Metrics row — all in orange (single accent). Reads totals_till_date
+          when the backend supplies it; falls back to "—" otherwise. */}
       <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-4 gap-1 text-center">
-        <MetricMini value="—" label="Projects" />
-        <MetricMini value="—" label="Serviced" />
-        <MetricMini value="—" label="Calls" />
-        <MetricMini value="—" label="Revenue" />
+        <MetricMini value={fmtMetric(row.totals_till_date?.projects)}                  label="Projects" />
+        <MetricMini value={fmtMetric(row.totals_till_date?.serviced)}                  label="Serviced" />
+        <MetricMini value={fmtMetric(row.totals_till_date?.calls)}                     label="Calls" />
+        <MetricMini value={fmtMetric(row.totals_till_date?.revenue, { money: true })}  label="Revenue" />
       </div>
 
       {/* Bottom action bar — just Edit / View / Delete now
@@ -1283,22 +1299,23 @@ function ClientContactDetail({ contactId }) {
             </div>
           )}
 
-          {/* Placeholder date fields */}
+          {/* Placeholder date fields (backend now supplies dummy values on
+              seeded rows; falls back to "—" when absent). */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
               <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
                 Last Project Receiving Date
               </div>
-              <div className="text-lg font-semibold text-gray-400 mt-1">
-                — <span className="text-[11px] text-gray-400 font-normal ml-2">(placeholder)</span>
+              <div className={`text-lg font-semibold mt-1 ${row.last_project_receiving_date ? "text-gray-900" : "text-gray-400"}`}>
+                {row.last_project_receiving_date ? fmtDate(row.last_project_receiving_date) : "—"}
               </div>
             </div>
             <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
               <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
                 Last Call Date
               </div>
-              <div className="text-lg font-semibold text-gray-400 mt-1">
-                — <span className="text-[11px] text-gray-400 font-normal ml-2">(placeholder)</span>
+              <div className={`text-lg font-semibold mt-1 ${row.last_call_date ? "text-gray-900" : "text-gray-400"}`}>
+                {row.last_call_date ? fmtDate(row.last_call_date) : "—"}
               </div>
             </div>
           </div>
@@ -1307,6 +1324,7 @@ function ClientContactDetail({ contactId }) {
           <ActivitySummary
             filter={activityFilter}
             onFilterChange={setActivityFilter}
+            data={row.activity_by_month}
           />
 
           {/* Previous work experience */}
@@ -1402,7 +1420,12 @@ function ActivitySummary({ filter, onFilterChange, data = null }) {
 
   const fmtCell = (v, isMoney) => {
     if (!v) return isMoney ? "$0" : "0";
-    if (isMoney) return `$${v.toLocaleString()}`;
+    if (isMoney) {
+      // Abbreviate large revenue numbers so the pivot cells don't blow up.
+      if (Math.abs(v) >= 1_000_000) return `$${(v / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+      if (Math.abs(v) >= 10_000)    return `$${(v / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+      return `$${v.toLocaleString()}`;
+    }
     return v.toLocaleString();
   };
 
@@ -1507,7 +1530,6 @@ function ActivitySummary({ filter, onFilterChange, data = null }) {
 
       <div className="mt-3 text-[11px] text-gray-400 italic flex items-center justify-between flex-wrap gap-2">
         <span>
-          Cell values are placeholders — the calculation pipeline will be enabled in a later phase.
           Months with no activity show <span className="font-mono">0</span>.
         </span>
         <span className="text-gray-500">Default range: <b className="text-gray-700">Last 12 Months</b></span>
@@ -1533,7 +1555,12 @@ function TotalTillDateChips({ totals = null }) {
   };
   const fmt = (v, money) => {
     if (!v) return money ? "$0" : "0";
-    return money ? `$${v.toLocaleString()}` : v.toLocaleString();
+    if (money) {
+      if (Math.abs(v) >= 1_000_000) return `$${(v / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+      if (Math.abs(v) >= 10_000)    return `$${(v / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+      return `$${v.toLocaleString()}`;
+    }
+    return v.toLocaleString();
   };
   // Single orange colour scheme for all four chips (per spec).
   const scheme = "border-[#ec9324]/30 bg-[#ec9324]/5 text-[#ec9324] ring-[#ec9324]/10";
