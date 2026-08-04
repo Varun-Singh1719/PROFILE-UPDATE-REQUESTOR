@@ -122,17 +122,19 @@ export default function SegmentationLinkMockupsPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-2 border-b border-gray-200 mb-6">
+        <div className="flex items-center gap-2 border-b border-gray-200 mb-6 overflow-x-auto">
           {[
             { k: "A", label: "Concept A · Chip Drawer" },
             { k: "B", label: "Concept B · Dual-Tree Linker" },
             { k: "C", label: "Concept C · Constellation Graph" },
+            { k: "D", label: "Concept D · Inline Pill Tags" },
+            { k: "E", label: "Concept E · Equivalency Matrix" },
           ].map((t) => (
             <button
               key={t.k}
               onClick={() => setTab(t.k)}
               className={
-                "px-4 py-2.5 text-sm font-medium border-b-2 transition-colors " +
+                "px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap " +
                 (tab === t.k
                   ? "border-[#ec9324] text-[#ec9324]"
                   : "border-transparent text-gray-500 hover:text-gray-800")
@@ -146,6 +148,8 @@ export default function SegmentationLinkMockupsPage() {
         {tab === "A" && <ConceptA />}
         {tab === "B" && <ConceptB />}
         {tab === "C" && <ConceptC />}
+        {tab === "D" && <ConceptD />}
+        {tab === "E" && <ConceptE />}
       </div>
     </Layout>
   );
@@ -1296,6 +1300,546 @@ function ConceptC() {
             "Nodes clustered around their parent segmentation",
             "Hover a node to highlight its links; click to focus + edit in the side panel",
             "Filter: All / Linked / Unlinked",
+          ]}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// CONCEPT D — Inline Pill Tags on Tree
+// ============================================================
+function ConceptD() {
+  const [links, setLinks] = useState(INITIAL_LINKS);
+  const [openNodeId, setOpenNodeId] = useState(null);
+  const [query, setQuery] = useState("");
+
+  const seg = SEGMENTATIONS[0]; // Infollion Research
+  const width = 1100;
+  const height = 640;
+  const rootX = 60;
+  const rootY = height / 2;
+
+  const l1Groups = useMemo(() => {
+    const map = {};
+    seg.l2.forEach((n) => {
+      if (!map[n.parent]) map[n.parent] = [];
+      map[n.parent].push(n);
+    });
+    return Object.entries(map).map(([parent, nodes]) => ({ parent, nodes }));
+  }, [seg]);
+
+  const l1X = 240;
+  const l2X = 500;
+  const l1YStart = 60;
+  const l1Slot = (height - 120) / Math.max(l1Groups.length, 1);
+  const l1Positions = l1Groups.map((_, i) => ({
+    x: l1X,
+    y: l1YStart + l1Slot * i + l1Slot / 2,
+  }));
+  const l2Positions = [];
+  l1Groups.forEach((g, gi) => {
+    const parentY = l1Positions[gi].y;
+    const spacing = 90; // extra room for chips row
+    g.nodes.forEach((n, i) => {
+      l2Positions.push({
+        id: n.id,
+        name: n.name,
+        x: l2X,
+        y: parentY - ((g.nodes.length - 1) * spacing) / 2 + i * spacing,
+        parentIndex: gi,
+      });
+    });
+  });
+
+  const findSuggestions = () => {
+    const q = query.trim().toLowerCase();
+    const already = new Set(
+      links
+        .filter((l) => l.a === openNodeId || l.b === openNodeId)
+        .flatMap((l) => [l.a, l.b])
+    );
+    const out = [];
+    SEGMENTATIONS.forEach((s) => {
+      if (s.id === seg.id) return;
+      s.l2.forEach((n) => {
+        if (already.has(n.id)) return;
+        if (q && !n.name.toLowerCase().includes(q)) return;
+        out.push({ ...n, seg: s });
+      });
+    });
+    return out.slice(0, 6);
+  };
+
+  return (
+    <div className="grid grid-cols-1 gap-6">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <div className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">
+              Segmentation
+            </div>
+            <div className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full" style={{ background: seg.color }} />
+              {seg.name}
+            </div>
+          </div>
+          <div className="text-xs text-gray-500">
+            Links appear as coloured pills directly under each Level-2 node
+          </div>
+        </div>
+        <div className="p-6 relative">
+          <svg viewBox={`0 0 ${width} ${height}`} className="w-full" style={{ height }}>
+            {/* root -> l1 */}
+            {l1Positions.map((p, i) => (
+              <path
+                key={`r-${i}`}
+                d={`M ${rootX + 22},${rootY} C ${(rootX + p.x) / 2},${rootY} ${(rootX + p.x) / 2},${p.y} ${p.x - 22},${p.y}`}
+                fill="none"
+                stroke="#e5e7eb"
+                strokeWidth={1.5}
+              />
+            ))}
+            {/* l1 -> l2 */}
+            {l2Positions.map((n) => {
+              const p = l1Positions[n.parentIndex];
+              return (
+                <path
+                  key={`l-${n.id}`}
+                  d={`M ${p.x + 22},${p.y} C ${(p.x + n.x) / 2},${p.y} ${(p.x + n.x) / 2},${n.y} ${n.x - 22},${n.y}`}
+                  fill="none"
+                  stroke="#e5e7eb"
+                  strokeWidth={1.5}
+                />
+              );
+            })}
+            {/* root */}
+            <circle cx={rootX} cy={rootY} r={12} fill={seg.color} />
+            <text x={rootX + 22} y={rootY + 4} fontSize={13} fontWeight={700} fill="#111827">
+              {seg.name}
+            </text>
+            {/* l1 groups */}
+            {l1Groups.map((g, i) => (
+              <g key={g.parent}>
+                <circle cx={l1Positions[i].x} cy={l1Positions[i].y} r={9} fill="#0ea5e9" />
+                <text
+                  x={l1Positions[i].x + 16}
+                  y={l1Positions[i].y + 4}
+                  fontSize={12}
+                  fontWeight={600}
+                  fill="#374151"
+                >
+                  {g.parent}
+                </text>
+              </g>
+            ))}
+            {/* l2 nodes with chip rows */}
+            {l2Positions.map((n) => {
+              const nodeLinks = linksFor(n.id, links);
+              const isOpen = openNodeId === n.id;
+              return (
+                <g key={n.id}>
+                  <circle cx={n.x} cy={n.y} r={7} fill="#fff" stroke="#22c55e" strokeWidth={2} />
+                  <text
+                    x={n.x + 14}
+                    y={n.y + 4}
+                    fontSize={13}
+                    fontWeight={600}
+                    fill="#111827"
+                  >
+                    {n.name}
+                  </text>
+                  {/* Chips row via foreignObject */}
+                  <foreignObject x={n.x + 14} y={n.y + 10} width={520} height={40}>
+                    <div
+                      xmlns="http://www.w3.org/1999/xhtml"
+                      className="flex flex-wrap items-center gap-1"
+                    >
+                      {nodeLinks.map((ln) => (
+                        <span
+                          key={ln.id}
+                          className="group inline-flex items-center gap-1 pl-1.5 pr-0.5 py-0.5 rounded-full text-[10px] font-medium border shadow-sm bg-white"
+                          style={{
+                            borderColor: ln.seg.color + "70",
+                            color: "#374151",
+                          }}
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full"
+                            style={{ background: ln.seg.color }}
+                          />
+                          {ln.name}
+                          <button
+                            onClick={() =>
+                              setLinks((prev) =>
+                                prev.filter(
+                                  (l) =>
+                                    !(
+                                      (l.a === n.id && l.b === ln.id) ||
+                                      (l.b === n.id && l.a === ln.id)
+                                    )
+                                )
+                              )
+                            }
+                            className="w-3 h-3 rounded-full opacity-40 hover:opacity-100 hover:bg-red-100 hover:text-red-600 flex items-center justify-center"
+                          >
+                            <span style={{ fontSize: 10, lineHeight: 1 }}>×</span>
+                          </button>
+                        </span>
+                      ))}
+                      <button
+                        onClick={() => {
+                          setOpenNodeId(isOpen ? null : n.id);
+                          setQuery("");
+                        }}
+                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold border border-dashed border-[#ec9324] text-[#ec9324] bg-orange-50/60 hover:bg-orange-100"
+                      >
+                        + Link
+                      </button>
+                    </div>
+                  </foreignObject>
+
+                  {/* Inline autocomplete popover */}
+                  {isOpen && (
+                    <foreignObject x={n.x + 14} y={n.y + 44} width={340} height={260}>
+                      <div
+                        xmlns="http://www.w3.org/1999/xhtml"
+                        className="bg-white rounded-lg shadow-2xl border border-gray-200 overflow-hidden"
+                      >
+                        <div className="px-3 py-2 border-b border-gray-100 flex items-center gap-2">
+                          <span style={{ fontSize: 12, color: "#9ca3af" }}>🔎</span>
+                          <input
+                            autoFocus
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            className="flex-1 outline-none text-xs placeholder-gray-400"
+                            placeholder="Search Level-2 nodes to link…"
+                          />
+                          <button
+                            className="text-[10px] text-gray-400 hover:text-gray-700"
+                            onClick={() => setOpenNodeId(null)}
+                          >
+                            ESC
+                          </button>
+                        </div>
+                        <div className="max-h-[210px] overflow-y-auto">
+                          {findSuggestions().length === 0 ? (
+                            <div className="px-3 py-3 text-[11px] italic text-gray-400">
+                              No matching nodes
+                            </div>
+                          ) : (
+                            findSuggestions().map((s) => (
+                              <button
+                                key={s.id}
+                                onClick={() => {
+                                  setLinks((prev) => [
+                                    ...prev,
+                                    { a: n.id, b: s.id },
+                                  ]);
+                                  setQuery("");
+                                }}
+                                className="w-full px-3 py-2 flex items-center gap-2 hover:bg-orange-50 border-b border-gray-50 text-left"
+                              >
+                                <span
+                                  className="w-2 h-2 rounded-full"
+                                  style={{ background: s.seg.color }}
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-xs font-semibold text-gray-800">
+                                    {s.name}
+                                  </div>
+                                  <div className="text-[10px] text-gray-500">
+                                    {s.seg.name} · under {s.parent}
+                                  </div>
+                                </div>
+                                <span className="text-[10px] text-[#ec9324] font-semibold">
+                                  Link ↵
+                                </span>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </foreignObject>
+                  )}
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <ProCon
+          heading="Best for"
+          tone="orange"
+          items={[
+            "Everyday CRM linking — see and edit links without leaving the tree",
+            "Analysts who scan a tree top-down and add tags in place",
+            "Zero context-switch: no drawer, no modal, no navigation",
+          ]}
+        />
+        <ProCon
+          heading="Not ideal for"
+          tone="gray"
+          items={[
+            "Very dense trees (many chips can clutter the row)",
+            "Bulk operations across many nodes",
+          ]}
+        />
+        <ProCon
+          heading="Interaction model"
+          tone="blue"
+          items={[
+            "Chips (coloured by target segmentation) render under each Level-2 label",
+            "'+ Link' pill opens an inline autocomplete right on the node",
+            "Type-ahead search filters across all other segmentations",
+            "Enter / click a suggestion → link created instantly; × on a chip removes",
+          ]}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// CONCEPT E — Equivalency Matrix (checkbox grid)
+// ============================================================
+function ConceptE() {
+  const [links, setLinks] = useState(INITIAL_LINKS);
+  const [rowSegId, setRowSegId] = useState("infollion");
+  const [colSegId, setColSegId] = useState("techcorp");
+
+  const rowSeg = SEGMENTATIONS.find((s) => s.id === rowSegId);
+  const colSeg = SEGMENTATIONS.find((s) => s.id === colSegId);
+
+  const isLinked = (aId, bId) =>
+    links.some(
+      (l) => (l.a === aId && l.b === bId) || (l.b === aId && l.a === bId)
+    );
+
+  const toggle = (aId, bId) => {
+    setLinks((prev) => {
+      const exists = prev.some(
+        (l) => (l.a === aId && l.b === bId) || (l.b === aId && l.a === bId)
+      );
+      if (exists) {
+        return prev.filter(
+          (l) => !((l.a === aId && l.b === bId) || (l.b === aId && l.a === bId))
+        );
+      }
+      return [...prev, { a: aId, b: bId }];
+    });
+  };
+
+  const rowCoverage = (rowNode) =>
+    colSeg.l2.filter((c) => isLinked(rowNode.id, c.id)).length;
+  const colCoverage = (colNode) =>
+    rowSeg.l2.filter((r) => isLinked(r.id, colNode.id)).length;
+
+  const totalCells = rowSeg.l2.length * colSeg.l2.length;
+  const linkedCells = rowSeg.l2.reduce(
+    (acc, r) => acc + rowCoverage(r),
+    0
+  );
+
+  return (
+    <div className="grid grid-cols-1 gap-6">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        {/* header controls */}
+        <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center gap-4 bg-gradient-to-r from-orange-50/40 to-sky-50/40">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">
+              Rows
+            </span>
+            <select
+              value={rowSegId}
+              onChange={(e) => setRowSegId(e.target.value)}
+              className="text-sm font-semibold bg-white border border-gray-200 rounded-md px-2 py-1"
+            >
+              {SEGMENTATIONS.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <span className="text-gray-300">×</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">
+              Columns
+            </span>
+            <select
+              value={colSegId}
+              onChange={(e) => setColSegId(e.target.value)}
+              className="text-sm font-semibold bg-white border border-gray-200 rounded-md px-2 py-1"
+            >
+              {SEGMENTATIONS.filter((s) => s.id !== rowSegId).map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="ml-auto flex items-center gap-3">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-100 text-[#ec9324] text-xs font-semibold">
+              <LinkIcon style={{ fontSize: 14 }} />
+              {linkedCells} / {totalCells} cells linked
+            </span>
+            <span className="text-xs text-gray-500">
+              {Math.round((linkedCells / totalCells) * 100)}% coverage
+            </span>
+          </div>
+        </div>
+
+        {/* Matrix */}
+        <div className="overflow-auto">
+          <table className="min-w-full border-collapse">
+            <thead>
+              <tr>
+                <th className="sticky left-0 bg-white z-10 px-3 py-3 border-b border-gray-200 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500 min-w-[220px]">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full" style={{ background: rowSeg.color }} />
+                    {rowSeg.name}
+                  </div>
+                </th>
+                {colSeg.l2.map((c) => (
+                  <th
+                    key={c.id}
+                    className="px-2 py-3 border-b border-gray-200 text-center align-bottom text-[11px] font-semibold text-gray-700"
+                    style={{ minWidth: 96 }}
+                  >
+                    <div className="flex flex-col items-center gap-1">
+                      <span
+                        className="w-2 h-2 rounded-full"
+                        style={{ background: colSeg.color }}
+                      />
+                      <span
+                        className="whitespace-nowrap"
+                        style={{
+                          writingMode: "horizontal-tb",
+                          transform: "rotate(-30deg)",
+                          transformOrigin: "center",
+                        }}
+                      >
+                        {c.name}
+                      </span>
+                      <span className="text-[9px] text-gray-400 font-normal">
+                        {colCoverage(c)} link{colCoverage(c) === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                  </th>
+                ))}
+                <th className="px-3 py-3 border-b border-l border-gray-200 text-center text-[11px] font-semibold uppercase tracking-wider text-gray-500 bg-orange-50/60">
+                  Row total
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rowSeg.l2.map((r, ri) => (
+                <tr key={r.id} className={ri % 2 ? "bg-gray-50/40" : "bg-white"}>
+                  <td className="sticky left-0 z-10 px-3 py-2 border-b border-gray-100 text-sm font-medium text-gray-800"
+                      style={{ background: ri % 2 ? "#fafafa" : "#fff" }}>
+                    <div className="flex flex-col">
+                      <span>{r.name}</span>
+                      <span className="text-[10px] text-gray-400 font-normal">
+                        under {r.parent}
+                      </span>
+                    </div>
+                  </td>
+                  {colSeg.l2.map((c) => {
+                    const linked = isLinked(r.id, c.id);
+                    return (
+                      <td
+                        key={c.id}
+                        className={
+                          "px-2 py-2 border-b border-gray-100 text-center cursor-pointer transition-colors " +
+                          (linked ? "bg-orange-50 hover:bg-orange-100" : "hover:bg-orange-50/40")
+                        }
+                        onClick={() => toggle(r.id, c.id)}
+                      >
+                        {linked ? (
+                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#ec9324] text-white shadow-sm">
+                            <CheckCircle style={{ fontSize: 16 }} />
+                          </span>
+                        ) : (
+                          <span className="inline-block w-5 h-5 rounded border border-gray-300 hover:border-[#ec9324] hover:bg-white" />
+                        )}
+                      </td>
+                    );
+                  })}
+                  <td className="px-3 py-2 border-b border-l border-gray-100 text-center text-sm font-semibold bg-orange-50/60 text-[#ec9324]">
+                    {rowCoverage(r)}
+                  </td>
+                </tr>
+              ))}
+              {/* Column totals footer */}
+              <tr className="bg-orange-50/40">
+                <td className="sticky left-0 z-10 bg-orange-50/60 px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-gray-500 border-t border-gray-200">
+                  Col total
+                </td>
+                {colSeg.l2.map((c) => (
+                  <td
+                    key={c.id}
+                    className="px-2 py-2 text-center text-sm font-semibold text-[#ec9324] border-t border-gray-200"
+                  >
+                    {colCoverage(c)}
+                  </td>
+                ))}
+                <td className="px-3 py-2 text-center text-sm font-bold text-[#ec9324] border-t border-l border-gray-200 bg-orange-100/60">
+                  {linkedCells}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer legend */}
+        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center gap-4 text-[11px] text-gray-600">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block w-4 h-4 rounded-full bg-[#ec9324] text-white text-[10px] flex items-center justify-center">
+              ✓
+            </span>
+            Linked
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block w-4 h-4 rounded border border-gray-300" />
+            Not linked
+          </span>
+          <span className="ml-auto flex items-center gap-1">
+            <Info style={{ fontSize: 14 }} />
+            Click any cell to toggle the link. Row / column totals give you instant coverage insight.
+          </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <ProCon
+          heading="Best for"
+          tone="orange"
+          items={[
+            "QA / bulk-verify mapping between two client taxonomies",
+            "Coverage gap analysis (which nodes have zero cross-links?)",
+            "Reviewers scanning row/column totals to catch imbalance",
+          ]}
+        />
+        <ProCon
+          heading="Not ideal for"
+          tone="gray"
+          items={[
+            "Ad-hoc, one-off linking while inside a normal tree edit",
+            "Understanding hierarchy — the parent (Level-1) context is stripped",
+          ]}
+        />
+        <ProCon
+          heading="Interaction model"
+          tone="blue"
+          items={[
+            "Row / Column dropdowns pick any 2 segmentations",
+            "Click a cell → toggles the link on/off",
+            "Row & column totals refresh live",
+            "Header pill shows overall coverage % of the grid",
           ]}
         />
       </div>
