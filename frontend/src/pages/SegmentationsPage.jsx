@@ -18,6 +18,8 @@ import Pencil from "@mui/icons-material/EditOutlined";
 import Trash2 from "@mui/icons-material/DeleteOutlined";
 import MoreVertical from "@mui/icons-material/MoreVert";
 import Circle from "@mui/icons-material/FiberManualRecord";
+import ChevronLeft from "@mui/icons-material/ChevronLeft";
+import ChevronRight from "@mui/icons-material/ChevronRight";
 import AccountTree from "@mui/icons-material/AccountTreeOutlined";
 import InfoOutlined from "@mui/icons-material/InfoOutlined";
 import Check from "@mui/icons-material/CheckOutlined";
@@ -50,6 +52,8 @@ export default function SegmentationsPage() {
   const [editing, setEditing] = useState(null);      // segmentation being edited (null = create)
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  // Collapsible sidebar (spec: expand/collapse chevron above the list bar).
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // ---- Fetch list ----
   const load = async () => {
@@ -175,11 +179,55 @@ export default function SegmentationsPage() {
       }
     >
       <div className="flex-1 flex overflow-hidden" data-testid="segmentations-shell">
-        {/* LEFT — sidebar list of segmentations */}
+        {/* LEFT — tree chart / detail (moved to the left per spec) */}
+        <main className="flex-1 bg-gray-50 overflow-hidden flex flex-col" data-testid="segmentations-detail">
+          {selected ? (
+            <SegmentationDetail
+              row={selected}
+              onEdit={() => openEdit(selected)}
+              onDelete={() => remove(selected)}
+              onTreeSaved={async (updated) => {
+                await load();
+                if (updated?.id) setSelectedId(updated.id);
+              }}
+            />
+          ) : (
+            <EmptyDetail onCreate={openCreate} hasAny={rows.length > 0} />
+          )}
+        </main>
+
+        {/* Thin expand rail — visible only when the sidebar is collapsed */}
+        {sidebarCollapsed && (
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed(false)}
+            data-testid="segmentations-sidebar-expand"
+            title="Show segmentations list"
+            className="w-6 bg-white border-l border-gray-200 hover:bg-[#ec9324]/5 flex items-start justify-center pt-3 group flex-shrink-0"
+          >
+            <ChevronLeft sx={{ fontSize: 18 }} className="text-gray-400 group-hover:text-[#ec9324]" />
+          </button>
+        )}
+
+        {/* RIGHT — sidebar list of segmentations (moved to the right per spec) */}
+        {!sidebarCollapsed && (
         <aside
-          className="w-[320px] min-w-[280px] max-w-[360px] bg-white border-r border-gray-200 flex flex-col"
+          className="w-[320px] min-w-[280px] max-w-[360px] bg-white border-l border-gray-200 flex flex-col"
           data-testid="segmentations-sidebar"
         >
+          {/* Collapse toggle above the segmentations bar (spec: small `>` chevron) */}
+          <div className="flex items-center justify-end px-2 py-1.5 border-b border-gray-100 bg-gray-50/60">
+            <button
+              type="button"
+              onClick={() => setSidebarCollapsed(true)}
+              data-testid="segmentations-sidebar-collapse"
+              title="Hide segmentations list"
+              className="w-6 h-6 rounded-md flex items-center justify-center text-gray-500 hover:bg-[#ec9324]/10 hover:text-[#ec9324]"
+            >
+              <ChevronRight sx={{ fontSize: 18 }} />
+            </button>
+          </div>
+
           <div className="px-4 py-4 border-b border-gray-100">
             <div className="flex items-center gap-2 mb-3">
               <PieChart className="text-[#ec9324] flex-shrink-0" sx={{ fontSize: 20 }} />
@@ -295,23 +343,7 @@ export default function SegmentationsPage() {
             )}
           </div>
         </aside>
-
-        {/* MAIN — detail / placeholder */}
-        <main className="flex-1 bg-gray-50 overflow-hidden flex flex-col" data-testid="segmentations-detail">
-          {selected ? (
-            <SegmentationDetail
-              row={selected}
-              onEdit={() => openEdit(selected)}
-              onDelete={() => remove(selected)}
-              onTreeSaved={async (updated) => {
-                await load();
-                if (updated?.id) setSelectedId(updated.id);
-              }}
-            />
-          ) : (
-            <EmptyDetail onCreate={openCreate} hasAny={rows.length > 0} />
-          )}
-        </main>
+        )}
       </div>
 
       {/* Create / Edit dialog */}

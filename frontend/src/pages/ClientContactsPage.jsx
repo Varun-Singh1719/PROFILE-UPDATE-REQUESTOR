@@ -546,7 +546,7 @@ function ContactCard({ row, onView, onEdit, onDelete }) {
       className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-[#ec9324]/40 transition-all p-4 flex flex-col"
       data-testid={`client-contact-card-${row.display_id}`}
     >
-      {/* Header — initials, name, contact + linkedin icons, no ID row here */}
+      {/* Header — initials, name, firm logo, LinkedIn + contact icons */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1 flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-full bg-[#ec9324] text-white flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-sm">
@@ -554,13 +554,21 @@ function ContactCard({ row, onView, onEdit, onDelete }) {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 min-w-0">
-              <h3
-                className="text-[15px] font-bold text-gray-900 truncate leading-tight cursor-pointer hover:text-[#ec9324] min-w-0"
-                onClick={onView}
+              <a
+                href={`/crm/client-contacts/${row.id}`}
+                onClick={(e) => {
+                  // Plain-click stays inside the SPA. Ctrl/Cmd/middle-click
+                  // is left to the browser so it opens a new tab natively.
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
+                  e.preventDefault();
+                  onView();
+                }}
+                className="text-[15px] font-bold text-gray-900 truncate leading-tight cursor-pointer hover:text-[#ec9324] min-w-0 no-underline"
                 data-testid={`client-contact-name-${row.display_id}`}
               >
                 {row.name}
-              </h3>
+              </a>
+              <FirmLogo name={row.client_name} />
               <LinkedInIconBtn
                 url={row.linkedin_url}
                 testId={`client-contact-linkedin-${row.display_id}`}
@@ -779,6 +787,47 @@ function LinkedInIconBtn({ url, testId }) {
     </Tooltip>
   );
 }
+
+// ---------- header-icon: firm brand logo pill ----------
+// Small text-based "logo" styled with each consulting firm's brand colours.
+// Renders nothing if the firm has no mapping (falls back gracefully so
+// unmapped clients don't break the card layout).
+const FIRM_BRAND = {
+  "McKinsey":                 { text: "McK",   bg: "#003A70", fg: "#FFFFFF" }, // MBB navy
+  "Boston Consulting Group":  { text: "BCG",   bg: "#00532F", fg: "#FFFFFF" }, // BCG green
+  "A T Kearney":              { text: "K",     bg: "#00A9E0", fg: "#FFFFFF" }, // Kearney blue
+  "Alvarez & Marsal":         { text: "A&M",   bg: "#00263A", fg: "#F0B323" }, // A&M navy + gold
+  "PwC":                      { text: "pwc",   bg: "#D04A02", fg: "#FFFFFF" }, // PwC orange
+  "EY":                       { text: "EY",    bg: "#2E2E38", fg: "#FFE600" }, // EY charcoal + yellow
+  "Infollion Research":       { text: "IR",    bg: "#ec9324", fg: "#FFFFFF" }, // Infollion orange
+};
+
+function FirmLogo({ name }) {
+  const brand = FIRM_BRAND[name];
+  if (!brand) return null;
+  const wide = brand.text.length > 2; // slightly wider pill for BCG / A&M / pwc
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={`inline-flex items-center justify-center rounded-md flex-shrink-0 shadow-sm select-none ${
+            wide ? "px-1.5 h-5 text-[9px]" : "w-5 h-5 text-[10px]"
+          } font-bold tracking-tight leading-none`}
+          style={{ backgroundColor: brand.bg, color: brand.fg }}
+          data-testid={`firm-logo-${(name || "").replace(/\s+/g, "-").toLowerCase()}`}
+          aria-label={name}
+        >
+          {brand.text}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="bg-gray-900 text-white">
+        {name}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+
 
 function MetaRow({ label, value }) {
   return (
