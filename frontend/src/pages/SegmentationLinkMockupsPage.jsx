@@ -1,83 +1,125 @@
 /**
  * SegmentationLinkMockupsPage
  * =========================================================
- * Static visual mockups (no backend calls) demonstrating three
- * candidate UI/UX approaches for linking Level-2 segmentation
- * nodes across different segmentations (many-to-many tag).
+ * Two visual mockups (no backend calls) for linking Level-2
+ * segmentation nodes across segmentations (many-to-many).
+ *
+ *   View 1 · Inline Pill Tags  — links rendered under each L2
+ *                                node right on the tree canvas.
+ *   View 2 · Ribbon Flow       — Sankey-style ribbons between
+ *                                two parallel columns of L2 nodes
+ *                                (light theme, dashboard palette).
+ *
+ * Both views share a single Edit dialog.
  *
  * Route: /crm/segmentation-link-mockups
  * =========================================================
  */
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import Layout from "../components/Layout";
 import LinkIcon from "@mui/icons-material/LinkOutlined";
-import LinkOff from "@mui/icons-material/LinkOffOutlined";
-import ChevronRight from "@mui/icons-material/ChevronRight";
-import Search from "@mui/icons-material/SearchOutlined";
 import Close from "@mui/icons-material/CloseOutlined";
-import Plus from "@mui/icons-material/AddOutlined";
+import Search from "@mui/icons-material/SearchOutlined";
 import ExpandMore from "@mui/icons-material/ExpandMoreOutlined";
-import Business from "@mui/icons-material/BusinessOutlined";
-import DragIndicator from "@mui/icons-material/DragIndicatorOutlined";
-import BubbleChart from "@mui/icons-material/BubbleChartOutlined";
-import CenterFocus from "@mui/icons-material/CenterFocusStrongOutlined";
-import Info from "@mui/icons-material/InfoOutlined";
+import EditOutlined from "@mui/icons-material/EditOutlined";
+import ZoomIn from "@mui/icons-material/ZoomInOutlined";
+import ZoomOut from "@mui/icons-material/ZoomOutOutlined";
+import CenterFocusStrong from "@mui/icons-material/CenterFocusStrongOutlined";
+import Fullscreen from "@mui/icons-material/FullscreenOutlined";
 import CheckCircle from "@mui/icons-material/CheckCircleOutlined";
-import CancelIcon from "@mui/icons-material/CancelOutlined";
 
 // ============================================================
-// MOCK DATA — 3 segmentations (companies) × Level-2 nodes each
+// MOCK DATA
 // ============================================================
 const SEGMENTATIONS = [
   {
     id: "infollion",
     name: "Infollion Research",
+    initials: "IR",
     color: "#ec9324", // brand orange
     l2: [
-      { id: "inf-banking",  name: "Banking",         parent: "BFSI" },
-      { id: "inf-fintech",  name: "Fintech",         parent: "BFSI" },
-      { id: "inf-insur",    name: "Insurance",       parent: "BFSI" },
-      { id: "inf-nbfc",     name: "NBFC",            parent: "BFSI" },
-      { id: "inf-fmcg",     name: "Consumer Staples",parent: "Consumer" },
-      { id: "inf-chem",     name: "Chemicals",       parent: "Materials" },
+      { id: "inf-agri",  name: "Agriculture" },
+      { id: "inf-auto",  name: "Automotive" },
+      { id: "inf-bfsi",  name: "BFSI" },
+      { id: "inf-chem",  name: "Chemicals" },
+      { id: "inf-cps",   name: "Commercial and Professional Services" },
+      { id: "inf-cd",    name: "Consumer Discretionary" },
+      { id: "inf-cs",    name: "Consumer Staples · Food & Beverages" },
+      { id: "inf-edu",   name: "Education" },
+      { id: "inf-eng",   name: "Engineering and Capital Goods" },
+      { id: "inf-hlth",  name: "Healthcare System and Services" },
+      { id: "inf-it",    name: "Information Technology" },
+      { id: "inf-log",   name: "Logistics" },
+      { id: "inf-met",   name: "Metals and Mining" },
+      { id: "inf-oil",   name: "Oil and Gas" },
+      { id: "inf-re",    name: "Real Estate" },
     ],
   },
   {
-    id: "techcorp",
-    name: "TechCorp Advisory",
+    id: "mckinsey",
+    name: "McKinsey",
+    initials: "MC",
+    color: "#8b5cf6", // violet
+    l2: [
+      { id: "mck-aero",  name: "Aerospace & Defense" },
+      { id: "mck-agri",  name: "Agriculture" },
+      { id: "mck-auto",  name: "Automotive & Assembly" },
+      { id: "mck-chem",  name: "Chemicals" },
+      { id: "mck-fs",    name: "Financial Services" },
+      { id: "mck-ins",   name: "Insurance" },
+      { id: "mck-cpg",   name: "Consumer Packaged Goods" },
+      { id: "mck-wam",   name: "Wealth and Asset Management" },
+      { id: "mck-hlth",  name: "Healthcare" },
+      { id: "mck-life",  name: "Life Sciences" },
+      { id: "mck-tmt",   name: "Technology, Media & Telecom" },
+      { id: "mck-pc",    name: "Private Capital" },
+      { id: "mck-semi",  name: "Semiconductors" },
+      { id: "mck-re",    name: "Real Estate" },
+      { id: "mck-infra", name: "Infrastructure" },
+    ],
+  },
+  {
+    id: "gartner",
+    name: "Gartner",
+    initials: "GA",
     color: "#0ea5e9", // sky
     l2: [
-      { id: "tc-fs",        name: "Financial Services", parent: "Finance" },
-      { id: "tc-insurtech", name: "Insurtech",          parent: "Finance" },
-      { id: "tc-lending",   name: "Consumer Lending",   parent: "Finance" },
-      { id: "tc-fmcg",      name: "FMCG",               parent: "Retail" },
-      { id: "tc-spchem",    name: "Specialty Chemicals",parent: "Industrials" },
-      { id: "tc-metals",    name: "Metals & Mining",    parent: "Industrials" },
-    ],
-  },
-  {
-    id: "globex",
-    name: "Globex Capital",
-    color: "#22c55e", // green
-    l2: [
-      { id: "gx-retail",    name: "Retail Banking", parent: "Finance" },
-      { id: "gx-payments",  name: "Payments",       parent: "Finance" },
-      { id: "gx-insur",     name: "Life Insurance", parent: "Finance" },
-      { id: "gx-materials", name: "Basic Materials",parent: "Materials" },
+      { id: "gar-fs",     name: "Banking & Investment" },
+      { id: "gar-ins",    name: "Insurance" },
+      { id: "gar-life",   name: "Life Sciences" },
+      { id: "gar-mfg",    name: "Manufacturing" },
+      { id: "gar-retail", name: "Retail" },
+      { id: "gar-energy", name: "Energy & Utilities" },
     ],
   },
 ];
 
 const INITIAL_LINKS = [
-  { a: "inf-banking", b: "tc-fs" },
-  { a: "inf-banking", b: "gx-retail" },
-  { a: "inf-insur",   b: "tc-insurtech" },
-  { a: "inf-insur",   b: "gx-insur" },
-  { a: "inf-chem",    b: "tc-spchem" },
-  { a: "inf-fintech", b: "tc-fs" },
+  { a: "inf-bfsi",  b: "mck-fs" },
+  { a: "inf-bfsi",  b: "mck-ins" },
+  { a: "inf-bfsi",  b: "mck-wam" },
+  { a: "inf-bfsi",  b: "mck-pc" },
+  { a: "inf-agri",  b: "mck-agri" },
+  { a: "inf-auto",  b: "mck-auto" },
+  { a: "inf-chem",  b: "mck-chem" },
+  { a: "inf-met",   b: "mck-chem" },
+  { a: "inf-cs",    b: "mck-cpg" },
+  { a: "inf-hlth",  b: "mck-hlth" },
+  { a: "inf-hlth",  b: "mck-life" },
+  { a: "inf-it",    b: "mck-tmt" },
+  { a: "inf-eng",   b: "mck-semi" },
+  { a: "inf-re",    b: "mck-re" },
+  { a: "inf-re",    b: "mck-infra" },
+  { a: "inf-oil",   b: "mck-infra" },
+  { a: "inf-cd",    b: "mck-cpg" },
+  { a: "inf-log",   b: "mck-infra" },
+  // Gartner cross-links (shown as "also referenced by")
+  { a: "inf-bfsi",  b: "gar-fs" },
+  { a: "inf-bfsi",  b: "gar-ins" },
+  { a: "inf-hlth",  b: "gar-life" },
 ];
 
-// helpers ---------------------------------------------------
+// ------------- helpers ----------------------
 const nodeById = (id) => {
   for (const s of SEGMENTATIONS) {
     const n = s.l2.find((x) => x.id === id);
@@ -86,10 +128,10 @@ const nodeById = (id) => {
   return null;
 };
 
-const linksFor = (nodeId, links) =>
+const linksFor = (id, links) =>
   links
-    .filter((l) => l.a === nodeId || l.b === nodeId)
-    .map((l) => (l.a === nodeId ? l.b : l.a))
+    .filter((l) => l.a === id || l.b === id)
+    .map((l) => (l.a === id ? l.b : l.a))
     .map(nodeById)
     .filter(Boolean);
 
@@ -97,263 +139,132 @@ const linksFor = (nodeId, links) =>
 // PAGE SHELL
 // ============================================================
 export default function SegmentationLinkMockupsPage() {
-  const [tab, setTab] = useState("A");
+  const [view, setView] = useState("overview"); // 'overview' | 'inline' | 'ribbon'
+  const [links, setLinks] = useState(INITIAL_LINKS);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editSourceId, setEditSourceId] = useState("inf-bfsi");
+
+  const openEditFor = (sourceId) => {
+    setEditSourceId(sourceId);
+    setEditOpen(true);
+  };
+
+  const applyLinks = (sourceId, newTargetIds) => {
+    setLinks((prev) => {
+      const kept = prev.filter((l) => l.a !== sourceId && l.b !== sourceId);
+      return [...kept, ...newTargetIds.map((id) => ({ a: sourceId, b: id }))];
+    });
+    setEditOpen(false);
+  };
 
   return (
     <Layout>
       <div className="px-6 py-6 max-w-[1700px] mx-auto">
         {/* Page header */}
-        <div className="mb-5">
+        <div className="mb-5 flex items-start justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-orange-100 text-[#ec9324] flex items-center justify-center">
               <LinkIcon />
             </div>
             <div>
               <h1 className="text-2xl font-semibold text-gray-900">
-                Cross-Segmentation Level-2 Linking — UI/UX Concepts
+                Cross-Segmentation Level-2 Linking
               </h1>
               <p className="text-sm text-gray-500">
-                Three candidate approaches for connecting a Level-2 node of one
-                segmentation to Level-2 nodes of other segmentations
-                (many-to-many).
+                Two view modes for the same many-to-many link data. Both share
+                the same Edit dialog.
               </p>
             </div>
           </div>
+
+          {/* View switcher */}
+          <div className="inline-flex bg-gray-100 rounded-lg p-1">
+            {[
+              { k: "overview", label: "Overview" },
+              { k: "inline", label: "Inline Pill Tags" },
+              { k: "ribbon", label: "Ribbon Flow" },
+            ].map((t) => (
+              <button
+                key={t.k}
+                onClick={() => setView(t.k)}
+                className={
+                  "px-4 py-1.5 text-sm font-medium rounded-md transition-colors " +
+                  (view === t.k
+                    ? "bg-white shadow-sm text-gray-900"
+                    : "text-gray-500 hover:text-gray-800")
+                }
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex items-center gap-2 border-b border-gray-200 mb-6 overflow-x-auto">
-          {[
-            { k: "A", label: "Concept A · Chip Drawer" },
-            { k: "B", label: "Concept B · Dual-Tree Linker" },
-            { k: "C", label: "Concept C · Constellation Graph" },
-            { k: "D", label: "Concept D · Inline Pill Tags" },
-            { k: "E", label: "Concept E · Equivalency Matrix" },
-          ].map((t) => (
-            <button
-              key={t.k}
-              onClick={() => setTab(t.k)}
-              className={
-                "px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap " +
-                (tab === t.k
-                  ? "border-[#ec9324] text-[#ec9324]"
-                  : "border-transparent text-gray-500 hover:text-gray-800")
-              }
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        {view === "overview" && (
+          <OverviewView
+            links={links}
+            onEdit={openEditFor}
+            onOpenView={setView}
+          />
+        )}
+        {view === "inline" && (
+          <InlinePillTagsView
+            links={links}
+            setLinks={setLinks}
+            onEdit={openEditFor}
+          />
+        )}
+        {view === "ribbon" && (
+          <RibbonFlowView
+            links={links}
+            setLinks={setLinks}
+            onEdit={openEditFor}
+          />
+        )}
 
-        {tab === "A" && <ConceptA />}
-        {tab === "B" && <ConceptB />}
-        {tab === "C" && <ConceptC />}
-        {tab === "D" && <ConceptD />}
-        {tab === "E" && <ConceptE />}
+        {editOpen && (
+          <EditLinksDialog
+            sourceId={editSourceId}
+            setSourceId={setEditSourceId}
+            links={links}
+            onClose={() => setEditOpen(false)}
+            onApply={applyLinks}
+          />
+        )}
       </div>
     </Layout>
   );
 }
 
 // ============================================================
-// CONCEPT A — Chip Drawer
+// SHARED EDIT DIALOG
+// (Same edit page used by both views)
 // ============================================================
-function ConceptA() {
-  const [links, setLinks] = useState(INITIAL_LINKS);
-  const [selected, setSelected] = useState("inf-banking");
-  const [pickerOpen, setPickerOpen] = useState(false);
-
-  const selNode = nodeById(selected);
-  const currentLinks = useMemo(() => linksFor(selected, links), [selected, links]);
-  const currentLinkedIds = new Set(currentLinks.map((n) => n.id));
-
-  return (
-    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] gap-6">
-      {/* LEFT — Segmentation tree (source) */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <div>
-            <div className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">
-              Segmentation
-            </div>
-            <div className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#ec9324]" />
-              Infollion Research
-            </div>
-          </div>
-          <div className="text-xs text-gray-500">
-            Click any Level-2 node to view/edit its cross-links
-          </div>
-        </div>
-        <div className="p-6">
-          <MiniTree
-            segmentation={SEGMENTATIONS[0]}
-            selectedId={selected}
-            linkedIds={new Set(links.flatMap((l) => [l.a, l.b]))}
-            onSelect={setSelected}
-          />
-        </div>
-      </div>
-
-      {/* RIGHT — Chip drawer */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm sticky top-4 self-start">
-        {selNode ? (
-          <>
-            {/* drawer header */}
-            <div className="px-5 py-4 border-b border-gray-100">
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">
-                    Level 2 · in {selNode.seg.name}
-                  </div>
-                  <div className="text-xl font-semibold text-gray-900">
-                    {selNode.name}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-0.5">
-                    Parent: {selNode.parent}
-                  </div>
-                </div>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-orange-100 text-[#ec9324]">
-                  <LinkIcon style={{ fontSize: 12 }} />
-                  {currentLinks.length} link{currentLinks.length === 1 ? "" : "s"}
-                </span>
-              </div>
-            </div>
-
-            {/* Linked chips */}
-            <div className="px-5 py-4">
-              <div className="text-[11px] uppercase tracking-wider text-gray-500 font-medium mb-2">
-                Linked Level-2 nodes
-              </div>
-              {currentLinks.length === 0 ? (
-                <div className="text-sm text-gray-400 italic py-3">
-                  No links yet — click <span className="font-medium">+ Link Node</span> to
-                  connect this to nodes in other segmentations.
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {currentLinks.map((n) => (
-                    <span
-                      key={n.id}
-                      className="group inline-flex items-center gap-2 pl-2 pr-1.5 py-1 rounded-lg border shadow-sm text-sm bg-white"
-                      style={{ borderColor: n.seg.color + "80" }}
-                    >
-                      <span
-                        className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{ background: n.seg.color }}
-                      />
-                      <span className="font-medium text-gray-800">{n.name}</span>
-                      <span className="text-[10px] uppercase tracking-wider text-gray-400">
-                        {n.seg.name}
-                      </span>
-                      <button
-                        onClick={() =>
-                          setLinks((prev) =>
-                            prev.filter(
-                              (l) =>
-                                !(
-                                  (l.a === selected && l.b === n.id) ||
-                                  (l.b === selected && l.a === n.id)
-                                )
-                            )
-                          )
-                        }
-                        className="ml-1 w-5 h-5 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-50 flex items-center justify-center"
-                        title="Unlink"
-                      >
-                        <Close style={{ fontSize: 14 }} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              <button
-                onClick={() => setPickerOpen(true)}
-                className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#ec9324] text-white text-sm font-medium hover:bg-[#d3811b]"
-              >
-                <Plus style={{ fontSize: 16 }} />
-                Link Node
-              </button>
-            </div>
-
-            {/* Meta */}
-            <div className="px-5 py-4 border-t border-gray-100 grid grid-cols-2 gap-3 text-xs">
-              <div>
-                <div className="text-gray-400 uppercase tracking-wider">Created</div>
-                <div className="text-gray-700 mt-0.5">Aug 03 2026 · 14:20</div>
-              </div>
-              <div>
-                <div className="text-gray-400 uppercase tracking-wider">Updated</div>
-                <div className="text-gray-700 mt-0.5">Aug 04 2026 · 10:05</div>
-              </div>
-            </div>
-
-            {/* Picker modal */}
-            {pickerOpen && (
-              <PickerModal
-                sourceNode={selNode}
-                linkedIds={currentLinkedIds}
-                onClose={() => setPickerOpen(false)}
-                onApply={(ids) => {
-                  setLinks((prev) => {
-                    // Remove existing L2 links from selected then re-add ids
-                    const kept = prev.filter(
-                      (l) => l.a !== selected && l.b !== selected
-                    );
-                    const additions = ids.map((id) => ({ a: selected, b: id }));
-                    return [...kept, ...additions];
-                  });
-                  setPickerOpen(false);
-                }}
-              />
-            )}
-          </>
-        ) : (
-          <div className="p-6 text-sm text-gray-500">Select a Level-2 node to view links.</div>
-        )}
-      </div>
-
-      {/* Bottom explainer */}
-      <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <ProCon
-          heading="Best for"
-          tone="orange"
-          items={[
-            "Fast, everyday tagging while editing a segmentation",
-            "Discoverable — links appear next to the node inline",
-            "Zero learning curve",
-          ]}
-        />
-        <ProCon
-          heading="Not ideal for"
-          tone="gray"
-          items={[
-            "Users linking many nodes across many segmentations at once",
-            "Understanding the 'big picture' of relationships",
-          ]}
-        />
-        <ProCon
-          heading="Interaction model"
-          tone="blue"
-          items={[
-            "Click node → drawer opens on the right",
-            "'+ Link Node' opens a picker grouped by segmentation with search + checkboxes",
-            "Each linked node is a coloured chip with an × to unlink",
-          ]}
-        />
-      </div>
-    </div>
+function EditLinksDialog({ sourceId, setSourceId, links, onClose, onApply }) {
+  const sourceNode = nodeById(sourceId);
+  const linkedIds = new Set(
+    links
+      .filter((l) => l.a === sourceId || l.b === sourceId)
+      .map((l) => (l.a === sourceId ? l.b : l.a))
   );
-}
-
-// -------- Picker modal used by Concept A -----------
-function PickerModal({ sourceNode, linkedIds, onClose, onApply }) {
-  const [checked, setChecked] = useState(new Set(linkedIds));
+  const [checked, setChecked] = useState(linkedIds);
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState(
-    () => new Set(SEGMENTATIONS.filter((s) => s.id !== sourceNode.seg.id).map((s) => s.id))
+    () => new Set(SEGMENTATIONS.filter((s) => s.id !== sourceNode?.seg.id).map((s) => s.id))
   );
+
+  // React to sourceId change — reset checked set
+  const sourceIdRef = useRef(sourceId);
+  if (sourceIdRef.current !== sourceId) {
+    sourceIdRef.current = sourceId;
+    const newLinked = new Set(
+      links
+        .filter((l) => l.a === sourceId || l.b === sourceId)
+        .map((l) => (l.a === sourceId ? l.b : l.a))
+    );
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    setChecked(newLinked);
+  }
 
   const toggle = (id) => {
     setChecked((prev) => {
@@ -364,18 +275,21 @@ function PickerModal({ sourceNode, linkedIds, onClose, onApply }) {
     });
   };
 
-  const others = SEGMENTATIONS.filter((s) => s.id !== sourceNode.seg.id);
+  const others = SEGMENTATIONS.filter((s) => s.id !== sourceNode?.seg.id);
+  if (!sourceNode) return null;
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden">
+        {/* header */}
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-orange-50 to-white">
           <div>
             <div className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">
-              Link Level-2 node
+              Edit cross-links
             </div>
             <div className="text-lg font-semibold text-gray-900">
-              Link <span className="text-[#ec9324]">{sourceNode.name}</span> to…
+              Links for{" "}
+              <span className="text-[#ec9324]">{sourceNode.name}</span>
             </div>
           </div>
           <button
@@ -386,7 +300,33 @@ function PickerModal({ sourceNode, linkedIds, onClose, onApply }) {
           </button>
         </div>
 
-        {/* search */}
+        {/* Source picker */}
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-3 bg-gray-50/60">
+          <span className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">
+            Source
+          </span>
+          <select
+            value={sourceId}
+            onChange={(e) => setSourceId(e.target.value)}
+            className="text-sm font-medium bg-white border border-gray-200 rounded-md px-2 py-1"
+          >
+            {SEGMENTATIONS.map((s) => (
+              <optgroup key={s.id} label={s.name}>
+                {s.l2.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.name}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          <span className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-100 text-[#ec9324] text-xs font-semibold">
+            <LinkIcon style={{ fontSize: 14 }} />
+            {checked.size} linked
+          </span>
+        </div>
+
+        {/* Search */}
         <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
           <Search style={{ fontSize: 18, color: "#9ca3af" }} />
           <input
@@ -398,13 +338,14 @@ function PickerModal({ sourceNode, linkedIds, onClose, onApply }) {
         </div>
 
         {/* body */}
-        <div className="max-h-[420px] overflow-y-auto">
+        <div className="max-h-[460px] overflow-y-auto">
           {others.map((s) => {
             const nodes = s.l2.filter((n) =>
               n.name.toLowerCase().includes(q.toLowerCase())
             );
             if (!nodes.length) return null;
             const isOpen = expanded.has(s.id);
+            const selCount = nodes.filter((n) => checked.has(n.id)).length;
             return (
               <div key={s.id}>
                 <button
@@ -420,14 +361,16 @@ function PickerModal({ sourceNode, linkedIds, onClose, onApply }) {
                 >
                   <div className="flex items-center gap-2">
                     <span
-                      className="w-2.5 h-2.5 rounded-full"
+                      className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[10px] font-bold"
                       style={{ background: s.color }}
-                    />
+                    >
+                      {s.initials}
+                    </span>
                     <span className="text-sm font-semibold text-gray-800">
                       {s.name}
                     </span>
                     <span className="text-[11px] text-gray-500">
-                      {nodes.length} nodes
+                      {selCount} / {nodes.length} selected
                     </span>
                   </div>
                   <ExpandMore
@@ -451,17 +394,12 @@ function PickerModal({ sourceNode, linkedIds, onClose, onApply }) {
                         onChange={() => toggle(n.id)}
                         className="w-4 h-4 accent-[#ec9324]"
                       />
-                      <div className="flex-1">
-                        <div className="text-sm font-medium text-gray-800">
-                          {n.name}
-                        </div>
-                        <div className="text-[11px] text-gray-500">
-                          under {n.parent}
-                        </div>
+                      <div className="flex-1 text-sm font-medium text-gray-800">
+                        {n.name}
                       </div>
                       {checked.has(n.id) && (
-                        <span className="text-[10px] uppercase text-[#ec9324] font-medium">
-                          Selected
+                        <span className="text-[10px] uppercase text-[#ec9324] font-semibold">
+                          Linked
                         </span>
                       )}
                     </label>
@@ -474,7 +412,7 @@ function PickerModal({ sourceNode, linkedIds, onClose, onApply }) {
         {/* footer */}
         <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between bg-gray-50">
           <div className="text-xs text-gray-500">
-            {checked.size} node{checked.size === 1 ? "" : "s"} selected
+            Changes apply to <span className="font-semibold">{sourceNode.name}</span>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -484,10 +422,10 @@ function PickerModal({ sourceNode, linkedIds, onClose, onApply }) {
               Cancel
             </button>
             <button
-              onClick={() => onApply(Array.from(checked))}
+              onClick={() => onApply(sourceId, Array.from(checked))}
               className="px-4 py-1.5 rounded-md bg-[#ec9324] text-white text-sm font-medium hover:bg-[#d3811b]"
             >
-              Apply
+              Save links
             </button>
           </div>
         </div>
@@ -496,882 +434,498 @@ function PickerModal({ sourceNode, linkedIds, onClose, onApply }) {
   );
 }
 
-// -------- Mini tree used in Concept A left panel -----------
-function MiniTree({ segmentation, selectedId, linkedIds, onSelect }) {
-  // Simple SVG tree: root -> 3 L1 parents -> Level-2 leaves
-  const width = 780;
-  const height = 480;
-  const rootX = 60;
-  const rootY = height / 2;
-
-  const l1Groups = useMemo(() => {
-    const map = {};
-    segmentation.l2.forEach((n) => {
-      if (!map[n.parent]) map[n.parent] = [];
-      map[n.parent].push(n);
-    });
-    return Object.entries(map).map(([parent, nodes]) => ({ parent, nodes }));
-  }, [segmentation]);
-
-  const l1X = 260;
-  const l2X = 520;
-  const l1YStart = 60;
-  const l1Slot = (height - 120) / Math.max(l1Groups.length, 1);
-
-  const l1Positions = l1Groups.map((_, i) => ({
-    x: l1X,
-    y: l1YStart + l1Slot * i + l1Slot / 2,
-  }));
-
-  const l2Positions = [];
-  l1Groups.forEach((g, gi) => {
-    const parentY = l1Positions[gi].y;
-    const spacing = 44;
-    g.nodes.forEach((n, i) => {
-      l2Positions.push({
-        id: n.id,
-        name: n.name,
-        x: l2X,
-        y: parentY - ((g.nodes.length - 1) * spacing) / 2 + i * spacing,
-        parentIndex: gi,
-      });
-    });
-  });
-
-  return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-[480px]">
-      {/* root -> l1 */}
-      {l1Positions.map((p, i) => (
-        <path
-          key={`r-${i}`}
-          d={`M ${rootX + 22},${rootY} C ${(rootX + p.x) / 2},${rootY} ${
-            (rootX + p.x) / 2
-          },${p.y} ${p.x - 22},${p.y}`}
-          fill="none"
-          stroke="#e5e7eb"
-          strokeWidth={1.5}
-        />
-      ))}
-      {/* l1 -> l2 */}
-      {l2Positions.map((n) => {
-        const p = l1Positions[n.parentIndex];
-        return (
-          <path
-            key={`l-${n.id}`}
-            d={`M ${p.x + 22},${p.y} C ${(p.x + n.x) / 2},${p.y} ${
-              (p.x + n.x) / 2
-            },${n.y} ${n.x - 22},${n.y}`}
-            fill="none"
-            stroke="#e5e7eb"
-            strokeWidth={1.5}
-          />
-        );
-      })}
-
-      {/* root */}
-      <g>
-        <circle cx={rootX} cy={rootY} r={12} fill={segmentation.color} />
-        <text
-          x={rootX + 22}
-          y={rootY + 4}
-          fontSize={13}
-          fontWeight={600}
-          fill="#111827"
-        >
-          {segmentation.name}
-        </text>
-      </g>
-
-      {/* l1 */}
-      {l1Groups.map((g, i) => (
-        <g key={g.parent}>
-          <circle cx={l1Positions[i].x} cy={l1Positions[i].y} r={8} fill="#0ea5e9" />
-          <text
-            x={l1Positions[i].x + 16}
-            y={l1Positions[i].y + 4}
-            fontSize={12}
-            fontWeight={600}
-            fill="#374151"
-          >
-            {g.parent}
-          </text>
-        </g>
-      ))}
-
-      {/* l2 */}
-      {l2Positions.map((n) => {
-        const isSel = n.id === selectedId;
-        const isLinked = linkedIds.has(n.id);
-        return (
-          <g
-            key={n.id}
-            style={{ cursor: "pointer" }}
-            onClick={() => onSelect(n.id)}
-          >
-            {isSel && (
-              <circle
-                cx={n.x}
-                cy={n.y}
-                r={12}
-                fill="rgba(236,147,36,0.15)"
-                stroke="#ec9324"
-                strokeWidth={2}
-              />
-            )}
-            <circle
-              cx={n.x}
-              cy={n.y}
-              r={6}
-              fill="#fff"
-              stroke="#22c55e"
-              strokeWidth={2}
-            />
-            <text
-              x={n.x + 14}
-              y={n.y + 4}
-              fontSize={12}
-              fontWeight={isSel ? 700 : 500}
-              fill={isSel ? "#ec9324" : "#111827"}
-            >
-              {n.name}
-            </text>
-            {isLinked && (
-              <g>
-                <circle cx={n.x + 118} cy={n.y - 8} r={7} fill="#ec9324" />
-                <text
-                  x={n.x + 118}
-                  y={n.y - 5}
-                  fontSize={9}
-                  fontWeight={700}
-                  fill="#fff"
-                  textAnchor="middle"
-                >
-                  L
-                </text>
-              </g>
-            )}
-          </g>
-        );
-      })}
-
-      {/* Legend */}
-      <g transform="translate(20, 440)">
-        <circle cx={0} cy={0} r={5} fill="#fff" stroke="#22c55e" strokeWidth={2} />
-        <text x={10} y={4} fontSize={11} fill="#6b7280">
-          Level-2 node
-        </text>
-        <circle cx={110} cy={0} r={7} fill="#ec9324" />
-        <text x={122} y={4} fontSize={11} fill="#6b7280">
-          Has cross-links
-        </text>
-        <rect
-          x={220}
-          y={-6}
-          width={12}
-          height={12}
-          fill="rgba(236,147,36,0.15)"
-          stroke="#ec9324"
-          strokeWidth={1.5}
-        />
-        <text x={238} y={4} fontSize={11} fill="#6b7280">
-          Selected
-        </text>
-      </g>
-    </svg>
+// ============================================================
+// VIEW 0 — OVERVIEW (summary dashboard)
+// ============================================================
+function OverviewView({ links, onEdit, onOpenView }) {
+  // ---- Aggregate stats ----
+  const totalLinks = links.length;
+  const allL2Nodes = SEGMENTATIONS.flatMap((s) =>
+    s.l2.map((n) => ({ ...n, seg: s }))
   );
-}
+  const linkedNodeIds = new Set(links.flatMap((l) => [l.a, l.b]));
+  const nodesWithLinks = allL2Nodes.filter((n) => linkedNodeIds.has(n.id));
+  const orphans = allL2Nodes.filter((n) => !linkedNodeIds.has(n.id));
+  const coveragePct = Math.round(
+    (nodesWithLinks.length / allL2Nodes.length) * 100
+  );
 
-// ============================================================
-// CONCEPT B — Dual-Tree Linker (drag to link)
-// ============================================================
-function ConceptB() {
-  const [links, setLinks] = useState(INITIAL_LINKS);
-  const [rightSegId, setRightSegId] = useState("techcorp");
-  const [dragging, setDragging] = useState(null); // {id, name, x, y}
-  const [pointer, setPointer] = useState(null);
-
-  const leftSeg = SEGMENTATIONS[0];
-  const rightSeg = SEGMENTATIONS.find((s) => s.id === rightSegId);
-
-  const nodeCoords = (side, index, total) => {
-    const y = 90 + index * 60;
-    const x = side === "left" ? 100 : 520;
-    return { x, y };
-  };
-
-  const linksBetween = links
-    .map((l) => {
+  // Per-segmentation pair link count matrix
+  const pairMatrix = useMemo(() => {
+    const m = {};
+    SEGMENTATIONS.forEach((s) => {
+      m[s.id] = {};
+      SEGMENTATIONS.forEach((t) => (m[s.id][t.id] = 0));
+    });
+    links.forEach((l) => {
       const a = nodeById(l.a);
       const b = nodeById(l.b);
-      const left =
-        a && a.seg.id === leftSeg.id ? a : b && b.seg.id === leftSeg.id ? b : null;
-      const right =
-        a && a.seg.id === rightSeg.id ? a : b && b.seg.id === rightSeg.id ? b : null;
-      if (!left || !right) return null;
-      return { left, right };
-    })
-    .filter(Boolean);
+      if (!a || !b) return;
+      m[a.seg.id][b.seg.id] += 1;
+      if (a.seg.id !== b.seg.id) m[b.seg.id][a.seg.id] += 1;
+    });
+    return m;
+  }, [links]);
 
-  return (
-    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-6">
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-orange-50/60 to-sky-50/60">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-white shadow-sm text-xs font-medium text-gray-700">
-              <span className="w-2 h-2 rounded-full" style={{ background: leftSeg.color }} />
-              {leftSeg.name}
-            </span>
-            <ChevronRight style={{ color: "#9ca3af" }} />
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 uppercase tracking-wider">
-                Link into
-              </span>
-              <select
-                value={rightSegId}
-                onChange={(e) => setRightSegId(e.target.value)}
-                className="text-sm font-medium bg-white border border-gray-200 rounded-md px-2 py-1"
-              >
-                {SEGMENTATIONS.filter((s) => s.id !== leftSeg.id).map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="text-xs text-gray-500 flex items-center gap-1.5">
-            <DragIndicator style={{ fontSize: 14 }} />
-            Drag a Level-2 node from the left onto a node on the right to link
-          </div>
-        </div>
+  // Top linked nodes
+  const linkCounts = useMemo(() => {
+    const cnt = {};
+    links.forEach((l) => {
+      cnt[l.a] = (cnt[l.a] || 0) + 1;
+      cnt[l.b] = (cnt[l.b] || 0) + 1;
+    });
+    return allL2Nodes
+      .map((n) => ({ ...n, count: cnt[n.id] || 0 }))
+      .filter((n) => n.count > 0)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [links]);
 
-        <div
-          className="relative bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] bg-[length:20px_20px]"
-          style={{ height: 560 }}
-          onMouseMove={(e) => {
-            if (!dragging) return;
-            const rect = e.currentTarget.getBoundingClientRect();
-            setPointer({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-          }}
-          onMouseUp={() => {
-            setDragging(null);
-            setPointer(null);
-          }}
-        >
-          <svg viewBox="0 0 640 560" className="w-full h-full">
-            {/* header labels */}
-            <text x={100} y={50} textAnchor="middle" fontSize={12} fontWeight={700} fill={leftSeg.color}>
-              {leftSeg.name.toUpperCase()}
-            </text>
-            <text x={520} y={50} textAnchor="middle" fontSize={12} fontWeight={700} fill={rightSeg.color}>
-              {rightSeg.name.toUpperCase()}
-            </text>
-
-            {/* Existing links — orange dashed arcs */}
-            {linksBetween.map(({ left, right }, i) => {
-              const li = leftSeg.l2.findIndex((n) => n.id === left.id);
-              const ri = rightSeg.l2.findIndex((n) => n.id === right.id);
-              const a = nodeCoords("left", li);
-              const b = nodeCoords("right", ri);
-              return (
-                <g key={i}>
-                  <path
-                    d={`M ${a.x + 90},${a.y} C 300,${a.y} 320,${b.y} ${b.x - 90},${b.y}`}
-                    fill="none"
-                    stroke="#ec9324"
-                    strokeWidth={2}
-                    strokeDasharray="4 3"
-                    opacity={0.7}
-                  />
-                  <circle cx={310} cy={(a.y + b.y) / 2} r={6} fill="#ec9324" />
-                  <LinkIconGlyph cx={310} cy={(a.y + b.y) / 2} />
-                </g>
-              );
-            })}
-
-            {/* live drag line */}
-            {dragging && pointer && (
-              <path
-                d={`M ${dragging.x + 90},${dragging.y} L ${pointer.x},${pointer.y}`}
-                stroke="#ec9324"
-                strokeWidth={2}
-                strokeDasharray="4 3"
-              />
-            )}
-
-            {/* LEFT column nodes */}
-            {leftSeg.l2.map((n, i) => {
-              const p = nodeCoords("left", i);
-              return (
-                <g key={n.id} style={{ cursor: "grab" }}>
-                  <rect
-                    x={p.x - 90}
-                    y={p.y - 18}
-                    rx={9}
-                    width={180}
-                    height={36}
-                    fill="#fff"
-                    stroke={leftSeg.color}
-                    strokeWidth={2}
-                    onMouseDown={() =>
-                      setDragging({ id: n.id, name: n.name, x: p.x, y: p.y })
-                    }
-                  />
-                  <text
-                    x={p.x}
-                    y={p.y + 4}
-                    textAnchor="middle"
-                    fontSize={13}
-                    fontWeight={600}
-                    fill="#111827"
-                    style={{ pointerEvents: "none" }}
-                  >
-                    {n.name}
-                  </text>
-                  <DragIndicatorSvg cx={p.x - 78} cy={p.y} />
-                </g>
-              );
-            })}
-
-            {/* RIGHT column nodes */}
-            {rightSeg.l2.map((n, i) => {
-              const p = nodeCoords("right", i);
-              const highlighted =
-                dragging && pointer && Math.abs(pointer.x - p.x) < 100 && Math.abs(pointer.y - p.y) < 22;
-              return (
-                <g
-                  key={n.id}
-                  onMouseUp={() => {
-                    if (!dragging) return;
-                    setLinks((prev) => {
-                      const exists = prev.some(
-                        (l) =>
-                          (l.a === dragging.id && l.b === n.id) ||
-                          (l.b === dragging.id && l.a === n.id)
-                      );
-                      if (exists) return prev;
-                      return [...prev, { a: dragging.id, b: n.id }];
-                    });
-                    setDragging(null);
-                    setPointer(null);
-                  }}
-                  style={{ cursor: dragging ? "cell" : "default" }}
-                >
-                  <rect
-                    x={p.x - 90}
-                    y={p.y - 18}
-                    rx={9}
-                    width={180}
-                    height={36}
-                    fill={highlighted ? "rgba(236,147,36,0.15)" : "#fff"}
-                    stroke={rightSeg.color}
-                    strokeWidth={2}
-                    strokeDasharray={dragging ? "4 3" : "0"}
-                  />
-                  <text
-                    x={p.x}
-                    y={p.y + 4}
-                    textAnchor="middle"
-                    fontSize={13}
-                    fontWeight={600}
-                    fill="#111827"
-                    style={{ pointerEvents: "none" }}
-                  >
-                    {n.name}
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
-        </div>
-      </div>
-
-      {/* Right sidebar */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm sticky top-4 self-start">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <div className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">
-            Active Links · this session
-          </div>
-          <div className="text-lg font-semibold text-gray-900">
-            {linksBetween.length} cross-links
-          </div>
-        </div>
-        <div className="max-h-[440px] overflow-y-auto">
-          {linksBetween.length === 0 && (
-            <div className="p-6 text-sm text-gray-400 italic">
-              No links between these two segmentations yet — drag from the left
-              onto the right to create one.
-            </div>
-          )}
-          {linksBetween.map(({ left, right }, i) => (
-            <div key={i} className="px-5 py-3 border-b border-gray-50 flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-800">
-                {left.name}
-              </span>
-              <span className="text-[#ec9324]">
-                <LinkIcon style={{ fontSize: 16 }} />
-              </span>
-              <span className="text-sm font-medium text-gray-800">
-                {right.name}
-              </span>
-              <button
-                onClick={() =>
-                  setLinks((prev) =>
-                    prev.filter(
-                      (l) =>
-                        !(
-                          (l.a === left.id && l.b === right.id) ||
-                          (l.b === left.id && l.a === right.id)
-                        )
-                    )
-                  )
-                }
-                className="ml-auto text-gray-400 hover:text-red-500"
-                title="Unlink"
-              >
-                <LinkOff style={{ fontSize: 18 }} />
-              </button>
-            </div>
-          ))}
-        </div>
-        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 text-[11px] text-gray-500 flex items-center gap-1">
-          <Info style={{ fontSize: 14 }} />
-          Switch the right dropdown to link with another segmentation
-        </div>
-      </div>
-
-      {/* Bottom explainer */}
-      <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <ProCon
-          heading="Best for"
-          tone="orange"
-          items={[
-            "Bulk-linking many nodes between two segmentations at once",
-            "Users who think spatially — draw → connect",
-            "Client-mapping / equivalency workflows",
-          ]}
-        />
-        <ProCon
-          heading="Not ideal for"
-          tone="gray"
-          items={[
-            "Linking across 3+ segmentations in one flow",
-            "Casual edits from inside the normal tree editor",
-          ]}
-        />
-        <ProCon
-          heading="Interaction model"
-          tone="blue"
-          items={[
-            "Split canvas — source on left, target segmentation picker on right",
-            "Drag a source card and drop onto a target card to create a link",
-            "Dashed orange arcs show existing links; unlink from the side list",
-          ]}
-        />
-      </div>
-    </div>
-  );
-}
-
-const LinkIconGlyph = ({ cx, cy }) => (
-  <g transform={`translate(${cx - 5},${cy - 5})`}>
-    <path
-      d="M3 5.5a2.5 2.5 0 0 1 2.5-2.5H7v1H5.5A1.5 1.5 0 0 0 4 5.5v1A1.5 1.5 0 0 0 5.5 8H7v1H5.5A2.5 2.5 0 0 1 3 6.5v-1zm4 0h1v1H7v-1zM6 5.5A1.5 1.5 0 0 1 7.5 4H9v1H7.5A.5.5 0 0 0 7 5.5v1a.5.5 0 0 0 .5.5H9v1H7.5A1.5 1.5 0 0 1 6 6.5v-1z"
-      fill="#fff"
-      transform="scale(0.85)"
-    />
-  </g>
-);
-
-const DragIndicatorSvg = ({ cx, cy }) => (
-  <g transform={`translate(${cx - 4},${cy - 6})`} opacity={0.45}>
-    <circle cx={2} cy={2} r={1.2} fill="#6b7280" />
-    <circle cx={6} cy={2} r={1.2} fill="#6b7280" />
-    <circle cx={2} cy={6} r={1.2} fill="#6b7280" />
-    <circle cx={6} cy={6} r={1.2} fill="#6b7280" />
-    <circle cx={2} cy={10} r={1.2} fill="#6b7280" />
-    <circle cx={6} cy={10} r={1.2} fill="#6b7280" />
-  </g>
-);
-
-// ============================================================
-// CONCEPT C — Constellation graph
-// ============================================================
-function ConceptC() {
-  const [links, setLinks] = useState(INITIAL_LINKS);
-  const [selected, setSelected] = useState("inf-banking");
-  const [hoverId, setHoverId] = useState(null);
-  const [filter, setFilter] = useState("all"); // all | linked | unlinked
-
-  // Compute positions: cluster nodes by their segmentation around three anchor points
-  const width = 1000;
-  const height = 620;
-  const anchors = {
-    infollion: { x: 280, y: 220 },
-    techcorp:  { x: 720, y: 220 },
-    globex:    { x: 500, y: 480 },
-  };
-
-  const positions = useMemo(() => {
-    const out = {};
-    SEGMENTATIONS.forEach((s) => {
-      const anchor = anchors[s.id];
-      const n = s.l2.length;
-      s.l2.forEach((node, i) => {
-        const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
-        const r = 110 + (i % 2) * 12;
-        out[node.id] = {
-          x: anchor.x + Math.cos(angle) * r,
-          y: anchor.y + Math.sin(angle) * r,
-          seg: s,
-          node,
+  // Recent links (mock — last 5 in the array with fake timestamps)
+  const recent = useMemo(() => {
+    const now = Date.now();
+    return links
+      .slice(-6)
+      .reverse()
+      .map((l, i) => {
+        const a = nodeById(l.a);
+        const b = nodeById(l.b);
+        return {
+          a,
+          b,
+          when: new Date(now - i * 1000 * 60 * (18 + i * 12)).toLocaleString(
+            undefined,
+            { dateStyle: "medium", timeStyle: "short" }
+          ),
+          by: i % 2 === 0 ? "Admin User" : "Aarushi Sharma",
         };
       });
-    });
-    return out;
-    // eslint-disable-next-line
-  }, []);
+  }, [links]);
 
-  const nodeIsVisible = (id) => {
-    if (filter === "all") return true;
-    const hasLink = links.some((l) => l.a === id || l.b === id);
-    return filter === "linked" ? hasLink : !hasLink;
-  };
-
-  const highlightNode = hoverId || selected;
-  const highlightLinks = new Set(
-    links
-      .filter((l) => l.a === highlightNode || l.b === highlightNode)
-      .flatMap((l) => [l.a, l.b])
+  const maxPairCount = Math.max(
+    1,
+    ...SEGMENTATIONS.flatMap((s) =>
+      SEGMENTATIONS.map((t) => (s.id === t.id ? 0 : pairMatrix[s.id][t.id]))
+    )
   );
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-6">
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-gradient-to-r from-orange-100 to-sky-100 text-xs font-semibold text-gray-800">
-              <BubbleChart style={{ fontSize: 16 }} />
-              Cross-Segmentation Map
-            </span>
-            <span className="text-xs text-gray-500">
-              {Object.keys(positions).length} Level-2 nodes · {links.length} links
-            </span>
-          </div>
-          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
-            {["all", "linked", "unlinked"].map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={
-                  "px-3 py-1 text-xs font-medium rounded-md capitalize " +
-                  (filter === f
-                    ? "bg-white shadow-sm text-gray-900"
-                    : "text-gray-500 hover:text-gray-800")
-                }
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="relative bg-gradient-to-br from-slate-50 to-white" style={{ height }}>
-          <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full">
-            {/* Cluster boundary circles */}
-            {SEGMENTATIONS.map((s) => (
-              <g key={s.id}>
-                <circle
-                  cx={anchors[s.id].x}
-                  cy={anchors[s.id].y}
-                  r={150}
-                  fill={s.color + "10"}
-                  stroke={s.color + "50"}
-                  strokeDasharray="6 6"
-                  strokeWidth={1.5}
-                />
-                <text
-                  x={anchors[s.id].x}
-                  y={anchors[s.id].y - 158}
-                  textAnchor="middle"
-                  fontSize={13}
-                  fontWeight={700}
-                  fill={s.color}
-                  style={{ textTransform: "uppercase", letterSpacing: 1 }}
-                >
-                  {s.name}
-                </text>
-              </g>
-            ))}
-
-            {/* Links */}
-            {links.map((l, i) => {
-              const a = positions[l.a];
-              const b = positions[l.b];
-              if (!a || !b) return null;
-              if (!nodeIsVisible(l.a) || !nodeIsVisible(l.b)) return null;
-              const isHi =
-                highlightNode && (l.a === highlightNode || l.b === highlightNode);
-              return (
-                <path
-                  key={i}
-                  d={`M ${a.x},${a.y} Q ${(a.x + b.x) / 2},${(a.y + b.y) / 2 - 50} ${b.x},${b.y}`}
-                  fill="none"
-                  stroke={isHi ? "#ec9324" : "#cbd5e1"}
-                  strokeWidth={isHi ? 2.5 : 1.5}
-                  opacity={isHi ? 1 : 0.55}
-                  strokeDasharray={isHi ? "0" : "5 4"}
-                />
-              );
-            })}
-
-            {/* Nodes */}
-            {Object.values(positions).map(({ x, y, seg, node }) => {
-              if (!nodeIsVisible(node.id)) return null;
-              const isSel = node.id === selected;
-              const isHi = highlightLinks.has(node.id);
-              const isHover = hoverId === node.id;
-              return (
-                <g
-                  key={node.id}
-                  style={{ cursor: "pointer" }}
-                  onMouseEnter={() => setHoverId(node.id)}
-                  onMouseLeave={() => setHoverId(null)}
-                  onClick={() => setSelected(node.id)}
-                >
-                  {isSel && (
-                    <circle
-                      cx={x}
-                      cy={y}
-                      r={22}
-                      fill="rgba(236,147,36,0.15)"
-                      stroke="#ec9324"
-                      strokeWidth={2}
-                    />
-                  )}
-                  <circle
-                    cx={x}
-                    cy={y}
-                    r={isSel || isHover ? 11 : 9}
-                    fill={seg.color}
-                    stroke={isHi ? "#ec9324" : "#fff"}
-                    strokeWidth={isHi ? 3 : 2}
-                  />
-                  <text
-                    x={x}
-                    y={y + 26}
-                    textAnchor="middle"
-                    fontSize={11}
-                    fontWeight={isSel ? 700 : 500}
-                    fill="#111827"
-                  >
-                    {node.name}
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
-
-          {/* Floating toolbar */}
-          <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur rounded-lg shadow-md border border-gray-200 flex items-center overflow-hidden text-gray-600">
-            <button className="w-9 h-9 flex items-center justify-center hover:bg-gray-100">
-              <CenterFocus style={{ fontSize: 18 }} />
-            </button>
-            <div className="w-px h-6 bg-gray-200" />
-            <button className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 text-lg font-bold">
-              +
-            </button>
-            <div className="w-px h-6 bg-gray-200" />
-            <button className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 text-lg font-bold">
-              −
-            </button>
-          </div>
-
-          {/* Legend */}
-          <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur rounded-lg shadow-md border border-gray-200 px-3 py-2 flex items-center gap-4 text-[11px] text-gray-600">
-            {SEGMENTATIONS.map((s) => (
-              <span key={s.id} className="inline-flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full" style={{ background: s.color }} />
-                {s.name}
-              </span>
-            ))}
-          </div>
-        </div>
+    <div className="grid grid-cols-1 gap-4">
+      {/* HERO STATS ROW */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <BigStat
+          label="Total Links"
+          value={totalLinks}
+          sub="across all segmentations"
+          accent="orange"
+          icon={<LinkIcon />}
+        />
+        <BigStat
+          label="Segmentations"
+          value={SEGMENTATIONS.length}
+          sub="connected in the graph"
+          accent="sky"
+          icon={<span className="text-lg font-bold">§</span>}
+        />
+        <BigStat
+          label="Linked Nodes"
+          value={nodesWithLinks.length}
+          sub={`of ${allL2Nodes.length} Level-2 nodes`}
+          accent="emerald"
+          icon={<CheckCircle />}
+        />
+        <BigStat
+          label="Orphans"
+          value={orphans.length}
+          sub="nodes with zero links"
+          accent="rose"
+          icon={<Close />}
+        />
+        <BigStat
+          label="Coverage"
+          value={`${coveragePct}%`}
+          sub="Level-2 nodes linked"
+          accent="violet"
+          icon={<EditOutlined />}
+        />
       </div>
 
-      {/* Right — details panel */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm sticky top-4 self-start">
-        {(() => {
-          const sel = nodeById(selected);
-          if (!sel) return <div className="p-5 text-sm text-gray-500">Click a node in the graph to see its links.</div>;
-          const sLinks = linksFor(selected, links);
-          return (
-            <>
-              <div className="px-5 py-4 border-b border-gray-100">
-                <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-gray-400 font-medium">
-                  <span className="w-2 h-2 rounded-full" style={{ background: sel.seg.color }} />
-                  {sel.seg.name} · Level 2
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-4">
+        {/* LEFT column */}
+        <div className="grid grid-cols-1 gap-4">
+          {/* SEGMENTATION PAIR MATRIX */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">
+                  Cross-Segmentation
                 </div>
-                <div className="text-xl font-semibold text-gray-900">{sel.name}</div>
-                <div className="text-xs text-gray-500 mt-0.5">under {sel.parent}</div>
+                <div className="text-lg font-semibold text-gray-900">
+                  Pair link volume
+                </div>
               </div>
-              <div className="px-5 py-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">
-                    Connected to
-                  </div>
-                  <span className="text-xs text-gray-500">{sLinks.length} nodes</span>
+              <button
+                onClick={() => onOpenView("ribbon")}
+                className="text-xs font-semibold text-[#ec9324] hover:bg-orange-50 rounded px-2 py-1"
+              >
+                Open Ribbon view →
+              </button>
+            </div>
+            <div className="p-5 overflow-x-auto">
+              <table className="min-w-full border-collapse">
+                <thead>
+                  <tr>
+                    <th className="text-left text-[11px] uppercase tracking-wider text-gray-400 font-medium px-3 py-2"></th>
+                    {SEGMENTATIONS.map((s) => (
+                      <th
+                        key={s.id}
+                        className="px-3 py-2 text-center text-[11px] font-semibold text-gray-700"
+                      >
+                        <div className="inline-flex items-center gap-1.5">
+                          <span
+                            className="w-2 h-2 rounded-full"
+                            style={{ background: s.color }}
+                          />
+                          {s.name}
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {SEGMENTATIONS.map((s) => (
+                    <tr key={s.id} className="border-t border-gray-50">
+                      <td className="px-3 py-3 text-sm font-semibold text-gray-800">
+                        <div className="inline-flex items-center gap-1.5">
+                          <span
+                            className="w-2 h-2 rounded-full"
+                            style={{ background: s.color }}
+                          />
+                          {s.name}
+                        </div>
+                      </td>
+                      {SEGMENTATIONS.map((t) => {
+                        if (s.id === t.id) {
+                          return (
+                            <td
+                              key={t.id}
+                              className="px-3 py-3 text-center text-gray-300"
+                            >
+                              —
+                            </td>
+                          );
+                        }
+                        const c = pairMatrix[s.id][t.id];
+                        const intensity = c / maxPairCount;
+                        return (
+                          <td key={t.id} className="px-3 py-3 text-center">
+                            <div
+                              className="inline-flex items-center justify-center min-w-[56px] h-10 rounded-lg font-bold text-sm"
+                              style={{
+                                background:
+                                  c === 0
+                                    ? "#f3f4f6"
+                                    : `rgba(236,147,36,${0.15 + intensity * 0.7})`,
+                                color: c === 0 ? "#9ca3af" : intensity > 0.55 ? "#fff" : "#b45309",
+                              }}
+                            >
+                              {c}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/60 text-[11px] text-gray-500 flex items-center gap-3">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block w-4 h-4 rounded bg-gray-100" />
+                0 links
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  className="inline-block w-4 h-4 rounded"
+                  style={{ background: "rgba(236,147,36,0.25)" }}
+                />
+                Few
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  className="inline-block w-4 h-4 rounded"
+                  style={{ background: "rgba(236,147,36,0.85)" }}
+                />
+                Many
+              </span>
+              <span className="ml-auto">
+                Symmetric — each cell counts every link between the two segmentations.
+              </span>
+            </div>
+          </div>
+
+          {/* TOP LINKED NODES */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">
+                  Leaderboard
                 </div>
-                {sLinks.length === 0 && (
-                  <div className="text-sm text-gray-400 italic">
-                    Not connected to any other segmentation yet.
-                  </div>
-                )}
-                <div className="space-y-2">
-                  {sLinks.map((n) => (
-                    <div
-                      key={n.id}
-                      className="flex items-center gap-2 px-2.5 py-2 rounded-lg border border-gray-200 hover:border-orange-300 hover:bg-orange-50/50"
-                    >
+                <div className="text-lg font-semibold text-gray-900">
+                  Most-linked Level-2 nodes
+                </div>
+              </div>
+              <button
+                onClick={() => onOpenView("inline")}
+                className="text-xs font-semibold text-[#ec9324] hover:bg-orange-50 rounded px-2 py-1"
+              >
+                Open Inline Pill Tags view →
+              </button>
+            </div>
+            <div className="p-5 space-y-2">
+              {linkCounts.length === 0 && (
+                <div className="text-sm italic text-gray-400 py-4">
+                  No links yet.
+                </div>
+              )}
+              {linkCounts.map((n, i) => {
+                const barW = (n.count / linkCounts[0].count) * 100;
+                return (
+                  <div
+                    key={n.id}
+                    className="flex items-center gap-3 py-1.5 group"
+                  >
+                    <div className="w-6 text-center text-xs font-bold text-gray-400">
+                      {i + 1}
+                    </div>
+                    <div className="flex items-center gap-2 min-w-[220px]">
                       <span
                         className="w-2 h-2 rounded-full flex-shrink-0"
                         style={{ background: n.seg.color }}
                       />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-800 truncate">
+                      <div>
+                        <div className="text-sm font-semibold text-gray-900">
                           {n.name}
                         </div>
-                        <div className="text-[10px] text-gray-500">{n.seg.name}</div>
+                        <div className="text-[10px] text-gray-500 uppercase tracking-wider">
+                          {n.seg.name}
+                        </div>
                       </div>
-                      <button
-                        onClick={() =>
-                          setLinks((prev) =>
-                            prev.filter(
-                              (l) =>
-                                !(
-                                  (l.a === selected && l.b === n.id) ||
-                                  (l.b === selected && l.a === n.id)
-                                )
-                            )
-                          )
-                        }
-                        className="text-gray-400 hover:text-red-500"
-                        title="Unlink"
-                      >
-                        <LinkOff style={{ fontSize: 16 }} />
-                      </button>
                     </div>
-                  ))}
-                </div>
-                <button className="mt-3 w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-md border border-dashed border-[#ec9324] text-[#ec9324] text-sm font-medium hover:bg-orange-50">
-                  <Plus style={{ fontSize: 16 }} />
-                  Drag another node onto {sel.name} to connect
-                </button>
+                    <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-[#ec9324] to-[#f4b559]"
+                        style={{ width: `${barW}%` }}
+                      />
+                    </div>
+                    <div className="w-14 text-right text-sm font-bold text-[#ec9324]">
+                      {n.count}
+                    </div>
+                    <button
+                      onClick={() => onEdit(n.id)}
+                      className="opacity-0 group-hover:opacity-100 text-[11px] font-semibold text-gray-500 hover:text-[#ec9324] hover:bg-orange-50 rounded px-1.5 py-0.5"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT column */}
+        <div className="grid grid-cols-1 gap-4">
+          {/* SEGMENTATION BREAKDOWN */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <div className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">
+                Per Segmentation
               </div>
-            </>
-          );
-        })()}
+              <div className="text-lg font-semibold text-gray-900">
+                Coverage breakdown
+              </div>
+            </div>
+            <div className="p-5 space-y-4">
+              {SEGMENTATIONS.map((s) => {
+                const nodes = s.l2;
+                const linked = nodes.filter((n) => linkedNodeIds.has(n.id)).length;
+                const pct = Math.round((linked / nodes.length) * 100);
+                return (
+                  <div key={s.id}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span
+                        className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
+                        style={{ background: s.color }}
+                      >
+                        {s.initials}
+                      </span>
+                      <div className="text-sm font-semibold text-gray-800 flex-1 truncate">
+                        {s.name}
+                      </div>
+                      <div className="text-sm font-bold text-gray-900">
+                        {linked} <span className="text-xs text-gray-400 font-medium">/ {nodes.length}</span>
+                      </div>
+                    </div>
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${pct}%`,
+                          background: s.color,
+                        }}
+                      />
+                    </div>
+                    <div className="mt-1 text-[10px] text-gray-500 uppercase tracking-wider">
+                      {pct}% linked · {nodes.length - linked} orphan{nodes.length - linked === 1 ? "" : "s"}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* RECENT ACTIVITY */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <div className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">
+                Recent
+              </div>
+              <div className="text-lg font-semibold text-gray-900">
+                Latest link activity
+              </div>
+            </div>
+            <div className="max-h-[280px] overflow-y-auto">
+              {recent.map((r, i) => (
+                <div
+                  key={i}
+                  className="px-5 py-2.5 border-b border-gray-50 hover:bg-gray-50/60 flex items-start gap-3"
+                >
+                  <div className="w-6 h-6 rounded-full bg-orange-100 text-[#ec9324] flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <LinkIcon style={{ fontSize: 14 }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-gray-800">
+                      <span className="font-semibold">{r.a?.name || "—"}</span>{" "}
+                      <span className="text-gray-400">linked to</span>{" "}
+                      <span className="font-semibold">{r.b?.name || "—"}</span>
+                    </div>
+                    <div className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                      <span className="inline-flex items-center gap-1">
+                        <span
+                          className="w-1.5 h-1.5 rounded-full"
+                          style={{ background: r.a?.seg.color }}
+                        />
+                        {r.a?.seg.name}
+                      </span>
+                      <span className="text-gray-300">→</span>
+                      <span className="inline-flex items-center gap-1">
+                        <span
+                          className="w-1.5 h-1.5 rounded-full"
+                          style={{ background: r.b?.seg.color }}
+                        />
+                        {r.b?.seg.name}
+                      </span>
+                      <span className="text-gray-300">·</span>
+                      <span>by {r.by}</span>
+                      <span className="text-gray-300">·</span>
+                      <span>{r.when}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Explainer */}
-      <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <ProCon
-          heading="Best for"
-          tone="orange"
-          items={[
-            "Exploring the big picture of relationships across all segmentations",
-            "Discovering hidden clusters / equivalencies",
-            "Analytics / reporting audiences",
-          ]}
-        />
-        <ProCon
-          heading="Not ideal for"
-          tone="gray"
-          items={[
-            "First-time or bulk data entry (initial linking)",
-            "Users who want the linking to happen inline while editing a tree",
-          ]}
-        />
-        <ProCon
-          heading="Interaction model"
-          tone="blue"
-          items={[
-            "Dedicated view — all Level-2 nodes on one canvas",
-            "Nodes clustered around their parent segmentation",
-            "Hover a node to highlight its links; click to focus + edit in the side panel",
-            "Filter: All / Linked / Unlinked",
-          ]}
-        />
+      {/* QUICK NAV CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <button
+          onClick={() => onOpenView("inline")}
+          className="group text-left bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:border-orange-300 hover:shadow-md transition-all"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-lg bg-orange-100 text-[#ec9324] flex items-center justify-center flex-shrink-0">
+              <LinkIcon />
+            </div>
+            <div className="flex-1">
+              <div className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                Inline Pill Tags
+                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">
+                  Editor
+                </span>
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                Level-2 nodes shown as cards with coloured link pills beneath.
+                Fast in-place editing with an autocomplete search.
+              </div>
+            </div>
+            <span className="text-[#ec9324] font-bold group-hover:translate-x-1 transition-transform">→</span>
+          </div>
+        </button>
+        <button
+          onClick={() => onOpenView("ribbon")}
+          className="group text-left bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:border-orange-300 hover:shadow-md transition-all"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-100 to-violet-100 text-[#ec9324] flex items-center justify-center flex-shrink-0">
+              <span className="text-lg">≈</span>
+            </div>
+            <div className="flex-1">
+              <div className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                Ribbon Flow
+                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">
+                  Visual
+                </span>
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                Two parallel columns with Sankey-style curved ribbons. Great
+                for spotting many-to-many mappings between two segmentations.
+              </div>
+            </div>
+            <span className="text-[#ec9324] font-bold group-hover:translate-x-1 transition-transform">→</span>
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// small hero-stat card used by Overview
+function BigStat({ label, value, sub, accent = "orange", icon }) {
+  const tones = {
+    orange:  { bg: "bg-orange-50",   border: "border-orange-100",  text: "text-[#ec9324]" },
+    sky:     { bg: "bg-sky-50",      border: "border-sky-100",     text: "text-sky-600" },
+    emerald: { bg: "bg-emerald-50",  border: "border-emerald-100", text: "text-emerald-600" },
+    rose:    { bg: "bg-rose-50",     border: "border-rose-100",    text: "text-rose-600" },
+    violet:  { bg: "bg-violet-50",   border: "border-violet-100",  text: "text-violet-600" },
+  }[accent];
+  return (
+    <div className={`${tones.bg} ${tones.border} border rounded-xl p-4`}>
+      <div className="flex items-start justify-between">
+        <div>
+          <div className={`text-[10px] uppercase tracking-wider ${tones.text} font-bold`}>
+            {label}
+          </div>
+          <div className="text-2xl font-bold text-gray-900 mt-1 leading-none">
+            {value}
+          </div>
+          <div className="text-[11px] text-gray-500 mt-1">{sub}</div>
+        </div>
+        <div className={`${tones.text} opacity-70`}>{icon}</div>
       </div>
     </div>
   );
 }
 
 // ============================================================
-// CONCEPT D — Inline Pill Tags on Tree
+// VIEW 1 — INLINE PILL TAGS
 // ============================================================
-function ConceptD() {
-  const [links, setLinks] = useState(INITIAL_LINKS);
-  const [openNodeId, setOpenNodeId] = useState(null);
-  const [query, setQuery] = useState("");
-
-  const seg = SEGMENTATIONS[0]; // Infollion Research
-  const width = 1100;
-  const height = 640;
-  const rootX = 60;
-  const rootY = height / 2;
-
-  const l1Groups = useMemo(() => {
-    const map = {};
-    seg.l2.forEach((n) => {
-      if (!map[n.parent]) map[n.parent] = [];
-      map[n.parent].push(n);
-    });
-    return Object.entries(map).map(([parent, nodes]) => ({ parent, nodes }));
-  }, [seg]);
-
-  const l1X = 240;
-  const l2X = 500;
-  const l1YStart = 60;
-  const l1Slot = (height - 120) / Math.max(l1Groups.length, 1);
-  const l1Positions = l1Groups.map((_, i) => ({
-    x: l1X,
-    y: l1YStart + l1Slot * i + l1Slot / 2,
-  }));
-  const l2Positions = [];
-  l1Groups.forEach((g, gi) => {
-    const parentY = l1Positions[gi].y;
-    const spacing = 90; // extra room for chips row
-    g.nodes.forEach((n, i) => {
-      l2Positions.push({
-        id: n.id,
-        name: n.name,
-        x: l2X,
-        y: parentY - ((g.nodes.length - 1) * spacing) / 2 + i * spacing,
-        parentIndex: gi,
-      });
-    });
-  });
-
-  const findSuggestions = () => {
-    const q = query.trim().toLowerCase();
-    const already = new Set(
-      links
-        .filter((l) => l.a === openNodeId || l.b === openNodeId)
-        .flatMap((l) => [l.a, l.b])
-    );
-    const out = [];
-    SEGMENTATIONS.forEach((s) => {
-      if (s.id === seg.id) return;
-      s.l2.forEach((n) => {
-        if (already.has(n.id)) return;
-        if (q && !n.name.toLowerCase().includes(q)) return;
-        out.push({ ...n, seg: s });
-      });
-    });
-    return out.slice(0, 6);
-  };
-
+function InlinePillTagsView({ links, setLinks, onEdit }) {
+  const seg = SEGMENTATIONS[0];
+  // We render a simple flat list of Level-2 nodes with chips beneath.
   return (
     <div className="grid grid-cols-1 gap-6">
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
@@ -1381,465 +935,597 @@ function ConceptD() {
               Segmentation
             </div>
             <div className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full" style={{ background: seg.color }} />
+              <span
+                className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[10px] font-bold"
+                style={{ background: seg.color }}
+              >
+                {seg.initials}
+              </span>
               {seg.name}
             </div>
           </div>
-          <div className="text-xs text-gray-500">
-            Links appear as coloured pills directly under each Level-2 node
+          <span className="text-xs text-gray-500">
+            Every link appears as a coloured pill directly under its Level-2 node.
+            Coloured dots at the start of each pill show which segmentation it
+            points to.
+          </span>
+        </div>
+
+        <div className="p-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {seg.l2.map((n) => {
+            const chips = linksFor(n.id, links);
+            return (
+              <div
+                key={n.id}
+                className="group rounded-lg border border-gray-200 hover:border-orange-300 hover:shadow-sm p-3 transition-colors bg-white"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: "#22c55e" }} />
+                    <div className="font-semibold text-gray-800 text-sm truncate">{n.name}</div>
+                  </div>
+                  <button
+                    onClick={() => onEdit(n.id)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1 text-[11px] text-[#ec9324] font-semibold hover:bg-orange-50 rounded px-1.5 py-0.5"
+                  >
+                    <EditOutlined style={{ fontSize: 14 }} />
+                    Edit
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-1">
+                  {chips.length === 0 && (
+                    <span className="text-[11px] italic text-gray-400">No links</span>
+                  )}
+                  {chips.map((c) => (
+                    <span
+                      key={c.id}
+                      className="inline-flex items-center gap-1 pl-1.5 pr-1 py-0.5 rounded-full text-[11px] font-medium border shadow-sm bg-white"
+                      style={{ borderColor: c.seg.color + "80", color: "#374151" }}
+                    >
+                      <span
+                        className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                        style={{ background: c.seg.color }}
+                      />
+                      <span className="truncate max-w-[140px]">{c.name}</span>
+                      <button
+                        onClick={() =>
+                          setLinks((prev) =>
+                            prev.filter(
+                              (l) =>
+                                !(
+                                  (l.a === n.id && l.b === c.id) ||
+                                  (l.b === n.id && l.a === c.id)
+                                )
+                            )
+                          )
+                        }
+                        className="w-3.5 h-3.5 rounded-full opacity-50 hover:opacity-100 hover:bg-red-100 hover:text-red-600 flex items-center justify-center"
+                      >
+                        <span style={{ fontSize: 11, lineHeight: 1 }}>×</span>
+                      </button>
+                    </span>
+                  ))}
+                  <button
+                    onClick={() => onEdit(n.id)}
+                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[11px] font-semibold border border-dashed border-[#ec9324] text-[#ec9324] bg-orange-50/60 hover:bg-orange-100"
+                  >
+                    + Link
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/60 flex items-center gap-4 text-[11px] text-gray-600 flex-wrap">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full" style={{ background: "#22c55e" }} />
+            Level-2 node
+          </span>
+          {SEGMENTATIONS.slice(1).map((s) => (
+            <span key={s.id} className="inline-flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full" style={{ background: s.color }} />
+              Chip → {s.name}
+            </span>
+          ))}
+          <span className="ml-auto text-gray-400">
+            Click <span className="font-semibold text-[#ec9324]">+ Link</span> or the Edit chip on
+            any node to open the shared Edit dialog.
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// VIEW 2 — RIBBON FLOW (Sankey-style)
+// ============================================================
+function RibbonFlowView({ links, setLinks, onEdit }) {
+  const [baseId, setBaseId] = useState("infollion");
+  const [linkedId, setLinkedId] = useState("mckinsey");
+  const [focusId, setFocusId] = useState("inf-bfsi");
+  const [query, setQuery] = useState("");
+
+  const base = SEGMENTATIONS.find((s) => s.id === baseId);
+  const linked = SEGMENTATIONS.find((s) => s.id === linkedId);
+
+  // Ribbons currently between base<->linked
+  const ribbons = useMemo(() => {
+    return links
+      .map((l) => {
+        const a = nodeById(l.a);
+        const b = nodeById(l.b);
+        const src = a && a.seg.id === base.id ? a : b && b.seg.id === base.id ? b : null;
+        const tgt = a && a.seg.id === linked.id ? a : b && b.seg.id === linked.id ? b : null;
+        if (!src || !tgt) return null;
+        return { src, tgt };
+      })
+      .filter(Boolean);
+  }, [links, base, linked]);
+
+  // Stats
+  const coverageBase = new Set(ribbons.map((r) => r.src.id)).size;
+  const coverageLinked = new Set(ribbons.map((r) => r.tgt.id)).size;
+  const totalBaseNodes = base.l2.length;
+  const totalLinkedNodes = linked.l2.length;
+
+  const manyLinkCount = useMemo(() => {
+    const counts = {};
+    ribbons.forEach((r) => {
+      counts[r.src.id] = (counts[r.src.id] || 0) + 1;
+    });
+    return Object.values(counts).filter((c) => c >= 2).length;
+  }, [ribbons]);
+
+  // Layout
+  const width = 1400;
+  const height = 640;
+  const padTop = 60;
+  const padBot = 40;
+  const baseX = 470; // right edge of base column labels
+  const linkedX = width - 470; // left edge of linked column labels
+  const rowHeight = (height - padTop - padBot) / Math.max(base.l2.length, linked.l2.length, 1);
+
+  const baseYs = {};
+  base.l2.forEach((n, i) => {
+    baseYs[n.id] = padTop + i * rowHeight + rowHeight / 2;
+  });
+  const linkedYs = {};
+  linked.l2.forEach((n, i) => {
+    linkedYs[n.id] = padTop + i * rowHeight + rowHeight / 2;
+  });
+
+  const focusedNode = focusId ? nodeById(focusId) : null;
+  const focusedMappedIds = useMemo(() => {
+    if (!focusId) return new Set();
+    return new Set(
+      ribbons
+        .filter((r) => r.src.id === focusId || r.tgt.id === focusId)
+        .flatMap((r) => [r.src.id, r.tgt.id])
+    );
+  }, [focusId, ribbons]);
+
+  // Extra: cross-references from Gartner (or any 3rd segmentation) to the focused node
+  const alsoRefs = useMemo(() => {
+    if (!focusId) return [];
+    return links
+      .filter((l) => l.a === focusId || l.b === focusId)
+      .map((l) => nodeById(l.a === focusId ? l.b : l.a))
+      .filter((n) => n && n.seg.id !== base.id && n.seg.id !== linked.id);
+  }, [focusId, links, base, linked]);
+
+  // Determine if a ribbon should be highlighted
+  const isHi = (r) =>
+    focusId && (r.src.id === focusId || r.tgt.id === focusId);
+
+  return (
+    <div className="grid grid-cols-1 gap-4">
+      {/* ---------- HEADER ---------- */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          {/* left cluster */}
+          <div className="flex items-start gap-4">
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">
+                Cross-Segmentation
+              </div>
+              <div className="flex items-center gap-3 mt-0.5">
+                <h2 className="text-2xl font-semibold text-gray-900">
+                  Segmentation Links
+                </h2>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-bold uppercase tracking-wider">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Live
+                </span>
+              </div>
+            </div>
+
+            {/* segmentation pair selector */}
+            <div className="flex items-center gap-1.5 pl-4 border-l border-gray-200 mt-1">
+              <SegPill segId={baseId} setSegId={setBaseId} role="Base" />
+              <span className="text-gray-400 mx-1">›</span>
+              <SegPill
+                segId={linkedId}
+                setSegId={setLinkedId}
+                role="Linked"
+                exclude={baseId}
+              />
+            </div>
+          </div>
+
+          {/* right cluster: stats + edit */}
+          <div className="flex items-stretch gap-3">
+            <StatCard label="Coverage" value={`${coverageBase} / ${totalBaseNodes}`} />
+            <StatCard label="Ribbons" value={ribbons.length} />
+            <StatCard label="Many-Links" value={manyLinkCount} />
+            <button
+              onClick={() => onEdit(focusId || base.l2[0].id)}
+              className="inline-flex items-center gap-1.5 px-4 rounded-lg bg-[#ec9324] text-white text-sm font-semibold hover:bg-[#d3811b] shadow-sm"
+            >
+              <EditOutlined style={{ fontSize: 18 }} />
+              Edit Links
+            </button>
           </div>
         </div>
-        <div className="p-6 relative">
-          <svg viewBox={`0 0 ${width} ${height}`} className="w-full" style={{ height }}>
-            {/* root -> l1 */}
-            {l1Positions.map((p, i) => (
-              <path
-                key={`r-${i}`}
-                d={`M ${rootX + 22},${rootY} C ${(rootX + p.x) / 2},${rootY} ${(rootX + p.x) / 2},${p.y} ${p.x - 22},${p.y}`}
-                fill="none"
-                stroke="#e5e7eb"
-                strokeWidth={1.5}
+      </div>
+
+      {/* ---------- CANVAS ---------- */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        {/* Top ribbon: legend + zoom */}
+        <div className="px-5 py-2.5 border-b border-gray-100 flex items-center justify-between text-[11px]">
+          <div className="flex items-center gap-4">
+            <span className="inline-flex items-center gap-1.5 text-gray-600">
+              <span
+                className="w-2.5 h-2.5 rounded-full"
+                style={{ background: base.color }}
               />
-            ))}
-            {/* l1 -> l2 */}
-            {l2Positions.map((n) => {
-              const p = l1Positions[n.parentIndex];
-              return (
-                <path
-                  key={`l-${n.id}`}
-                  d={`M ${p.x + 22},${p.y} C ${(p.x + n.x) / 2},${p.y} ${(p.x + n.x) / 2},${n.y} ${n.x - 22},${n.y}`}
-                  fill="none"
-                  stroke="#e5e7eb"
-                  strokeWidth={1.5}
-                />
-              );
-            })}
-            {/* root */}
-            <circle cx={rootX} cy={rootY} r={12} fill={seg.color} />
-            <text x={rootX + 22} y={rootY + 4} fontSize={13} fontWeight={700} fill="#111827">
-              {seg.name}
-            </text>
-            {/* l1 groups */}
-            {l1Groups.map((g, i) => (
-              <g key={g.parent}>
-                <circle cx={l1Positions[i].x} cy={l1Positions[i].y} r={9} fill="#0ea5e9" />
-                <text
-                  x={l1Positions[i].x + 16}
-                  y={l1Positions[i].y + 4}
-                  fontSize={12}
-                  fontWeight={600}
-                  fill="#374151"
+              {base.name} L2
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-gray-600">
+              <span
+                className="w-2.5 h-2.5 rounded-full"
+                style={{ background: linked.color }}
+              />
+              {linked.name} L2
+            </span>
+            <span className="text-gray-400">Ribbon = link</span>
+          </div>
+          <div className="inline-flex items-center bg-gray-100 rounded-lg text-gray-600">
+            <IconBtn><ZoomIn style={{ fontSize: 16 }} /></IconBtn>
+            <IconBtn><ZoomOut style={{ fontSize: 16 }} /></IconBtn>
+            <IconBtn><CenterFocusStrong style={{ fontSize: 16 }} /></IconBtn>
+            <IconBtn><Fullscreen style={{ fontSize: 16 }} /></IconBtn>
+          </div>
+        </div>
+
+        {/* SVG ribbons */}
+        <div className="relative bg-gradient-to-br from-orange-50/30 via-white to-sky-50/30">
+          <svg viewBox={`0 0 ${width} ${height}`} className="w-full" style={{ height }}>
+            <defs>
+              {ribbons.map((r, i) => (
+                <linearGradient
+                  key={i}
+                  id={`ribbon-grad-${i}`}
+                  x1="0"
+                  x2="1"
+                  y1="0"
+                  y2="0"
                 >
-                  {g.parent}
-                </text>
-              </g>
-            ))}
-            {/* l2 nodes with chip rows */}
-            {l2Positions.map((n) => {
-              const nodeLinks = linksFor(n.id, links);
-              const isOpen = openNodeId === n.id;
+                  <stop offset="0%" stopColor={base.color} stopOpacity={0.9} />
+                  <stop offset="100%" stopColor={linked.color} stopOpacity={0.9} />
+                </linearGradient>
+              ))}
+            </defs>
+
+            {/* Column headers */}
+            <text x={baseX} y={30} textAnchor="end" fontSize={11} fontWeight={700}
+              fill="#6b7280" style={{ letterSpacing: 1 }}>
+              {base.name.toUpperCase()} · L2
+            </text>
+            <text x={linkedX} y={30} textAnchor="start" fontSize={11} fontWeight={700}
+              fill="#6b7280" style={{ letterSpacing: 1 }}>
+              {linked.name.toUpperCase()} · L2
+            </text>
+
+            {/* Ribbons (draw non-highlighted first, then highlighted on top) */}
+            {ribbons
+              .slice()
+              .sort((a, b) => (isHi(a) ? 1 : 0) - (isHi(b) ? 1 : 0))
+              .map((r, i) => {
+                const y1 = baseYs[r.src.id];
+                const y2 = linkedYs[r.tgt.id];
+                const hi = isHi(r);
+                const mid = (baseX + linkedX) / 2;
+                const path = `M ${baseX + 20},${y1} C ${mid},${y1} ${mid},${y2} ${linkedX - 20},${y2}`;
+                const gradId = ribbons.indexOf(r);
+                return (
+                  <path
+                    key={`${r.src.id}-${r.tgt.id}`}
+                    d={path}
+                    fill="none"
+                    stroke={`url(#ribbon-grad-${gradId})`}
+                    strokeWidth={hi ? 9 : 6}
+                    strokeLinecap="round"
+                    opacity={focusId ? (hi ? 0.85 : 0.12) : 0.4}
+                  />
+                );
+              })}
+
+            {/* BASE column labels + dots */}
+            {base.l2.map((n) => {
+              const y = baseYs[n.id];
+              const hasLink = ribbons.some((r) => r.src.id === n.id);
+              const isFocus = focusId === n.id;
+              const isMuted = focusId && !isFocus && !focusedMappedIds.has(n.id);
+              const fill = isFocus ? "#111827" : isMuted ? "#9ca3af" : "#374151";
+              const weight = isFocus ? 700 : hasLink ? 600 : 500;
               return (
-                <g key={n.id}>
-                  <circle cx={n.x} cy={n.y} r={7} fill="#fff" stroke="#22c55e" strokeWidth={2} />
+                <g
+                  key={n.id}
+                  style={{ cursor: "pointer" }}
+                  onClick={() => setFocusId(n.id)}
+                >
+                  {/* invisible hit area */}
+                  <rect
+                    x={0}
+                    y={y - rowHeight / 2}
+                    width={baseX + 20}
+                    height={rowHeight}
+                    fill="transparent"
+                  />
                   <text
-                    x={n.x + 14}
-                    y={n.y + 4}
+                    x={baseX - 12}
+                    y={y + 4}
+                    textAnchor="end"
                     fontSize={13}
-                    fontWeight={600}
-                    fill="#111827"
+                    fontWeight={weight}
+                    fill={fill}
+                    opacity={isMuted ? 0.6 : 1}
                   >
                     {n.name}
                   </text>
-                  {/* Chips row via foreignObject */}
-                  <foreignObject x={n.x + 14} y={n.y + 10} width={520} height={40}>
-                    <div
-                      xmlns="http://www.w3.org/1999/xhtml"
-                      className="flex flex-wrap items-center gap-1"
-                    >
-                      {nodeLinks.map((ln) => (
-                        <span
-                          key={ln.id}
-                          className="group inline-flex items-center gap-1 pl-1.5 pr-0.5 py-0.5 rounded-full text-[10px] font-medium border shadow-sm bg-white"
-                          style={{
-                            borderColor: ln.seg.color + "70",
-                            color: "#374151",
-                          }}
-                        >
-                          <span
-                            className="w-1.5 h-1.5 rounded-full"
-                            style={{ background: ln.seg.color }}
-                          />
-                          {ln.name}
-                          <button
-                            onClick={() =>
-                              setLinks((prev) =>
-                                prev.filter(
-                                  (l) =>
-                                    !(
-                                      (l.a === n.id && l.b === ln.id) ||
-                                      (l.b === n.id && l.a === ln.id)
-                                    )
-                                )
-                              )
-                            }
-                            className="w-3 h-3 rounded-full opacity-40 hover:opacity-100 hover:bg-red-100 hover:text-red-600 flex items-center justify-center"
-                          >
-                            <span style={{ fontSize: 10, lineHeight: 1 }}>×</span>
-                          </button>
-                        </span>
-                      ))}
-                      <button
-                        onClick={() => {
-                          setOpenNodeId(isOpen ? null : n.id);
-                          setQuery("");
-                        }}
-                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold border border-dashed border-[#ec9324] text-[#ec9324] bg-orange-50/60 hover:bg-orange-100"
-                      >
-                        + Link
-                      </button>
-                    </div>
-                  </foreignObject>
-
-                  {/* Inline autocomplete popover */}
-                  {isOpen && (
-                    <foreignObject x={n.x + 14} y={n.y + 44} width={340} height={260}>
-                      <div
-                        xmlns="http://www.w3.org/1999/xhtml"
-                        className="bg-white rounded-lg shadow-2xl border border-gray-200 overflow-hidden"
-                      >
-                        <div className="px-3 py-2 border-b border-gray-100 flex items-center gap-2">
-                          <span style={{ fontSize: 12, color: "#9ca3af" }}>🔎</span>
-                          <input
-                            autoFocus
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            className="flex-1 outline-none text-xs placeholder-gray-400"
-                            placeholder="Search Level-2 nodes to link…"
-                          />
-                          <button
-                            className="text-[10px] text-gray-400 hover:text-gray-700"
-                            onClick={() => setOpenNodeId(null)}
-                          >
-                            ESC
-                          </button>
-                        </div>
-                        <div className="max-h-[210px] overflow-y-auto">
-                          {findSuggestions().length === 0 ? (
-                            <div className="px-3 py-3 text-[11px] italic text-gray-400">
-                              No matching nodes
-                            </div>
-                          ) : (
-                            findSuggestions().map((s) => (
-                              <button
-                                key={s.id}
-                                onClick={() => {
-                                  setLinks((prev) => [
-                                    ...prev,
-                                    { a: n.id, b: s.id },
-                                  ]);
-                                  setQuery("");
-                                }}
-                                className="w-full px-3 py-2 flex items-center gap-2 hover:bg-orange-50 border-b border-gray-50 text-left"
-                              >
-                                <span
-                                  className="w-2 h-2 rounded-full"
-                                  style={{ background: s.seg.color }}
-                                />
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-xs font-semibold text-gray-800">
-                                    {s.name}
-                                  </div>
-                                  <div className="text-[10px] text-gray-500">
-                                    {s.seg.name} · under {s.parent}
-                                  </div>
-                                </div>
-                                <span className="text-[10px] text-[#ec9324] font-semibold">
-                                  Link ↵
-                                </span>
-                              </button>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    </foreignObject>
+                  <circle
+                    cx={baseX}
+                    cy={y}
+                    r={isFocus ? 7 : 5}
+                    fill={hasLink || isFocus ? base.color : "#e5e7eb"}
+                    stroke={isFocus ? "#fff" : "none"}
+                    strokeWidth={isFocus ? 2 : 0}
+                  />
+                  {isFocus && (
+                    <circle
+                      cx={baseX}
+                      cy={y}
+                      r={12}
+                      fill="none"
+                      stroke={base.color}
+                      strokeWidth={2}
+                      opacity={0.4}
+                    />
                   )}
                 </g>
               );
             })}
+
+            {/* LINKED column labels + dots */}
+            {linked.l2.map((n) => {
+              const y = linkedYs[n.id];
+              const hasLink = ribbons.some((r) => r.tgt.id === n.id);
+              const isFocus = focusId === n.id;
+              const isMappedToFocus =
+                focusId && focusedMappedIds.has(n.id) && !isFocus;
+              const isMuted =
+                focusId && !isFocus && !isMappedToFocus && !focusedMappedIds.has(n.id);
+              const fill = isFocus || isMappedToFocus ? "#111827" : isMuted ? "#9ca3af" : "#374151";
+              const weight = isFocus || isMappedToFocus ? 700 : hasLink ? 600 : 500;
+              return (
+                <g
+                  key={n.id}
+                  style={{ cursor: "pointer" }}
+                  onClick={() => setFocusId(n.id)}
+                >
+                  <rect
+                    x={linkedX - 20}
+                    y={y - rowHeight / 2}
+                    width={width - linkedX + 20}
+                    height={rowHeight}
+                    fill="transparent"
+                  />
+                  <circle
+                    cx={linkedX}
+                    cy={y}
+                    r={isFocus ? 7 : 5}
+                    fill={hasLink || isFocus ? linked.color : "#e5e7eb"}
+                    stroke={isFocus ? "#fff" : "none"}
+                    strokeWidth={isFocus ? 2 : 0}
+                  />
+                  <text
+                    x={linkedX + 12}
+                    y={y + 4}
+                    textAnchor="start"
+                    fontSize={13}
+                    fontWeight={weight}
+                    fill={fill}
+                    opacity={isMuted ? 0.6 : 1}
+                  >
+                    {n.name}
+                  </text>
+                </g>
+              );
+            })}
           </svg>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <ProCon
-          heading="Best for"
-          tone="orange"
-          items={[
-            "Everyday CRM linking — see and edit links without leaving the tree",
-            "Analysts who scan a tree top-down and add tags in place",
-            "Zero context-switch: no drawer, no modal, no navigation",
-          ]}
-        />
-        <ProCon
-          heading="Not ideal for"
-          tone="gray"
-          items={[
-            "Very dense trees (many chips can clutter the row)",
-            "Bulk operations across many nodes",
-          ]}
-        />
-        <ProCon
-          heading="Interaction model"
-          tone="blue"
-          items={[
-            "Chips (coloured by target segmentation) render under each Level-2 label",
-            "'+ Link' pill opens an inline autocomplete right on the node",
-            "Type-ahead search filters across all other segmentations",
-            "Enter / click a suggestion → link created instantly; × on a chip removes",
-          ]}
-        />
-      </div>
-    </div>
-  );
-}
-
-// ============================================================
-// CONCEPT E — Equivalency Matrix (checkbox grid)
-// ============================================================
-function ConceptE() {
-  const [links, setLinks] = useState(INITIAL_LINKS);
-  const [rowSegId, setRowSegId] = useState("infollion");
-  const [colSegId, setColSegId] = useState("techcorp");
-
-  const rowSeg = SEGMENTATIONS.find((s) => s.id === rowSegId);
-  const colSeg = SEGMENTATIONS.find((s) => s.id === colSegId);
-
-  const isLinked = (aId, bId) =>
-    links.some(
-      (l) => (l.a === aId && l.b === bId) || (l.b === aId && l.a === bId)
-    );
-
-  const toggle = (aId, bId) => {
-    setLinks((prev) => {
-      const exists = prev.some(
-        (l) => (l.a === aId && l.b === bId) || (l.b === aId && l.a === bId)
-      );
-      if (exists) {
-        return prev.filter(
-          (l) => !((l.a === aId && l.b === bId) || (l.b === aId && l.a === bId))
-        );
-      }
-      return [...prev, { a: aId, b: bId }];
-    });
-  };
-
-  const rowCoverage = (rowNode) =>
-    colSeg.l2.filter((c) => isLinked(rowNode.id, c.id)).length;
-  const colCoverage = (colNode) =>
-    rowSeg.l2.filter((r) => isLinked(r.id, colNode.id)).length;
-
-  const totalCells = rowSeg.l2.length * colSeg.l2.length;
-  const linkedCells = rowSeg.l2.reduce(
-    (acc, r) => acc + rowCoverage(r),
-    0
-  );
-
-  return (
-    <div className="grid grid-cols-1 gap-6">
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        {/* header controls */}
-        <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center gap-4 bg-gradient-to-r from-orange-50/40 to-sky-50/40">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">
-              Rows
-            </span>
-            <select
-              value={rowSegId}
-              onChange={(e) => setRowSegId(e.target.value)}
-              className="text-sm font-semibold bg-white border border-gray-200 rounded-md px-2 py-1"
-            >
-              {SEGMENTATIONS.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <span className="text-gray-300">×</span>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">
-              Columns
-            </span>
-            <select
-              value={colSegId}
-              onChange={(e) => setColSegId(e.target.value)}
-              className="text-sm font-semibold bg-white border border-gray-200 rounded-md px-2 py-1"
-            >
-              {SEGMENTATIONS.filter((s) => s.id !== rowSegId).map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="ml-auto flex items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-100 text-[#ec9324] text-xs font-semibold">
-              <LinkIcon style={{ fontSize: 14 }} />
-              {linkedCells} / {totalCells} cells linked
-            </span>
-            <span className="text-xs text-gray-500">
-              {Math.round((linkedCells / totalCells) * 100)}% coverage
-            </span>
-          </div>
-        </div>
-
-        {/* Matrix */}
-        <div className="overflow-auto">
-          <table className="min-w-full border-collapse">
-            <thead>
-              <tr>
-                <th className="sticky left-0 bg-white z-10 px-3 py-3 border-b border-gray-200 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500 min-w-[220px]">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full" style={{ background: rowSeg.color }} />
-                    {rowSeg.name}
+          {/* Focused segment card — overlaid to the right */}
+          {focusedNode && (
+            <div className="absolute top-16 right-6 w-[280px] bg-white rounded-xl border border-orange-200 shadow-lg overflow-hidden">
+              <div className="px-4 pt-3 pb-2">
+                <div className="text-[10px] uppercase tracking-wider text-[#ec9324] font-bold">
+                  Focused Segment
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <span
+                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                    style={{ background: focusedNode.seg.color }}
+                  />
+                  <div className="text-lg font-semibold text-gray-900 leading-tight">
+                    {focusedNode.name}
                   </div>
-                </th>
-                {colSeg.l2.map((c) => (
-                  <th
-                    key={c.id}
-                    className="px-2 py-3 border-b border-gray-200 text-center align-bottom text-[11px] font-semibold text-gray-700"
-                    style={{ minWidth: 96 }}
-                  >
-                    <div className="flex flex-col items-center gap-1">
-                      <span
-                        className="w-2 h-2 rounded-full"
-                        style={{ background: colSeg.color }}
-                      />
-                      <span
-                        className="whitespace-nowrap"
-                        style={{
-                          writingMode: "horizontal-tb",
-                          transform: "rotate(-30deg)",
-                          transformOrigin: "center",
-                        }}
-                      >
-                        {c.name}
-                      </span>
-                      <span className="text-[9px] text-gray-400 font-normal">
-                        {colCoverage(c)} link{colCoverage(c) === 1 ? "" : "s"}
-                      </span>
+                </div>
+                <div className="text-[11px] text-gray-500 mt-0.5">
+                  Level 2 · {focusedNode.seg.name}
+                </div>
+              </div>
+              <div className="px-4 pb-3">
+                <div className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-1.5">
+                  Mapped {focusedNode.seg.id === base.id ? linked.name : base.name} segments
+                </div>
+                <div className="space-y-1">
+                  {ribbons
+                    .filter(
+                      (r) =>
+                        r.src.id === focusedNode.id || r.tgt.id === focusedNode.id
+                    )
+                    .map((r, i) => {
+                      const other = r.src.id === focusedNode.id ? r.tgt : r.src;
+                      return (
+                        <div
+                          key={i}
+                          className="flex items-center gap-1.5 text-sm text-gray-800"
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                            style={{ background: other.seg.color }}
+                          />
+                          {other.name}
+                        </div>
+                      );
+                    })}
+                  {ribbons.filter(
+                    (r) =>
+                      r.src.id === focusedNode.id || r.tgt.id === focusedNode.id
+                  ).length === 0 && (
+                    <div className="text-xs italic text-gray-400">
+                      No mapped segments yet.
                     </div>
-                  </th>
-                ))}
-                <th className="px-3 py-3 border-b border-l border-gray-200 text-center text-[11px] font-semibold uppercase tracking-wider text-gray-500 bg-orange-50/60">
-                  Row total
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rowSeg.l2.map((r, ri) => (
-                <tr key={r.id} className={ri % 2 ? "bg-gray-50/40" : "bg-white"}>
-                  <td className="sticky left-0 z-10 px-3 py-2 border-b border-gray-100 text-sm font-medium text-gray-800"
-                      style={{ background: ri % 2 ? "#fafafa" : "#fff" }}>
-                    <div className="flex flex-col">
-                      <span>{r.name}</span>
-                      <span className="text-[10px] text-gray-400 font-normal">
-                        under {r.parent}
+                  )}
+                </div>
+              </div>
+              <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50">
+                <div className="text-[10px] text-gray-500">
+                  Also referenced by{" "}
+                  <span className="font-bold text-gray-800">
+                    {alsoRefs.length}
+                  </span>{" "}
+                  other{" "}
+                  {focusedNode.seg.id === base.id ? linked.name : base.name === base.name ? base.name : linked.name}{" "}
+                  segments.
+                </div>
+                {alsoRefs.length > 0 && (
+                  <div className="mt-1 text-[11px] text-gray-700">
+                    {alsoRefs.map((n) => (
+                      <span key={n.id} className="inline-flex items-center gap-1 mr-2">
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: n.seg.color }} />
+                        {n.name}
                       </span>
-                    </div>
-                  </td>
-                  {colSeg.l2.map((c) => {
-                    const linked = isLinked(r.id, c.id);
-                    return (
-                      <td
-                        key={c.id}
-                        className={
-                          "px-2 py-2 border-b border-gray-100 text-center cursor-pointer transition-colors " +
-                          (linked ? "bg-orange-50 hover:bg-orange-100" : "hover:bg-orange-50/40")
-                        }
-                        onClick={() => toggle(r.id, c.id)}
-                      >
-                        {linked ? (
-                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#ec9324] text-white shadow-sm">
-                            <CheckCircle style={{ fontSize: 16 }} />
-                          </span>
-                        ) : (
-                          <span className="inline-block w-5 h-5 rounded border border-gray-300 hover:border-[#ec9324] hover:bg-white" />
-                        )}
-                      </td>
-                    );
-                  })}
-                  <td className="px-3 py-2 border-b border-l border-gray-100 text-center text-sm font-semibold bg-orange-50/60 text-[#ec9324]">
-                    {rowCoverage(r)}
-                  </td>
-                </tr>
-              ))}
-              {/* Column totals footer */}
-              <tr className="bg-orange-50/40">
-                <td className="sticky left-0 z-10 bg-orange-50/60 px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-gray-500 border-t border-gray-200">
-                  Col total
-                </td>
-                {colSeg.l2.map((c) => (
-                  <td
-                    key={c.id}
-                    className="px-2 py-2 text-center text-sm font-semibold text-[#ec9324] border-t border-gray-200"
-                  >
-                    {colCoverage(c)}
-                  </td>
-                ))}
-                <td className="px-3 py-2 text-center text-sm font-bold text-[#ec9324] border-t border-l border-gray-200 bg-orange-100/60">
-                  {linkedCells}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="px-4 py-2 border-t border-gray-100 flex items-center justify-end">
+                <button
+                  onClick={() => onEdit(focusedNode.id)}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-[#ec9324] hover:bg-orange-50 rounded px-2 py-1"
+                >
+                  <EditOutlined style={{ fontSize: 14 }} />
+                  Edit this segment&apos;s links
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Footer legend */}
-        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center gap-4 text-[11px] text-gray-600">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block w-4 h-4 rounded-full bg-[#ec9324] text-white text-[10px] flex items-center justify-center">
-              ✓
+        {/* Bottom bar */}
+        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/60 flex items-center gap-3 flex-wrap">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-gray-200 text-sm text-gray-500 min-w-[280px]">
+            <Search style={{ fontSize: 16, color: "#9ca3af" }} />
+            <input
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                const q = e.target.value.trim().toLowerCase();
+                if (!q) return;
+                const hit = [...base.l2, ...linked.l2].find((n) =>
+                  n.name.toLowerCase().includes(q)
+                );
+                if (hit) setFocusId(hit.id);
+              }}
+              className="flex-1 outline-none bg-transparent placeholder-gray-400 text-sm"
+              placeholder="Search or focus a segment"
+            />
+            <span className="text-[10px] text-gray-400 px-1.5 py-0.5 rounded border border-gray-200 bg-gray-50 font-mono">
+              ⌘K
             </span>
-            Linked
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block w-4 h-4 rounded border border-gray-300" />
-            Not linked
-          </span>
-          <span className="ml-auto flex items-center gap-1">
-            <Info style={{ fontSize: 14 }} />
-            Click any cell to toggle the link. Row / column totals give you instant coverage insight.
-          </span>
+          </div>
+
+          <div className="ml-auto flex items-center gap-4 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
+            <div>
+              <div className="text-[9px] uppercase tracking-wider text-gray-400 font-bold">
+                Focused
+              </div>
+              <div className="text-sm font-semibold text-gray-800">
+                {focusedNode ? focusedNode.name : "—"}
+              </div>
+            </div>
+            <div className="w-px h-8 bg-gray-200" />
+            <div>
+              <div className="text-[9px] uppercase tracking-wider text-gray-400 font-bold">
+                Maps to
+              </div>
+              <div className="text-sm font-semibold text-[#ec9324]">
+                {focusedNode
+                  ? `${
+                      ribbons.filter(
+                        (r) =>
+                          r.src.id === focusedNode.id || r.tgt.id === focusedNode.id
+                      ).length
+                    } ${
+                      focusedNode.seg.id === base.id ? linked.name : base.name
+                    } segments`
+                  : "—"}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
+      {/* Explainer */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <ProCon
+        <MiniCard
           heading="Best for"
           tone="orange"
           items={[
-            "QA / bulk-verify mapping between two client taxonomies",
-            "Coverage gap analysis (which nodes have zero cross-links?)",
-            "Reviewers scanning row/column totals to catch imbalance",
+            "Executive / stakeholder view — instantly see which base segments carry weight",
+            "Visualising many-to-many mappings between two client taxonomies",
+            "Spotting orphan nodes (both sides show grey unlinked dots)",
           ]}
         />
-        <ProCon
+        <MiniCard
           heading="Not ideal for"
           tone="gray"
           items={[
-            "Ad-hoc, one-off linking while inside a normal tree edit",
-            "Understanding hierarchy — the parent (Level-1) context is stripped",
+            "Bulk data entry — use the shared Edit Links dialog instead",
+            "Comparing 3+ segmentations in one view",
           ]}
         />
-        <ProCon
+        <MiniCard
           heading="Interaction model"
           tone="blue"
           items={[
-            "Row / Column dropdowns pick any 2 segmentations",
-            "Click a cell → toggles the link on/off",
-            "Row & column totals refresh live",
-            "Header pill shows overall coverage % of the grid",
+            "Click a segment name (either column) to focus — other ribbons fade to 12%",
+            "Focused Segment card lists the mapped targets on the right",
+            "Search bar (⌘K) jumps focus to any segment",
+            "Edit Links opens the SAME dialog used by the Inline Pill Tags view",
           ]}
         />
       </div>
@@ -1847,34 +1533,62 @@ function ConceptE() {
   );
 }
 
-// ============================================================
-// SHARED — Pro/con card
-// ============================================================
-function ProCon({ heading, items, tone = "orange" }) {
-  const tones = {
-    orange: {
-      bg: "bg-orange-50/60",
-      border: "border-orange-200",
-      dot: "text-[#ec9324]",
-      icon: <CheckCircle style={{ fontSize: 16 }} className="text-[#ec9324]" />,
-      title: "text-[#ec9324]",
-    },
-    gray: {
-      bg: "bg-gray-50",
-      border: "border-gray-200",
-      dot: "text-gray-500",
-      icon: <CancelIcon style={{ fontSize: 16 }} className="text-gray-500" />,
-      title: "text-gray-600",
-    },
-    blue: {
-      bg: "bg-sky-50/60",
-      border: "border-sky-200",
-      dot: "text-sky-600",
-      icon: <Info style={{ fontSize: 16 }} className="text-sky-600" />,
-      title: "text-sky-700",
-    },
-  }[tone];
+// ---------- small subcomponents used by the ribbon view ----------
+function SegPill({ segId, setSegId, role, exclude }) {
+  const seg = SEGMENTATIONS.find((s) => s.id === segId);
+  return (
+    <div className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5">
+      <span
+        className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
+        style={{ background: seg.color }}
+      >
+        {seg.initials}
+      </span>
+      <div>
+        <div className="text-[9px] uppercase tracking-wider text-gray-400 font-bold leading-none mb-0.5">
+          {role}
+        </div>
+        <select
+          value={segId}
+          onChange={(e) => setSegId(e.target.value)}
+          className="text-sm font-semibold bg-transparent border-0 p-0 outline-none cursor-pointer text-gray-900"
+        >
+          {SEGMENTATIONS.filter((s) => s.id !== exclude).map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+}
 
+function StatCard({ label, value }) {
+  return (
+    <div className="inline-flex flex-col items-start px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-100">
+      <div className="text-[9px] uppercase tracking-wider text-[#ec9324] font-bold">
+        {label}
+      </div>
+      <div className="text-lg font-bold text-gray-900 leading-tight">{value}</div>
+    </div>
+  );
+}
+
+function IconBtn({ children }) {
+  return (
+    <button className="w-8 h-8 flex items-center justify-center hover:bg-white hover:text-gray-900 first:rounded-l-lg last:rounded-r-lg">
+      {children}
+    </button>
+  );
+}
+
+function MiniCard({ heading, items, tone = "orange" }) {
+  const tones = {
+    orange: { bg: "bg-orange-50/60", border: "border-orange-200", title: "text-[#ec9324]", icon: <CheckCircle style={{ fontSize: 16 }} className="text-[#ec9324]" /> },
+    gray:   { bg: "bg-gray-50",       border: "border-gray-200",   title: "text-gray-600",  icon: <Close style={{ fontSize: 16 }} className="text-gray-500" /> },
+    blue:   { bg: "bg-sky-50/60",     border: "border-sky-200",    title: "text-sky-700",   icon: <LinkIcon style={{ fontSize: 16 }} className="text-sky-600" /> },
+  }[tone];
   return (
     <div className={`${tones.bg} ${tones.border} border rounded-lg p-4`}>
       <div className={`text-sm font-semibold ${tones.title} flex items-center gap-1.5 mb-2`}>
@@ -1884,7 +1598,7 @@ function ProCon({ heading, items, tone = "orange" }) {
       <ul className="space-y-1.5">
         {items.map((it, i) => (
           <li key={i} className="text-[13px] text-gray-700 flex items-start gap-1.5">
-            <span className={`${tones.dot} mt-0.5`}>•</span>
+            <span className="text-gray-400 mt-0.5">•</span>
             <span>{it}</span>
           </li>
         ))}
