@@ -173,20 +173,14 @@ export default function ClientsPage() {
 
   return (
     <Layout>
-      <div className="px-6 py-6 max-w-[1700px] mx-auto">
-        {/* ============ HEADER ============ */}
-        <div className="mb-5 flex items-start justify-between gap-4 flex-wrap">
+      <div className="px-6 py-5">
+        {/* ============ HEADER (compact top bar) ============ */}
+        <div className="mb-5 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-orange-100 text-[#ec9324] flex items-center justify-center">
               <BusinessCenter />
             </div>
-            <div>
-              <h1 className="text-2xl font-semibold text-gray-900">Clients</h1>
-              <p className="text-sm text-gray-500">
-                Master directory of client organisations. Each client rolls up to
-                its Client Contacts, Projects, and Serviced engagements.
-              </p>
-            </div>
+            <h1 className="text-2xl font-semibold text-gray-900">Clients</h1>
           </div>
 
           <Button
@@ -395,14 +389,12 @@ function ClientCard({ row, onView, onEdit, onDelete }) {
     .slice(0, 2)
     .toUpperCase();
 
-  const accent = TYPE_ACCENTS[row.type] || TYPE_ACCENTS["Corporations and Companies"];
-
   return (
     <div
       className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-[#ec9324]/40 transition-all p-4 flex flex-col"
       data-testid={`client-card-${row.display_id}`}
     >
-      {/* Header */}
+      {/* Header — initials + name/id + edit in top-right */}
       <div className="flex items-start gap-3">
         <div className="w-11 h-11 rounded-full bg-[#ec9324] text-white flex items-center justify-center text-sm font-bold flex-shrink-0 shadow-sm">
           {initials}
@@ -419,48 +411,29 @@ function ClientCard({ row, onView, onEdit, onDelete }) {
             ID: <span className="font-mono text-gray-700">{row.display_id}</span>
           </div>
         </div>
-      </div>
-
-      {/* Type badge */}
-      <div className="mt-3">
-        <span
-          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold border ${accent.bg} ${accent.text} ${accent.border}`}
+        <button
+          type="button"
+          onClick={onEdit}
+          title="Edit"
+          aria-label="Edit"
+          data-testid={`client-edit-${row.display_id}`}
+          className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 hover:text-[#ec9324] hover:bg-orange-50 transition-colors flex-shrink-0"
         >
-          {row.type}
-        </span>
-      </div>
-
-      {/* Metrics row — 3 placeholders */}
-      <div className="mt-4 pt-3 border-t border-gray-100 grid grid-cols-3 gap-1 text-center">
-        <MetricMini
-          value={row.client_contact_count ?? 0}
-          label="Contacts"
-          icon={<ContactsIcon sx={{ fontSize: 14 }} />}
-        />
-        <MetricMini
-          value={row.project_count ?? 0}
-          label="Projects"
-          icon={<Assignment sx={{ fontSize: 14 }} />}
-        />
-        <MetricMini
-          value={row.serviced_count ?? 0}
-          label="Serviced"
-          icon={<CheckCircle sx={{ fontSize: 14 }} />}
-        />
-      </div>
-
-      {/* Actions */}
-      <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
-        <ActionIcon label="Edit" onClick={onEdit} testId={`client-edit-${row.display_id}`}>
           <Pencil sx={{ fontSize: 16 }} />
-        </ActionIcon>
-        <ActionIcon label="View" onClick={onView} testId={`client-view-${row.display_id}`}>
-          <Eye sx={{ fontSize: 16 }} />
-        </ActionIcon>
-        <div className="flex-1" />
-        <ActionIcon label="Delete" tone="danger" onClick={onDelete} testId={`client-delete-${row.display_id}`}>
-          <Trash sx={{ fontSize: 16 }} />
-        </ActionIcon>
+        </button>
+      </div>
+
+      {/* Type — plain text row */}
+      <div className="mt-3 text-[12px] text-gray-700">
+        <span className="text-gray-500 font-medium">Type :</span>{" "}
+        <span className="text-gray-900">{row.type}</span>
+      </div>
+
+      {/* Metrics row — 3 placeholders, no icons */}
+      <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-3 gap-1 text-center">
+        <MetricMini value={row.client_contact_count ?? 0} label="Contacts" />
+        <MetricMini value={row.project_count ?? 0}        label="Projects" />
+        <MetricMini value={row.serviced_count ?? 0}       label="Serviced" />
       </div>
     </div>
   );
@@ -469,12 +442,11 @@ function ClientCard({ row, onView, onEdit, onDelete }) {
 // ============================================================
 // tiny helpers
 // ============================================================
-function MetricMini({ value, label, icon }) {
+function MetricMini({ value, label }) {
   return (
     <div className="flex flex-col items-center">
-      <div className="text-[#ec9324] mb-0.5">{icon}</div>
       <div className="text-base font-bold text-gray-900 leading-none">{value}</div>
-      <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mt-0.5">
+      <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mt-1">
         {label}
       </div>
     </div>
