@@ -1,6 +1,18 @@
 # Infollion Utilities — PRD
 
 
+## CRM → Segmentation — Cross-Segmentation Level-2 Linking UI/UX Mockups (Aug 04 2026)
+- **Purpose**: static visual mockups to compare 3 candidate UI/UX approaches for linking a Level-2 node of one Segmentation to Level-2 nodes of other Segmentations (many-to-many tag). **Mockups only — no backend wiring, no persistence.**
+- **New route**: `/crm/segmentation-link-mockups` (registered in `App.js`, gated `ADMIN_ROLES`).
+- **File**: `frontend/src/pages/SegmentationLinkMockupsPage.jsx` (~1000 lines, self-contained mock data for 3 companies × 4-6 L2 nodes each and 6 pre-seeded cross-links).
+- **Three tabs, each with Best-For / Not-Ideal / Interaction-Model bottom cards**:
+  1. **Concept A · Chip Drawer** — click a L2 node in the source tree → right-side drawer shows existing links as coloured chips + "+ Link Node" opens a segmentation-grouped searchable multi-select modal.
+  2. **Concept B · Dual-Tree Linker** — split canvas: left panel = source segmentation nodes, right panel = target segmentation (dropdown switcher). Drag from a left card and drop onto a right card to link. Existing links render as dashed orange arcs; unlink from the right sidebar.
+  3. **Concept C · Constellation Graph** — force-directed-style clustered view: all L2 nodes across all segmentations plotted around per-segmentation cluster anchors. Hover a node → highlight all its links; click → focus in side panel. Filter tabs: All / Linked / Unlinked.
+- **Env**: recreated `/app/backend/.env` (Atlas cluster0.vmgql1i.mongodb.net · `app_db` · user `sakshamsinghal_db_user`, per user-supplied creds) and `/app/frontend/.env`. JWT_SECRET + FERNET_KEY regenerated. Login verified for `admin@ticketing.com / Admin@123`.
+- Testing agent NOT deployed per user instruction. Verified via 3 playwright screenshots at 1600×1000 — Concept A default view, Concept A picker modal open, Concept B, Concept C.
+
+
 ## CRM → Client Contacts — Card + Form + Colour polish (Aug 3 2026 rev-4)
 - **Single-orange colour scheme** — killed the "rainbow" from earlier rev.
   - `TotalTillDateChips` now uses one orange scheme for all four chips (Projects / Serviced / Calls / Revenue).
