@@ -11363,3 +11363,190 @@ agent_communication:
 
         Report PASS / FAIL per scenario. Do not attempt to fix bugs; report
         anything wrong back to me and I'll patch.
+
+
+## [2026-08-04] POC Status Configuration — moved to per-Client bar (bug fix)
+user_problem_statement: |
+  User pointed out I had built POC Status Configuration as a global sidebar
+  module by mistake. Correct behaviour: it must be a bar INSIDE the Client
+  Detail page (directly below the Segment / Available / Add Segmentation
+  bar), and each Client stores its OWN configuration that only affects its
+  own Client Contacts.
+
+frontend:
+  - task: "Remove global POC Status Configuration sidebar + route"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/Sidebar.jsx, frontend/src/App.js, frontend/src/pages/POCStatusConfigPage.jsx (deleted)"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Removed the sidebar entry "POC Status Configuration" from the
+            CRM group. Removed the `/crm/poc-status` route from App.js and
+            deleted the POCStatusConfigPage file. Moved the reusable chip
+            to `frontend/src/components/POCStatusChip.jsx` (default export)
+            so both ClientContactsPage and ClientDetailPage can consume it.
+            ClientContactsPage import updated accordingly.
+
+  - task: "Add per-client POC Status Configuration bar to Client Detail"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/ClientDetailPage.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            New POCStatusConfigBar component rendered directly below the
+            Segment bar on the Client Detail page. Fields:
+              * Duration dropdown (1-12)
+              * Unit dropdown (Days / Weeks / Months / Years)
+              * Save / Update button (right-aligned)
+            Live rule preview updates as the dropdowns change, showing:
+              "If a contact's last project date is within N unit
+               [Active-chip] otherwise [Dormant-chip]"
+            Bottom caption shows the currently-persisted config (duration,
+            when it was set, and by whom), or an italic "No configuration
+            for this client yet" if none exists. Save triggers PUT
+            `/api/clients/{id}/poc-status/config` which persists per-client
+            AND recomputes only that client's contacts. Success toast
+            reports the recomputed count.
+
+backend:
+  - task: "Refactor POC Status backend to per-client config"
+    implemented: true
+    working: true
+    file: "backend/routers/poc_status.py, backend/routers/client_contacts.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: |
+            Rewrote `poc_status.py`:
+            - New routes: `GET /api/clients/{client_id}/poc-status/config`
+              and `PUT /api/clients/{client_id}/poc-status/config`. The
+              global `GET/PUT /api/poc-status/config` routes are gone.
+              `GET /api/poc-status/statuses` retained as the shared catalogue.
+            - Config docs now carry `client_id` + `client_name` and a
+              `active: true` flag. Saving deactivates all prior configs for
+              that client (kept as history) then inserts the new one.
+            - Recompute is scoped: `recompute_client_contacts(client_id)`
+              hits only contacts whose `client_name` matches the client's
+              name.
+            - `annotate_status(rows)` batches the config lookups by
+              (name → client id → active config) so a page of N contacts
+              costs at most `distinct(client_name)` reads.
+            - Central engine `compute_status(contact, config)` unchanged;
+              same STATUSES catalogue (Active / Dormant) with a predicate
+              lambda so future statuses drop in without a data-model change.
+            - Purged the previous global config doc (no `client_id`) from
+              the DB so there's no ambiguity.
+            Verified via curl at time of write:
+            - `PUT /api/clients/{mckId}/poc-status/config { duration:3, unit:"months" }`
+              returned `{config: {...}, recomputed: 3}`.
+            - `GET /api/client-contacts?page_size=5` returned each row with
+              `poc_status: {key, label, color}` populated by the annotator.
+            - Confirming with 1-week threshold caused only Nikhil Desai
+              (last project 2026-07-30, 5 days before today) to stay Active
+              while all others flipped to Dormant.
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 2
+
+test_plan:
+  current_focus:
+    - "Remove global POC Status Configuration sidebar + route"
+    - "Add per-client POC Status Configuration bar to Client Detail"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    - agent: "main"
+      message: |
+        Verify the corrected POC Status feature. Credentials in
+        /app/memory/test_credentials.md (admin@ticketing.com / Admin@123).
+
+        Scenarios:
+
+        1. **Sidebar cleanup**
+           A. Sign in. Expand the CRM group in the left sidebar.
+           B. Confirm the sidebar under CRM shows EXACTLY:
+              Segmentations, Clients, Client Contacts — no "POC Status
+              Configuration" entry.
+           C. Directly hitting `/crm/poc-status` should NOT resolve to a
+              working page (it can 404, redirect, or fall through to the
+              catch-all — anything except rendering the old form is fine).
+
+        2. **POC Status Configuration bar exists on Client Detail (bug fix core)**
+           A. Sidebar → CRM → Clients → click "McKinsey" (display_id 1006).
+           B. Below the Segment section (which shows the green "Available"
+              pill), there MUST be a new bar whose label reads
+              "POC Status Configuration · Inactivity threshold for
+              McKinsey's Client Contacts".
+           C. The bar exposes exactly two dropdowns + a Save button:
+              - Duration dropdown pre-set to the last-saved value (default 3).
+              - Unit dropdown pre-set to the last-saved value (default Months).
+              - Live rule-preview line reads:
+                "If a contact's last project date is within {duration}
+                 {unit} [Active-chip] · otherwise [Dormant-chip]".
+              The preview text updates as either dropdown changes.
+           D. Save button is DISABLED when nothing has changed (i.e. the
+              form value equals the persisted value), ENABLED after any
+              change.
+
+        3. **Per-client persistence + scoped recompute**
+           A. Change Duration to 1 and Unit to Weeks. Click Save.
+           B. Success toast appears mentioning "recomputed N client
+              contact(s)" where N > 0 for McKinsey. No JS console errors.
+           C. Refresh the page. The bar re-populates with Duration=1 /
+              Unit=Weeks (proves persistence).
+           D. Now navigate to a DIFFERENT client — e.g. click "Back to
+              Clients" and open Sequoia India (display_id 1001).
+           E. The Sequoia India config bar must show its OWN previous
+              value or the italic "No configuration for this client yet"
+              caption — NOT the 1-week value we just set for McKinsey.
+              (This proves per-client scoping.)
+           F. Save a DIFFERENT config for Sequoia (e.g. 6 months). Success
+              toast fires again. Return to McKinsey and confirm its config
+              is still 1 week (unchanged).
+
+        4. **Client Contacts card + detail chip reflect the new config**
+           A. Sidebar → CRM → Client Contacts.
+           B. Every card must show a small green Active or red Dormant
+              chip on the ID row (top-right of the header meta line, next
+              to the "ID: xxxx" text). Non-empty; no console errors.
+           C. Open any contact by clicking the name. The detail header
+              (right of the client-name pill) must also show the same
+              chip, larger size, with the tooltip "POC Status is
+              auto-calculated (read-only)" on hover.
+           D. The chip must NOT be editable — there is no dropdown or
+              input for it anywhere in the Edit dialog.
+
+        5. **Regression sanity**
+           A. The Segment bar (Available / Add Segmentation) still works
+              — clicking "Available" on McKinsey still navigates to
+              `/crm/segmentations` with McKinsey selected (previous bug
+              stays fixed).
+           B. The Overview pivot at the bottom still renders with column
+              headers Segmentations · Mar 26 … · TOTAL and the CC/P/S/C/$
+              sub-columns.
+           C. The 5 "Total till date" chips on the Client Detail top row
+              (Client Contacts, Projects, Serviced, Calls, Revenue) still
+              render.
+
+        Report PASS / FAIL per scenario. Do NOT attempt to fix bugs — just
+        surface them back so I can patch. All pivot cell values remain
+        seeded pseudo-random for now (deterministic per client + node +
+        month + metric).
+

@@ -17,7 +17,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "../components/ui/select";
 import DateFilter from "../components/DateFilter";
-import Pencil from "@mui/icons-material/EditOutlined";
+import POCStatusChip from "../components/POCStatusChip";
 import ArrowBack from "@mui/icons-material/ArrowBackOutlined";
 import BusinessCenter from "@mui/icons-material/BusinessCenterOutlined";
 import Check from "@mui/icons-material/CheckCircleOutlined";
@@ -26,6 +26,9 @@ import Plus from "@mui/icons-material/AddOutlined";
 import Contacts from "@mui/icons-material/ContactsOutlined";
 import Assignment from "@mui/icons-material/AssignmentOutlined";
 import PieChart from "@mui/icons-material/PieChartOutlineOutlined";
+import Timer from "@mui/icons-material/TimerOutlined";
+import Pencil from "@mui/icons-material/EditOutlined";
+import Save from "@mui/icons-material/SaveOutlined";
 
 const CLIENT_TYPES = [
   "Venture Capital/Private Equity",
@@ -320,6 +323,9 @@ export default function ClientDetailPage() {
                 )}
               </div>
             </div>
+
+            {/* ============ POC STATUS CONFIGURATION BAR ============ */}
+            <POCStatusConfigBar clientId={id} clientName={row.name} />
 
             {/* ============ ACTIVITY PIVOT TABLE ============ */}
             <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
@@ -687,3 +693,179 @@ function PivotTable({ l2Nodes, months, clientId }) {
     </div>
   );
 }
+
+// ============================================================
+// POC Status Configuration Bar (per client)
+// ============================================================
+// Sits directly below the Segment bar on the Client Detail page.
+// Persists a per-client inactivity threshold that drives the
+// Active / Dormant status shown on every Client Contact belonging
+// to this client.
+// ============================================================
+const _UNIT_OPTIONS = [
+  { value: "days",   label: "Days"   },
+  { value: "weeks",  label: "Weeks"  },
+  { value: "months", label: "Months" },
+  { value: "years",  label: "Years"  },
+];
+const _NUMBERS = Array.from({ length: 12 }, (_, i) => i + 1);
+
+function POCStatusConfigBar({ clientId, clientName }) {
+  const [current, setCurrent] = useState(null);
+  const [duration, setDuration] = useState(3);
+  const [unit, setUnit] = useState("months");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveErr, setSaveErr] = useState("");
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await api.get(`/clients/${clientId}/poc-status/config`);
+      const cfg = r.data?.config;
+      setCurrent(cfg);
+      if (cfg) {
+        setDuration(cfg.duration);
+        setUnit(cfg.unit);
+      }
+    } catch (e) {
+      // silent — bar still renders, just with defaults
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    if (clientId) load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId]);
+
+  const save = async () => {
+    setSaveErr("");
+    setSaving(true);
+    try {
+      const r = await api.put(`/clients/${clientId}/poc-status/config`, {
+        duration, unit,
+      });
+      setCurrent(r.data?.config);
+      notify.success(
+        `POC Status configuration saved · ${r.data?.recomputed || 0} client contact${
+          (r.data?.recomputed || 0) === 1 ? "" : "s"
+        } recomputed`
+      );
+    } catch (e) {
+      setSaveErr(formatApiError(e, "Failed to save configuration"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const dirty = useMemo(
+    () => !current || current.duration !== duration || current.unit !== unit,
+    [current, duration, unit]
+  );
+
+  const unitLabel = _UNIT_OPTIONS.find(u => u.value === unit)?.label || unit;
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5" data-testid="client-detail-poc-config">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        {/* Left — label + icon + rule preview */}
+        <div className="flex items-start gap-3 flex-1 min-w-[280px]">
+          <div className="w-10 h-10 rounded-lg bg-orange-100 text-[#ec9324] flex items-center justify-center flex-shrink-0">
+            <Timer />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+              POC Status Configuration
+            </div>
+            <div className="text-base font-semibold text-gray-900">
+              Inactivity threshold for {clientName}&apos;s Client Contacts
+            </div>
+            {/* Rule preview — updates live as the user changes the dropdowns */}
+            <div className="text-[12px] text-gray-600 mt-1.5 flex items-center gap-2 flex-wrap">
+              <span>If a contact&apos;s last project date is within</span>
+              <span className="font-semibold text-gray-900">
+                {duration} {unitLabel.toLowerCase()}
+              </span>
+              <POCStatusChip status={{ key: "active", label: "Active", color: "green" }} />
+              <span>· otherwise</span>
+              <POCStatusChip status={{ key: "dormant", label: "Dormant", color: "red" }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Right — the two dropdowns + Save */}
+        <div className="flex items-end gap-2 flex-wrap">
+          <div>
+            <Label className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+              Duration
+            </Label>
+            <Select value={String(duration)} onValueChange={(v) => setDuration(parseInt(v, 10))}>
+              <SelectTrigger className="mt-1 h-9 w-24" data-testid="poc-duration-select">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {_NUMBERS.map((n) => (
+                  <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+              Unit
+            </Label>
+            <Select value={unit} onValueChange={setUnit}>
+              <SelectTrigger className="mt-1 h-9 w-32" data-testid="poc-unit-select">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {_UNIT_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button
+            onClick={save}
+            disabled={saving || !dirty || loading}
+            className="bg-[#ec9324] hover:bg-[#d3811b] text-white h-9 disabled:opacity-50"
+            data-testid="poc-config-save"
+          >
+            <Save sx={{ fontSize: 16, marginRight: "4px" }} />
+            {saving ? "Saving…" : current ? "Update" : "Save"}
+          </Button>
+        </div>
+      </div>
+
+      {/* Current active config caption */}
+      <div className="mt-3 pt-3 border-t border-gray-100 text-[11px] text-gray-500 flex items-center gap-3 flex-wrap">
+        {current ? (
+          <>
+            <span>
+              Active config:{" "}
+              <span className="font-semibold text-gray-800">
+                {current.duration} {_UNIT_OPTIONS.find(u => u.value === current.unit)?.label}
+              </span>
+            </span>
+            <span className="text-gray-300">·</span>
+            <span>
+              Set on{" "}
+              {new Date(current.created_on).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}{" "}
+              by {current.created_by?.name || "—"}
+            </span>
+          </>
+        ) : (
+          <span className="italic">
+            No configuration for this client yet — saving will apply it to every Client Contact
+            of <span className="font-semibold text-gray-700">{clientName}</span>.
+          </span>
+        )}
+        {saveErr && (
+          <span className="ml-auto text-red-600 bg-red-50 px-2 py-1 rounded">{saveErr}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+

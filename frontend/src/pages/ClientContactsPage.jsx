@@ -63,6 +63,7 @@ import Loader2 from "@mui/icons-material/Autorenew";
 import CheckCircle2 from "@mui/icons-material/CheckCircleOutlineOutlined";
 import AlertTriangle from "@mui/icons-material/WarningAmberOutlined";
 import AlertOctagon from "@mui/icons-material/ReportGmailerrorredOutlined";
+import POCStatusChip from "../components/POCStatusChip";
 
 // -------- constants --------
 const EMPTY_WORK = {
@@ -579,8 +580,9 @@ function ContactCard({ row, onView, onEdit, onDelete }) {
                 testId={`client-contact-contactinfo-${row.display_id}`}
               />
             </div>
-            <div className="text-[11px] text-gray-500 mt-0.5">
-              ID: <span className="font-mono text-gray-700">{row.display_id}</span>
+            <div className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-2 flex-wrap">
+              <span>ID: <span className="font-mono text-gray-700">{row.display_id}</span></span>
+              {row.poc_status && <POCStatusChip status={row.poc_status} />}
             </div>
           </div>
         </div>
@@ -1282,6 +1284,11 @@ function ClientContactDetail({ contactId }) {
                 {row.client_name && (
                   <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/30 font-medium">
                     {row.client_name}
+                  </span>
+                )}
+                {row.poc_status && (
+                  <span title="POC Status is auto-calculated (read-only)">
+                    <POCStatusChip status={row.poc_status} size="lg" />
                   </span>
                 )}
               </div>

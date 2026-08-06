@@ -275,6 +275,9 @@ async def list_client_contacts(
     skip = (page - 1) * page_size
     cursor = db[COLL].find(query).sort("created_on", -1).skip(skip).limit(page_size)
     rows = [_serialize(d) async for d in cursor]
+    # POC Status: central engine annotates every row inline
+    from routers.poc_status import annotate_status as _poc_annotate
+    await _poc_annotate(rows)
     return {"rows": rows, "total": total, "page": page, "page_size": page_size}
 
 
@@ -283,7 +286,10 @@ async def get_client_contact(contact_id: str, user=Depends(get_current_user)):
     doc = await db[COLL].find_one({"id": contact_id})
     if not doc:
         raise HTTPException(404, "Client contact not found")
-    return _serialize(doc)
+    row = _serialize(doc)
+    from routers.poc_status import annotate_status as _poc_annotate
+    await _poc_annotate([row])
+    return row
 
 
 @api_router.patch("/client-contacts/{contact_id}")
@@ -317,7 +323,23 @@ async def update_client_contact(
     updates["updated_on"] = now_iso()
     await db[COLL].update_one({"id": contact_id}, {"$set": updates})
     doc = await db[COLL].find_one({"id": contact_id})
-    return _serialize(doc)
+    row = _serialize(doc)
+    # If the field driving POC Status changed, refresh cached key + annotate
+    if "last_project_receiving_date" in updates:
+        from routers.poc_status import (
+            annotate_status as _poc_annotate,
+            compute_status as _poc_compute,
+            get_active_config as _poc_cfg,
+        )
+        cfg = await _poc_cfg()
+        s = _poc_compute(doc, cfg)
+        await db[COLL].update_one(
+            {"id": contact_id},
+            {"$set": {"poc_status_key": s["key"], "poc_status_computed_at": now_iso()}},
+        )
+    from routers.poc_status import annotate_status as _poc_annotate2
+    await _poc_annotate2([row])
+    return row
 
 
 @api_router.delete("/client-contacts/{contact_id}")
