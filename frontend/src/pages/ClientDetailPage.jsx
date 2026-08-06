@@ -16,6 +16,9 @@ import { Label } from "../components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "../components/ui/select";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "../components/ui/dialog";
 import DateFilter from "../components/DateFilter";
 import POCStatusChip from "../components/POCStatusChip";
 import ArrowBack from "@mui/icons-material/ArrowBackOutlined";
@@ -291,11 +294,8 @@ export default function ClientDetailPage() {
                     <PieChart />
                   </div>
                   <div>
-                    <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
-                      Segment
-                    </div>
                     <div className="text-base font-semibold text-gray-900">
-                      Segmentation for {row.name}
+                      Segmentation
                     </div>
                   </div>
                 </div>
@@ -325,17 +325,14 @@ export default function ClientDetailPage() {
             </div>
 
             {/* ============ POC STATUS CONFIGURATION BAR ============ */}
-            <POCStatusConfigBar clientId={id} clientName={row.name} />
+            <POCStatusConfigBar clientId={id} />
 
             {/* ============ ACTIVITY PIVOT TABLE ============ */}
             <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
               <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
                 <div>
-                  <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
-                    Overview
-                  </div>
                   <div className="text-base font-semibold text-gray-900">
-                    {months.length} month{months.length === 1 ? "" : "s"} · {l2Nodes.length} segment{l2Nodes.length === 1 ? "" : "s"}
+                    Overview
                   </div>
                 </div>
                 <DateFilter
@@ -361,12 +358,6 @@ export default function ClientDetailPage() {
               ) : (
                 <PivotTable l2Nodes={l2Nodes} months={months} clientId={row.id} />
               )}
-
-              <div className="mt-3 text-[11px] text-gray-500 italic">
-                All cells and totals are seeded pseudo-random placeholders until the activity
-                calc pipeline is wired. The same client + node + month combo always renders the
-                same value, so screenshots stay stable across reloads.
-              </div>
             </div>
           </div>
         )}
@@ -710,24 +701,22 @@ const _UNIT_OPTIONS = [
 ];
 const _NUMBERS = Array.from({ length: 12 }, (_, i) => i + 1);
 
-function POCStatusConfigBar({ clientId, clientName }) {
+function POCStatusConfigBar({ clientId }) {
   const [current, setCurrent] = useState(null);
-  const [duration, setDuration] = useState(3);
-  const [unit, setUnit] = useState("months");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState("");
+
+  // Dialog + draft (editable) values — only committed on Save.
+  const [open, setOpen] = useState(false);
+  const [draftDuration, setDraftDuration] = useState(3);
+  const [draftUnit, setDraftUnit] = useState("months");
 
   const load = async () => {
     setLoading(true);
     try {
       const r = await api.get(`/clients/${clientId}/poc-status/config`);
-      const cfg = r.data?.config;
-      setCurrent(cfg);
-      if (cfg) {
-        setDuration(cfg.duration);
-        setUnit(cfg.unit);
-      }
+      setCurrent(r.data?.config || null);
     } catch (e) {
       // silent — bar still renders, just with defaults
     } finally {
@@ -739,14 +728,23 @@ function POCStatusConfigBar({ clientId, clientName }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
+  const openEditor = () => {
+    setSaveErr("");
+    setDraftDuration(current?.duration || 3);
+    setDraftUnit(current?.unit || "months");
+    setOpen(true);
+  };
+
   const save = async () => {
     setSaveErr("");
     setSaving(true);
     try {
       const r = await api.put(`/clients/${clientId}/poc-status/config`, {
-        duration, unit,
+        duration: draftDuration,
+        unit: draftUnit,
       });
       setCurrent(r.data?.config);
+      setOpen(false);
       notify.success(
         `POC Status configuration saved · ${r.data?.recomputed || 0} client contact${
           (r.data?.recomputed || 0) === 1 ? "" : "s"
@@ -759,112 +757,119 @@ function POCStatusConfigBar({ clientId, clientName }) {
     }
   };
 
-  const dirty = useMemo(
-    () => !current || current.duration !== duration || current.unit !== unit,
-    [current, duration, unit]
-  );
-
-  const unitLabel = _UNIT_OPTIONS.find(u => u.value === unit)?.label || unit;
+  // Displayed value (falls back to a sensible default when unset).
+  const valueDuration = current?.duration ?? 3;
+  const valueUnit = current?.unit ?? "months";
+  const valueUnitLabel = _UNIT_OPTIONS.find(u => u.value === valueUnit)?.label || valueUnit;
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5" data-testid="client-detail-poc-config">
       <div className="flex items-start justify-between gap-4 flex-wrap">
-        {/* Left — label + icon + rule preview */}
+        {/* Left — icon + header with Active / Dormant chips */}
         <div className="flex items-start gap-3 flex-1 min-w-[280px]">
           <div className="w-10 h-10 rounded-lg bg-orange-100 text-[#ec9324] flex items-center justify-center flex-shrink-0">
             <Timer />
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
-              POC Status Configuration
-            </div>
-            <div className="text-base font-semibold text-gray-900">
-              Inactivity threshold for {clientName}&apos;s Client Contacts
-            </div>
-            {/* Rule preview — updates live as the user changes the dropdowns */}
-            <div className="text-[12px] text-gray-600 mt-1.5 flex items-center gap-2 flex-wrap">
-              <span>If a contact&apos;s last project date is within</span>
-              <span className="font-semibold text-gray-900">
-                {duration} {unitLabel.toLowerCase()}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-base font-semibold text-gray-900">
+                POC Status Configuration
               </span>
               <POCStatusChip status={{ key: "active", label: "Active", color: "green" }} />
-              <span>· otherwise</span>
               <POCStatusChip status={{ key: "dormant", label: "Dormant", color: "red" }} />
             </div>
           </div>
         </div>
 
-        {/* Right — the two dropdowns + Save */}
-        <div className="flex items-end gap-2 flex-wrap">
-          <div>
-            <Label className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
-              Duration
-            </Label>
-            <Select value={String(duration)} onValueChange={(v) => setDuration(parseInt(v, 10))}>
-              <SelectTrigger className="mt-1 h-9 w-24" data-testid="poc-duration-select">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {_NUMBERS.map((n) => (
-                  <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
-              Unit
-            </Label>
-            <Select value={unit} onValueChange={setUnit}>
-              <SelectTrigger className="mt-1 h-9 w-32" data-testid="poc-unit-select">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {_UNIT_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        {/* Right — value showcase + Edit button */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="text-right">
+            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+              Time Frame
+            </div>
+            <div className="text-base font-semibold text-gray-900" data-testid="poc-config-value">
+              {loading ? "…" : `${valueDuration} ${valueUnitLabel}`}
+            </div>
           </div>
           <Button
-            onClick={save}
-            disabled={saving || !dirty || loading}
-            className="bg-[#ec9324] hover:bg-[#d3811b] text-white h-9 disabled:opacity-50"
-            data-testid="poc-config-save"
+            onClick={openEditor}
+            disabled={loading}
+            variant="outline"
+            className="h-9 border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            data-testid="poc-config-edit"
           >
-            <Save sx={{ fontSize: 16, marginRight: "4px" }} />
-            {saving ? "Saving…" : current ? "Update" : "Save"}
+            <Pencil sx={{ fontSize: 16, marginRight: "4px" }} />
+            Edit
           </Button>
         </div>
       </div>
 
-      {/* Current active config caption */}
-      <div className="mt-3 pt-3 border-t border-gray-100 text-[11px] text-gray-500 flex items-center gap-3 flex-wrap">
-        {current ? (
-          <>
-            <span>
-              Active config:{" "}
-              <span className="font-semibold text-gray-800">
-                {current.duration} {_UNIT_OPTIONS.find(u => u.value === current.unit)?.label}
-              </span>
-            </span>
-            <span className="text-gray-300">·</span>
-            <span>
-              Set on{" "}
-              {new Date(current.created_on).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}{" "}
-              by {current.created_by?.name || "—"}
-            </span>
-          </>
-        ) : (
-          <span className="italic">
-            No configuration for this client yet — saving will apply it to every Client Contact
-            of <span className="font-semibold text-gray-700">{clientName}</span>.
-          </span>
-        )}
-        {saveErr && (
-          <span className="ml-auto text-red-600 bg-red-50 px-2 py-1 rounded">{saveErr}</span>
-        )}
-      </div>
+      {/* ===== Edit popup — 2 dropdowns (Duration + Unit) ===== */}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-[420px]" data-testid="poc-config-dialog">
+          <DialogHeader>
+            <DialogTitle>Edit Time Frame</DialogTitle>
+          </DialogHeader>
+
+          <div className="flex items-end gap-3 py-2">
+            <div className="flex-1">
+              <Label className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+                Duration
+              </Label>
+              <Select value={String(draftDuration)} onValueChange={(v) => setDraftDuration(parseInt(v, 10))}>
+                <SelectTrigger className="mt-1 h-9 w-full" data-testid="poc-duration-select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {_NUMBERS.map((n) => (
+                    <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex-1">
+              <Label className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+                Unit
+              </Label>
+              <Select value={draftUnit} onValueChange={setDraftUnit}>
+                <SelectTrigger className="mt-1 h-9 w-full" data-testid="poc-unit-select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {_UNIT_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {saveErr && (
+            <div className="text-[12px] text-red-600 bg-red-50 px-2 py-1.5 rounded">{saveErr}</div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setOpen(false)}
+              disabled={saving}
+              className="h-9"
+              data-testid="poc-config-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={save}
+              disabled={saving}
+              className="bg-[#ec9324] hover:bg-[#d3811b] text-white h-9 disabled:opacity-50"
+              data-testid="poc-config-save"
+            >
+              <Save sx={{ fontSize: 16, marginRight: "4px" }} />
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
