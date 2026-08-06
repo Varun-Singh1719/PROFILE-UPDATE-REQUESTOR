@@ -338,7 +338,8 @@ export default function ClientDetailPage() {
                 <DateFilter
                   value={filter}
                   onChange={setFilter}
-                  fieldLabels={{ date: "Activity date" }}
+                  fields={["date"]}
+                  title="Select Date"
                   data-testid="client-detail-date-filter"
                 />
               </div>

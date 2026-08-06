@@ -89,6 +89,9 @@ export default function DateFilter({
   label,
   testId = "date-filter",
   className = "",
+  // Optional heading shown at the top of the popup (e.g. "Select Date").
+  // When provided, it replaces the field radio group visually.
+  title,
   // singleDate = true → hide the mode tabs and expose only a single-date
   //   picker (used for the "Booking Date" / "Request Workstation Date"
   //   pickers where "Before/After/Between" don't make sense).
@@ -191,11 +194,18 @@ export default function DateFilter({
         </button>
       </DialogTrigger>
       <DialogContent
-        className={`${mode === "between" ? "max-w-4xl" : "max-w-md"} p-0 overflow-hidden`}
+        className={`${mode === "between" ? "max-w-xl" : "max-w-sm"} p-0 gap-0 overflow-hidden`}
       >
-        {/* Field selector (hidden when only one field is exposed) */}
-        {showFieldSelector && (
-          <div className="flex items-center gap-8 px-8 pt-6 pb-5 border-b border-gray-100">
+        {/* Optional heading (e.g. "Select Date") */}
+        {title && (
+          <div className="px-5 pt-4 pb-3 border-b border-gray-100 text-base font-semibold text-gray-900">
+            {title}
+          </div>
+        )}
+
+        {/* Field selector (hidden when only one field is exposed or a title is set) */}
+        {showFieldSelector && !title && (
+          <div className="flex items-center gap-8 px-5 pt-4 pb-3 border-b border-gray-100">
             {fields.map((f) => (
               <label key={f} className="flex items-center gap-2 cursor-pointer" data-testid={`${testId}-field-${f}`}>
                 <span
@@ -219,14 +229,14 @@ export default function DateFilter({
 
         {/* Mode tabs — hidden in singleDate mode */}
         {!singleDate && (
-        <div className={`flex gap-2 px-8 border-b border-gray-100 ${showFieldSelector ? "pt-4" : "pt-6"}`}>
+        <div className="flex gap-1 px-5 border-b border-gray-100 pt-2">
           {(["between", "on", "before", "after"]).map((m) => (
             <button
               key={m}
               type="button"
               data-testid={`${testId}-mode-${m}`}
               onClick={() => setDraft({ ...draft, mode: m, to: m === "between" ? draft?.to : null })}
-              className={`px-4 py-3 text-sm font-medium relative ${
+              className={`px-3 py-2.5 text-sm font-medium relative ${
                 mode === m ? "text-[#ec9324]" : "text-gray-500 hover:text-gray-800"
               }`}
             >
@@ -238,10 +248,10 @@ export default function DateFilter({
         )}
 
         {/* Date inputs + calendars */}
-        <div className={singleDate ? "px-5 py-3" : "px-5 py-3"}>
+        <div className="px-4 py-3">
           {mode === "between" ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div>
+            <div className="flex flex-wrap justify-center gap-5">
+              <div className="w-[248px]">
                 <DateInput label="From" testId={`${testId}-from`} value={draft?.from} onChange={(d) => setDraft({ ...draft, from: d })} />
                 <div className="mt-2 flex justify-center">
                   <Calendar
@@ -256,7 +266,7 @@ export default function DateFilter({
                   />
                 </div>
               </div>
-              <div>
+              <div className="w-[248px]">
                 <DateInput label="To" testId={`${testId}-to`} value={draft?.to} onChange={(d) => setDraft({ ...draft, to: d })} />
                 <div className="mt-2 flex justify-center">
                   <Calendar
@@ -272,7 +282,7 @@ export default function DateFilter({
               </div>
             </div>
           ) : (
-            <div className="max-w-md mx-auto">
+            <div className="w-[248px] mx-auto">
               <DateInput label={singleDate ? "Date" : MODE_LABEL[mode]} testId={`${testId}-single`} value={draft?.from} onChange={(d) => setDraft({ ...draft, from: d })}/>
               <div className="mt-2 flex justify-center">
                 <Calendar
