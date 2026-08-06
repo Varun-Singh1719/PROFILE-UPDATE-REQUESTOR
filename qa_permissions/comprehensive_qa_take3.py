@@ -12,8 +12,8 @@ import time
 import requests
 from datetime import datetime
 
-BASE_API = "https://segment-mapper-1.preview.emergentagent.com/api"
-BASE_UI = "https://segment-mapper-1.preview.emergentagent.com"
+BASE_API = "https://segment-linker.preview.emergentagent.com/api"
+BASE_UI = "https://segment-linker.preview.emergentagent.com"
 
 # Super Admin credentials
 SA_EMAIL = "admin@ticketing.com"
