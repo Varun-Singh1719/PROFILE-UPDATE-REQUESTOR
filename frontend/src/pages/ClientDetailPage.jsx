@@ -296,7 +296,7 @@ export default function ClientDetailPage() {
                 >
                   {t.label}
                   {t.key === "link" && linkDirty && (
-                    <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-amber-500 align-middle" />
+                    <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-[#ec9324] align-middle" />
                   )}
                 </button>
               );

@@ -1,39 +1,57 @@
 /**
  * LinkSegmentationTab — Client Detail View → "Link Segmentation" tab.
  * ===================================================================
- * Two equal columns:
+ * Two-panel mapping UI:
  *   • LEFT  — the master Level-1 segmentation categories of
- *             "Infollion Research".
- *   • RIGHT — for each Infollion Level-1 category, a multi-select
- *             dropdown (same UI/UX as Manage → Teams → Add Team →
- *             Team Member) listing the SELECTED client's own Level-1
- *             segmentations. Selected values render as removable chips.
+ *             "Infollion Research" (searchable, selectable list).
+ *   • RIGHT — for each Infollion Level-1 category, a dropdown box that
+ *             shows the mapped client Level-1 segmentations as removable
+ *             chips (single-colour orange / white). Clicking the box
+ *             opens a checkbox picker of the client's Level-1 options.
  *
- * If the client has no Level-1 segmentation, the right side shows a
- * "No Segmentation Available" empty state with a "+ Add Segmentation"
- * button that behaves exactly like the Client Detail Add Segmentation
- * button (navigates to the Segmentations editor pre-filled with the
- * client name).
+ * If the client has no Level-1 segmentation, each right box shows an
+ * inline "No segmentation available" + "+ Add Segmentation" prompt that
+ * behaves exactly like the Client Detail Add Segmentation button.
  *
  * Nothing is persisted until Save is clicked. Cancel reverts to the
- * last-saved mapping. The parent (ClientDetailPage) is notified of the
- * dirty state via onDirtyChange so it can guard tab switches / page
- * navigation.
+ * last-saved mapping. Parent (ClientDetailPage) is notified of the dirty
+ * state via onDirtyChange to guard tab switches / navigation.
  */
 import React, {
-  useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, forwardRef,
+  useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo,
+  useRef, useState, forwardRef,
 } from "react";
+import { createPortal } from "react-dom";
 import api, { formatApiError } from "../lib/api";
 import notify from "../lib/notify";
-import MultiSelectFilter from "./ui/MultiSelectFilter";
 import { Button } from "./ui/button";
-import PieChart from "@mui/icons-material/PieChartOutlineOutlined";
 import LinkIcon from "@mui/icons-material/LinkOutlined";
 import Plus from "@mui/icons-material/AddOutlined";
 import Save from "@mui/icons-material/SaveOutlined";
 import Close from "@mui/icons-material/CloseOutlined";
+import Search from "@mui/icons-material/SearchOutlined";
+import ChevronRight from "@mui/icons-material/KeyboardArrowRight";
+import ChevronDown from "@mui/icons-material/KeyboardArrowDown";
+import Check from "@mui/icons-material/Check";
+import Apartment from "@mui/icons-material/ApartmentOutlined";
+import Spa from "@mui/icons-material/SpaOutlined";
+// Category icon pool (cycled by index for visual variety, single tone).
+import IcAgri from "@mui/icons-material/AgricultureOutlined";
+import IcCar from "@mui/icons-material/DirectionsCarOutlined";
+import IcBank from "@mui/icons-material/AccountBalanceOutlined";
+import IcSci from "@mui/icons-material/ScienceOutlined";
+import IcWork from "@mui/icons-material/WorkOutlineOutlined";
+import IcCart from "@mui/icons-material/ShoppingCartOutlined";
+import IcTv from "@mui/icons-material/TvOutlined";
+import IcBolt from "@mui/icons-material/BoltOutlined";
+import IcHeart from "@mui/icons-material/FavoriteBorderOutlined";
+import IcChip from "@mui/icons-material/MemoryOutlined";
+import IcStore from "@mui/icons-material/StorefrontOutlined";
+import IcLabel from "@mui/icons-material/LabelOutlined";
 
-// Deep-equal for a mapping object { key: [sorted names] }.
+const CAT_ICONS = [IcAgri, IcCar, IcBank, IcSci, IcWork, IcCart, IcTv, IcBolt, IcHeart, IcChip, IcStore, IcLabel];
+
+// Deep-equal for a mapping object { key: [names] }.
 function mappingsEqual(a, b) {
   const ka = Object.keys(a || {}).filter((k) => (a[k] || []).length);
   const kb = Object.keys(b || {}).filter((k) => (b[k] || []).length);
@@ -47,6 +65,193 @@ function mappingsEqual(a, b) {
   return true;
 }
 
+/* ============================================================
+ * SegLinkMultiSelect — dropdown box with chips INSIDE (single
+ * orange/white tone) + checkbox picker popup. Controlled-open.
+ * ============================================================ */
+function SegLinkMultiSelect({
+  options = [], value = [], onChange, open, onOpenChange, onAddSegmentation, testIdPrefix,
+}) {
+  const [query, setQuery] = useState("");
+  const boxRef = useRef(null);
+  const popRef = useRef(null);
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
+  const tid = testIdPrefix;
+  const hasOptions = options.length > 0;
+
+  const place = useCallback(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setPos({ top: r.bottom + 4, left: r.left, width: r.width });
+  }, []);
+
+  useLayoutEffect(() => { if (open) place(); }, [open, place]);
+  useEffect(() => {
+    if (!open) return;
+    const h = () => place();
+    window.addEventListener("scroll", h, true);
+    window.addEventListener("resize", h);
+    return () => {
+      window.removeEventListener("scroll", h, true);
+      window.removeEventListener("resize", h);
+    };
+  }, [open, place]);
+
+  // Outside-click / Esc close.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => {
+      if (boxRef.current?.contains(e.target)) return;
+      if (popRef.current?.contains(e.target)) return;
+      onOpenChange?.(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") onOpenChange?.(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, onOpenChange]);
+
+  useEffect(() => { if (!open) setQuery(""); }, [open]);
+
+  const toggle = (val) => {
+    const set = new Set(value);
+    if (set.has(val)) set.delete(val);
+    else set.add(val);
+    // preserve option order
+    onChange?.(options.map((o) => o.value).filter((v) => set.has(v)));
+  };
+  const remove = (val) => onChange?.(value.filter((v) => v !== val));
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((o) => o.label.toLowerCase().includes(q));
+  }, [options, query]);
+
+  const selectedOpts = useMemo(
+    () => value.map((v) => options.find((o) => o.value === v)).filter(Boolean),
+    [value, options]
+  );
+
+  // -------- Empty state (client has no L1 segmentation) --------
+  if (!hasOptions) {
+    return (
+      <div
+        className="w-full min-h-[42px] rounded-lg border border-dashed border-gray-200 bg-gray-50/60 px-3 py-2"
+        data-testid={tid ? `${tid}-empty` : undefined}
+      >
+        <div className="text-xs text-gray-400">No segmentation available</div>
+        <button
+          type="button"
+          onClick={onAddSegmentation}
+          className="mt-0.5 inline-flex items-center gap-0.5 text-xs font-semibold text-[#ec9324] hover:underline"
+          data-testid={tid ? `${tid}-add` : undefined}
+        >
+          <Plus sx={{ fontSize: 14 }} /> Add Segmentation
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div
+        ref={boxRef}
+        onClick={() => onOpenChange?.(!open)}
+        data-testid={tid ? `${tid}-trigger` : undefined}
+        className={
+          "w-full min-h-[42px] rounded-lg border bg-white px-2.5 py-1.5 flex items-start gap-2 cursor-pointer transition-colors " +
+          (open ? "border-[#ec9324] ring-2 ring-[#ec9324]/20" : "border-gray-200 hover:border-gray-300")
+        }
+      >
+        <div className="flex-1 min-w-0 flex flex-wrap gap-1.5 items-center min-h-[26px]">
+          {selectedOpts.length === 0 ? (
+            <span className="text-xs text-gray-400 py-1">Select segmentations...</span>
+          ) : (
+            selectedOpts.map((o) => (
+              <span
+                key={o.value}
+                className="inline-flex items-center gap-1 rounded-md bg-orange-50 border border-[#ec9324]/40 text-[#ec9324] text-xs font-medium pl-2 pr-1 py-0.5 max-w-full"
+                data-testid={tid ? `${tid}-chip-${o.value}` : undefined}
+                title={o.label}
+              >
+                <span className="truncate">{o.label}</span>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); remove(o.value); }}
+                  aria-label={`Remove ${o.label}`}
+                  className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full hover:bg-[#ec9324]/15"
+                  data-testid={tid ? `${tid}-chip-remove-${o.value}` : undefined}
+                >
+                  <Close sx={{ fontSize: 11 }} />
+                </button>
+              </span>
+            ))
+          )}
+        </div>
+        <ChevronDown
+          sx={{ fontSize: 20 }}
+          className={"shrink-0 mt-1 text-gray-400 transition-transform " + (open ? "rotate-180" : "")}
+        />
+      </div>
+
+      {open && createPortal(
+        <div
+          ref={popRef}
+          style={{ position: "fixed", top: pos.top, left: pos.left, width: pos.width, zIndex: 60 }}
+          className="bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden"
+          data-testid={tid ? `${tid}-popup` : undefined}
+        >
+          <div className="p-2 border-b border-gray-100">
+            <div className="relative">
+              <Search sx={{ fontSize: 16 }} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search..."
+                className="w-full h-8 pl-7 pr-2 text-xs border border-gray-200 rounded-md outline-none focus:border-[#ec9324] focus:ring-2 focus:ring-[#ec9324]/20"
+                data-testid={tid ? `${tid}-search` : undefined}
+              />
+            </div>
+          </div>
+          <div className="max-h-56 overflow-y-auto py-1">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-3 text-xs text-gray-400 text-center">No matches</div>
+            ) : (
+              filtered.map((o) => {
+                const sel = value.includes(o.value);
+                return (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => toggle(o.value)}
+                    className={"w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors " + (sel ? "bg-orange-50" : "hover:bg-orange-50/60")}
+                    data-testid={tid ? `${tid}-opt-${o.value}` : undefined}
+                  >
+                    <span
+                      className={"shrink-0 w-4 h-4 rounded flex items-center justify-center border " + (sel ? "bg-[#ec9324] border-[#ec9324]" : "border-gray-300 bg-white")}
+                    >
+                      {sel && <Check sx={{ fontSize: 13 }} className="text-white" />}
+                    </span>
+                    <span className={"truncate " + (sel ? "text-[#ec9324] font-medium" : "text-gray-700")}>{o.label}</span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
+/* ============================================================ */
 const LinkSegmentationTab = forwardRef(function LinkSegmentationTab(
   { clientId, clientName, onDirtyChange, onAddSegmentation },
   ref
@@ -55,19 +260,16 @@ const LinkSegmentationTab = forwardRef(function LinkSegmentationTab(
   const [saving, setSaving] = useState(false);
   const [infollionL1, setInfollionL1] = useState([]);
   const [clientL1, setClientL1] = useState([]);
-  const [hasClientSeg, setHasClientSeg] = useState(false);
   const [infollionExists, setInfollionExists] = useState(true);
 
-  // Saved baseline (what's persisted) vs draft (in-memory edits).
   const [saved, setSaved] = useState({});
   const [draft, setDraft] = useState({});
+  const [catQuery, setCatQuery] = useState("");
+  const [activeCat, setActiveCat] = useState(null);
+  const [openCat, setOpenCat] = useState(null); // which row's dropdown is open
 
   const dirty = useMemo(() => !mappingsEqual(saved, draft), [saved, draft]);
-
-  // Keep the parent in sync so it can guard navigation.
-  useEffect(() => {
-    onDirtyChange?.(dirty);
-  }, [dirty, onDirtyChange]);
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
 
   const load = useCallback(async () => {
     if (!clientId) return;
@@ -77,7 +279,6 @@ const LinkSegmentationTab = forwardRef(function LinkSegmentationTab(
       setInfollionL1(data?.infollion?.level1 || []);
       setInfollionExists(!!data?.infollion?.exists);
       setClientL1(data?.client_level1 || []);
-      setHasClientSeg(!!data?.client_has_segmentation);
       const m = data?.mappings || {};
       setSaved(m);
       setDraft(m);
@@ -90,17 +291,14 @@ const LinkSegmentationTab = forwardRef(function LinkSegmentationTab(
 
   useEffect(() => { load(); }, [load]);
 
-  // Reload when the window regains focus — e.g. after the user creates a
-  // new segmentation on the Segmentations page and comes back — so the
-  // dropdown options refresh without a manual page reload. We only auto
-  // reload when there are NO unsaved edits, to avoid clobbering the draft.
+  // Reload on window focus (e.g. after adding a segmentation elsewhere),
+  // but only when there are no unsaved edits.
   useEffect(() => {
     const onFocus = () => { if (!dirty) load(); };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [dirty, load]);
 
-  // Expose imperative helpers to the parent (discard on guarded leave).
   useImperativeHandle(ref, () => ({
     discard: () => setDraft(saved),
     reload: () => load(),
@@ -119,9 +317,7 @@ const LinkSegmentationTab = forwardRef(function LinkSegmentationTab(
   const handleSave = async () => {
     setSaving(true);
     try {
-      const { data } = await api.put(`/clients/${clientId}/segmentation-link`, {
-        mappings: draft,
-      });
+      const { data } = await api.put(`/clients/${clientId}/segmentation-link`, { mappings: draft });
       const m = data?.mappings || {};
       setSaved(m);
       setDraft(m);
@@ -133,17 +329,23 @@ const LinkSegmentationTab = forwardRef(function LinkSegmentationTab(
     }
   };
 
-  const handleCancel = () => setDraft(saved);
+  const handleCancel = () => { setDraft(saved); setOpenCat(null); };
 
   const clientOptions = useMemo(
-    () => clientL1.map((n) => ({ value: n, label: n, searchText: n })),
+    () => clientL1.map((n) => ({ value: n, label: n })),
     [clientL1]
   );
+
+  const visibleCats = useMemo(() => {
+    const q = catQuery.trim().toLowerCase();
+    if (!q) return infollionL1;
+    return infollionL1.filter((n) => n.toLowerCase().includes(q));
+  }, [infollionL1, catQuery]);
 
   // ---------------- render ----------------
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm" data-testid="link-segmentation-tab">
-      {/* Header with Save / Cancel top-right */}
+      {/* Outer header with Save / Cancel */}
       <div className="flex items-center justify-between gap-3 flex-wrap px-5 py-4 border-b border-gray-100">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-orange-100 text-[#ec9324] flex items-center justify-center">
@@ -156,16 +358,7 @@ const LinkSegmentationTab = forwardRef(function LinkSegmentationTab(
             </div>
           </div>
         </div>
-
         <div className="flex items-center gap-2">
-          {dirty && (
-            <span
-              className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1"
-              data-testid="link-seg-unsaved-badge"
-            >
-              Unsaved changes
-            </span>
-          )}
           <Button
             variant="outline"
             onClick={handleCancel}
@@ -195,89 +388,122 @@ const LinkSegmentationTab = forwardRef(function LinkSegmentationTab(
           The master “Infollion Research” segmentation was not found.
         </div>
       ) : (
-        <div className="p-5">
-          {/* Column headers */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 pb-2 mb-1 border-b border-gray-100">
-            <div className="text-[11px] uppercase tracking-wider font-semibold text-gray-500 flex items-center gap-1.5">
-              <PieChart sx={{ fontSize: 16 }} className="text-[#ec9324]" />
-              Infollion Research — Level 1
+        <div className="p-4 sm:p-5">
+          <div className="relative">
+            {/* Arrow badge between the two panels (desktop) */}
+            <div className="hidden lg:flex absolute left-1/2 top-24 -translate-x-1/2 z-10 pointer-events-none">
+              <div className="w-8 h-8 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-400">
+                <ChevronRight sx={{ fontSize: 20 }} />
+              </div>
             </div>
-            <div className="text-[11px] uppercase tracking-wider font-semibold text-gray-500">
-              {clientName} — Segmentation
-            </div>
-          </div>
 
-          {!hasClientSeg ? (
-            // Right column: no client segmentation available
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 pt-4">
-              {/* LEFT — master categories still listed for context */}
-              <div className="space-y-2" data-testid="link-seg-left-list">
-                {infollionL1.map((name) => (
-                  <div
-                    key={name}
-                    className="flex items-center min-h-[40px] px-3 rounded-lg bg-gray-50 border border-gray-200 text-sm font-medium text-gray-800"
-                  >
-                    {name}
+            {/* ===== HEADERS (2-col grid, aligned) ===== */}
+            <div className="grid grid-cols-1 lg:grid-cols-2">
+              {/* LEFT header */}
+              <div className="lg:pr-8">
+                <div className="rounded-t-xl border border-gray-200 bg-gray-50/50 p-4">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-lg bg-orange-100 text-[#ec9324] flex items-center justify-center">
+                        <Spa sx={{ fontSize: 20 }} />
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold text-gray-900">Infollion Research — Level 1</div>
+                        <div className="text-[11px] text-gray-500">Master segmentation categories</div>
+                      </div>
+                    </div>
+                    <div className="relative flex-1 min-w-[160px] max-w-[220px]">
+                      <Search sx={{ fontSize: 16 }} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        value={catQuery}
+                        onChange={(e) => setCatQuery(e.target.value)}
+                        placeholder="Search categories..."
+                        className="w-full h-8 pl-8 pr-2 text-xs bg-white border border-gray-200 rounded-lg outline-none focus:border-[#ec9324] focus:ring-2 focus:ring-[#ec9324]/20"
+                        data-testid="link-seg-cat-search"
+                      />
+                    </div>
                   </div>
-                ))}
+                </div>
               </div>
-              {/* RIGHT — empty state */}
-              <div className="flex items-center justify-center">
-                <div
-                  className="w-full flex flex-col items-center justify-center text-center border border-dashed border-gray-300 rounded-xl bg-gray-50/60 py-12 px-6"
-                  data-testid="link-seg-no-seg"
-                >
-                  <div className="w-12 h-12 rounded-full bg-orange-100 text-[#ec9324] flex items-center justify-center mb-3">
-                    <PieChart />
+              {/* RIGHT header */}
+              <div className="lg:pl-8 mt-3 lg:mt-0">
+                <div className="rounded-t-xl border border-gray-200 bg-gray-50/50 p-4">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-lg bg-orange-100 text-[#ec9324] flex items-center justify-center">
+                        <Apartment sx={{ fontSize: 20 }} />
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold text-gray-900">{clientName} — Level 1</div>
+                        <div className="text-[11px] text-gray-500">Map to client segmentations</div>
+                      </div>
+                    </div>
+                    <div className="relative flex-1 min-w-[160px] max-w-[220px]">
+                      <Search sx={{ fontSize: 16 }} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        value={catQuery}
+                        onChange={(e) => setCatQuery(e.target.value)}
+                        placeholder="Search segmentations..."
+                        className="w-full h-8 pl-8 pr-2 text-xs bg-white border border-gray-200 rounded-lg outline-none focus:border-[#ec9324] focus:ring-2 focus:ring-[#ec9324]/20"
+                        data-testid="link-seg-seg-search"
+                      />
+                    </div>
                   </div>
-                  <div className="text-sm font-semibold text-gray-700">No Segmentation Available</div>
-                  <p className="text-xs text-gray-500 mt-1 mb-4 max-w-xs">
-                    This client has no Level-1 segmentation yet. Add one to map it against the
-                    Infollion Research categories.
-                  </p>
-                  <Button
-                    onClick={() => onAddSegmentation?.()}
-                    className="bg-[#ec9324] hover:bg-[#d3811b] text-white h-9"
-                    data-testid="link-seg-add-segmentation"
-                  >
-                    <Plus sx={{ fontSize: 18, marginRight: "4px" }} />
-                    Add Segmentation
-                  </Button>
                 </div>
               </div>
             </div>
-          ) : (
-            // Row-aligned mapping grid
-            <div className="divide-y divide-gray-100">
-              {infollionL1.map((name, idx) => (
-                <div
-                  key={name}
-                  className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 py-3 items-start"
-                  data-testid={`link-seg-row-${idx}`}
-                >
-                  {/* LEFT — master category */}
-                  <div className="flex items-center min-h-[40px] px-3 rounded-lg bg-gray-50 border border-gray-200 text-sm font-medium text-gray-800">
-                    {name}
-                  </div>
-                  {/* RIGHT — Team-Member-style multi-select */}
-                  <div className="relative">
-                    <MultiSelectFilter
-                      label="Segmentations"
-                      options={clientOptions}
-                      value={draft[name] || []}
-                      onChange={(v) => updateRow(name, v)}
-                      placeholder="Select segmentations..."
-                      testIdPrefix={`link-seg-select-${idx}`}
-                      hideLabelPrefix
-                      fullWidth
-                      searchInTrigger
-                      countUnitLabel="segmentation(s) selected"
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+
+            {/* ===== BODY (single grid → left/right cells share row height) ===== */}
+            {visibleCats.length === 0 ? (
+              <div className="border border-t-0 border-gray-200 rounded-b-xl p-8 text-center text-sm text-gray-400">
+                No categories match “{catQuery}”.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 border border-t-0 border-gray-200 rounded-b-xl overflow-visible">
+                {visibleCats.map((name, idx) => {
+                  const Icon = CAT_ICONS[idx % CAT_ICONS.length];
+                  const active = activeCat === name || openCat === name;
+                  const isLast = idx === visibleCats.length - 1;
+                  return (
+                    <React.Fragment key={name}>
+                      {/* LEFT cell — category pill */}
+                      <div className={"lg:pr-8 px-3 py-2 " + (isLast ? "" : "")}>
+                        <button
+                          type="button"
+                          onClick={() => { setActiveCat(name); setOpenCat(name); }}
+                          data-testid={`link-seg-cat-${idx}`}
+                          className={
+                            "w-full flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors " +
+                            (active
+                              ? "bg-orange-50 border-[#ec9324] border-l-4 text-[#ec9324]"
+                              : "bg-white border-gray-200 border-l-4 border-l-transparent text-gray-800 hover:border-gray-300")
+                          }
+                        >
+                          <span className={"w-8 h-8 rounded-lg flex items-center justify-center shrink-0 " + (active ? "bg-[#ec9324]/15 text-[#ec9324]" : "bg-gray-100 text-gray-500")}>
+                            <Icon sx={{ fontSize: 18 }} />
+                          </span>
+                          <span className="flex-1 min-w-0 truncate text-sm font-medium">{name}</span>
+                          <ChevronRight sx={{ fontSize: 18 }} className={active ? "text-[#ec9324]" : "text-gray-300"} />
+                        </button>
+                      </div>
+                      {/* RIGHT cell — dropdown box */}
+                      <div className={"lg:pl-8 px-3 py-2 lg:border-l border-gray-100 " + (active ? "lg:bg-orange-50/30" : "")} data-testid={`link-seg-row-${idx}`}>
+                        <SegLinkMultiSelect
+                          options={clientOptions}
+                          value={draft[name] || []}
+                          onChange={(v) => updateRow(name, v)}
+                          open={openCat === name}
+                          onOpenChange={(o) => setOpenCat(o ? name : null)}
+                          onAddSegmentation={onAddSegmentation}
+                          testIdPrefix={`link-seg-select-${idx}`}
+                        />
+                      </div>
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
