@@ -235,6 +235,159 @@ async def get_client_segmentation(client_id: str, user=Depends(get_current_user)
     }
 
 
+# =====================================================================
+# Link Segmentation — map Infollion Research Level-1 categories to the
+# selected client's own Level-1 segmentations.
+# =====================================================================
+LINKS_COLL = "segmentation_links"
+INFOLLION_NAME = "Infollion Research"
+
+
+def _level1_names(seg: Optional[dict]) -> List[str]:
+    """Return the Level-1 node names (tree root's direct children)."""
+    if not seg:
+        return []
+    tree = seg.get("tree") or {}
+    out: List[str] = []
+    for ch in (tree.get("children") or []):
+        nm = (ch or {}).get("name")
+        if nm and str(nm).strip():
+            out.append(str(nm).strip())
+    # de-dup while preserving order
+    seen = set()
+    uniq = []
+    for n in out:
+        if n not in seen:
+            seen.add(n)
+            uniq.append(n)
+    return uniq
+
+
+class SegmentationLinkUpdate(BaseModel):
+    # { <infollion_level1_name>: [<client_level1_name>, ...] }
+    mappings: dict = Field(default_factory=dict)
+
+
+@api_router.get("/clients/{client_id}/segmentation-link")
+async def get_client_segmentation_link(client_id: str, user=Depends(get_current_user)):
+    """Payload for the Client Detail → Link Segmentation tab.
+
+    Returns:
+      {
+        client: { id, name },
+        infollion: { exists, name, level1: [name, ...] },
+        client_level1: [name, ...],       # the selected client's own L1
+        client_has_segmentation: bool,
+        mappings: { <infollion_l1>: [<client_l1>, ...] }  # saved only
+      }
+    """
+    client = await db[COLL].find_one({"id": client_id})
+    if not client:
+        raise HTTPException(404, "Client not found")
+    client_name = client.get("name") or ""
+
+    infollion = await db["segmentations"].find_one({
+        "name": {"$regex": f"^{re.escape(INFOLLION_NAME)}$", "$options": "i"}
+    })
+    infollion_l1 = _level1_names(infollion)
+
+    client_seg = await db["segmentations"].find_one({
+        "name": {"$regex": f"^{re.escape(client_name)}$", "$options": "i"}
+    })
+    client_l1 = _level1_names(client_seg)
+
+    saved = await db[LINKS_COLL].find_one({"client_id": client_id})
+    raw_mappings = (saved or {}).get("mappings") or {}
+
+    # Sanitize: only keep infollion keys that still exist and client targets
+    # that still exist — so stale entries silently drop out.
+    infollion_set = set(infollion_l1)
+    client_set = set(client_l1)
+    mappings: dict = {}
+    for k, vals in raw_mappings.items():
+        if k in infollion_set:
+            kept = [v for v in (vals or []) if v in client_set]
+            if kept:
+                mappings[k] = kept
+
+    return {
+        "client": {"id": client_id, "name": client_name},
+        "infollion": {
+            "exists": bool(infollion),
+            "name": INFOLLION_NAME,
+            "level1": infollion_l1,
+        },
+        "client_level1": client_l1,
+        "client_has_segmentation": bool(client_seg) and len(client_l1) > 0,
+        "mappings": mappings,
+    }
+
+
+@api_router.put("/clients/{client_id}/segmentation-link")
+async def put_client_segmentation_link(
+    client_id: str, body: SegmentationLinkUpdate, user=Depends(get_current_user)
+):
+    """Persist the Infollion→client Level-1 mapping for this client.
+
+    Mappings are only saved when the user clicks Save on the frontend.
+    """
+    client = await db[COLL].find_one({"id": client_id})
+    if not client:
+        raise HTTPException(404, "Client not found")
+    client_name = client.get("name") or ""
+
+    infollion = await db["segmentations"].find_one({
+        "name": {"$regex": f"^{re.escape(INFOLLION_NAME)}$", "$options": "i"}
+    })
+    infollion_set = set(_level1_names(infollion))
+
+    client_seg = await db["segmentations"].find_one({
+        "name": {"$regex": f"^{re.escape(client_name)}$", "$options": "i"}
+    })
+    client_set = set(_level1_names(client_seg))
+
+    # Validate + sanitize incoming payload against current L1 nodes.
+    clean: dict = {}
+    for k, vals in (body.mappings or {}).items():
+        if k not in infollion_set:
+            continue
+        kept = []
+        for v in (vals or []):
+            if v in client_set and v not in kept:
+                kept.append(v)
+        if kept:
+            clean[k] = kept
+
+    now = now_iso()
+    actor = {"id": user.get("id"), "name": user.get("name"), "email": user.get("email")}
+    existing = await db[LINKS_COLL].find_one({"client_id": client_id})
+    if existing:
+        await db[LINKS_COLL].update_one(
+            {"client_id": client_id},
+            {"$set": {
+                "mappings": clean,
+                "client_name": client_name,
+                "updated_by": actor,
+                "updated_on": now,
+            }},
+        )
+    else:
+        await db[LINKS_COLL].insert_one({
+            "id": str(uuid.uuid4()),
+            "client_id": client_id,
+            "client_name": client_name,
+            "mappings": clean,
+            "created_by": actor,
+            "created_on": now,
+            "updated_by": actor,
+            "updated_on": now,
+        })
+
+    return {"ok": True, "mappings": clean}
+
+
+
+
 @api_router.patch("/clients/{client_id}")
 async def update_client(
     client_id: str, payload: ClientUpdate, user=Depends(get_current_user)

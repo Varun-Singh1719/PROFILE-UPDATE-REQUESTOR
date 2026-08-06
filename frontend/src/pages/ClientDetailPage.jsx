@@ -5,11 +5,13 @@
  * Segment section (redirects to Segmentations tab), Activity Summary
  * pivot table (L2 rows × Month columns × 5 metric sub-columns).
  */
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import api, { formatApiError } from "../lib/api";
 import notify from "../lib/notify";
+import { confirm as confirmDialog } from "../lib/dialog";
+import LinkSegmentationTab from "../components/LinkSegmentationTab";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -102,6 +104,63 @@ export default function ClientDetailPage() {
   const [saveErr, setSaveErr] = useState("");
 
   const [filter, setFilter] = useState(getLast6MonthsRange);
+
+  // ---- Tabs (Overview | Link Segmentation) ----
+  const [activeTab, setActiveTab] = useState("overview");
+  const linkTabRef = useRef(null);
+  const linkDirtyRef = useRef(false);
+  const [linkDirty, setLinkDirty] = useState(false);
+  const onLinkDirtyChange = (d) => { linkDirtyRef.current = d; setLinkDirty(d); };
+
+  // Unsaved-changes confirmation used whenever the user tries to leave the
+  // Link Segmentation tab with pending edits (tab switch / navigate away).
+  const confirmLeave = async () => {
+    if (!linkDirtyRef.current) return true;
+    const ok = await confirmDialog({
+      title: "Are you sure you want to leave this page without saving your changes?",
+      confirmLabel: "Yes",
+      cancelLabel: "Cancel",
+      confirmVariant: "destructive",
+    });
+    return ok;
+  };
+
+  // Guarded tab switch — prompts before leaving a dirty Link Segmentation tab.
+  const switchTab = async (tab) => {
+    if (tab === activeTab) return;
+    if (activeTab === "link" && linkDirtyRef.current) {
+      const ok = await confirmLeave();
+      if (!ok) return;           // Cancel → stay, preserve edits
+      linkTabRef.current?.discard?.();
+      linkDirtyRef.current = false;
+      setLinkDirty(false);
+    }
+    setActiveTab(tab);
+  };
+
+  // Guarded in-app navigation (back button / any leave action).
+  const guardedNavigate = async (to) => {
+    if (activeTab === "link" && linkDirtyRef.current) {
+      const ok = await confirmLeave();
+      if (!ok) return;
+      linkDirtyRef.current = false;
+      setLinkDirty(false);
+    }
+    navigate(to);
+  };
+
+  // Guard hard reloads / tab-close while there are unsaved link edits.
+  useEffect(() => {
+    const handler = (e) => {
+      if (linkDirtyRef.current) {
+        e.preventDefault();
+        e.returnValue = "";
+        return "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, []);
 
   // ---- Load ----
   const load = async () => {
@@ -202,21 +261,61 @@ export default function ClientDetailPage() {
   );
 
   return (
-    <Layout title={row ? row.name : "Client"} actions={topBarActions}>
+    <Layout title={row ? row.name : "Client"} actions={activeTab === "overview" ? topBarActions : null}>
       <div className="px-6 py-5">
         {/* Back link */}
         <button
-          onClick={() => navigate("/crm/clients")}
+          onClick={() => guardedNavigate("/crm/clients")}
           className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-[#ec9324] mb-4"
         >
           <ArrowBack sx={{ fontSize: 16 }} />
           Back to Clients
         </button>
 
+        {/* ============ TABS ============ */}
+        {!loading && row && (
+          <div className="flex items-center gap-1 border-b border-gray-200 mb-4" role="tablist">
+            {[
+              { key: "overview", label: "Overview" },
+              { key: "link", label: "Link Segmentation" },
+            ].map((t) => {
+              const active = activeTab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => switchTab(t.key)}
+                  data-testid={`client-tab-${t.key}`}
+                  className={
+                    "relative px-4 py-2.5 text-sm font-semibold transition-colors -mb-px border-b-2 " +
+                    (active
+                      ? "text-[#ec9324] border-[#ec9324]"
+                      : "text-gray-500 border-transparent hover:text-gray-800")
+                  }
+                >
+                  {t.label}
+                  {t.key === "link" && linkDirty && (
+                    <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-amber-500 align-middle" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {loading ? (
           <div className="text-center py-16 text-sm text-gray-500">Loading…</div>
         ) : !row ? (
           <div className="text-center py-16 text-sm text-gray-500">Client not found.</div>
+        ) : activeTab === "link" ? (
+          <LinkSegmentationTab
+            ref={linkTabRef}
+            clientId={id}
+            clientName={row.name}
+            onDirtyChange={onLinkDirtyChange}
+            onAddSegmentation={goSegmentationAdd}
+          />
         ) : (
           <div className="grid grid-cols-1 gap-4">
             {/* ============ OVERVIEW CARD ============ */}
