@@ -48,6 +48,12 @@ export default function SegmentationsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState(null);
+  // When the user arrives via Client Detail's "Add Segmentation" (?new=1) we
+  // (a) keep the detail pane BLANK behind the create dialog instead of
+  // auto-selecting an unrelated segmentation, and (b) after create, open the
+  // brand-new segmentation directly in tree-edit mode.
+  const [pendingCreateFlow, setPendingCreateFlow] = useState(false);
+  const [autoEditId, setAutoEditId] = useState(null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);      // segmentation being edited (null = create)
@@ -81,6 +87,11 @@ export default function SegmentationsPage() {
       setEditing(null);
       setForm({ name: prefName || "", description: "" });
       setFormOpen(true);
+      // Keep the detail pane blank while the create dialog is open — don't
+      // let the "auto-select first row" effect surface another client's
+      // segmentation (e.g. PwC) in the background.
+      setPendingCreateFlow(true);
+      setSelectedId(null);
       // Strip params so a page refresh doesn't reopen the dialog
       const cleaned = new URLSearchParams(searchParams);
       cleaned.delete("new");
@@ -124,10 +135,11 @@ export default function SegmentationsPage() {
   useEffect(() => {
     if (rows.length === 0) { setSelectedId(null); return; }
     if (searchParams.get("select")) return; // deep-link handler owns selection
+    if (pendingCreateFlow) return;           // keep pane blank while creating
     if (!selectedId || !rows.find((r) => r.id === selectedId)) {
       setSelectedId(rows[0].id);
     }
-  }, [rows, selectedId, searchParams]);
+  }, [rows, selectedId, searchParams, pendingCreateFlow]);
 
   const selected = useMemo(
     () => rows.find((r) => r.id === selectedId) || null,
@@ -173,9 +185,15 @@ export default function SegmentationsPage() {
         const r = await api.post("/segmentations", payload);
         saved = r.data;
         notify.success("Segmentation created");
-        setSelectedId(saved?.id || null);
         setFormOpen(false);
+        setPendingCreateFlow(false);
         await load();
+        // Open the freshly created segmentation directly in tree-edit mode
+        // so the user can start adding nodes right away (blank canvas).
+        if (saved?.id) {
+          setSelectedId(saved.id);
+          setAutoEditId(saved.id);
+        }
       }
     } catch (e) {
       notify.error(formatApiError(e, "Failed to save segmentation"));
@@ -225,6 +243,8 @@ export default function SegmentationsPage() {
           {selected ? (
             <SegmentationDetail
               row={selected}
+              autoEdit={autoEditId === selected.id}
+              onAutoEditConsumed={() => setAutoEditId(null)}
               onEdit={() => openEdit(selected)}
               onDelete={() => remove(selected)}
               onTreeSaved={async (updated) => {
@@ -387,7 +407,12 @@ export default function SegmentationsPage() {
       {/* Create / Edit dialog */}
       <SegmentationFormDialog
         open={formOpen}
-        onOpenChange={setFormOpen}
+        onOpenChange={(o) => {
+          setFormOpen(o);
+          // If the create dialog is dismissed (cancel / escape / overlay)
+          // without creating, resume normal selection behaviour.
+          if (!o) setPendingCreateFlow(false);
+        }}
         editing={editing}
         form={form}
         setForm={setForm}
@@ -399,7 +424,7 @@ export default function SegmentationsPage() {
 }
 
 // ============================================================ Sub-components
-function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
+function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved, autoEdit = false, onAutoEditConsumed }) {
   // Aug 3 2026 rewrite — DRAFT MODE:
   //   • Non-edit mode: tree shows the persisted `row.tree` verbatim.
   //   • Edit mode: user manipulates a LOCAL DRAFT tree (draftTree).
@@ -443,6 +468,18 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved }) {
     setReviewOpen(false);
     setPendingChanges(null);
   };
+
+  // Auto-enter tree-edit mode when this segmentation was just created via the
+  // Client Detail "Add Segmentation" flow, so the user lands straight on the
+  // editable blank canvas ready to add nodes.
+  useEffect(() => {
+    if (autoEdit) {
+      setDraftTree(JSON.parse(JSON.stringify(seedTree)));
+      setTreeEditMode(true);
+      onAutoEditConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoEdit, row.id]);
 
   // ------ Diff draft vs. persisted for the review dialog ------
   const computeChanges = (before, after) => {
