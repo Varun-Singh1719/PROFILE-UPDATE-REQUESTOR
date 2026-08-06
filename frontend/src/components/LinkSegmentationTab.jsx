@@ -116,6 +116,7 @@ function SegLinkMultiSelect({
   const [query, setQuery] = useState("");
   const boxRef = useRef(null);
   const popRef = useRef(null);
+  const inputRef = useRef(null);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
   const tid = testIdPrefix;
   const hasOptions = options.length > 0;
@@ -202,37 +203,48 @@ function SegLinkMultiSelect({
     <>
       <div
         ref={boxRef}
-        onClick={() => onOpenChange?.(!open)}
+        onClick={() => { onOpenChange?.(true); inputRef.current?.focus(); }}
         data-testid={tid ? `${tid}-trigger` : undefined}
         className={
-          "w-full min-h-[42px] rounded-lg border bg-white px-2.5 py-1.5 flex items-start gap-2 cursor-pointer transition-colors " +
+          "w-full min-h-[42px] rounded-lg border bg-white px-2.5 py-1.5 flex items-start gap-2 cursor-text transition-colors " +
           (open ? "border-[#ec9324] ring-2 ring-[#ec9324]/20" : "border-gray-200 hover:border-gray-300")
         }
       >
         <div className="flex-1 min-w-0 flex flex-wrap gap-1.5 items-center min-h-[26px]">
-          {selectedOpts.length === 0 ? (
-            <span className="text-xs text-gray-400 py-1">Select segmentations...</span>
-          ) : (
-            selectedOpts.map((o) => (
-              <span
-                key={o.value}
-                className="inline-flex items-center gap-1 rounded-md bg-orange-50 border border-[#ec9324]/40 text-[#ec9324] text-xs font-medium pl-2 pr-1 py-0.5 max-w-full"
-                data-testid={tid ? `${tid}-chip-${o.value}` : undefined}
-                title={o.label}
+          {selectedOpts.map((o) => (
+            <span
+              key={o.value}
+              className="inline-flex items-center gap-1 rounded-md bg-orange-50 border border-[#ec9324]/40 text-[#ec9324] text-xs font-medium pl-2 pr-1 py-0.5 max-w-full"
+              data-testid={tid ? `${tid}-chip-${o.value}` : undefined}
+              title={o.label}
+            >
+              <span className="truncate">{o.label}</span>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); remove(o.value); }}
+                aria-label={`Remove ${o.label}`}
+                className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full hover:bg-[#ec9324]/15"
+                data-testid={tid ? `${tid}-chip-remove-${o.value}` : undefined}
               >
-                <span className="truncate">{o.label}</span>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); remove(o.value); }}
-                  aria-label={`Remove ${o.label}`}
-                  className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full hover:bg-[#ec9324]/15"
-                  data-testid={tid ? `${tid}-chip-remove-${o.value}` : undefined}
-                >
-                  <Close sx={{ fontSize: 11 }} />
-                </button>
-              </span>
-            ))
-          )}
+                <Close sx={{ fontSize: 11 }} />
+              </button>
+            </span>
+          ))}
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); onOpenChange?.(true); }}
+            onFocus={() => onOpenChange?.(true)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") { onOpenChange?.(false); }
+              else if (e.key === "Backspace" && !query && selectedOpts.length) {
+                remove(selectedOpts[selectedOpts.length - 1].value);
+              }
+            }}
+            placeholder={selectedOpts.length === 0 ? "Select segmentations..." : ""}
+            className="flex-1 min-w-[90px] bg-transparent outline-none text-xs text-gray-900 placeholder-gray-400 py-1"
+            data-testid={tid ? `${tid}-search` : undefined}
+          />
         </div>
         <ChevronDown
           sx={{ fontSize: 20 }}
@@ -247,19 +259,6 @@ function SegLinkMultiSelect({
           className="bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden"
           data-testid={tid ? `${tid}-popup` : undefined}
         >
-          <div className="p-2 border-b border-gray-100">
-            <div className="relative">
-              <Search sx={{ fontSize: 16 }} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                autoFocus
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search..."
-                className="w-full h-8 pl-7 pr-2 text-xs border border-gray-200 rounded-md outline-none focus:border-[#ec9324] focus:ring-2 focus:ring-[#ec9324]/20"
-                data-testid={tid ? `${tid}-search` : undefined}
-              />
-            </div>
-          </div>
           <div className="max-h-56 overflow-y-auto py-1">
             {filtered.length === 0 ? (
               <div className="px-3 py-3 text-xs text-gray-400 text-center">No matches</div>
@@ -270,7 +269,7 @@ function SegLinkMultiSelect({
                   <button
                     key={o.value}
                     type="button"
-                    onClick={() => toggle(o.value)}
+                    onClick={() => { toggle(o.value); inputRef.current?.focus(); }}
                     className={"w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors " + (sel ? "bg-orange-50" : "hover:bg-orange-50/60")}
                     data-testid={tid ? `${tid}-opt-${o.value}` : undefined}
                   >
