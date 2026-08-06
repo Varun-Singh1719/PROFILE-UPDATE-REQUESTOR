@@ -35,6 +35,8 @@ import AddTaskIcon from "./icons/AddTaskIcon";
 import EventSeatRoundedIcon from "./icons/EventSeatRoundedIcon";
 import Diversity3 from "@mui/icons-material/Diversity3Outlined";
 import PieChart from "@mui/icons-material/PieChartOutlineOutlined";
+import AccountTree from "@mui/icons-material/AccountTreeOutlined";
+import { useOverviewMeta } from "../lib/overviewMeta";
 
 // --------------------------------------------------------------------------
 // MODULE_LABEL — the CRM section will be renamed later; centralising the
@@ -73,6 +75,7 @@ const NAV_CONFIG = [
   {
     kind: "group", label: CRM_MODULE_LABEL, icon: Diversity3,
     children: [
+      { to: "/crm/overview", label: "Overview", icon: AccountTree, dynamicLabelKey: "overview" },
       { to: "/crm/segmentations", label: "Segmentations", icon: PieChart },
       { to: "/crm/clients", label: "Clients", icon: BusinessCenter },
       { to: "/crm/client-contacts", label: "Client Contacts", icon: BookUser },
@@ -105,6 +108,27 @@ function flattenForSearch(items) {
     if (it.kind === "group") it.children.forEach(c => out.push({ ...c, group: it.label, superAdminOnly: it.superAdminOnly }));
   });
   return out;
+}
+
+// Overlay dynamic (configuration-driven) labels onto the static nav config.
+// Any item carrying a `dynamicLabelKey` gets its user-facing label replaced by
+// the value from `labels` (e.g. the CRM → Overview tab name from the backend).
+function applyDynamicLabels(items, labels) {
+  return items.map((it) => {
+    if (it.kind === "group") {
+      return {
+        ...it,
+        children: it.children.map((c) =>
+          c.dynamicLabelKey && labels[c.dynamicLabelKey]
+            ? { ...c, label: labels[c.dynamicLabelKey] }
+            : c
+        ),
+      };
+    }
+    return it.dynamicLabelKey && labels[it.dynamicLabelKey]
+      ? { ...it, label: labels[it.dynamicLabelKey] }
+      : it;
+  });
 }
 
 // --------------------------------------------------------------------------
@@ -302,6 +326,12 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const isSuperAdmin = user?.role === "Super Admin";
+  // Dynamic (config-driven) CRM → Overview tab label.
+  const overviewMeta = useOverviewMeta();
+  const navConfig = useMemo(
+    () => applyDynamicLabels(NAV_CONFIG, { overview: overviewMeta?.tab_name }),
+    [overviewMeta?.tab_name]
+  );
   // STRICT gating: any non-Super-Admin whose effective permission set has
   // NO usable modules/pages sees the "No Module Assigned" hint. Fires both
   // when the user has zero assigned sets AND when the assigned set(s)
@@ -370,7 +400,7 @@ export default function Sidebar() {
 
   const flatItems = useMemo(() => {
     if (noAccess) return [];
-    return flattenForSearch(NAV_CONFIG).filter(it => {
+    return flattenForSearch(navConfig).filter(it => {
       if (it.superAdminOnly && !isSuperAdmin) return false;
       // Special-case the Dashboard link — hide when the user has no
       // dashboard access for any product.
@@ -384,7 +414,7 @@ export default function Sidebar() {
       }
       return true;
     });
-  }, [isSuperAdmin, can, isPageViewVisible, noAccess, hasAnyDashboardAccess]);
+  }, [isSuperAdmin, can, isPageViewVisible, noAccess, hasAnyDashboardAccess, navConfig]);
 
   // Mobile: hamburger button + drawer
   if (isMobile) {
@@ -402,7 +432,7 @@ export default function Sidebar() {
             <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)}/>
             <aside className="relative w-64 bg-white h-full flex flex-col shadow-2xl">
               <SidebarHeader collapsed={false} user={user} onToggle={() => setMobileOpen(false)} mobile onSearch={() => setSearchOpen(true)}/>
-              <SidebarNav collapsed={false} currentPath={location.pathname} can={can} isSuperAdmin={isSuperAdmin} isPageViewVisible={isPageViewVisible} onNavigate={onNavigateMobile} noAccess={noAccess} hasAnyDashboardAccess={hasAnyDashboardAccess}/>
+              <SidebarNav navConfig={navConfig} collapsed={false} currentPath={location.pathname} can={can} isSuperAdmin={isSuperAdmin} isPageViewVisible={isPageViewVisible} onNavigate={onNavigateMobile} noAccess={noAccess} hasAnyDashboardAccess={hasAnyDashboardAccess}/>
             </aside>
           </div>
         )}
@@ -419,7 +449,7 @@ export default function Sidebar() {
         className={`bg-white border-r border-gray-200 flex flex-col fixed top-0 left-0 h-screen z-30 transition-all duration-200 ${collapsed ? "w-16" : "w-64"}`}
       >
         <SidebarHeader collapsed={collapsed} user={user} onToggle={toggle} onSearch={() => setSearchOpen(true)}/>
-        <SidebarNav collapsed={collapsed} currentPath={location.pathname} can={can} isSuperAdmin={isSuperAdmin} isPageViewVisible={isPageViewVisible} noAccess={noAccess} hasAnyDashboardAccess={hasAnyDashboardAccess}/>
+        <SidebarNav navConfig={navConfig} collapsed={collapsed} currentPath={location.pathname} can={can} isSuperAdmin={isSuperAdmin} isPageViewVisible={isPageViewVisible} noAccess={noAccess} hasAnyDashboardAccess={hasAnyDashboardAccess}/>
       </aside>
       <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} items={flatItems}/>
     </>
@@ -476,7 +506,7 @@ function SidebarHeader({ collapsed, user, onToggle, mobile, onSearch }) {
 // --------------------------------------------------------------------------
 // Nav list
 // --------------------------------------------------------------------------
-function SidebarNav({ collapsed, currentPath, can, isSuperAdmin, isPageViewVisible, onNavigate, noAccess = false, hasAnyDashboardAccess = true }) {
+function SidebarNav({ navConfig = NAV_CONFIG, collapsed, currentPath, can, isSuperAdmin, isPageViewVisible, onNavigate, noAccess = false, hasAnyDashboardAccess = true }) {
   // CSS quirk: setting overflow-y on one axis coerces the other to non-visible too.
   // For the collapsed icon-only view we keep `overflow-visible` so hover tooltips
   // (which extend to the right of the sidebar) are not clipped.
@@ -518,7 +548,7 @@ function SidebarNav({ collapsed, currentPath, can, isSuperAdmin, isPageViewVisib
 
   return (
     <nav className={`flex-1 py-3 space-y-1 ${collapsed ? "px-1.5 overflow-visible" : "px-3 overflow-y-auto overflow-x-hidden"}`}>
-      {NAV_CONFIG.map(item => {
+      {navConfig.map(item => {
         if (item.kind === "link") {
           // Dashboard link is only shown when the user has any dashboard access.
           if (item.to === "/admin" && !hasAnyDashboardAccess) return null;

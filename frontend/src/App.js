@@ -35,6 +35,7 @@ import SegmentationsPage from "./pages/SegmentationsPage";
 import ClientsPage from "./pages/ClientsPage";
 import ClientDetailPage from "./pages/ClientDetailPage";
 import SegmentationLinkMockupsPage from "./pages/SegmentationLinkMockupsPage";
+import CrossSegmentationOverviewPage from "./pages/CrossSegmentationOverviewPage";
 import ClientContactsPage from "./pages/ClientContactsPage";
 import ProfilePage from "./pages/ProfilePage";
 import WMOverallPreview from "./pages/WMOverallPreview";
@@ -153,6 +154,7 @@ function App() {
             <Route path="/workspace-manager/bookings" element={<V3ProtectedRoute pages={[["desk_booking","bookings_history"]]}><BookingsPage /></V3ProtectedRoute>} />
             
             {/* CRM (label to be finalised later) — currently accessible to any Super Admin / Admin */}
+            <Route path="/crm/overview" element={<ProtectedRoute roles={ADMIN_ROLES}><CrossSegmentationOverviewPage /></ProtectedRoute>} />
             <Route path="/crm/segmentations" element={<ProtectedRoute roles={ADMIN_ROLES}><SegmentationsPage /></ProtectedRoute>} />
             <Route path="/crm/clients" element={<ProtectedRoute roles={ADMIN_ROLES}><ClientsPage /></ProtectedRoute>} />
             <Route path="/crm/clients/:id" element={<ProtectedRoute roles={ADMIN_ROLES}><ClientDetailPage /></ProtectedRoute>} />
