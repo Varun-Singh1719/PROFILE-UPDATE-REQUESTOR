@@ -19,6 +19,20 @@ function toDisplayDDMMYYYY(d) {
   return `${pad(dt.getDate())}/${pad(dt.getMonth() + 1)}/${dt.getFullYear()}`;
 }
 
+// Parse a "DD/MM/YYYY" string into a Date (or null if invalid).
+function parseDDMMYYYY(text) {
+  const m = String(text).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return null;
+  const day = parseInt(m[1], 10);
+  const month = parseInt(m[2], 10);
+  const year = parseInt(m[3], 10);
+  if (month < 1 || month > 12) return null;
+  const lastDay = new Date(year, month, 0).getDate();
+  if (day < 1 || day > lastDay) return null;
+  const d = new Date(year, month - 1, day);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 function fmtShort(d) {
   if (!d) return "";
   return new Date(d).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
@@ -33,6 +47,16 @@ export function getCurrentMonthRange() {
 
 const FIELD_LABEL = { created_at: "Created At", updated_at: "Updated At", created_on: "Created On", updated_on: "Updated On", date: "Date" };
 const MODE_LABEL = { between: "Between", on: "On", before: "Before", after: "After" };
+
+// Tighter calendar spacing overrides — reduces the large vertical gap between
+// week rows so the picker doesn't feel airy. Scoped to this component only
+// (does not touch the shared Calendar defaults used elsewhere).
+const CAL_CLASSNAMES = {
+  month: "space-y-2",
+  table: "w-full border-collapse",
+  row: "flex w-full mt-0.5",
+  caption: "flex justify-center pt-1 pb-1 relative items-center",
+};
 
 /**
  * DateFilter — Metabase-style date range picker in a modal popup.
@@ -77,7 +101,23 @@ export default function DateFilter({
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
 
-  useEffect(() => { if (open) setDraft(value); }, [open, value]);
+  // Controlled month for each calendar so typed / arrow-key date edits
+  // navigate the calendar, while the prev/next nav buttons still work.
+  const [fromMonth, setFromMonth] = useState(() => value?.from || new Date());
+  const [toMonth, setToMonth] = useState(() => value?.to || new Date());
+
+  useEffect(() => {
+    if (open) {
+      setDraft(value);
+      setFromMonth(value?.from || new Date());
+      setToMonth(value?.to || new Date());
+    }
+  }, [open, value]);
+
+  // Keep the displayed month in sync when the bound date changes (typing /
+  // arrow keys / calendar select land here via draft updates).
+  useEffect(() => { if (draft?.from) setFromMonth(draft.from); }, [draft?.from]);
+  useEffect(() => { if (draft?.to) setToMonth(draft.to); }, [draft?.to]);
 
   const showFieldSelector = !singleDate && fields.length > 1;
   // Ensure the value's field is always one of the allowed fields
@@ -198,43 +238,52 @@ export default function DateFilter({
         )}
 
         {/* Date inputs + calendars */}
-        <div className={singleDate ? "px-5 py-4" : "px-5 py-4"}>
+        <div className={singleDate ? "px-5 py-3" : "px-5 py-3"}>
           {mode === "between" ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
-                <DateInput label="From" value={draft?.from} onChange={(d) => setDraft({ ...draft, from: d })} />
-                <div className="mt-4">
+                <DateInput label="From" testId={`${testId}-from`} value={draft?.from} onChange={(d) => setDraft({ ...draft, from: d })} />
+                <div className="mt-2 flex justify-center">
                   <Calendar
                     mode="single"
+                    month={fromMonth}
+                    onMonthChange={setFromMonth}
                     selected={draft?.from || undefined}
                     onSelect={(d) => setDraft({ ...draft, from: d || null })}
                     initialFocus
                     disabled={disabledMatcher}
+                    classNames={CAL_CLASSNAMES}
                   />
                 </div>
               </div>
               <div>
-                <DateInput label="To" value={draft?.to} onChange={(d) => setDraft({ ...draft, to: d })} />
-                <div className="mt-4">
+                <DateInput label="To" testId={`${testId}-to`} value={draft?.to} onChange={(d) => setDraft({ ...draft, to: d })} />
+                <div className="mt-2 flex justify-center">
                   <Calendar
                     mode="single"
+                    month={toMonth}
+                    onMonthChange={setToMonth}
                     selected={draft?.to || undefined}
                     onSelect={(d) => setDraft({ ...draft, to: d || null })}
                     disabled={disabledMatcher}
+                    classNames={CAL_CLASSNAMES}
                   />
                 </div>
               </div>
             </div>
           ) : (
-            <div className="max-w-md">
-              <DateInput label={singleDate ? "Date" : MODE_LABEL[mode]} value={draft?.from} onChange={(d) => setDraft({ ...draft, from: d })}/>
-              <div className="mt-4">
+            <div className="max-w-md mx-auto">
+              <DateInput label={singleDate ? "Date" : MODE_LABEL[mode]} testId={`${testId}-single`} value={draft?.from} onChange={(d) => setDraft({ ...draft, from: d })}/>
+              <div className="mt-2 flex justify-center">
                 <Calendar
                   mode="single"
+                  month={fromMonth}
+                  onMonthChange={setFromMonth}
                   selected={draft?.from || undefined}
                   onSelect={(d) => setDraft({ ...draft, from: d || null, mode: singleDate ? "on" : (draft?.mode || "on") })}
                   initialFocus
                   disabled={disabledMatcher}
+                  classNames={CAL_CLASSNAMES}
                 />
               </div>
             </div>
@@ -259,12 +308,96 @@ export default function DateFilter({
   );
 }
 
-function DateInput({ label, value, onChange }) {
-  // Read-only display; calendar drives the value
+function DateInput({ label, value, onChange, testId }) {
+  const inputRef = React.useRef(null);
+  const pendingSel = React.useRef(null); // [start, end] to reselect after arrow edits
+  const [text, setText] = React.useState(value ? toDisplayDDMMYYYY(value) : "");
+
+  // Sync the text box when the bound value changes externally (calendar click).
+  // Skip the overwrite while the field is focused and holds an in-progress edit
+  // that doesn't yet parse, so typing isn't clobbered.
+  React.useEffect(() => {
+    const focused = document.activeElement === inputRef.current;
+    const parsed = parseDDMMYYYY(text);
+    if (focused && !parsed && text !== "") return;
+    setText(value ? toDisplayDDMMYYYY(value) : "");
+  }, [value]);
+
+  // Restore the caret to the edited segment after an arrow-key change.
+  React.useLayoutEffect(() => {
+    if (pendingSel.current && inputRef.current) {
+      const [s, e] = pendingSel.current;
+      inputRef.current.focus();
+      inputRef.current.setSelectionRange(s, e);
+      pendingSel.current = null;
+    }
+  });
+
+  const commit = (t) => {
+    setText(t);
+    if (t.trim() === "") { onChange(null); return; }
+    const d = parseDDMMYYYY(t);
+    if (d) onChange(d);
+  };
+
+  // Segment helpers for "DD/MM/YYYY" (caret 0-2 = day, 3-5 = month, 6-10 = year)
+  const segmentAt = (pos) => (pos <= 2 ? "day" : pos <= 5 ? "month" : "year");
+  const segmentRange = (s) => (s === "day" ? [0, 2] : s === "month" ? [3, 5] : [6, 10]);
+
+  const handleKeyDown = (e) => {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    const el = inputRef.current;
+    const pos = el?.selectionStart ?? 0;
+    const seg = segmentAt(pos);
+    const delta = e.key === "ArrowUp" ? 1 : -1;
+
+    const base = parseDDMMYYYY(text) || (value ? new Date(value) : new Date());
+    const y = base.getFullYear();
+    const mIdx = base.getMonth();
+    const d = base.getDate();
+
+    let next;
+    if (seg === "day") {
+      next = new Date(y, mIdx, d + delta);
+    } else if (seg === "month") {
+      const targetIdx = mIdx + delta;
+      const lastDay = new Date(y, ((targetIdx % 12) + 12) % 12 + 1, 0).getDate();
+      next = new Date(y, targetIdx, Math.min(d, lastDay));
+    } else {
+      const lastDay = new Date(y + delta, mIdx + 1, 0).getDate();
+      next = new Date(y + delta, mIdx, Math.min(d, lastDay));
+    }
+
+    setText(toDisplayDDMMYYYY(next));
+    onChange(next);
+    pendingSel.current = segmentRange(seg);
+  };
+
+  const handleFocus = (e) => {
+    // Select the day segment on focus for immediate arrow-key stepping.
+    const el = e.target;
+    requestAnimationFrame(() => {
+      try { el.setSelectionRange(0, 2); } catch (_) { /* noop */ }
+    });
+  };
+
   return (
-    <div className="rounded-xl border border-gray-300 px-4 py-3 bg-white relative">
+    <div className="rounded-xl border border-gray-300 px-4 py-2.5 bg-white relative focus-within:border-[#ec9324] focus-within:ring-2 focus-within:ring-[#ec9324]/20 transition-colors">
       <div className="absolute -top-2.5 left-3 px-1.5 bg-white text-xs text-gray-500">{label}</div>
-      <div className="text-base text-gray-900">{value ? toDisplayDDMMYYYY(value) : "—"}</div>
+      <input
+        ref={inputRef}
+        type="text"
+        inputMode="numeric"
+        placeholder="DD/MM/YYYY"
+        value={text}
+        onChange={(e) => commit(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onFocus={handleFocus}
+        data-testid={testId ? `${testId}-input` : undefined}
+        aria-label={`${label} date, format DD/MM/YYYY`}
+        className="w-full text-base text-gray-900 outline-none bg-transparent placeholder:text-gray-400"
+      />
     </div>
   );
 }
