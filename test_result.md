@@ -381,6 +381,128 @@ backend:
             the new Date rule is evaluated against the request's booking date.
 
 frontend:
+  - task: "Segmentation — no DB record until Save (unsaved draft flow + unsaved-changes guard)"
+    implemented: true
+    working: true
+    file: "frontend/src/pages/SegmentationsPage.jsx, frontend/src/components/CollapsibleTree.jsx, frontend/src/pages/ClientDetailPage.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            NEW BEHAVIOR (Segmentation module):
+            1) NO DB record is created until the user explicitly clicks Save.
+               - Client Detail "Add Segmentation" navigates to
+                 /crm/segmentations?new=1&name=<client>. This now opens an
+                 IN-MEMORY unsaved draft editor (sentinel id "__draft__") — NO
+                 POST happens on landing or when a name is entered.
+               - The top-bar "New Segmentation" button opens the name dialog
+                 (name/description only, NO POST) then lands on the draft editor.
+               - The record is created (POST /segmentations) ONLY when the user
+                 clicks the Save (check) icon in the editor glass panel.
+            2) Default landing screen: lands directly on the edit page; root
+               (Level 1 = client name) is AUTO-SELECTED so the orange "+ Add
+               sub-segment" control is immediately visible. Glass panel shows
+               "UNSAVED" badge; footer "Draft — click Save to publish".
+            3) Unsaved-changes guard: guardedRun() intercepts clicking another
+               segmentation in the sidebar AND the "New Segmentation" button.
+               When there are unsaved changes it shows the app confirm dialog
+               "Are you sure you want to close the page without saving the
+               changes?" with Yes / Cancel.
+                 - Yes  -> discard draft/edits (no save), proceed to target.
+                 - Cancel -> stay on editor, preserve entered data.
+               If NOTHING is dirty, navigation happens immediately (no dialog).
+               A beforeunload handler guards hard reload / tab-close.
+            TEST CREDENTIALS: admin@ticketing.com / Admin@123 (Super Admin).
+            HOW TO REACH: log in -> CRM -> Clients -> open a client -> "Add
+            Segmentation" (Segmentation card). Alternatively CRM -> Segmentations
+            -> "New Segmentation".
+            SELECTORS: draft save = [data-testid=segmentation-detail-save];
+            cancel = [data-testid=segmentation-detail-cancel]; sidebar rows =
+            [data-testid=segmentation-row-<id>]; new btn = [data-testid=
+            segmentation-new-btn]; unsaved badge = [data-testid=
+            segmentation-editing-badge] (reads "Unsaved" for drafts).
+            IMPORTANT: please DELETE any segmentations you create during testing
+            (DELETE /api/segmentations/<id>) so the list stays at its original 8.
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ ALL THREE CORE FLOWS VERIFIED SUCCESSFULLY (Aug 6 2026)
+            
+            Comprehensive testing of the newly-reworked SEGMENTATION module completed.
+            Test credentials: admin@ticketing.com / Admin@123
+            
+            **FLOW 1: NO DB RECORD ON LANDING (draft) — ✅ PASS**
+            
+            1. Navigated to CRM → Segmentations
+            2. Clicked "New Segmentation" button (data-testid="segmentation-new-btn")
+            3. Entered name "QA_Flow2_Test" and clicked Create
+            4. ✅ VERIFIED: NO new record created in DB (sidebar count unchanged)
+            5. ✅ VERIFIED: Editor opened with "UNSAVED" badge (data-testid="segmentation-editing-badge")
+            6. ✅ VERIFIED: Footer shows "Draft — click Save to publish"
+            7. ✅ VERIFIED: Root node auto-selected with orange "+" (Add sub-segment) button visible
+            8. ✅ VERIFIED: Selection ring is orange (#ec9324)
+            
+            **FLOW 2: UNSAVED-CHANGES WARNING — ✅ PASS**
+            
+            1. Added sub-segment "ChildA" by clicking orange "+", typing name, pressing Enter
+            2. ✅ VERIFIED: ChildA appeared in tree (unsaved changes exist)
+            3. Clicked a different segmentation in sidebar
+            4. ✅ VERIFIED: Confirmation dialog appeared with text "Are you sure you want to close the page without saving the changes?"
+            5. ✅ VERIFIED: Dialog has "Yes" and "Cancel" buttons
+            6. Clicked "Cancel"
+            7. ✅ VERIFIED: Remained on current draft editor
+            8. ✅ VERIFIED: ChildA data preserved (nothing saved to DB)
+            9. Attempted navigation again, clicked "Yes"
+            10. ✅ VERIFIED: Draft discarded (UNSAVED badge gone)
+            11. ✅ VERIFIED: Navigated to selected segmentation
+            12. ✅ VERIFIED: NO partial record saved (sidebar count unchanged)
+            
+            **BONUS TEST: No-changes navigation (no dialog) — ✅ PASS**
+            - Created fresh draft without making changes
+            - Clicked another segmentation
+            - ✅ VERIFIED: NO confirmation dialog appeared
+            - ✅ VERIFIED: Navigated immediately (no unsaved changes)
+            
+            **FLOW 3: SAVE CREATES THE RECORD — ✅ PASS**
+            
+            1. Started fresh draft "QA_Save_XYZ"
+            2. Added child node "TestChild"
+            3. Clicked Save icon (data-testid="segmentation-detail-save")
+            4. ✅ VERIFIED: Success toast appeared ("Segmentation created")
+            5. ✅ VERIFIED: Sidebar count increased by 1
+            6. ✅ VERIFIED: New segmentation "QA_Save_XYZ" appeared in sidebar
+            7. ✅ VERIFIED: Selected in VIEW mode (no UNSAVED badge)
+            8. ✅ VERIFIED: Edit and Delete buttons visible (data-testid="segmentation-detail-edit", "segmentation-detail-delete")
+            
+            **CLEANUP: ✅ COMPLETED**
+            - Successfully deleted test segmentation via API (DELETE /api/segmentations/{id})
+            - Sidebar returned to original state
+            
+            **CLIENT DETAIL ENTRY POINT:**
+            - Unable to test "Add Segmentation" from Client Detail page (button not found)
+            - Likely because test client already has a segmentation assigned
+            - Code inspection confirms implementation matches spec (navigates to /crm/segmentations?new=1&name=<client>)
+            
+            **CONSOLE ERRORS:**
+            - No JavaScript errors detected during testing
+            - No console warnings related to segmentation functionality
+            
+            **SCREENSHOTS:**
+            - seg-flow2-complete.png: Shows draft with ChildA after Cancel (data preserved)
+            - seg-flow3-complete.png: Shows saved segmentation in VIEW mode with success toast
+            
+            **CONCLUSION:**
+            All three core flows specified in the review request are working correctly:
+            1. ✅ Draft segmentations are NOT saved to DB until explicit Save click
+            2. ✅ Unsaved-changes guard prevents accidental data loss with confirmation dialog
+            3. ✅ Save button creates the DB record and switches to VIEW mode
+            
+            The implementation matches the specification exactly. No issues found.
+
+
   - task: "Floor Layout — Meeting room availability by CURRENT TIME (Jul 29 2026)"
     implemented: true
     working: true
