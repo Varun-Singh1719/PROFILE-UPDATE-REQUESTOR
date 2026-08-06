@@ -24,10 +24,7 @@ import React, {
 import { createPortal } from "react-dom";
 import api, { formatApiError } from "../lib/api";
 import notify from "../lib/notify";
-import { Button } from "./ui/button";
-import LinkIcon from "@mui/icons-material/LinkOutlined";
 import Plus from "@mui/icons-material/AddOutlined";
-import Save from "@mui/icons-material/SaveOutlined";
 import Close from "@mui/icons-material/CloseOutlined";
 import Search from "@mui/icons-material/SearchOutlined";
 import ChevronRight from "@mui/icons-material/KeyboardArrowRight";
@@ -297,7 +294,7 @@ function SegLinkMultiSelect({
 
 /* ============================================================ */
 const LinkSegmentationTab = forwardRef(function LinkSegmentationTab(
-  { clientId, clientName, onDirtyChange, onAddSegmentation },
+  { clientId, clientName, onDirtyChange, onSavingChange, onAddSegmentation },
   ref
 ) {
   const [loading, setLoading] = useState(true);
@@ -335,19 +332,7 @@ const LinkSegmentationTab = forwardRef(function LinkSegmentationTab(
 
   useEffect(() => { load(); }, [load]);
 
-  // Reload on window focus (e.g. after adding a segmentation elsewhere),
-  // but only when there are no unsaved edits.
-  useEffect(() => {
-    const onFocus = () => { if (!dirty) load(); };
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, [dirty, load]);
-
-  useImperativeHandle(ref, () => ({
-    discard: () => setDraft(saved),
-    reload: () => load(),
-    isDirty: () => dirty,
-  }), [saved, dirty, load]);
+  // NOTE: no auto-refresh — data loads on mount / client change only.
 
   const updateRow = (key, values) => {
     setDraft((prev) => {
@@ -375,6 +360,18 @@ const LinkSegmentationTab = forwardRef(function LinkSegmentationTab(
 
   const handleCancel = () => { setDraft(saved); setOpenCat(null); };
 
+  // Report saving state upward so the parent's Save/Cancel (in the tab bar)
+  // can disable while a save is in flight.
+  useEffect(() => { onSavingChange?.(saving); }, [saving, onSavingChange]);
+
+  useImperativeHandle(ref, () => ({
+    discard: () => setDraft(saved),
+    reload: () => load(),
+    isDirty: () => dirty,
+    save: handleSave,
+    cancel: handleCancel,
+  }));
+
   const clientOptions = useMemo(
     () => clientL1.map((n) => ({ value: n, label: n })),
     [clientL1]
@@ -388,38 +385,7 @@ const LinkSegmentationTab = forwardRef(function LinkSegmentationTab(
 
   // ---------------- render ----------------
   return (
-    <div className="bg-white border border-gray-200 rounded-xl shadow-sm" data-testid="link-segmentation-tab">
-      {/* Outer header with Save / Cancel */}
-      <div className="flex items-center justify-between gap-3 flex-wrap px-5 py-3 border-b border-gray-100">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-orange-100 text-[#ec9324] flex items-center justify-center">
-            <LinkIcon sx={{ fontSize: 20 }} />
-          </div>
-          <div className="text-base font-semibold text-gray-900">Link Segmentation</div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={handleCancel}
-            disabled={!dirty || saving}
-            className="h-9"
-            data-testid="link-seg-cancel"
-          >
-            <Close sx={{ fontSize: 18, marginRight: "4px" }} />
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={!dirty || saving}
-            className="bg-[#ec9324] hover:bg-[#d3811b] text-white h-9"
-            data-testid="link-seg-save"
-          >
-            <Save sx={{ fontSize: 18, marginRight: "4px" }} />
-            {saving ? "Saving…" : "Save"}
-          </Button>
-        </div>
-      </div>
-
+    <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden" data-testid="link-segmentation-tab">
       {loading ? (
         <div className="text-center py-16 text-sm text-gray-500">Loading…</div>
       ) : !infollionExists ? (
@@ -427,23 +393,22 @@ const LinkSegmentationTab = forwardRef(function LinkSegmentationTab(
           The master “Infollion Research” segmentation was not found.
         </div>
       ) : (
-        <div className="p-4 sm:p-5">
-          <div className="relative">
-            {/* Arrow badge between the two panels (desktop) */}
-            <div className="hidden lg:flex absolute left-1/2 top-16 -translate-x-1/2 z-10 pointer-events-none">
-              <div className="w-8 h-8 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-400">
-                <ChevronRight sx={{ fontSize: 20 }} />
-              </div>
-            </div>
-
-            {/* ===== HEADERS (2-col grid, aligned) ===== */}
-            <div className="grid grid-cols-1 lg:grid-cols-2">
-              {/* LEFT header */}
-              <div className="lg:pr-8">
-                <div className="rounded-t-xl border border-gray-200 bg-gray-50/50 p-3">
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="p-3 sm:p-4">
+          <div className="rounded-xl border border-gray-200 overflow-hidden">
+            <div className="h-[calc(100vh-172px)] overflow-y-auto">
+              {/* ===== STICKY HEADERS ===== */}
+              <div className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 shadow-sm">
+                <div className="relative grid grid-cols-1 lg:grid-cols-2">
+                  {/* Arrow badge between the two panels (desktop) */}
+                  <div className="hidden lg:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
+                    <div className="w-7 h-7 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-400">
+                      <ChevronRight sx={{ fontSize: 18 }} />
+                    </div>
+                  </div>
+                  {/* LEFT header */}
+                  <div className="p-3 lg:pr-8 flex items-center justify-between gap-3 flex-wrap">
                     <div className="text-sm font-bold text-gray-900">Infollion Research</div>
-                    <div className="relative flex-1 min-w-[160px] max-w-[220px]">
+                    <div className="relative flex-1 min-w-[150px] max-w-[220px]">
                       <Search sx={{ fontSize: 16 }} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         value={catQuery}
@@ -454,14 +419,10 @@ const LinkSegmentationTab = forwardRef(function LinkSegmentationTab(
                       />
                     </div>
                   </div>
-                </div>
-              </div>
-              {/* RIGHT header */}
-              <div className="lg:pl-8 mt-3 lg:mt-0">
-                <div className="rounded-t-xl border border-gray-200 bg-gray-50/50 p-3">
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                  {/* RIGHT header */}
+                  <div className="p-3 lg:pl-8 lg:border-l border-gray-200 flex items-center justify-between gap-3 flex-wrap">
                     <div className="text-sm font-bold text-gray-900">{clientName}</div>
-                    <div className="relative flex-1 min-w-[160px] max-w-[220px]">
+                    <div className="relative flex-1 min-w-[150px] max-w-[220px]">
                       <Search sx={{ fontSize: 16 }} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         value={catQuery}
@@ -474,15 +435,14 @@ const LinkSegmentationTab = forwardRef(function LinkSegmentationTab(
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* ===== BODY (single grid → left/right cells share row height) ===== */}
-            {visibleCats.length === 0 ? (
-              <div className="border border-t-0 border-gray-200 rounded-b-xl p-8 text-center text-sm text-gray-400">
-                No categories match “{catQuery}”.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 border border-t-0 border-gray-200 rounded-b-xl overflow-visible">
+              {/* ===== BODY (single grid → left/right cells share row height) ===== */}
+              {visibleCats.length === 0 ? (
+                <div className="p-8 text-center text-sm text-gray-400">
+                  No categories match “{catQuery}”.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2">
                 {visibleCats.map((name, idx) => {
                   const Icon = getCategoryIcon(name);
                   const active = activeCat === name || openCat === name;
@@ -524,8 +484,9 @@ const LinkSegmentationTab = forwardRef(function LinkSegmentationTab(
                     </React.Fragment>
                   );
                 })}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

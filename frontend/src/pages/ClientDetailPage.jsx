@@ -110,7 +110,9 @@ export default function ClientDetailPage() {
   const linkTabRef = useRef(null);
   const linkDirtyRef = useRef(false);
   const [linkDirty, setLinkDirty] = useState(false);
+  const [linkSaving, setLinkSaving] = useState(false);
   const onLinkDirtyChange = (d) => { linkDirtyRef.current = d; setLinkDirty(d); };
+  const onLinkSavingChange = (s) => setLinkSaving(s);
 
   // Unsaved-changes confirmation used whenever the user tries to leave the
   // Link Segmentation tab with pending edits (tab switch / navigate away).
@@ -274,33 +276,58 @@ export default function ClientDetailPage() {
 
         {/* ============ TABS ============ */}
         {!loading && row && (
-          <div className="flex items-center gap-1 border-b border-gray-200 mb-3" role="tablist">
-            {[
-              { key: "overview", label: "Overview" },
-              { key: "link", label: "Link Segmentation" },
-            ].map((t) => {
-              const active = activeTab === t.key;
-              return (
-                <button
-                  key={t.key}
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => switchTab(t.key)}
-                  data-testid={`client-tab-${t.key}`}
-                  className={
-                    "relative px-4 py-2 text-sm font-semibold transition-colors -mb-px border-b-2 " +
-                    (active
-                      ? "text-[#ec9324] border-[#ec9324]"
-                      : "text-gray-500 border-transparent hover:text-gray-800")
-                  }
+          <div className="flex items-center justify-between border-b border-gray-200 mb-3">
+            <div className="flex items-center gap-1" role="tablist">
+              {[
+                { key: "overview", label: "Overview" },
+                { key: "link", label: "Link Segmentation" },
+              ].map((t) => {
+                const active = activeTab === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => switchTab(t.key)}
+                    data-testid={`client-tab-${t.key}`}
+                    className={
+                      "relative px-4 py-2 text-sm font-semibold transition-colors -mb-px border-b-2 " +
+                      (active
+                        ? "text-[#ec9324] border-[#ec9324]"
+                        : "text-gray-500 border-transparent hover:text-gray-800")
+                    }
+                  >
+                    {t.label}
+                    {t.key === "link" && linkDirty && (
+                      <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-[#ec9324] align-middle" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Save / Cancel parallel to the tab name (Link Segmentation tab only) */}
+            {activeTab === "link" && (
+              <div className="flex items-center gap-2 pb-1.5">
+                <Button
+                  variant="outline"
+                  onClick={() => linkTabRef.current?.cancel?.()}
+                  disabled={!linkDirty || linkSaving}
+                  className="h-8"
+                  data-testid="link-seg-cancel"
                 >
-                  {t.label}
-                  {t.key === "link" && linkDirty && (
-                    <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-[#ec9324] align-middle" />
-                  )}
-                </button>
-              );
-            })}
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => linkTabRef.current?.save?.()}
+                  disabled={!linkDirty || linkSaving}
+                  className="bg-[#ec9324] hover:bg-[#d3811b] text-white h-8"
+                  data-testid="link-seg-save"
+                >
+                  {linkSaving ? "Saving…" : "Save"}
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
@@ -314,6 +341,7 @@ export default function ClientDetailPage() {
             clientId={id}
             clientName={row.name}
             onDirtyChange={onLinkDirtyChange}
+            onSavingChange={onLinkSavingChange}
             onAddSegmentation={goSegmentationAdd}
           />
         ) : (
