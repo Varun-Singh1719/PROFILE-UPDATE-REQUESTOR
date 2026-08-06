@@ -262,11 +262,11 @@ export default function ClientDetailPage() {
 
   return (
     <Layout title={row ? row.name : "Client"} actions={activeTab === "overview" ? topBarActions : null}>
-      <div className="px-6 py-5">
+      <div className="px-6 py-2.5">
         {/* Back link */}
         <button
           onClick={() => guardedNavigate("/crm/clients")}
-          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-[#ec9324] mb-4"
+          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-[#ec9324] mb-1.5"
         >
           <ArrowBack sx={{ fontSize: 16 }} />
           Back to Clients
@@ -274,7 +274,7 @@ export default function ClientDetailPage() {
 
         {/* ============ TABS ============ */}
         {!loading && row && (
-          <div className="flex items-center gap-1 border-b border-gray-200 mb-4" role="tablist">
+          <div className="flex items-center gap-1 border-b border-gray-200 mb-3" role="tablist">
             {[
               { key: "overview", label: "Overview" },
               { key: "link", label: "Link Segmentation" },
@@ -288,7 +288,7 @@ export default function ClientDetailPage() {
                   onClick={() => switchTab(t.key)}
                   data-testid={`client-tab-${t.key}`}
                   className={
-                    "relative px-4 py-2.5 text-sm font-semibold transition-colors -mb-px border-b-2 " +
+                    "relative px-4 py-2 text-sm font-semibold transition-colors -mb-px border-b-2 " +
                     (active
                       ? "text-[#ec9324] border-[#ec9324]"
                       : "text-gray-500 border-transparent hover:text-gray-800")

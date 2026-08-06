@@ -33,23 +33,67 @@ import Search from "@mui/icons-material/SearchOutlined";
 import ChevronRight from "@mui/icons-material/KeyboardArrowRight";
 import ChevronDown from "@mui/icons-material/KeyboardArrowDown";
 import Check from "@mui/icons-material/Check";
-import Apartment from "@mui/icons-material/ApartmentOutlined";
-import Spa from "@mui/icons-material/SpaOutlined";
-// Category icon pool (cycled by index for visual variety, single tone).
+// ----- Category icons (resolved by keyword from the category name) -----
 import IcAgri from "@mui/icons-material/AgricultureOutlined";
 import IcCar from "@mui/icons-material/DirectionsCarOutlined";
 import IcBank from "@mui/icons-material/AccountBalanceOutlined";
 import IcSci from "@mui/icons-material/ScienceOutlined";
-import IcWork from "@mui/icons-material/WorkOutlineOutlined";
+import IcBiz from "@mui/icons-material/BusinessCenterOutlined";
+import IcBag from "@mui/icons-material/ShoppingBagOutlined";
+import IcKitchen from "@mui/icons-material/KitchenOutlined";
 import IcCart from "@mui/icons-material/ShoppingCartOutlined";
-import IcTv from "@mui/icons-material/TvOutlined";
+import IcFood from "@mui/icons-material/RestaurantOutlined";
+import IcSchool from "@mui/icons-material/SchoolOutlined";
+import IcEng from "@mui/icons-material/EngineeringOutlined";
+import IcMed from "@mui/icons-material/MedicalServicesOutlined";
+import IcComputer from "@mui/icons-material/ComputerOutlined";
+import IcBio from "@mui/icons-material/BiotechOutlined";
+import IcShip from "@mui/icons-material/LocalShippingOutlined";
+import IcLayers from "@mui/icons-material/LayersOutlined";
+import IcMovie from "@mui/icons-material/MovieOutlined";
+import IcConstruction from "@mui/icons-material/ConstructionOutlined";
+import IcGas from "@mui/icons-material/LocalGasStationOutlined";
 import IcBolt from "@mui/icons-material/BoltOutlined";
-import IcHeart from "@mui/icons-material/FavoriteBorderOutlined";
-import IcChip from "@mui/icons-material/MemoryOutlined";
+import IcHome from "@mui/icons-material/HomeWorkOutlined";
 import IcStore from "@mui/icons-material/StorefrontOutlined";
-import IcLabel from "@mui/icons-material/LabelOutlined";
+import IcChip from "@mui/icons-material/MemoryOutlined";
+import IcTower from "@mui/icons-material/CellTowerOutlined";
+import IcSocial from "@mui/icons-material/Diversity3Outlined";
+import IcCategory from "@mui/icons-material/CategoryOutlined";
 
-const CAT_ICONS = [IcAgri, IcCar, IcBank, IcSci, IcWork, IcCart, IcTv, IcBolt, IcHeart, IcChip, IcStore, IcLabel];
+// Resolve a sensible icon from the category name using keyword matching.
+// Order matters — more specific terms are checked first.
+function getCategoryIcon(name) {
+  const n = (name || "").toLowerCase();
+  const has = (...keys) => keys.some((k) => n.includes(k));
+  if (has("semiconductor")) return IcChip;
+  if (has("information technology", "info tech", "software", "technology")) return IcComputer;
+  if (has("telecom", "telecommunication")) return IcTower;
+  if (has("oil", "gas")) return IcGas;
+  if (has("metal", "mining")) return IcConstruction;
+  if (has("life science", "biotech", "pharma")) return IcBio;
+  if (has("health", "hospital", "medical")) return IcMed;
+  if (has("logistic", "shipping", "transport", "supply chain")) return IcShip;
+  if (has("engineering", "capital goods", "manufactur", "industrial")) return IcEng;
+  if (has("education", "school", "learning")) return IcSchool;
+  if (has("food", "beverage", "staples", "restaurant")) return IcFood;
+  if (has("fmcg", "non-durable", "non durable")) return IcCart;
+  if (has("durable", "appliance")) return IcKitchen;
+  if (has("discretionary")) return IcBag;
+  if (has("retail", "ecommerce", "e-commerce", "commerce")) return IcStore;
+  if (has("media", "entertainment")) return IcMovie;
+  if (has("real estate", "property")) return IcHome;
+  if (has("utilit", "infrastructure", "power", "energy", "electric")) return IcBolt;
+  if (has("public sector", "social", "government", "govt")) return IcSocial;
+  if (has("commercial", "professional service", "consulting")) return IcBiz;
+  if (has("chemical")) return IcSci;
+  if (has("agricultur", "farm")) return IcAgri;
+  if (has("automotive", "auto", "mobility", "vehicle")) return IcCar;
+  if (has("bfsi", "bank", "financ", "insurance", "capital market")) return IcBank;
+  if (has("material")) return IcLayers;
+  if (has("consumer")) return IcBag;
+  return IcCategory;
+}
 
 // Deep-equal for a mapping object { key: [names] }.
 function mappingsEqual(a, b) {
@@ -346,17 +390,12 @@ const LinkSegmentationTab = forwardRef(function LinkSegmentationTab(
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm" data-testid="link-segmentation-tab">
       {/* Outer header with Save / Cancel */}
-      <div className="flex items-center justify-between gap-3 flex-wrap px-5 py-4 border-b border-gray-100">
+      <div className="flex items-center justify-between gap-3 flex-wrap px-5 py-3 border-b border-gray-100">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-orange-100 text-[#ec9324] flex items-center justify-center">
-            <LinkIcon />
+          <div className="w-9 h-9 rounded-lg bg-orange-100 text-[#ec9324] flex items-center justify-center">
+            <LinkIcon sx={{ fontSize: 20 }} />
           </div>
-          <div>
-            <div className="text-base font-semibold text-gray-900">Link Segmentation</div>
-            <div className="text-[12px] text-gray-500">
-              Map each Infollion Research category to this client&apos;s segmentations
-            </div>
-          </div>
+          <div className="text-base font-semibold text-gray-900">Link Segmentation</div>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -391,7 +430,7 @@ const LinkSegmentationTab = forwardRef(function LinkSegmentationTab(
         <div className="p-4 sm:p-5">
           <div className="relative">
             {/* Arrow badge between the two panels (desktop) */}
-            <div className="hidden lg:flex absolute left-1/2 top-24 -translate-x-1/2 z-10 pointer-events-none">
+            <div className="hidden lg:flex absolute left-1/2 top-16 -translate-x-1/2 z-10 pointer-events-none">
               <div className="w-8 h-8 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-400">
                 <ChevronRight sx={{ fontSize: 20 }} />
               </div>
@@ -401,17 +440,9 @@ const LinkSegmentationTab = forwardRef(function LinkSegmentationTab(
             <div className="grid grid-cols-1 lg:grid-cols-2">
               {/* LEFT header */}
               <div className="lg:pr-8">
-                <div className="rounded-t-xl border border-gray-200 bg-gray-50/50 p-4">
-                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-lg bg-orange-100 text-[#ec9324] flex items-center justify-center">
-                        <Spa sx={{ fontSize: 20 }} />
-                      </div>
-                      <div>
-                        <div className="text-sm font-bold text-gray-900">Infollion Research — Level 1</div>
-                        <div className="text-[11px] text-gray-500">Master segmentation categories</div>
-                      </div>
-                    </div>
+                <div className="rounded-t-xl border border-gray-200 bg-gray-50/50 p-3">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="text-sm font-bold text-gray-900">Infollion Research</div>
                     <div className="relative flex-1 min-w-[160px] max-w-[220px]">
                       <Search sx={{ fontSize: 16 }} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
@@ -427,17 +458,9 @@ const LinkSegmentationTab = forwardRef(function LinkSegmentationTab(
               </div>
               {/* RIGHT header */}
               <div className="lg:pl-8 mt-3 lg:mt-0">
-                <div className="rounded-t-xl border border-gray-200 bg-gray-50/50 p-4">
-                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-lg bg-orange-100 text-[#ec9324] flex items-center justify-center">
-                        <Apartment sx={{ fontSize: 20 }} />
-                      </div>
-                      <div>
-                        <div className="text-sm font-bold text-gray-900">{clientName} — Level 1</div>
-                        <div className="text-[11px] text-gray-500">Map to client segmentations</div>
-                      </div>
-                    </div>
+                <div className="rounded-t-xl border border-gray-200 bg-gray-50/50 p-3">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="text-sm font-bold text-gray-900">{clientName}</div>
                     <div className="relative flex-1 min-w-[160px] max-w-[220px]">
                       <Search sx={{ fontSize: 16 }} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
@@ -461,7 +484,7 @@ const LinkSegmentationTab = forwardRef(function LinkSegmentationTab(
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 border border-t-0 border-gray-200 rounded-b-xl overflow-visible">
                 {visibleCats.map((name, idx) => {
-                  const Icon = CAT_ICONS[idx % CAT_ICONS.length];
+                  const Icon = getCategoryIcon(name);
                   const active = activeCat === name || openCat === name;
                   const isLast = idx === visibleCats.length - 1;
                   return (
