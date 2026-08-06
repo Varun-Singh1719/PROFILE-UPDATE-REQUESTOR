@@ -86,10 +86,14 @@ export default function CollapsibleTree({
   onEditableToggle,
   defaultExpandDepth = Infinity,
   showToolbar = true,
+  // When true, the root node (Level 1) starts SELECTED so its "+ Add
+  // sub-segment" control is immediately visible/ready (used for the new
+  // unsaved segmentation draft editor).
+  autoSelectRoot = false,
 }) {
   const svgRef = useRef(null);
   const containerRef = useRef(null);
-  const selectedIdRef = useRef(null);
+  const selectedIdRef = useRef(autoSelectRoot ? 0 : null);
   const zoomBehaviorRef = useRef(null);
   const didInitialFitRef = useRef(false);
   const fitToViewRef = useRef(null); // set inside useLayoutEffect

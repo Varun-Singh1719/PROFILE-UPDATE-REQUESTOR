@@ -42,18 +42,22 @@ const fmtDateTime = (iso) => {
 
 const EMPTY_FORM = { name: "", description: "" };
 
+// Sentinel id for an in-memory, UNSAVED segmentation draft. Nothing is written
+// to the DB until the user explicitly clicks Save inside the tree editor.
+const DRAFT_ID = "__draft__";
+
 // ============================================================ MAIN
 export default function SegmentationsPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState(null);
-  // When the user arrives via Client Detail's "Add Segmentation" (?new=1) we
-  // (a) keep the detail pane BLANK behind the create dialog instead of
-  // auto-selecting an unrelated segmentation, and (b) after create, open the
-  // brand-new segmentation directly in tree-edit mode.
-  const [pendingCreateFlow, setPendingCreateFlow] = useState(false);
-  const [autoEditId, setAutoEditId] = useState(null);
+  // In-memory UNSAVED segmentation draft. When set, the editor renders this
+  // draft (never touching the DB) until the user clicks Save.
+  const [draftSeg, setDraftSeg] = useState(null);
+  // Reported by the editor — true whenever there are unsaved changes. Drives
+  // the "unsaved changes" confirmation before navigating away.
+  const [hasUnsaved, setHasUnsaved] = useState(false);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);      // segmentation being edited (null = create)
@@ -76,23 +80,35 @@ export default function SegmentationsPage() {
   };
   useEffect(() => { load(); }, []);
 
+  // ---- Draft (unsaved) segmentation helpers ----
+  // Start a brand-new in-memory draft. NOTHING is written to the DB here —
+  // the record is only created when the user clicks Save in the editor.
+  const startDraft = (name, description = "") => {
+    const nm = (name || "").trim() || "Untitled Segmentation";
+    setSelectedId(null);
+    setDraftSeg({
+      id: DRAFT_ID,
+      name: nm,
+      description: (description || "").trim(),
+      status: "Active",
+      tree: { name: nm, children: [] },
+    });
+  };
+
   // ---- Query-param triggers (from Client Detail page) ----
-  // ?new=1&name=X          → open create dialog pre-filled with the client name
+  // ?new=1&name=X          → open a NEW unsaved draft editor (Client Detail
+  //                          "Add Segmentation"); no DB record is created.
   // ?select=<segId|name>   → auto-select that segmentation in the sidebar
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
     const isNew = searchParams.get("new");
     const prefName = searchParams.get("name");
     if (isNew === "1") {
-      setEditing(null);
-      setForm({ name: prefName || "", description: "" });
-      setFormOpen(true);
-      // Keep the detail pane blank while the create dialog is open — don't
-      // let the "auto-select first row" effect surface another client's
-      // segmentation (e.g. PwC) in the background.
-      setPendingCreateFlow(true);
-      setSelectedId(null);
-      // Strip params so a page refresh doesn't reopen the dialog
+      // Land directly on the edit page with an unsaved draft (Level 1 = the
+      // client name). The detail pane shows only this draft — no other
+      // client's segmentation is surfaced in the background.
+      startDraft(prefName || "");
+      // Strip params so a page refresh doesn't reopen the draft
       const cleaned = new URLSearchParams(searchParams);
       cleaned.delete("new");
       cleaned.delete("name");
@@ -133,25 +149,56 @@ export default function SegmentationsPage() {
   // deep-link auto-select (from Client Detail's "Available" button) races with this
   // and always loses to rows[0].
   useEffect(() => {
-    if (rows.length === 0) { setSelectedId(null); return; }
+    if (rows.length === 0) { if (!draftSeg) setSelectedId(null); return; }
     if (searchParams.get("select")) return; // deep-link handler owns selection
-    if (pendingCreateFlow) return;           // keep pane blank while creating
+    if (draftSeg) return;                    // keep the draft editor in view
     if (!selectedId || !rows.find((r) => r.id === selectedId)) {
       setSelectedId(rows[0].id);
     }
-  }, [rows, selectedId, searchParams, pendingCreateFlow]);
+  }, [rows, selectedId, searchParams, draftSeg]);
+
+  // Warn on hard browser navigation / reload / tab-close while unsaved.
+  useEffect(() => {
+    const handler = (e) => {
+      if (!hasUnsaved) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasUnsaved]);
+
+  // Gate an in-app navigation action behind the unsaved-changes confirm.
+  // If nothing is dirty, the action runs immediately (no dialog).
+  const guardedRun = async (action) => {
+    if (!hasUnsaved) { action(); return; }
+    const ok = await confirmDialog({
+      title: "Are you sure you want to close the page without saving the changes?",
+      confirmLabel: "Yes",
+      cancelLabel: "Cancel",
+      confirmVariant: "destructive",
+    });
+    if (!ok) return;                 // Cancel → stay, preserve data
+    setHasUnsaved(false);
+    action();                        // Yes → discard & proceed
+  };
 
   const selected = useMemo(
     () => rows.find((r) => r.id === selectedId) || null,
     [rows, selectedId]
   );
+  // The row shown in the editor — an unsaved draft takes precedence over any
+  // persisted selection.
+  const activeRow = draftSeg || selected;
 
   // ---- Form open/close ----
-  const openCreate = () => {
+  // The "New Segmentation" button collects a name/description first (NO DB
+  // write) and then lands on the unsaved draft editor.
+  const openCreate = () => guardedRun(() => {
     setEditing(null);
     setForm(EMPTY_FORM);
     setFormOpen(true);
-  };
+  });
   const openEdit = (row) => {
     setEditing(row);
     setForm({
@@ -167,34 +214,22 @@ export default function SegmentationsPage() {
       notify.error("Name is required");
       return;
     }
+    // ---- New segmentation → open an UNSAVED draft (no DB write yet) ----
+    if (!editing) {
+      const desc = (form.description || "").trim();
+      setFormOpen(false);
+      startDraft(name, desc);
+      return;
+    }
+    // ---- Rename / edit description of an EXISTING segmentation ----
     setSaving(true);
     try {
-      const payload = {
-        name,
-        description: (form.description || "").trim(),
-      };
-      let saved;
-      if (editing) {
-        const r = await api.patch(`/segmentations/${editing.id}`, payload);
-        saved = r.data;
-        notify.success("Segmentation updated");
-        setFormOpen(false);
-        await load();
-        if (saved?.id) setSelectedId(saved.id);
-      } else {
-        const r = await api.post("/segmentations", payload);
-        saved = r.data;
-        notify.success("Segmentation created");
-        setFormOpen(false);
-        setPendingCreateFlow(false);
-        await load();
-        // Open the freshly created segmentation directly in tree-edit mode
-        // so the user can start adding nodes right away (blank canvas).
-        if (saved?.id) {
-          setSelectedId(saved.id);
-          setAutoEditId(saved.id);
-        }
-      }
+      const payload = { name, description: (form.description || "").trim() };
+      const r = await api.patch(`/segmentations/${editing.id}`, payload);
+      notify.success("Segmentation updated");
+      setFormOpen(false);
+      await load();
+      if (r.data?.id) setSelectedId(r.data.id);
     } catch (e) {
       notify.error(formatApiError(e, "Failed to save segmentation"));
     } finally {
@@ -240,13 +275,20 @@ export default function SegmentationsPage() {
       <div className="flex-1 flex overflow-hidden" data-testid="segmentations-shell">
         {/* LEFT — tree chart / detail (moved to the left per spec) */}
         <main className="flex-1 bg-gray-50 overflow-hidden flex flex-col" data-testid="segmentations-detail">
-          {selected ? (
+          {activeRow ? (
             <SegmentationDetail
-              row={selected}
-              autoEdit={autoEditId === selected.id}
-              onAutoEditConsumed={() => setAutoEditId(null)}
-              onEdit={() => openEdit(selected)}
-              onDelete={() => remove(selected)}
+              row={activeRow}
+              isDraft={!!draftSeg}
+              onDirtyChange={setHasUnsaved}
+              onDraftSaved={async (created) => {
+                setDraftSeg(null);
+                setHasUnsaved(false);
+                await load();
+                if (created?.id) setSelectedId(created.id);
+              }}
+              onDiscardDraft={() => { setDraftSeg(null); setHasUnsaved(false); }}
+              onEdit={() => openEdit(activeRow)}
+              onDelete={() => remove(activeRow)}
               onTreeSaved={async (updated) => {
                 await load();
                 if (updated?.id) setSelectedId(updated.id);
@@ -327,11 +369,11 @@ export default function SegmentationsPage() {
             ) : (
               <ul className="py-1.5">
                 {filtered.map((r) => {
-                  const active = selectedId === r.id;
+                  const active = selectedId === r.id && !draftSeg;
                   return (
                     <li key={r.id}>
                       <button
-                        onClick={() => setSelectedId(r.id)}
+                        onClick={() => guardedRun(() => { setDraftSeg(null); setSelectedId(r.id); })}
                         data-testid={`segmentation-row-${r.id}`}
                         className={`group w-full text-left px-4 py-2.5 flex items-center gap-2 border-l-2 transition-colors ${
                           active
@@ -407,12 +449,7 @@ export default function SegmentationsPage() {
       {/* Create / Edit dialog */}
       <SegmentationFormDialog
         open={formOpen}
-        onOpenChange={(o) => {
-          setFormOpen(o);
-          // If the create dialog is dismissed (cancel / escape / overlay)
-          // without creating, resume normal selection behaviour.
-          if (!o) setPendingCreateFlow(false);
-        }}
+        onOpenChange={setFormOpen}
         editing={editing}
         form={form}
         setForm={setForm}
@@ -424,7 +461,7 @@ export default function SegmentationsPage() {
 }
 
 // ============================================================ Sub-components
-function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved, autoEdit = false, onAutoEditConsumed }) {
+function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved, isDraft = false, onDirtyChange, onDraftSaved, onDiscardDraft }) {
   // Aug 3 2026 rewrite — DRAFT MODE:
   //   • Non-edit mode: tree shows the persisted `row.tree` verbatim.
   //   • Edit mode: user manipulates a LOCAL DRAFT tree (draftTree).
@@ -467,19 +504,31 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved, autoEdit = fal
     setTreeEditMode(false);
     setReviewOpen(false);
     setPendingChanges(null);
+    onDirtyChange?.(false);
+    // For an unsaved draft, cancelling throws the whole draft away.
+    if (isDraft) onDiscardDraft?.();
   };
 
-  // Auto-enter tree-edit mode when this segmentation was just created via the
-  // Client Detail "Add Segmentation" flow, so the user lands straight on the
-  // editable blank canvas ready to add nodes.
+  // A brand-new UNSAVED draft always opens straight into edit mode on a blank
+  // canvas (Level 1 = the segmentation name), ready for the user to add nodes.
   useEffect(() => {
-    if (autoEdit) {
+    if (isDraft) {
       setDraftTree(JSON.parse(JSON.stringify(seedTree)));
       setTreeEditMode(true);
-      onAutoEditConsumed?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoEdit, row.id]);
+  }, [isDraft, row.id]);
+
+  // ------ Unsaved-changes signal (drives the navigation guard) ------
+  // Dirty when: editing an existing tree that differs from the persisted one,
+  // OR an unsaved draft that has been modified from its initial (empty) state.
+  const treeDirty = useMemo(() => {
+    if (!treeEditMode || !draftTree) return false;
+    return JSON.stringify(draftTree) !== JSON.stringify(seedTree);
+  }, [treeEditMode, draftTree, seedTree]);
+  useEffect(() => { onDirtyChange?.(treeDirty); }, [treeDirty]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Clear the dirty flag if this editor unmounts.
+  useEffect(() => () => onDirtyChange?.(false), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ------ Diff draft vs. persisted for the review dialog ------
   const computeChanges = (before, after) => {
@@ -572,6 +621,36 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved, autoEdit = fal
     setReviewOpen(true);
   };
 
+  // Save handler for the top-bar Save button: an unsaved draft is CREATED
+  // (first DB write); an existing tree goes through the Review Changes flow.
+  const handleSaveClick = () => {
+    if (isDraft) return saveDraft();
+    return openReview();
+  };
+
+  // First DB write for an unsaved draft — POST create with the full tree.
+  const saveDraft = async () => {
+    setSaving(true);
+    try {
+      const toSave = JSON.parse(JSON.stringify(draftTree || seedTree));
+      toSave.name = row.name;
+      const r = await api.post("/segmentations", {
+        name: row.name,
+        description: row.description || "",
+        tree: toSave,
+      });
+      notify.success("Segmentation created");
+      setDraftTree(null);
+      setTreeEditMode(false);
+      onDirtyChange?.(false);
+      onDraftSaved?.(r.data);
+    } catch (e) {
+      notify.error(formatApiError(e, "Failed to create segmentation"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const confirmSave = async () => {
     if (!draftTree) return;
     setSaving(true);
@@ -584,6 +663,7 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved, autoEdit = fal
       setTreeEditMode(false);
       setReviewOpen(false);
       setPendingChanges(null);
+      onDirtyChange?.(false);
       onTreeSaved?.(r.data);
     } catch (e) {
       notify.error(formatApiError(e, "Failed to save tree"));
@@ -617,6 +697,7 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved, autoEdit = fal
           editable={treeEditMode}
           onEditableToggle={setTreeEditMode}
           defaultExpandDepth={1}
+          autoSelectRoot={isDraft}
         />
 
         {/* Floating glass panel — Name + Info / Save / Cancel / Delete.
@@ -634,7 +715,7 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved, autoEdit = fal
           <div className="w-7 h-7 rounded-md bg-[#ec9324]/15 text-[#ec9324] flex items-center justify-center flex-shrink-0">
             <PieChart sx={{ fontSize: 16 }} />
           </div>
-          {treeEditMode ? (
+          {treeEditMode && !isDraft ? (
             <button
               type="button"
               onClick={onEdit}
@@ -661,7 +742,7 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved, autoEdit = fal
                          tracking-wide rounded-full px-1.5 py-0.5 border border-[#ec9324]/40
                          bg-[#ec9324]/10 text-[#ec9324]"
             >
-              Editing
+              {isDraft ? "Unsaved" : "Editing"}
             </span>
           )}
           <div className="w-px h-6 bg-black/10 mx-1" />
@@ -670,7 +751,7 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved, autoEdit = fal
             {treeEditMode ? (
               <>
                 <IconAction
-                  onClick={openReview}
+                  onClick={handleSaveClick}
                   title="Save"
                   testid="segmentation-detail-save"
                   className="text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
@@ -696,14 +777,16 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved, autoEdit = fal
                 <Pencil sx={{ fontSize: 18 }} />
               </IconAction>
             )}
-            <IconAction
-              onClick={onDelete}
-              title="Delete"
-              testid="segmentation-detail-delete"
-              className="text-red-500 hover:bg-red-50 hover:text-red-700"
-            >
-              <Trash2 sx={{ fontSize: 18 }} />
-            </IconAction>
+            {!isDraft && (
+              <IconAction
+                onClick={onDelete}
+                title="Delete"
+                testid="segmentation-detail-delete"
+                className="text-red-500 hover:bg-red-50 hover:text-red-700"
+              >
+                <Trash2 sx={{ fontSize: 18 }} />
+              </IconAction>
+            )}
           </div>
         </div>
       </div>
