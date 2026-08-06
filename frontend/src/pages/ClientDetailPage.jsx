@@ -764,9 +764,9 @@ function POCStatusConfigBar({ clientId }) {
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5" data-testid="client-detail-poc-config">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         {/* Left — icon + header with Active / Dormant chips */}
-        <div className="flex items-start gap-3 flex-1 min-w-[280px]">
+        <div className="flex items-center gap-3 flex-1 min-w-[280px]">
           <div className="w-10 h-10 rounded-lg bg-orange-100 text-[#ec9324] flex items-center justify-center flex-shrink-0">
             <Timer />
           </div>
@@ -781,26 +781,24 @@ function POCStatusConfigBar({ clientId }) {
           </div>
         </div>
 
-        {/* Right — value showcase + Edit button */}
+        {/* Right — value showcase + icon-only Edit (bell-style hover tooltip) */}
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="text-right">
-            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
-              Time Frame
-            </div>
-            <div className="text-base font-semibold text-gray-900" data-testid="poc-config-value">
-              {loading ? "…" : `${valueDuration} ${valueUnitLabel}`}
-            </div>
+          <div className="text-base font-semibold text-gray-900" data-testid="poc-config-value">
+            {loading ? "…" : `${valueDuration} ${valueUnitLabel}`}
           </div>
-          <Button
+          <button
+            type="button"
             onClick={openEditor}
             disabled={loading}
-            variant="outline"
-            className="h-9 border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            aria-label="Edit"
+            className="group relative inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-100 text-gray-600 disabled:opacity-50"
             data-testid="poc-config-edit"
           >
-            <Pencil sx={{ fontSize: 16, marginRight: "4px" }} />
-            Edit
-          </Button>
+            <Pencil sx={{ fontSize: 20 }} />
+            <span className="pointer-events-none absolute top-full mt-1.5 right-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+              Edit
+            </span>
+          </button>
         </div>
       </div>
 
