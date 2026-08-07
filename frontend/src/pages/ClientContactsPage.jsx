@@ -31,6 +31,8 @@ import {
   Popover, PopoverTrigger, PopoverContent,
 } from "../components/ui/popover";
 import SearchSelect from "../components/SearchSelect";
+import CountrySelect from "../components/CountrySelect";
+import { COUNTRY_OPTIONS, getRegionByCountryId, getCountryName } from "../data/countries";
 import DateFilter from "../components/DateFilter";
 import Pagination from "../components/Pagination";
 import DeferredSearchInput from "../components/DeferredSearchInput";
@@ -78,6 +80,9 @@ const EMPTY_FORM = {
   client_name: "",
   designation: "",
   base_location: "",
+  city: "",
+  country_id: null,
+  country_name: "",
   linkedin_url: "",
   industries: [],
   previous_work_experience: [],
@@ -113,7 +118,8 @@ const REQUIRED_CC_FIELDS = [
   ["email", "Email"],
   ["phone", "Phone No."],
   ["client_name", "Client Name"],
-  ["base_location", "Base Location"],
+  ["city", "City"],
+  ["country_id", "Country"],
 ];
 
 // Returns the label of the first missing required field, or null when valid.
@@ -335,6 +341,9 @@ function ClientContactsList() {
       phone_isd,
       client_name: row.client_name || "",
       designation: row.designation || "",
+      city: (row.city != null || row.country_id != null) ? (row.city || "") : (row.base_location || ""),
+      country_id: row.country_id ?? null,
+      country_name: row.country_name || (row.country_id != null ? getCountryName(row.country_id) : ""),
       base_location: row.base_location || "",
       linkedin_url: row.linkedin_url || "",
       industries: row.industries || [],
@@ -353,6 +362,9 @@ function ClientContactsList() {
     const forceParam = opts.force ? "?force=true" : "";
     try {
       const payload = { ...form };
+      // Keep the legacy `base_location` in sync (City, Country) so list/card
+      // displays and exports that still read it continue to work.
+      payload.base_location = [payload.city, payload.country_name].filter(Boolean).join(", ");
       if (editing) {
         await api.patch(`/client-contacts/${editing.id}${forceParam}`, payload);
         notify.success("Client contact updated");
@@ -997,11 +1009,24 @@ function ContactFormDialog({
                 testId="cc-client-name"
               />
             </Field>
-            <Field label="Base Location *">
+            <Field label="City *">
               <Input
-                value={form.base_location}
-                onChange={(e) => patch("base_location", e.target.value)}
-                placeholder="City / country"
+                value={form.city}
+                onChange={(e) => patch("city", e.target.value)}
+                placeholder="e.g. Mumbai"
+                data-testid="cc-city"
+              />
+            </Field>
+            <Field label="Country *">
+              <CountrySelect
+                options={COUNTRY_OPTIONS}
+                value={form.country_id}
+                onChange={(id, opt) => {
+                  patch("country_id", id);
+                  patch("country_name", opt ? opt.label : "");
+                }}
+                placeholder="Select country…"
+                testId="cc-country"
               />
             </Field>
           </div>
@@ -1197,6 +1222,9 @@ function ClientContactDetail({ contactId }) {
       phone_isd,
       client_name: row.client_name || "",
       designation: row.designation || "",
+      city: (row.city != null || row.country_id != null) ? (row.city || "") : (row.base_location || ""),
+      country_id: row.country_id ?? null,
+      country_name: row.country_name || (row.country_id != null ? getCountryName(row.country_id) : ""),
       base_location: row.base_location || "",
       linkedin_url: row.linkedin_url || "",
       industries: row.industries || [],
@@ -1213,7 +1241,9 @@ function ClientContactDetail({ contactId }) {
     setSaving(true);
     const forceParam = opts.force ? "?force=true" : "";
     try {
-      const r = await api.patch(`/client-contacts/${contactId}${forceParam}`, form);
+      const payload = { ...form };
+      payload.base_location = [payload.city, payload.country_name].filter(Boolean).join(", ");
+      const r = await api.patch(`/client-contacts/${contactId}${forceParam}`, payload);
       setRow(r.data);
       setDupState(null);
       setDialogOpen(false);
@@ -1292,9 +1322,9 @@ function ClientContactDetail({ contactId }) {
                     <Phone sx={{ fontSize: 14 }} /> {row.phone_isd ? `${row.phone_isd} ` : ""}{row.phone}
                   </span>
                 )}
-                {row.base_location && (
+                {(row.city || row.country_name || row.base_location) && (
                   <span className="flex items-center gap-1">
-                    <Place sx={{ fontSize: 14 }} /> {row.base_location}
+                    <Place sx={{ fontSize: 14 }} /> {[row.city, row.country_name].filter(Boolean).join(", ") || row.base_location}
                   </span>
                 )}
                 {row.linkedin_url && (
@@ -1316,6 +1346,37 @@ function ClientContactDetail({ contactId }) {
             >
               <Pencil sx={{ fontSize: 15 }} /> Edit
             </button>
+          </div>
+
+          {/* Location & Region — Region is auto-derived from the Country id. */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm" data-testid="cc-location-region">
+            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-3">
+              Location
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <div className="text-[11px] text-gray-400 font-medium">City</div>
+                <div className="text-sm text-gray-800 mt-0.5">{row.city || "—"}</div>
+              </div>
+              <div>
+                <div className="text-[11px] text-gray-400 font-medium">Country</div>
+                <div className="text-sm text-gray-800 mt-0.5">
+                  {row.country_name || (row.country_id != null ? getCountryName(row.country_id) : "") || "—"}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] text-gray-400 font-medium">Region</div>
+                <div className="mt-1" data-testid="cc-region-value">
+                  {getRegionByCountryId(row.country_id) ? (
+                    <span className="inline-flex items-center text-xs px-2.5 py-1 rounded-full bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/30 font-medium">
+                      {getRegionByCountryId(row.country_id)}
+                    </span>
+                  ) : (
+                    <span className="text-sm text-gray-800">—</span>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Total-till-date chips — placeholder counts, wired later when the

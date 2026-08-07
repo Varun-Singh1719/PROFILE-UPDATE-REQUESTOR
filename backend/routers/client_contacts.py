@@ -121,6 +121,9 @@ class ClientContactBase(BaseModel):
     client_name: Optional[str] = Field(None, max_length=200)
     designation: Optional[str] = Field(None, max_length=200)
     base_location: Optional[str] = Field(None, max_length=160)
+    city: Optional[str] = Field(None, max_length=120)
+    country_id: Optional[int] = None            # preserved from Country List (id) for future reference
+    country_name: Optional[str] = Field(None, max_length=120)
     previous_work_experience: Optional[List[WorkExperience]] = None
     linkedin_url: Optional[str] = Field(None, max_length=400)
     industries: Optional[List[str]] = None      # L2 segment names
@@ -154,6 +157,9 @@ class ClientContactUpdate(BaseModel):
     client_name: Optional[str] = Field(None, max_length=200)
     designation: Optional[str] = Field(None, max_length=200)
     base_location: Optional[str] = Field(None, max_length=160)
+    city: Optional[str] = Field(None, max_length=120)
+    country_id: Optional[int] = None
+    country_name: Optional[str] = Field(None, max_length=120)
     previous_work_experience: Optional[List[WorkExperience]] = None
     linkedin_url: Optional[str] = Field(None, max_length=400)
     industries: Optional[List[str]] = None

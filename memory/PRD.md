@@ -1,6 +1,17 @@
 # Infollion Utilities — PRD
 
 
+## CRM → Client Contacts — Base Location split into City + Country + auto Region (Aug 07 2026)
+- **Base Location → City + Country**: the single "Base Location" field in the Add/Edit Client Contact form (`ContactFormDialog`) is now two required fields — **City** (text `Input`) and **Country** (searchable dropdown).
+- **Country data**: new `frontend/src/data/countries.js` (AUTO-GENERATED from the user-supplied `Country List.xlsx`, 197 rows). Exports `COUNTRIES`, `COUNTRY_OPTIONS`, `regionCountryMap` (verbatim business mapping), `REGION_LABELS`, `getCountryName(id)`, `getRegionByCountryId(id)`. The country **id is preserved** for future reference.
+- **Country dropdown UX**: new `frontend/src/components/CountrySelect.jsx` — a **single-select** clone of the CRM → Client → Link Segmentation "Select segmentation" dropdown (`SegLinkMultiSelect`): orange `#ec9324` accent, inline search, `createPortal` popup that follows scroll/resize, checkmark on the selected row, outside-click/Esc close, clear (×) button.
+- **Backend** (`routers/client_contacts.py`): added `city: Optional[str]`, `country_id: Optional[int]`, `country_name: Optional[str]` to `ClientContactBase` and `ClientContactUpdate`. Legacy `base_location` kept and auto-composed as `"City, Country"` on save (frontend) so existing list/card/export displays keep working. Verified persistence via create→get→delete (city/country_id/country_name round-trip OK).
+- **Region (detail view)**: `ClientContactDetail` now shows a **Location** card with City · Country · **Region**, where Region is auto-derived from `country_id` via `getRegionByCountryId` (first-match-wins on the user's overlapping id lists). Region renders as an orange badge (e.g. India id 39 → **LATAM** per the supplied map).
+- Edit flow: legacy records (only `base_location`) pre-fill City from `base_location`; user picks a Country on next edit.
+- Verified via 3 Playwright screenshots (Country dropdown open+search, form with City/Country, detail Location card w/ Region=LATAM). Testing agent NOT deployed per user instruction.
+
+
+
 ## CRM Forms — Notched-Outline Field Headers (Aug 07 2026)
 - **Goal**: Make every field header/label in the CRM Add/Edit forms sit "notched" on the control's top border (Material-UI outlined style) so the header stays visible whether the field is **blank or filled** — matching the user-supplied reference screenshots.
 - **New shared component**: `frontend/src/components/FloatingField.jsx` — wraps a bordered control and renders the label absolutely at `-top-2 left-3` with a solid `labelBg` (default `bg-white`, override to `bg-gray-50` on grey surfaces) punching through the border.
