@@ -33,7 +33,6 @@ import ZoomOutIcon from "@mui/icons-material/ZoomOut";
 import CenterFocusStrong from "@mui/icons-material/CenterFocusStrong";
 import ChevronDown from "@mui/icons-material/KeyboardArrowDown";
 import AccountTree from "@mui/icons-material/AccountTreeOutlined";
-import CloseIcon from "@mui/icons-material/Close";
 
 const BASE_COLOR = "#ec9324";   // Infollion — brand orange
 const CLIENT_COLOR = "#8b5cf6"; // client — violet
@@ -422,6 +421,9 @@ function MappingCanvas({
               const isFocus = focusId === n.id;
               const muted = activeId && relatedIds && !relatedIds.has(n.id);
               const cnt = (segContacts?.counts || {})[n.name];
+              const hasCnt = cnt != null;
+              const pillW = hasCnt ? Math.max(20, 12 + String(cnt).length * 7) : 0;
+              const labelX = hasCnt ? linkedX + 12 + pillW + 8 : linkedX + 14;
               return (
                 <g key={n.id} style={{ cursor: "pointer" }}
                   onClick={(e) => { e.stopPropagation(); setFocusId(n.id === focusId ? null : n.id); }}
@@ -434,16 +436,20 @@ function MappingCanvas({
                     opacity={muted ? 0.5 : 1}
                     stroke={isFocus ? "#fff" : "none"} strokeWidth={isFocus ? 2 : 0} />
                   {isFocus && <circle cx={linkedX} cy={y} r={12} fill="none" stroke={CLIENT_COLOR} strokeWidth={2} opacity={0.4} />}
-                  <text x={linkedX + 14} y={y + 4} textAnchor="start" fontSize={13}
+                  {/* client-contact count badge */}
+                  {hasCnt && (
+                    <g opacity={muted ? 0.45 : 1} data-testid={`crm-overview-count-${n.i}`}>
+                      <rect x={linkedX + 12} y={y - 8} width={pillW} height={16} rx={8}
+                        fill={CLIENT_COLOR} fillOpacity={0.16} stroke={CLIENT_COLOR} strokeOpacity={0.35} strokeWidth={0.75} />
+                      <text x={linkedX + 12 + pillW / 2} y={y + 3.5} textAnchor="middle"
+                        fontSize={10.5} fontWeight={800} fill="#6d28d9">{cnt}</text>
+                    </g>
+                  )}
+                  <text x={labelX} y={y + 4} textAnchor="start" fontSize={13}
                     fontWeight={isFocus ? 700 : hasLink ? 600 : 500}
                     fill={isFocus ? "#111827" : muted ? "#9ca3af" : "#374151"}
                     opacity={muted ? 0.55 : 1}>
                     {n.name}
-                    {cnt != null && (
-                      <tspan dx={7} fontSize={11} fontWeight={700} fill={CLIENT_COLOR} opacity={muted ? 0.55 : 0.95}>
-                        ● {cnt}
-                      </tspan>
-                    )}
                   </text>
                 </g>
               );
@@ -521,7 +527,6 @@ function MappingCanvas({
       {focusedNode && (
         <SegmentModal
           node={focusedNode}
-          clientName={clientName}
           ribbons={ribbons}
           segContacts={segContacts}
           onClose={() => setFocusId(null)}
@@ -539,16 +544,14 @@ function MappingCanvas({
 }
 
 // ============================================================
-// "Selected Segment" popup — segment name + list of client contacts
+// "Selected Segment" panel — floating in the corner (same as before),
+// now listing the segment's client contacts.
 // ============================================================
-function SegmentModal({ node, clientName, ribbons, segContacts, onClose }) {
+function SegmentModal({ node, ribbons, segContacts, onClose }) {
   const isLeft = node.side === "L";
   const dotColor = isLeft ? BASE_COLOR : CLIENT_COLOR;
   const bySeg = segContacts?.contacts || {};
 
-  // Resolve the client contacts for this segment.
-  // - Right (client) segment: contacts mapped directly to it.
-  // - Left (Infollion) segment: union of contacts across all linked client segments.
   const { contacts, linkedSegs } = useMemo(() => {
     if (!isLeft) {
       return { contacts: bySeg[node.name] || [], linkedSegs: [node.name] };
@@ -565,72 +568,53 @@ function SegmentModal({ node, clientName, ribbons, segContacts, onClose }) {
     return { contacts: list, linkedSegs: segs };
   }, [isLeft, node, ribbons, bySeg]);
 
-  // close on Escape
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   return (
     <div
-      className="absolute inset-0 z-30 flex items-center justify-center p-4"
-      data-testid="crm-overview-segment-modal"
-      onMouseDown={onClose}
+      className="absolute top-3 right-16 z-20 w-[300px] max-h-[calc(100%-24px)] bg-white rounded-xl border border-orange-200 shadow-[0_12px_32px_rgba(0,0,0,0.16)] flex flex-col overflow-hidden"
+      data-testid="crm-overview-info-panel"
+      onMouseDown={(e) => e.stopPropagation()}
     >
-      {/* backdrop — light so the highlighted mapping stays visible behind */}
-      <div className="absolute inset-0 bg-gray-900/25 backdrop-blur-[1px]" />
-
-      <div
-        className="relative w-[440px] max-w-[92vw] max-h-[80vh] bg-white rounded-2xl shadow-[0_24px_64px_rgba(0,0,0,0.28)] border border-gray-100 flex flex-col overflow-hidden"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        {/* header */}
-        <div className="px-5 pt-4 pb-3 border-b border-gray-100">
-          <div className="flex items-start justify-between">
-            <div className="text-[11px] uppercase tracking-wider text-[#ec9324] font-bold">Selected Segment</div>
-            <button onClick={onClose} data-testid="crm-overview-modal-close" className="w-7 h-7 -mr-1 -mt-1 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-800 hover:bg-gray-100 transition-colors">
-              <CloseIcon sx={{ fontSize: 18 }} />
-            </button>
-          </div>
-          <div className="flex items-center gap-2 mt-1.5">
-            <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: dotColor }} />
-            <h3 className="text-xl font-semibold text-gray-900 leading-tight">{node.name}</h3>
-          </div>
-          <div className="mt-1 text-[12px] text-gray-500">
-            <b className="text-gray-800">{contacts.length}</b> client contact{contacts.length === 1 ? "" : "s"}
-            {isLeft && linkedSegs.length > 0 && (
-              <span> · across {linkedSegs.length} linked {clientName} segment{linkedSegs.length === 1 ? "" : "s"}</span>
-            )}
-          </div>
+      {/* header */}
+      <div className="px-4 pt-3 pb-2.5 border-b border-gray-100 flex-shrink-0">
+        <div className="flex items-start justify-between">
+          <div className="text-[10px] uppercase tracking-wider text-[#ec9324] font-bold">Selected Segment</div>
+          <button onClick={onClose} data-testid="crm-overview-panel-close" className="text-gray-400 hover:text-gray-700 text-xs font-medium">Clear</button>
         </div>
-
-        {/* contact list */}
-        <div className="flex-1 overflow-y-auto px-3 py-2">
-          {contacts.length === 0 ? (
-            <div className="px-2 py-8 text-center text-sm text-gray-400 italic">
-              No client contacts mapped to this segment yet.
-            </div>
-          ) : (
-            <ul className="space-y-1">
-              {contacts.map((c) => (
-                <li key={c.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-50">
-                  <span className="w-8 h-8 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center flex-shrink-0 text-[11px] font-bold">
-                    {(c.name || "?").split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-gray-900 truncate">
-                      {c.name}
-                    </div>
-                    <div className="text-[12px] text-gray-500 truncate">
-                      {[c.designation, c.base_location].filter(Boolean).join(" · ") || c.email || "—"}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+        <div className="flex items-center gap-2 mt-1">
+          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: dotColor }} />
+          <div className="text-lg font-semibold text-gray-900 leading-tight">{node.name}</div>
+        </div>
+        <div className="text-[11px] text-gray-500 mt-0.5">
+          <b className="text-gray-800">{contacts.length}</b> client contact{contacts.length === 1 ? "" : "s"}
+          {isLeft && linkedSegs.length > 0 && (
+            <span> · across {linkedSegs.length} linked segment{linkedSegs.length === 1 ? "" : "s"}</span>
           )}
         </div>
+      </div>
+
+      {/* contact list */}
+      <div className="flex-1 overflow-y-auto px-2 py-1.5 min-h-0">
+        {contacts.length === 0 ? (
+          <div className="px-2 py-6 text-center text-xs text-gray-400 italic">
+            No client contacts mapped to this segment yet.
+          </div>
+        ) : (
+          <ul className="space-y-0.5">
+            {contacts.map((c) => (
+              <li key={c.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-gray-50">
+                <span className="w-7 h-7 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">
+                  {(c.name || "?").split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-medium text-gray-900 truncate">{c.name}</div>
+                  <div className="text-[11px] text-gray-500 truncate">
+                    {[c.designation, c.base_location].filter(Boolean).join(" · ") || c.email || "—"}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
