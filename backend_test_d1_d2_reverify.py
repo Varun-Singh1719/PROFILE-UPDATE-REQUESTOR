@@ -13,7 +13,7 @@ import time
 from typing import Dict, List, Tuple, Optional
 
 # Configuration
-BASE_URL = "https://segment-metrics-bar.preview.emergentagent.com/api"
+BASE_URL = "https://form-view-update.preview.emergentagent.com/api"
 SUPER_ADMIN_EMAIL = "admin@ticketing.com"
 SUPER_ADMIN_PASSWORD = "Admin@123"
 
