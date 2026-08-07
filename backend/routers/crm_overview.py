@@ -81,3 +81,34 @@ async def update_overview_meta(body: OverviewMetaUpdate, user=Depends(get_curren
     await db[SETTINGS_COLL].update_one({"key": META_KEY}, {"$set": update})
     doc = await db[SETTINGS_COLL].find_one({"key": META_KEY})
     return _clean(doc or {})
+
+
+@api_router.get("/crm/overview/segment-contacts")
+async def get_segment_contacts(client_name: str, user=Depends(get_current_user)):
+    """For the given client, return the client contacts grouped by the
+    Level-2 segment they are mapped to (via their `industries` list), plus a
+    per-segment count. Powers the segment count badges and the "Selected
+    Segment" popup on the Cross-Segmentation Overview page."""
+    counts: dict = {}
+    contacts: dict = {}
+    cursor = db["client_contacts"].find(
+        {"client_name": client_name},
+        {"_id": 0, "id": 1, "name": 1, "designation": 1, "email": 1,
+         "base_location": 1, "industries": 1, "display_id": 1},
+    )
+    async for c in cursor:
+        segs = c.get("industries") or []
+        info = {
+            "id": c.get("id"),
+            "display_id": c.get("display_id"),
+            "name": c.get("name"),
+            "designation": c.get("designation"),
+            "email": c.get("email"),
+            "base_location": c.get("base_location"),
+        }
+        for seg in segs:
+            counts[seg] = counts.get(seg, 0) + 1
+            contacts.setdefault(seg, []).append(info)
+    for seg in contacts:
+        contacts[seg].sort(key=lambda x: (x.get("name") or "").lower())
+    return {"counts": counts, "contacts": contacts}
