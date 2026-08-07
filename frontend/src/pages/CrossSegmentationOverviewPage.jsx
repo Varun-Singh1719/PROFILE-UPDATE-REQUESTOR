@@ -332,6 +332,15 @@ function MappingCanvas({
   // Selection FREEZES the view: once a segment is focused, hover is ignored
   // (focusId wins). Hover only drives highlighting when nothing is selected.
   const activeId = focusId || hoverId;
+
+  // Clearing the selection must INSTANTLY restore the default view — reset both
+  // the frozen selection AND any stale hover state on the same click, so the
+  // visualization does not wait for a subsequent mousemove/hover to redraw.
+  const clearSelection = useCallback(() => {
+    setFocusId(null);
+    setHoverId(null);
+  }, []);
+
   const relatedIds = useMemo(() => {
     if (!activeId) return null;
     const s = new Set([activeId]);
@@ -367,7 +376,7 @@ function MappingCanvas({
           className="block cursor-grab active:cursor-grabbing"
           style={{ font: "13px Inter, system-ui, sans-serif" }}
           data-testid="crm-overview-svg"
-          onClick={() => setFocusId(null)}
+          onClick={() => clearSelection()}
         >
           <defs>
             <linearGradient id="ov-ribbon" x1="0" x2="1" y1="0" y2="0">
@@ -512,7 +521,7 @@ function MappingCanvas({
           node={focusedNode}
           ribbons={ribbons}
           segContacts={segContacts}
-          onClose={() => setFocusId(null)}
+          onClose={() => clearSelection()}
         />
       )}
 
