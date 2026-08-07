@@ -33,6 +33,7 @@ import ZoomOutIcon from "@mui/icons-material/ZoomOut";
 import CenterFocusStrong from "@mui/icons-material/CenterFocusStrong";
 import ChevronDown from "@mui/icons-material/KeyboardArrowDown";
 import AccountTree from "@mui/icons-material/AccountTreeOutlined";
+import CloseIcon from "@mui/icons-material/Close";
 
 const BASE_COLOR = "#ec9324";   // Infollion — brand orange
 const CLIENT_COLOR = "#8b5cf6"; // client — violet
@@ -328,7 +329,9 @@ function MappingCanvas({
   };
 
   // ----- highlight logic -----
-  const activeId = hoverId || focusId;
+  // Selection FREEZES the view: once a segment is focused, hover is ignored
+  // (focusId wins). Hover only drives highlighting when nothing is selected.
+  const activeId = focusId || hoverId;
   const relatedIds = useMemo(() => {
     if (!activeId) return null;
     const s = new Set([activeId]);
@@ -409,13 +412,18 @@ function MappingCanvas({
               const hasLink = ribbons.some((r) => r.srcId === n.id);
               const isFocus = focusId === n.id;
               const muted = activeId && relatedIds && !relatedIds.has(n.id);
+              // Tight hit area around the dot + label ONLY (no full-row band),
+              // so blank space / margins neither hover-highlight nor select.
+              const approxW = (n.name || "").length * 7.2;
+              const hitX = baseX - 18 - approxW;
+              const hitW = approxW + 32;
               return (
                 <g key={n.id} style={{ cursor: "pointer" }}
                   onClick={(e) => { e.stopPropagation(); setFocusId(n.id === focusId ? null : n.id); }}
-                  onMouseEnter={() => setHoverId(n.id)}
-                  onMouseLeave={() => setHoverId(null)}
+                  onMouseEnter={() => { if (!focusId) setHoverId(n.id); }}
+                  onMouseLeave={() => { if (!focusId) setHoverId(null); }}
                   data-testid={`crm-overview-left-node-${n.i}`}>
-                  <rect x={0} y={y - 15} width={baseX + 10} height={30} fill="transparent" />
+                  <rect x={hitX} y={y - 13} width={hitW} height={26} fill="transparent" />
                   <text x={baseX - 14} y={y + 4} textAnchor="end" fontSize={13}
                     fontWeight={isFocus ? 700 : hasLink ? 600 : 500}
                     fill={isFocus ? "#111827" : muted ? "#9ca3af" : "#374151"}
@@ -441,16 +449,20 @@ function MappingCanvas({
               const hasCnt = cnt != null;
               const nameX = linkedX + 14;
               // rough width estimate so the count pill sits AFTER the name
-              const approxNameW = (n.name || "").length * 7.0;
+              const approxNameW = (n.name || "").length * 7.2;
               const pillW = hasCnt ? Math.max(20, 12 + String(cnt).length * 7) : 0;
               const pillX = nameX + approxNameW + 8;
+              // Tight hit area around dot + label (+ count pill) ONLY.
+              const hitRight = hasCnt ? (pillX + pillW) : (nameX + approxNameW);
+              const hitX = linkedX - 12;
+              const hitW = hitRight - hitX + 6;
               return (
                 <g key={n.id} style={{ cursor: "pointer" }}
                   onClick={(e) => { e.stopPropagation(); setFocusId(n.id === focusId ? null : n.id); }}
-                  onMouseEnter={() => setHoverId(n.id)}
-                  onMouseLeave={() => setHoverId(null)}
+                  onMouseEnter={() => { if (!focusId) setHoverId(n.id); }}
+                  onMouseLeave={() => { if (!focusId) setHoverId(null); }}
                   data-testid={`crm-overview-right-node-${n.i}`}>
-                  <rect x={linkedX - 10} y={y - 15} width={w - linkedX + 10} height={30} fill="transparent" />
+                  <rect x={hitX} y={y - 13} width={hitW} height={26} fill="transparent" />
                   <circle cx={linkedX} cy={y} r={isFocus ? 7 : 5}
                     fill={hasLink || isFocus ? CLIENT_COLOR : "#e5e7eb"}
                     opacity={muted ? 0.5 : 1}
@@ -463,13 +475,12 @@ function MappingCanvas({
                     opacity={muted ? 0.55 : 1}>
                     {n.name}
                   </text>
-                  {/* client-contact count badge — shown AFTER the segment name */}
+                  {/* client-contact count badge — purple bg + white text (matches contact initials) */}
                   {hasCnt && (
                     <g opacity={muted ? 0.45 : 1} data-testid={`crm-overview-count-${n.i}`}>
-                      <rect x={pillX} y={y - 8} width={pillW} height={16} rx={8}
-                        fill={CLIENT_COLOR} fillOpacity={0.16} stroke={CLIENT_COLOR} strokeOpacity={0.35} strokeWidth={0.75} />
+                      <rect x={pillX} y={y - 8} width={pillW} height={16} rx={8} fill="#7c3aed" />
                       <text x={pillX + pillW / 2} y={y + 3.5} textAnchor="middle"
-                        fontSize={10.5} fontWeight={800} fill="#6d28d9">{cnt}</text>
+                        fontSize={10.5} fontWeight={800} fill="#ffffff">{cnt}</text>
                     </g>
                   )}
                 </g>
@@ -482,7 +493,7 @@ function MappingCanvas({
       {/* ---- Floating glass ZOOM TOOLBAR (top-right) ---- */}
       {!loading && infollionExists && (
         <div
-          className="absolute top-3 right-3 z-10 flex flex-col
+          className="absolute top-3 right-3 z-30 flex flex-col
                      bg-white/40 backdrop-blur-xl backdrop-saturate-150
                      border border-white/70 ring-1 ring-black/5
                      rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.10)]"
@@ -524,7 +535,7 @@ function SegmentModal({ node, ribbons, segContacts, onClose }) {
   const dotColor = isLeft ? BASE_COLOR : CLIENT_COLOR;
   const bySeg = segContacts?.contacts || {};
 
-  const { contacts, linkedSegs } = useMemo(() => {
+  const { contacts } = useMemo(() => {
     if (!isLeft) {
       return { contacts: bySeg[node.name] || [], linkedSegs: [node.name] };
     }
@@ -550,17 +561,26 @@ function SegmentModal({ node, ribbons, segContacts, onClose }) {
       <div className="px-4 pt-3 pb-2.5 border-b border-gray-100 flex-shrink-0">
         <div className="flex items-start justify-between">
           <div className="text-[10px] uppercase tracking-wider text-[#ec9324] font-bold">Selected Segment</div>
-          <button onClick={onClose} data-testid="crm-overview-panel-close" className="text-gray-400 hover:text-gray-700 text-xs font-medium">Clear</button>
+          <button
+            type="button"
+            onClick={onClose}
+            data-testid="crm-overview-panel-close"
+            aria-label="Close"
+            title="Close"
+            className="group relative inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-500 hover:text-[#ec9324] hover:bg-white/60 transition-colors -mt-0.5 -mr-1"
+          >
+            <CloseIcon sx={{ fontSize: 16 }} />
+            <span className="pointer-events-none absolute right-full mr-2 top-1/2 -translate-y-1/2 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50 shadow-lg">
+              Close
+            </span>
+          </button>
         </div>
         <div className="flex items-center gap-2 mt-1">
           <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: dotColor }} />
           <div className="text-lg font-semibold text-gray-900 leading-tight">{node.name}</div>
         </div>
         <div className="text-[11px] text-gray-500 mt-0.5">
-          <b className="text-gray-800">{contacts.length}</b> client contact{contacts.length === 1 ? "" : "s"}
-          {isLeft && linkedSegs.length > 0 && (
-            <span> · across {linkedSegs.length} linked segment{linkedSegs.length === 1 ? "" : "s"}</span>
-          )}
+          Client Contact : <b className="text-gray-800">{contacts.length}</b>
         </div>
       </div>
 
