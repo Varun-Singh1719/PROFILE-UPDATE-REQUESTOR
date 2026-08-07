@@ -209,9 +209,10 @@ export default function SearchSelect({
       {open && typeof document !== "undefined" && createPortal(
         <div
           ref={popRef}
-          style={{ position: "fixed", top: pos.top, left: pos.left, width: pos.width, zIndex: 9999 }}
+          style={{ position: "fixed", top: pos.top, left: pos.left, width: pos.width, zIndex: 9999, pointerEvents: "auto" }}
           onPointerDownCapture={(e) => e.stopPropagation()}
           onMouseDownCapture={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
           onWheel={(e) => e.stopPropagation()}
           className="bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden"
           data-testid={testId ? `${testId}-popup` : undefined}
