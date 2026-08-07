@@ -105,6 +105,23 @@ const SORT_OPTIONS = [
   { value: "id_asc", label: "ID (ascending)" },
 ];
 
+// Required fields for a client contact (everything EXCEPT Web Handle,
+// Industry and Previous Work Experience). Order = validation message order.
+const REQUIRED_CC_FIELDS = [
+  ["name", "Name"],
+  ["designation", "Designation"],
+  ["email", "Email"],
+  ["phone", "Phone No."],
+  ["client_name", "Client Name"],
+  ["base_location", "Base Location"],
+];
+
+// Returns the label of the first missing required field, or null when valid.
+function firstMissingContactField(form) {
+  const miss = REQUIRED_CC_FIELDS.find(([k]) => !String(form[k] || "").trim());
+  return miss ? miss[1] : null;
+}
+
 // -------- helpers --------
 function fmtDate(iso) {
   if (!iso) return "—";
@@ -327,8 +344,9 @@ function ClientContactsList() {
   };
 
   const onSave = async (opts = {}) => {
-    if (!form.name.trim()) {
-      notify.error("Name is required");
+    const missing = firstMissingContactField(form);
+    if (missing) {
+      notify.error(`${missing} is required`);
       return;
     }
     setSaving(true);
@@ -939,14 +957,14 @@ function ContactFormDialog({
                 data-testid="cc-name"
               />
             </Field>
-            <Field label="Designation">
+            <Field label="Designation *">
               <Input
                 value={form.designation}
                 onChange={(e) => patch("designation", e.target.value)}
                 placeholder="e.g. Partner, Director"
               />
             </Field>
-            <Field label="Email">
+            <Field label="Email *">
               <Input
                 type="email"
                 value={form.email}
@@ -954,7 +972,7 @@ function ContactFormDialog({
                 placeholder="name@company.com"
               />
             </Field>
-            <Field label="Phone No.">
+            <Field label="Phone No. *">
               <div className="grid grid-cols-[110px_1fr] gap-2">
                 <ISDPicker
                   value={form.phone_isd || DEFAULT_ISD}
@@ -970,7 +988,7 @@ function ContactFormDialog({
                 />
               </div>
             </Field>
-            <Field label="Client Name (Level 1)">
+            <Field label="Client Name (Level 1) *">
               <SearchSelect
                 options={l1Options}
                 value={form.client_name || ""}
@@ -979,7 +997,7 @@ function ContactFormDialog({
                 testId="cc-client-name"
               />
             </Field>
-            <Field label="Base Location">
+            <Field label="Base Location *">
               <Input
                 value={form.base_location}
                 onChange={(e) => patch("base_location", e.target.value)}
@@ -1189,7 +1207,8 @@ function ClientContactDetail({ contactId }) {
   const [dupState, setDupState] = useState(null);
 
   const onSave = async (opts = {}) => {
-    if (!form.name.trim()) { notify.error("Name is required"); return; }
+    const missing = firstMissingContactField(form);
+    if (missing) { notify.error(`${missing} is required`); return; }
     setSaving(true);
     const forceParam = opts.force ? "?force=true" : "";
     try {
