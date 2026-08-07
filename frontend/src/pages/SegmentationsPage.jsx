@@ -4,7 +4,7 @@ import Layout from "../components/Layout";
 import api, { formatApiError } from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import { Label } from "../components/ui/label";
+import { FloatingField } from "../components/FloatingField";
 import { Textarea } from "../components/ui/textarea";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -1167,11 +1167,11 @@ function SegmentationFormDialog({ open, onOpenChange, editing, form, setForm, on
         <DialogHeader>
           <DialogTitle>{editing ? "Edit Segmentation" : "New Segmentation"}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 pt-2">
-          <div>
-            <Label htmlFor="seg-name">
-              Name <span className="text-red-500">*</span>
-            </Label>
+        <div className="space-y-5 pt-3">
+          <FloatingField
+            htmlFor="seg-name"
+            label={<>Name <span className="text-red-500">*</span></>}
+          >
             <Input
               id="seg-name"
               value={form.name}
@@ -1181,10 +1181,9 @@ function SegmentationFormDialog({ open, onOpenChange, editing, form, setForm, on
               maxLength={120}
               autoFocus
             />
-          </div>
+          </FloatingField>
 
-          <div>
-            <Label htmlFor="seg-description">Description</Label>
+          <FloatingField htmlFor="seg-description" label="Description">
             <Textarea
               id="seg-description"
               value={form.description}
@@ -1194,7 +1193,7 @@ function SegmentationFormDialog({ open, onOpenChange, editing, form, setForm, on
               rows={3}
               maxLength={2000}
             />
-          </div>
+          </FloatingField>
         </div>
         <DialogFooter>
           <Button

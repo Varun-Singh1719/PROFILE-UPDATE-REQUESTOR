@@ -31,7 +31,7 @@ import {
 } from "../components/ui/dialog";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import { Label } from "../components/ui/label";
+import { FloatingField } from "../components/FloatingField";
 import SearchSelect from "../components/SearchSelect";
 import Plus from "@mui/icons-material/AddOutlined";
 import Search from "@mui/icons-material/SearchOutlined";
@@ -288,27 +288,22 @@ export default function ClientsPage() {
               </DialogTitle>
             </DialogHeader>
 
-            <div className="space-y-4 py-2">
-              <div>
-                <Label htmlFor="client-name" className="text-xs uppercase tracking-wider text-gray-500 font-semibold">
-                  Name <span className="text-red-500">*</span>
-                </Label>
+            <div className="space-y-5 py-3">
+              <FloatingField
+                htmlFor="client-name"
+                label={<>Name <span className="text-red-500">*</span></>}
+              >
                 <Input
                   id="client-name"
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                   placeholder="e.g., Sequoia India"
                   data-testid="client-form-name"
-                  className="mt-1"
                   autoFocus
                 />
-              </div>
+              </FloatingField>
 
-              <div>
-                <Label className="text-xs uppercase tracking-wider text-gray-500 font-semibold">
-                  Type <span className="text-red-500">*</span>
-                </Label>
-              <div className="mt-1">
+              <FloatingField label={<>Type <span className="text-red-500">*</span></>}>
                 <SearchSelect
                   options={CLIENT_TYPES.map((t) => ({ value: t, label: t }))}
                   value={form.type || ""}
@@ -317,8 +312,7 @@ export default function ClientsPage() {
                   allowClear={false}
                   testId="client-form-type"
                 />
-              </div>
-              </div>
+              </FloatingField>
 
               {editing && (
                 <div className="text-[11px] text-gray-500 border border-gray-100 rounded-md px-3 py-2 bg-gray-50">

@@ -946,9 +946,9 @@ function ContactFormDialog({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-5 pt-2">
           {/* Primary fields */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-5">
             <Field label="Name *">
               <Input
                 value={form.name}
@@ -1007,10 +1007,7 @@ function ContactFormDialog({
           </div>
 
           {/* Web handle */}
-          <div>
-            <div className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide mb-1.5">
-              Web Handle
-            </div>
+          <Field label="Web Handle">
             <div className="flex items-center gap-2 border border-gray-200 rounded-md px-2 py-1.5 bg-white focus-within:border-[#ec9324]">
               <LinkedIn className="text-[#0a66c2] shrink-0" sx={{ fontSize: 18 }} />
               <input
@@ -1021,7 +1018,7 @@ function ContactFormDialog({
                 data-testid="cc-linkedin"
               />
             </div>
-          </div>
+          </Field>
 
           {/* Industry (L2) — same UX as Teams → Team Member */}
           <div className="relative">
@@ -1070,8 +1067,8 @@ function ContactFormDialog({
                   className="border border-gray-200 rounded-lg p-3 bg-gray-50"
                   data-testid={`cc-work-${i}`}
                 >
-                  <div className="grid grid-cols-2 gap-2">
-                    <Field label="Company Name">
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-4">
+                    <Field label="Company Name" labelBg="bg-gray-50">
                       <Input
                         value={w.company_name || ""}
                         onChange={(e) => setWork(i, "company_name", e.target.value)}
@@ -1079,21 +1076,21 @@ function ContactFormDialog({
                         data-testid={`cc-work-${i}-company`}
                       />
                     </Field>
-                    <Field label="Designation">
+                    <Field label="Designation" labelBg="bg-gray-50">
                       <Input
                         value={w.designation || ""}
                         onChange={(e) => setWork(i, "designation", e.target.value)}
                         placeholder="Designation"
                       />
                     </Field>
-                    <Field label="Start Date (Month & Year)">
+                    <Field label="Start Date (Month & Year)" labelBg="bg-gray-50">
                       <MonthYearPicker
                         value={w.start_month_year || ""}
                         onChange={(v) => setWork(i, "start_month_year", v)}
                         testId={`cc-work-${i}-start`}
                       />
                     </Field>
-                    <Field label="End Date (Month & Year)">
+                    <Field label="End Date (Month & Year)" labelBg="bg-gray-50">
                       <div className="flex items-center gap-2">
                         <MonthYearPicker
                           value={w.end_month_year || ""}
@@ -1138,14 +1135,18 @@ function ContactFormDialog({
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, labelBg = "bg-white", children }) {
   return (
-    <label className="block">
-      <span className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide">
-        {label}
-      </span>
-      <div className="mt-1">{children}</div>
-    </label>
+    <div className="relative">
+      {label != null && label !== "" && (
+        <label
+          className={`absolute -top-2 left-3 px-1.5 ${labelBg} text-[11px] font-medium text-gray-500 leading-none z-10 pointer-events-none`}
+        >
+          {label}
+        </label>
+      )}
+      {children}
+    </div>
   );
 }
 

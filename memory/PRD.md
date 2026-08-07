@@ -1,6 +1,20 @@
 # Infollion Utilities — PRD
 
 
+## CRM Forms — Notched-Outline Field Headers (Aug 07 2026)
+- **Goal**: Make every field header/label in the CRM Add/Edit forms sit "notched" on the control's top border (Material-UI outlined style) so the header stays visible whether the field is **blank or filled** — matching the user-supplied reference screenshots.
+- **New shared component**: `frontend/src/components/FloatingField.jsx` — wraps a bordered control and renders the label absolutely at `-top-2 left-3` with a solid `labelBg` (default `bg-white`, override to `bg-gray-50` on grey surfaces) punching through the border.
+- **Applied to (3 of the 4 CRM pages that have data-entry forms)**:
+  - **Clients** (`ClientsPage.jsx`) — Name, Type now use `FloatingField` (removed stacked shadcn `Label`).
+  - **Segmentations** (`SegmentationsPage.jsx`) — Name, Description now use `FloatingField`.
+  - **Client Contacts** (`ClientContactsPage.jsx`) — local `Field` wrapper rewritten to the notched style (auto-updates Name / Designation / Email / Phone / Client Name / Base Location / work-experience rows); "Web Handle" converted; work-experience `Field`s pass `labelBg="bg-gray-50"`; grid spacing bumped to `gap-y-5` so labels don't crowd.
+  - **Overview** (`CrossSegmentationOverviewPage.jsx`) — **skipped** (it's a zoom/pan canvas with no data-entry form, per user).
+- Existing orange (`#ec9324`) focus accent preserved on all controls.
+- **Env restore**: recreated missing `backend/.env` (Atlas `cluster0.vmgql1i` · `app_db` · user `sakshamsinghal_db_user`, per user creds; new JWT_SECRET + FERNET_KEY) and `frontend/.env` (`REACT_APP_BACKEND_URL` = preview URL). Backend was crash-looping (KeyError JWT_SECRET) before this. Login verified `admin@ticketing.com / Admin@123`.
+- Testing agent NOT deployed (per user instruction). Verified via 4 Playwright screenshots: CC blank, CC filled (incl. grey work-experience card), Clients form, Segmentations form.
+
+
+
 ## CRM → Segmentation — Cross-Segmentation Level-2 Linking UI/UX Mockups (Aug 04 2026)
 - **Purpose**: static visual mockups to compare 3 candidate UI/UX approaches for linking a Level-2 node of one Segmentation to Level-2 nodes of other Segmentations (many-to-many tag). **Mockups only — no backend wiring, no persistence.**
 - **New route**: `/crm/segmentation-link-mockups` (registered in `App.js`, gated `ADMIN_ROLES`).
