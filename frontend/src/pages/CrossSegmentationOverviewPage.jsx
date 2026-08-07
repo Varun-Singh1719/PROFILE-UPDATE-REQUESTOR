@@ -173,21 +173,40 @@ export default function CrossSegmentationOverviewPage() {
   const isDummy = !hasReal && (clientName || "").toLowerCase() === BCG_NAME.toLowerCase();
   const mappings = hasReal ? realMappings : (isDummy ? buildDummyMappings(leftNames, rightNames) : {});
 
+  const totalMappings = useMemo(() => {
+    let n = 0;
+    Object.entries(mappings || {}).forEach(([l, targets]) => {
+      (targets || []).forEach((r) => {
+        if (leftNames.includes(l) && rightNames.includes(r)) n += 1;
+      });
+    });
+    return n;
+  }, [mappings, leftNames, rightNames]);
+
   return (
     <Layout
       title={meta?.tab_name || "Overview"}
       fullBleed
       contentClassName="h-[calc(100vh-56px)] flex flex-col"
     >
+      {/* Full-width summary bar between the top bar and the mapping canvas */}
+      <SegmentationLinksBar
+        baseName={data?.infollion?.name || BASE_NAME}
+        clientName={clientName}
+        clients={clients}
+        clientId={clientId}
+        onSelectClient={setClientId}
+        infollionCount={leftNames.length}
+        clientCount={rightNames.length}
+        totalMappings={totalMappings}
+        loading={loading}
+      />
       <div className="flex-1 min-h-0 relative bg-white" data-testid="crm-overview-page">
         <MappingCanvas
           key={clientId + ":" + (hasReal ? "real" : "dummy")}
           loading={loading}
           baseName={data?.infollion?.name || BASE_NAME}
           clientName={clientName}
-          clients={clients}
-          clientId={clientId}
-          onSelectClient={setClientId}
           leftNames={leftNames}
           rightNames={rightNames}
           mappings={mappings}
@@ -203,7 +222,7 @@ export default function CrossSegmentationOverviewPage() {
 // Full-page mapping canvas — SVG ribbons + d3 zoom/pan/fit + floating panels
 // ============================================================
 function MappingCanvas({
-  loading, baseName, clientName, clients, clientId, onSelectClient,
+  loading, baseName, clientName,
   leftNames, rightNames, mappings, segContacts, infollionExists,
 }) {
   const wrapRef = useRef(null);
@@ -230,8 +249,6 @@ function MappingCanvas({
     });
     return { leftNodes: ln, rightNodes: rn, ribbons: rb };
   }, [leftNames, rightNames, mappings]);
-
-  const totalMappings = ribbons.length;
 
   // ----- geometry -----
   const geom = useMemo(() => {
@@ -422,8 +439,11 @@ function MappingCanvas({
               const muted = activeId && relatedIds && !relatedIds.has(n.id);
               const cnt = (segContacts?.counts || {})[n.name];
               const hasCnt = cnt != null;
+              const nameX = linkedX + 14;
+              // rough width estimate so the count pill sits AFTER the name
+              const approxNameW = (n.name || "").length * 7.0;
               const pillW = hasCnt ? Math.max(20, 12 + String(cnt).length * 7) : 0;
-              const labelX = hasCnt ? linkedX + 12 + pillW + 8 : linkedX + 14;
+              const pillX = nameX + approxNameW + 8;
               return (
                 <g key={n.id} style={{ cursor: "pointer" }}
                   onClick={(e) => { e.stopPropagation(); setFocusId(n.id === focusId ? null : n.id); }}
@@ -436,76 +456,28 @@ function MappingCanvas({
                     opacity={muted ? 0.5 : 1}
                     stroke={isFocus ? "#fff" : "none"} strokeWidth={isFocus ? 2 : 0} />
                   {isFocus && <circle cx={linkedX} cy={y} r={12} fill="none" stroke={CLIENT_COLOR} strokeWidth={2} opacity={0.4} />}
-                  {/* client-contact count badge */}
-                  {hasCnt && (
-                    <g opacity={muted ? 0.45 : 1} data-testid={`crm-overview-count-${n.i}`}>
-                      <rect x={linkedX + 12} y={y - 8} width={pillW} height={16} rx={8}
-                        fill={CLIENT_COLOR} fillOpacity={0.16} stroke={CLIENT_COLOR} strokeOpacity={0.35} strokeWidth={0.75} />
-                      <text x={linkedX + 12 + pillW / 2} y={y + 3.5} textAnchor="middle"
-                        fontSize={10.5} fontWeight={800} fill="#6d28d9">{cnt}</text>
-                    </g>
-                  )}
-                  <text x={labelX} y={y + 4} textAnchor="start" fontSize={13}
+                  {/* segment name */}
+                  <text x={nameX} y={y + 4} textAnchor="start" fontSize={13}
                     fontWeight={isFocus ? 700 : hasLink ? 600 : 500}
                     fill={isFocus ? "#111827" : muted ? "#9ca3af" : "#374151"}
                     opacity={muted ? 0.55 : 1}>
                     {n.name}
                   </text>
+                  {/* client-contact count badge — shown AFTER the segment name */}
+                  {hasCnt && (
+                    <g opacity={muted ? 0.45 : 1} data-testid={`crm-overview-count-${n.i}`}>
+                      <rect x={pillX} y={y - 8} width={pillW} height={16} rx={8}
+                        fill={CLIENT_COLOR} fillOpacity={0.16} stroke={CLIENT_COLOR} strokeOpacity={0.35} strokeWidth={0.75} />
+                      <text x={pillX + pillW / 2} y={y + 3.5} textAnchor="middle"
+                        fontSize={10.5} fontWeight={800} fill="#6d28d9">{cnt}</text>
+                    </g>
+                  )}
                 </g>
               );
             })}
           </g>
         </svg>
       )}
-
-      {/* ---- Floating glass HEADER (top-left) ---- */}
-      <div
-        className="absolute top-3 left-3 z-10 flex items-center gap-2 flex-wrap
-                   bg-white/50 backdrop-blur-xl backdrop-saturate-150
-                   border border-white/70 ring-1 ring-black/5
-                   rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.10)] px-2.5 py-1.5"
-        data-testid="crm-overview-header-panel"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <div className="w-7 h-7 rounded-md bg-[#ec9324]/15 text-[#ec9324] flex items-center justify-center flex-shrink-0">
-          <AccountTree sx={{ fontSize: 16 }} />
-        </div>
-        <span className="text-[14px] font-semibold text-gray-900">Linked Segmentation</span>
-        <div className="w-px h-6 bg-black/10 mx-0.5" />
-        {/* base → client */}
-        <span className="inline-flex items-center gap-1.5">
-          <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[9px] font-bold" style={{ background: BASE_COLOR }}>IR</span>
-          <span className="text-[13px] font-semibold text-gray-900">{BASE_NAME}</span>
-        </span>
-        <ChevronDown sx={{ fontSize: 16 }} className="text-gray-400 -rotate-90" />
-        <span className="inline-flex items-center gap-1.5">
-          <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[9px] font-bold" style={{ background: CLIENT_COLOR }}>
-            {(clientName || "?").slice(0, 2).toUpperCase()}
-          </span>
-          <div className="relative flex items-center">
-            <select
-              value={clientId || ""}
-              onChange={(e) => onSelectClient(e.target.value)}
-              data-testid="crm-overview-client-select"
-              className="appearance-none pr-5 text-[13px] font-semibold bg-transparent border-0 p-0 outline-none cursor-pointer text-gray-900 max-w-[220px] truncate"
-            >
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            <ChevronDown sx={{ fontSize: 16 }} className="absolute right-0 text-gray-400 pointer-events-none" />
-          </div>
-        </span>
-        <div className="w-px h-6 bg-black/10 mx-0.5" />
-        {/* compact stats */}
-        <span className="text-[11px] text-gray-500">
-          <b className="text-gray-900">{leftNames.length}</b> Infollion
-          <span className="mx-1 text-gray-300">·</span>
-          <b className="text-gray-900">{rightNames.length}</b> Client
-          <span className="mx-1 text-gray-300">·</span>
-          <b className="text-gray-900">{totalMappings}</b> Mappings
-        </span>
-      </div>
 
       {/* ---- Floating glass ZOOM TOOLBAR (top-right) ---- */}
       {!loading && infollionExists && (
@@ -602,7 +574,7 @@ function SegmentModal({ node, ribbons, segContacts, onClose }) {
           <ul className="space-y-0.5">
             {contacts.map((c) => (
               <li key={c.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-gray-50">
-                <span className="w-7 h-7 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">
+                <span className="w-7 h-7 rounded-full bg-violet-600 text-white flex items-center justify-center flex-shrink-0 text-[10px] font-bold">
                   {(c.name || "?").split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()}
                 </span>
                 <div className="min-w-0 flex-1">
@@ -615,6 +587,94 @@ function SegmentModal({ node, ribbons, segContacts, onClose }) {
             ))}
           </ul>
         )}
+      </div>
+    </div>
+  );
+}
+
+
+// ============================================================
+// Full-width summary bar shown BETWEEN the top bar and the mapping canvas.
+// Layout mirrors the reference: eyebrow + title on the left, the
+// Infollion → client chips in the middle (with the working client selector),
+// and the three key counts aligned to the right.
+// ============================================================
+function initials(name) {
+  return (name || "?")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+function StatBlock({ label, value }) {
+  return (
+    <div className="leading-tight">
+      <div className="text-[9px] uppercase tracking-[0.1em] text-gray-400 font-bold whitespace-nowrap">{label}</div>
+      <div className="text-[18px] font-bold text-gray-900">{value}</div>
+    </div>
+  );
+}
+
+function SegmentationLinksBar({
+  baseName, clientName, clients, clientId, onSelectClient,
+  infollionCount, clientCount, totalMappings, loading,
+}) {
+  return (
+    <div
+      className="flex-shrink-0 bg-white border-b border-gray-200 px-5 py-3 flex items-center gap-5"
+      data-testid="crm-overview-summary-bar"
+    >
+      {/* eyebrow + title */}
+      <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="w-9 h-9 rounded-lg bg-[#ec9324]/15 text-[#ec9324] flex items-center justify-center">
+          <AccountTree sx={{ fontSize: 20 }} />
+        </div>
+        <div className="leading-tight">
+          <div className="text-[10px] uppercase tracking-[0.12em] text-gray-400 font-bold">Cross-Segmentation</div>
+          <div className="text-[17px] font-bold text-gray-900">Linked Segmentation</div>
+        </div>
+      </div>
+
+      {/* divider */}
+      <div className="w-px h-9 bg-gray-200 flex-shrink-0" />
+
+      {/* base → client chips */}
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="inline-flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-full bg-gray-50 border border-gray-200">
+          <span className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ background: BASE_COLOR }}>
+            {initials(baseName)}
+          </span>
+          <span className="text-[13px] font-semibold text-gray-900 whitespace-nowrap">{baseName}</span>
+        </span>
+        <ChevronDown sx={{ fontSize: 18 }} className="text-gray-300 -rotate-90 flex-shrink-0" />
+        <span className="inline-flex items-center gap-2 pl-1 pr-1.5 py-1 rounded-full bg-gray-50 border border-gray-200 min-w-0">
+          <span className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ background: CLIENT_COLOR }}>
+            {initials(clientName)}
+          </span>
+          <div className="relative flex items-center min-w-0">
+            <select
+              value={clientId || ""}
+              onChange={(e) => onSelectClient(e.target.value)}
+              data-testid="crm-overview-client-select"
+              className="appearance-none pr-6 text-[13px] font-semibold bg-transparent border-0 p-0 outline-none cursor-pointer text-gray-900 max-w-[240px] truncate"
+            >
+              {(clients || []).map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <ChevronDown sx={{ fontSize: 18 }} className="absolute right-0 text-gray-400 pointer-events-none" />
+          </div>
+        </span>
+      </div>
+
+      {/* key counts aligned to the right */}
+      <div className="ml-auto flex items-center gap-8 pr-1 flex-shrink-0">
+        <StatBlock label="Infollion Segments" value={loading ? "—" : infollionCount} />
+        <StatBlock label="Client Segments" value={loading ? "—" : clientCount} />
+        <StatBlock label="Total Mappings" value={loading ? "—" : totalMappings} />
       </div>
     </div>
   );
