@@ -26,7 +26,6 @@ import Layout from "../components/Layout";
 import api, { formatApiError } from "../lib/api";
 import notify from "../lib/notify";
 import { useOverviewMeta } from "../lib/overviewMeta";
-import LinkIcon from "@mui/icons-material/AccountTreeOutlined";
 import ZoomIn from "@mui/icons-material/ZoomInOutlined";
 import ZoomOut from "@mui/icons-material/ZoomOutOutlined";
 import CenterFocusStrong from "@mui/icons-material/CenterFocusStrongOutlined";
@@ -146,12 +145,10 @@ export default function CrossSegmentationOverviewPage() {
   return (
     <Layout
       title={tabName}
-      breadcrumbs={[{ label: "CRM" }, { label: tabName }]}
       fullBleed
       contentClassName="px-4 py-4"
     >
       <div className="max-w-[1700px] mx-auto" data-testid="crm-overview-page">
-        <PageHeader tabName={tabName} description={meta?.description} />
         <TopBar
           clientName={clientName}
           clients={clients}
@@ -174,27 +171,6 @@ export default function CrossSegmentationOverviewPage() {
         />
       </div>
     </Layout>
-  );
-}
-
-// ============================================================
-// Page header (icon + dynamic tab name)
-// ============================================================
-function PageHeader({ tabName, description }) {
-  return (
-    <div className="mb-4 flex items-center gap-3" data-testid="crm-overview-header">
-      <div className="w-10 h-10 rounded-lg bg-orange-100 text-[#ec9324] flex items-center justify-center flex-shrink-0">
-        <LinkIcon />
-      </div>
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900" data-testid="crm-overview-title">
-          {tabName}
-        </h1>
-        <p className="text-sm text-gray-500">
-          {description || "Cross-segmentation mapping between Infollion Research and a selected client."}
-        </p>
-      </div>
-    </div>
   );
 }
 
