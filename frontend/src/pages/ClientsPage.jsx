@@ -32,9 +32,7 @@ import {
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "../components/ui/select";
+import SearchSelect from "../components/SearchSelect";
 import Plus from "@mui/icons-material/AddOutlined";
 import Search from "@mui/icons-material/SearchOutlined";
 import Pencil from "@mui/icons-material/EditOutlined";
@@ -216,18 +214,22 @@ export default function ClientsPage() {
 
           <div className="ml-auto flex items-center gap-2">
             <span className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">Sort</span>
-            <select
-              value={sort}
-              onChange={(e) => { setSort(e.target.value); setPage(1); }}
-              className="text-sm border border-gray-200 rounded-md px-2 py-1 bg-white"
-              data-testid="clients-sort"
-            >
-              <option value="newest">Newest</option>
-              <option value="oldest">Oldest</option>
-              <option value="name_asc">Name A → Z</option>
-              <option value="name_desc">Name Z → A</option>
-              <option value="id_asc">ID ascending</option>
-            </select>
+            <div className="w-44">
+              <SearchSelect
+                options={[
+                  { value: "newest", label: "Newest" },
+                  { value: "oldest", label: "Oldest" },
+                  { value: "name_asc", label: "Name A → Z" },
+                  { value: "name_desc", label: "Name Z → A" },
+                  { value: "id_asc", label: "ID ascending" },
+                ]}
+                value={sort}
+                onChange={(v) => { setSort(v || "newest"); setPage(1); }}
+                size="sm"
+                allowClear={false}
+                testId="clients-sort"
+              />
+            </div>
             <span className="text-xs text-gray-500 pl-2 border-l border-gray-200">
               {total} client{total === 1 ? "" : "s"}
             </span>
@@ -306,24 +308,16 @@ export default function ClientsPage() {
                 <Label className="text-xs uppercase tracking-wider text-gray-500 font-semibold">
                   Type <span className="text-red-500">*</span>
                 </Label>
-                <Select
-                  value={form.type}
-                  onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}
-                >
-                  <SelectTrigger
-                    className="mt-1"
-                    data-testid="client-form-type"
-                  >
-                    <SelectValue placeholder="Select a client type…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CLIENT_TYPES.map((t) => (
-                      <SelectItem key={t} value={t} data-testid={`client-form-type-${t.replace(/\s+/g, '-')}`}>
-                        {t}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="mt-1">
+                <SearchSelect
+                  options={CLIENT_TYPES.map((t) => ({ value: t, label: t }))}
+                  value={form.type || ""}
+                  onChange={(v) => setForm((f) => ({ ...f, type: v || "" }))}
+                  placeholder="Select a client type…"
+                  allowClear={false}
+                  testId="client-form-type"
+                />
+              </div>
               </div>
 
               {editing && (

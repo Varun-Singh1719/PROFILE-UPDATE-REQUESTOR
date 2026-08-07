@@ -15,9 +15,7 @@ import LinkSegmentationTab from "../components/LinkSegmentationTab";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "../components/ui/select";
+import SearchSelect from "../components/SearchSelect";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "../components/ui/dialog";
@@ -366,19 +364,16 @@ export default function ClientDetailPage() {
                       </div>
                       <div>
                         <Label className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Type</Label>
-                        <Select
-                          value={form.type}
-                          onValueChange={(v) => setForm(f => ({ ...f, type: v }))}
-                        >
-                          <SelectTrigger className="mt-1" data-testid="client-detail-type-select">
-                            <SelectValue placeholder="Select…" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {CLIENT_TYPES.map(t => (
-                              <SelectItem key={t} value={t}>{t}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="mt-1">
+                          <SearchSelect
+                            options={CLIENT_TYPES.map((t) => ({ value: t, label: t }))}
+                            value={form.type || ""}
+                            onChange={(v) => setForm(f => ({ ...f, type: v || "" }))}
+                            placeholder="Select…"
+                            allowClear={false}
+                            testId="client-detail-type-select"
+                          />
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -942,31 +937,31 @@ function POCStatusConfigBar({ clientId }) {
               <Label className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
                 Duration
               </Label>
-              <Select value={String(draftDuration)} onValueChange={(v) => setDraftDuration(parseInt(v, 10))}>
-                <SelectTrigger className="mt-1 h-9 w-full" data-testid="poc-duration-select">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {_NUMBERS.map((n) => (
-                    <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="mt-1">
+                <SearchSelect
+                  options={_NUMBERS.map((n) => ({ value: String(n), label: String(n) }))}
+                  value={String(draftDuration)}
+                  onChange={(v) => setDraftDuration(parseInt(v, 10))}
+                  size="sm"
+                  allowClear={false}
+                  testId="poc-duration-select"
+                />
+              </div>
             </div>
             <div className="flex-1">
               <Label className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
                 Unit
               </Label>
-              <Select value={draftUnit} onValueChange={setDraftUnit}>
-                <SelectTrigger className="mt-1 h-9 w-full" data-testid="poc-unit-select">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {_UNIT_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="mt-1">
+                <SearchSelect
+                  options={_UNIT_OPTIONS}
+                  value={draftUnit}
+                  onChange={(v) => setDraftUnit(v)}
+                  size="sm"
+                  allowClear={false}
+                  testId="poc-unit-select"
+                />
+              </div>
             </div>
           </div>
 

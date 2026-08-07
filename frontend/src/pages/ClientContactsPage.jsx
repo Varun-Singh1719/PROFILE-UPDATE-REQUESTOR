@@ -30,8 +30,7 @@ import {
 import {
   Popover, PopoverTrigger, PopoverContent,
 } from "../components/ui/popover";
-import SingleSelect from "../components/SingleSelect";
-import MultiSelectFilter from "../components/ui/MultiSelectFilter";
+import SearchSelect from "../components/SearchSelect";
 import DateFilter from "../components/DateFilter";
 import Pagination from "../components/Pagination";
 import DeferredSearchInput from "../components/DeferredSearchInput";
@@ -54,7 +53,6 @@ import LinkedIn from "@mui/icons-material/LinkedIn";
 import Business from "@mui/icons-material/BusinessOutlined";
 import Place from "@mui/icons-material/PlaceOutlined";
 import BackArrow from "@mui/icons-material/ArrowBackOutlined";
-import Close from "@mui/icons-material/Close";
 import Upload from "@mui/icons-material/CloudUploadOutlined";
 import FileDown from "@mui/icons-material/DownloadOutlined";
 import FileSpreadsheet from "@mui/icons-material/DescriptionOutlined";
@@ -429,22 +427,23 @@ function ClientContactsList() {
               />
             </div>
             <div className="w-56">
-              <SingleSelect
+              <SearchSelect
                 options={[{ value: "", label: "All clients" }, ...l1Options]}
                 value={clientFilter || ""}
                 onChange={(v) => setClientFilter(v || "")}
                 placeholder="Filter by Client Name"
-                searchable
+                size="sm"
                 allowClear={false}
                 testId="client-contact-client-filter"
               />
             </div>
             <div className="w-52">
-              <SingleSelect
+              <SearchSelect
                 options={SORT_OPTIONS}
                 value={sortKey}
                 onChange={(v) => setSortKey(v || "newest")}
                 placeholder="Sort by"
+                size="sm"
                 allowClear={false}
                 testId="client-contact-sort"
               />
@@ -971,12 +970,11 @@ function ContactFormDialog({
               </div>
             </Field>
             <Field label="Client Name (Level 1)">
-              <SingleSelect
+              <SearchSelect
                 options={l1Options}
-                value={form.client_name || null}
-                onChange={(v) => patch("client_name", v)}
+                value={form.client_name || ""}
+                onChange={(v) => patch("client_name", v || "")}
                 placeholder="Select client…"
-                searchable
                 testId="cc-client-name"
               />
             </Field>
@@ -1011,9 +1009,9 @@ function ContactFormDialog({
             <label className="absolute -top-2 left-3 px-1.5 bg-white text-[11px] font-medium text-gray-500 z-10 pointer-events-none">
               Industry (Level 2 of {form.client_name || "chosen client"})
             </label>
-            <MultiSelectFilter
-              label="Industries"
-              options={l2Options.map((o) => ({ ...o, searchText: o.label }))}
+            <SearchSelect
+              multiple
+              options={l2Options}
               value={form.industries || []}
               onChange={(v) => patch("industries", v)}
               placeholder={
@@ -1021,42 +1019,9 @@ function ContactFormDialog({
                   ? "Select one or more industries…"
                   : "Choose a Client Name first"
               }
-              testIdPrefix="cc-industries"
-              hideLabelPrefix
-              fullWidth
-              searchInTrigger
-              renderChipsBelow={false}
-              countUnitLabel="industry(ies) selected"
+              testId="cc-industries"
               disabled={!form.client_name}
             />
-            {(form.industries || []).length > 0 && (
-              <div
-                className="flex flex-wrap gap-1.5 mt-2"
-                data-testid="cc-industries-chips"
-              >
-                {(form.industries || []).sort((a, b) => a.localeCompare(b)).map((i) => (
-                  <span
-                    key={i}
-                    className="inline-flex items-center gap-1.5 max-w-full text-xs font-medium rounded-full border bg-[#ec9324]/10 text-[#ec9324] border-[#ec9324]/30 pl-2.5 pr-1 py-0.5"
-                    data-testid={`cc-industry-chip-${i}`}
-                    title={i}
-                  >
-                    <span className="truncate">{i}</span>
-                    <button
-                      type="button"
-                      onClick={() => patch(
-                        "industries",
-                        (form.industries || []).filter((x) => x !== i)
-                      )}
-                      aria-label={`Remove ${i}`}
-                      className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full hover:bg-black/10"
-                    >
-                      <Close sx={{ fontSize: 11 }} />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
 
           {/* Previous work experience — repeatable */}

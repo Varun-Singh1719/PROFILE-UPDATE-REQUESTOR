@@ -34,6 +34,7 @@ import CenterFocusStrong from "@mui/icons-material/CenterFocusStrong";
 import ChevronDown from "@mui/icons-material/KeyboardArrowDown";
 import AccountTree from "@mui/icons-material/AccountTreeOutlined";
 import CloseIcon from "@mui/icons-material/Close";
+import SearchSelect from "../components/SearchSelect";
 
 const BASE_COLOR = "#ec9324";   // Infollion — brand orange
 const CLIENT_COLOR = "#8b5cf6"; // client — violet
@@ -679,22 +680,20 @@ function SegmentationLinksBar({
           <span className="text-[13px] font-semibold text-gray-900 truncate max-w-[100px] sm:max-w-none">{baseName}</span>
         </span>
         <ChevronDown sx={{ fontSize: 18 }} className="text-gray-300 -rotate-90 flex-shrink-0" />
-        <span className="inline-flex items-center gap-2 pl-1 pr-1.5 py-1 rounded-full bg-gray-50 border border-gray-200 min-w-0">
+        <span className="inline-flex items-center gap-2 min-w-0">
           <span className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ background: CLIENT_COLOR }}>
             {initials(clientName)}
           </span>
-          <div className="relative flex items-center min-w-0">
-            <select
+          <div className="w-[170px] sm:w-[240px]">
+            <SearchSelect
+              options={(clients || []).map((c) => ({ value: c.id, label: c.name }))}
               value={clientId || ""}
-              onChange={(e) => onSelectClient(e.target.value)}
-              data-testid="crm-overview-client-select"
-              className="appearance-none pr-6 text-[13px] font-semibold bg-transparent border-0 p-0 outline-none cursor-pointer text-gray-900 max-w-[120px] sm:max-w-[240px] truncate"
-            >
-              {(clients || []).map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            <ChevronDown sx={{ fontSize: 18 }} className="absolute right-0 text-gray-400 pointer-events-none" />
+              onChange={(v) => onSelectClient(v)}
+              placeholder="Select client…"
+              size="sm"
+              allowClear={false}
+              testId="crm-overview-client-select"
+            />
           </div>
         </span>
       </div>
