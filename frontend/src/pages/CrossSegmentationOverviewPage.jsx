@@ -157,7 +157,6 @@ export default function CrossSegmentationOverviewPage() {
           leftNames={leftNames}
           rightNames={rightNames}
           mappings={mappings}
-          isDummy={isDummy}
         />
         <MappingCanvas
           key={clientId + ":" + (hasReal ? "real" : "dummy")}
@@ -177,17 +176,11 @@ export default function CrossSegmentationOverviewPage() {
 // ============================================================
 // Top bar — base + linked client + summary cards
 // ============================================================
-function TopBar({ clientName, clients, clientId, onSelectClient, leftNames, rightNames, mappings, isDummy }) {
+function TopBar({ clientName, clients, clientId, onSelectClient, leftNames, rightNames, mappings }) {
   const totalMappings = useMemo(
     () => Object.values(mappings).reduce((n, arr) => n + (arr || []).length, 0),
     [mappings]
   );
-  const coverage = useMemo(() => {
-    const total = leftNames.length || 0;
-    if (!total) return 0;
-    const covered = Object.keys(mappings).filter((k) => (mappings[k] || []).length).length;
-    return Math.round((covered / total) * 100);
-  }, [mappings, leftNames]);
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 mb-4" data-testid="crm-overview-topbar">
@@ -200,16 +193,6 @@ function TopBar({ clientName, clients, clientId, onSelectClient, leftNames, righ
             </div>
             <div className="flex items-center gap-2 mt-0.5">
               <h2 className="text-xl font-semibold text-gray-900">Segmentation Links</h2>
-              {isDummy ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[11px] font-bold uppercase tracking-wider">
-                  Sample
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-bold uppercase tracking-wider">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Live
-                </span>
-              )}
             </div>
           </div>
 
@@ -221,8 +204,7 @@ function TopBar({ clientName, clients, clientId, onSelectClient, leftNames, righ
                 style={{ background: BASE_COLOR }}
               >IR</span>
               <div>
-                <div className="text-[9px] uppercase tracking-wider text-gray-400 font-bold leading-none mb-0.5">Base</div>
-                <div className="text-sm font-semibold text-gray-900 leading-none">{BASE_NAME}</div>
+                <div className="text-sm font-semibold text-gray-900">{BASE_NAME}</div>
               </div>
             </div>
             <span className="text-gray-400">›</span>
@@ -233,7 +215,6 @@ function TopBar({ clientName, clients, clientId, onSelectClient, leftNames, righ
                 style={{ background: CLIENT_COLOR }}
               >{(clientName || "?").slice(0, 2).toUpperCase()}</span>
               <div>
-                <div className="text-[9px] uppercase tracking-wider text-gray-400 font-bold leading-none mb-0.5">Linked Client</div>
                 <div className="relative flex items-center">
                   <select
                     value={clientId || ""}
@@ -257,7 +238,6 @@ function TopBar({ clientName, clients, clientId, onSelectClient, leftNames, righ
           <StatCard label="Infollion Segments" value={leftNames.length} />
           <StatCard label="Client Segments" value={rightNames.length} />
           <StatCard label="Total Mappings" value={totalMappings} />
-          <StatCard label="Coverage" value={`${coverage}%`} accent />
         </div>
       </div>
     </div>
@@ -411,19 +391,8 @@ function MappingCanvas({ loading, baseName, clientName, leftNames, rightNames, m
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden" data-testid="crm-overview-canvas">
-      {/* legend + zoom toolbar */}
-      <div className="px-5 py-2.5 border-b border-gray-100 flex items-center justify-between text-[11px]">
-        <div className="flex items-center gap-4">
-          <span className="inline-flex items-center gap-1.5 text-gray-600">
-            <span className="w-2.5 h-2.5 rounded-full" style={{ background: BASE_COLOR }} />
-            {baseName} · L2
-          </span>
-          <span className="inline-flex items-center gap-1.5 text-gray-600">
-            <span className="w-2.5 h-2.5 rounded-full" style={{ background: CLIENT_COLOR }} />
-            {clientName} · L2
-          </span>
-          <span className="text-gray-400 hidden sm:inline">Connector = mapping</span>
-        </div>
+      {/* zoom toolbar */}
+      <div className="px-5 py-2.5 border-b border-gray-100 flex items-center justify-end text-[11px]">
         <div className="inline-flex items-center bg-gray-100 rounded-lg text-gray-600">
           <IconBtn onClick={() => zoomBy(1.3)} title="Zoom in" testid="crm-overview-zoom-in"><ZoomIn style={{ fontSize: 16 }} /></IconBtn>
           <IconBtn onClick={() => zoomBy(1 / 1.3)} title="Zoom out" testid="crm-overview-zoom-out"><ZoomOut style={{ fontSize: 16 }} /></IconBtn>
@@ -464,10 +433,10 @@ function MappingCanvas({ loading, baseName, clientName, leftNames, rightNames, m
             <g ref={gRef}>
               {/* column headers */}
               <text x={baseX} y={26} textAnchor="end" fontSize={11} fontWeight={700} fill="#9ca3af" style={{ letterSpacing: 1 }}>
-                {baseName.toUpperCase()} · L2
+                {baseName.toUpperCase()}
               </text>
               <text x={linkedX} y={26} textAnchor="start" fontSize={11} fontWeight={700} fill="#9ca3af" style={{ letterSpacing: 1 }}>
-                {clientName.toUpperCase()} · L2
+                {clientName.toUpperCase()}
               </text>
 
               {/* ribbons — non-highlighted first, highlighted on top */}
