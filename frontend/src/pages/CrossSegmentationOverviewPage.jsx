@@ -653,30 +653,30 @@ function SegmentationLinksBar({
 }) {
   return (
     <div
-      className="flex-shrink-0 bg-white border-b border-gray-200 px-5 py-3 flex items-center gap-5"
+      className="flex-shrink-0 bg-white border-b border-gray-200 px-3 sm:px-5 py-2.5 sm:py-3 flex flex-wrap items-center gap-x-3 sm:gap-x-5 gap-y-2"
       data-testid="crm-overview-summary-bar"
     >
       {/* eyebrow + title */}
-      <div className="flex items-center gap-3 flex-shrink-0">
-        <div className="w-9 h-9 rounded-lg bg-[#ec9324]/15 text-[#ec9324] flex items-center justify-center">
+      <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0">
+        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-[#ec9324]/15 text-[#ec9324] flex items-center justify-center">
           <AccountTree sx={{ fontSize: 20 }} />
         </div>
         <div className="leading-tight">
           <div className="text-[10px] uppercase tracking-[0.12em] text-gray-400 font-bold">Cross-Segmentation</div>
-          <div className="text-[17px] font-bold text-gray-900">Linked Segmentation</div>
+          <div className="text-[15px] sm:text-[17px] font-bold text-gray-900">Linked Segmentation</div>
         </div>
       </div>
 
       {/* divider */}
-      <div className="w-px h-9 bg-gray-200 flex-shrink-0" />
+      <div className="hidden md:block w-px h-9 bg-gray-200 flex-shrink-0" />
 
       {/* base → client chips */}
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="inline-flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-full bg-gray-50 border border-gray-200">
+      <div className="flex items-center gap-2 min-w-0 flex-1 sm:flex-initial">
+        <span className="inline-flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-full bg-gray-50 border border-gray-200 min-w-0">
           <span className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ background: BASE_COLOR }}>
             {initials(baseName)}
           </span>
-          <span className="text-[13px] font-semibold text-gray-900 whitespace-nowrap">{baseName}</span>
+          <span className="text-[13px] font-semibold text-gray-900 truncate max-w-[100px] sm:max-w-none">{baseName}</span>
         </span>
         <ChevronDown sx={{ fontSize: 18 }} className="text-gray-300 -rotate-90 flex-shrink-0" />
         <span className="inline-flex items-center gap-2 pl-1 pr-1.5 py-1 rounded-full bg-gray-50 border border-gray-200 min-w-0">
@@ -688,7 +688,7 @@ function SegmentationLinksBar({
               value={clientId || ""}
               onChange={(e) => onSelectClient(e.target.value)}
               data-testid="crm-overview-client-select"
-              className="appearance-none pr-6 text-[13px] font-semibold bg-transparent border-0 p-0 outline-none cursor-pointer text-gray-900 max-w-[240px] truncate"
+              className="appearance-none pr-6 text-[13px] font-semibold bg-transparent border-0 p-0 outline-none cursor-pointer text-gray-900 max-w-[120px] sm:max-w-[240px] truncate"
             >
               {(clients || []).map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
@@ -699,8 +699,8 @@ function SegmentationLinksBar({
         </span>
       </div>
 
-      {/* key counts aligned to the right */}
-      <div className="ml-auto flex items-center gap-8 pr-1 flex-shrink-0">
+      {/* key counts — reflow to their own line on small screens */}
+      <div className="w-full md:w-auto md:ml-auto flex items-center gap-5 sm:gap-8 pr-1 flex-shrink-0 overflow-x-auto">
         <StatBlock label="Infollion Segments" value={loading ? "—" : infollionCount} />
         <StatBlock label="Client Segments" value={loading ? "—" : clientCount} />
         <StatBlock label="Total Mappings" value={loading ? "—" : totalMappings} />

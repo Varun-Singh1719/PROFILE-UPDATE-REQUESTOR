@@ -64,7 +64,9 @@ export default function SegmentationsPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   // Collapsible sidebar (spec: expand/collapse chevron above the list bar).
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 768,
+  );
 
   // ---- Fetch list ----
   const load = async () => {
@@ -272,7 +274,7 @@ export default function SegmentationsPage() {
         </Button>
       }
     >
-      <div className="flex-1 flex overflow-hidden" data-testid="segmentations-shell">
+      <div className="flex-1 flex overflow-hidden relative" data-testid="segmentations-shell">
         {/* LEFT — tree chart / detail (moved to the left per spec) */}
         <main className="flex-1 bg-gray-50 overflow-hidden flex flex-col" data-testid="segmentations-detail">
           {activeRow ? (
@@ -315,7 +317,7 @@ export default function SegmentationsPage() {
         {/* RIGHT — sidebar list of segmentations (moved to the right per spec) */}
         {!sidebarCollapsed && (
         <aside
-          className="w-[320px] min-w-[280px] max-w-[360px] bg-white border-l border-gray-200 flex flex-col"
+          className="absolute md:relative right-0 top-0 h-full z-30 md:z-auto w-[86%] max-w-[340px] md:w-[320px] md:min-w-[280px] md:max-w-[360px] bg-white border-l border-gray-200 flex flex-col shadow-2xl md:shadow-none"
           data-testid="segmentations-sidebar"
         >
           <div className="px-4 py-4 border-b border-gray-100">
