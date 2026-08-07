@@ -1,21 +1,23 @@
 /**
  * CrossSegmentationOverviewPage — CRM → Dynamic "Overview" tab.
  * =========================================================================
- * A READ-ONLY, side-by-side visual mapping between:
+ * READ-ONLY, full-page, side-by-side visual mapping between:
  *   • LEFT  — Infollion Research  (always the master / base segmentation)
  *   • RIGHT — the selected client (default: Boston Consulting Group)
  *
  * Data is driven ENTIRELY by the mappings created under
  * CRM → Clients → Link Segmentation (GET /api/clients/{id}/segmentation-link).
  * When a client has no saved mappings yet, realistic DUMMY mappings are shown
- * for Boston Consulting Group only, and they are automatically replaced by the
- * real mappings once any are saved.
+ * for Boston Consulting Group only, replaced automatically by the real
+ * mappings once any are saved.
  *
- * The user-facing tab name is dynamic (GET /api/crm/overview/meta) so it can
- * be renamed with zero code changes.
+ * Layout mirrors the CRM Segmentations tree page: the whole viewport below the
+ * top bar is a white canvas, with FLOATING GLASS PANELS overlaid on top —
+ * a header (top-left), a vertical zoom toolbar (top-right, same ToolButton
+ * hover style as the segmentation tree) and a details panel (bottom-right).
  *
- * Segment level shown throughout: LEVEL 2 (the direct-child categories of each
- * segmentation), matching the Cross-Segmentation Level-2 reference design.
+ * The user-facing tab name is dynamic (GET /api/crm/overview/meta).
+ * Segment level shown throughout: LEVEL 2 (direct-child categories).
  * =========================================================================
  */
 import React, {
@@ -26,11 +28,11 @@ import Layout from "../components/Layout";
 import api, { formatApiError } from "../lib/api";
 import notify from "../lib/notify";
 import { useOverviewMeta } from "../lib/overviewMeta";
-import ZoomIn from "@mui/icons-material/ZoomInOutlined";
-import ZoomOut from "@mui/icons-material/ZoomOutOutlined";
-import CenterFocusStrong from "@mui/icons-material/CenterFocusStrongOutlined";
-import Fullscreen from "@mui/icons-material/FullscreenOutlined";
+import ZoomInIcon from "@mui/icons-material/ZoomIn";
+import ZoomOutIcon from "@mui/icons-material/ZoomOut";
+import CenterFocusStrong from "@mui/icons-material/CenterFocusStrong";
 import ChevronDown from "@mui/icons-material/KeyboardArrowDown";
+import AccountTree from "@mui/icons-material/AccountTreeOutlined";
 import ArrowInward from "@mui/icons-material/SouthEastOutlined";
 import ArrowOutward from "@mui/icons-material/NorthEastOutlined";
 
@@ -40,10 +42,35 @@ const BASE_NAME = "Infollion Research";
 const BCG_NAME = "Boston Consulting Group";
 
 // ------------------------------------------------------------------
+// Glass toolbar button — same visual pattern as the Segmentations tree
+// (pill hover target, orange tint on hover, dark tooltip fading in to the
+// LEFT of the button).
+// ------------------------------------------------------------------
+const ToolButton = ({ onClick, icon, label, testid, position }) => {
+  const round =
+    position === "top" ? "rounded-t-lg" :
+    position === "bottom" ? "rounded-b-lg" :
+    position === "solo" ? "rounded-lg" : "";
+  const divider = position === "bottom" || position === "solo" ? "" : "border-b border-white/50";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      data-testid={testid}
+      className={"group relative inline-flex items-center justify-center w-9 h-9 transition-colors text-gray-700 hover:text-[#ec9324] hover:bg-white/60 " + round + " " + divider}
+    >
+      {icon}
+      <span className="pointer-events-none absolute right-full mr-2 top-1/2 -translate-y-1/2 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50 shadow-lg">
+        {label}
+      </span>
+    </button>
+  );
+};
+
+// ------------------------------------------------------------------
 // Dummy-mapping generator (Boston Consulting Group only).
-// Keyword themes connect Infollion L2 → whatever client L2 names exist,
-// so ribbons always land on REAL right-hand nodes. Replaced automatically
-// the moment real mappings are saved under Link Segmentation.
 // ------------------------------------------------------------------
 const THEME_MAP = [
   { l: /agricultur/i, r: [/consumer products/i, /industrial/i] },
@@ -87,14 +114,11 @@ function buildDummyMappings(leftNames, rightNames) {
 // ============================================================
 export default function CrossSegmentationOverviewPage() {
   const meta = useOverviewMeta();
-  const tabName = meta?.tab_name || "Overview";
-
   const [clients, setClients] = useState([]);
   const [clientId, setClientId] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState(null); // segmentation-link payload
+  const [data, setData] = useState(null);
 
-  // ---- load client list once (default to Boston Consulting Group) ----
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -112,7 +136,6 @@ export default function CrossSegmentationOverviewPage() {
     return () => { alive = false; };
   }, []);
 
-  // ---- load mapping payload whenever the selected client changes ----
   useEffect(() => {
     if (!clientId) return;
     let alive = true;
@@ -132,11 +155,9 @@ export default function CrossSegmentationOverviewPage() {
 
   const client = clients.find((c) => c.id === clientId) || null;
   const clientName = data?.client?.name || client?.name || "Selected Client";
-
   const leftNames = data?.infollion?.level1 || [];
   const rightNames = data?.client_level1 || [];
 
-  // Real vs dummy mappings.
   const realMappings = data?.mappings || {};
   const hasReal = Object.keys(realMappings).some((k) => (realMappings[k] || []).length);
   const isDummy = !hasReal && (clientName || "").toLowerCase() === BCG_NAME.toLowerCase();
@@ -144,25 +165,19 @@ export default function CrossSegmentationOverviewPage() {
 
   return (
     <Layout
-      title={tabName}
+      title={meta?.tab_name || "Overview"}
       fullBleed
-      contentClassName="px-4 py-4"
+      contentClassName="h-[calc(100vh-56px)] flex flex-col"
     >
-      <div className="max-w-[1700px] mx-auto" data-testid="crm-overview-page">
-        <TopBar
-          clientName={clientName}
-          clients={clients}
-          clientId={clientId}
-          onSelectClient={setClientId}
-          leftNames={leftNames}
-          rightNames={rightNames}
-          mappings={mappings}
-        />
+      <div className="flex-1 min-h-0 relative bg-white" data-testid="crm-overview-page">
         <MappingCanvas
           key={clientId + ":" + (hasReal ? "real" : "dummy")}
           loading={loading}
           baseName={data?.infollion?.name || BASE_NAME}
           clientName={clientName}
+          clients={clients}
+          clientId={clientId}
+          onSelectClient={setClientId}
           leftNames={leftNames}
           rightNames={rightNames}
           mappings={mappings}
@@ -174,102 +189,23 @@ export default function CrossSegmentationOverviewPage() {
 }
 
 // ============================================================
-// Top bar — base + linked client + summary cards
+// Full-page mapping canvas — SVG ribbons + d3 zoom/pan/fit + floating panels
 // ============================================================
-function TopBar({ clientName, clients, clientId, onSelectClient, leftNames, rightNames, mappings }) {
-  const totalMappings = useMemo(
-    () => Object.values(mappings).reduce((n, arr) => n + (arr || []).length, 0),
-    [mappings]
-  );
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 mb-4" data-testid="crm-overview-topbar">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        {/* left cluster */}
-        <div className="flex items-center gap-4">
-          <div>
-            <div className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">
-              Cross-Segmentation
-            </div>
-            <div className="flex items-center gap-2 mt-0.5">
-              <h2 className="text-xl font-semibold text-gray-900">Segmentation Links</h2>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 pl-4 border-l border-gray-200">
-            {/* Base — fixed to Infollion Research */}
-            <div className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5">
-              <span
-                className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[10px] font-bold"
-                style={{ background: BASE_COLOR }}
-              >IR</span>
-              <div>
-                <div className="text-sm font-semibold text-gray-900">{BASE_NAME}</div>
-              </div>
-            </div>
-            <span className="text-gray-400">›</span>
-            {/* Linked client selector */}
-            <div className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5">
-              <span
-                className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[10px] font-bold"
-                style={{ background: CLIENT_COLOR }}
-              >{(clientName || "?").slice(0, 2).toUpperCase()}</span>
-              <div>
-                <div className="relative flex items-center">
-                  <select
-                    value={clientId || ""}
-                    onChange={(e) => onSelectClient(e.target.value)}
-                    data-testid="crm-overview-client-select"
-                    className="appearance-none pr-5 text-sm font-semibold bg-transparent border-0 p-0 outline-none cursor-pointer text-gray-900 max-w-[220px] truncate"
-                  >
-                    {clients.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                  <ChevronDown sx={{ fontSize: 18 }} className="absolute right-0 text-gray-400 pointer-events-none" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* right cluster: summary cards */}
-        <div className="flex items-stretch gap-2.5" data-testid="crm-overview-summary">
-          <StatCard label="Infollion Segments" value={leftNames.length} />
-          <StatCard label="Client Segments" value={rightNames.length} />
-          <StatCard label="Total Mappings" value={totalMappings} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StatCard({ label, value, accent }) {
-  return (
-    <div className={"inline-flex flex-col items-start px-3 py-1.5 rounded-lg border " + (accent ? "bg-orange-50 border-orange-100" : "bg-gray-50 border-gray-100")}>
-      <div className={"text-[9px] uppercase tracking-wider font-bold " + (accent ? "text-[#ec9324]" : "text-gray-400")}>
-        {label}
-      </div>
-      <div className="text-lg font-bold text-gray-900 leading-tight">{value}</div>
-    </div>
-  );
-}
-
-// ============================================================
-// Mapping canvas — SVG ribbons + d3 zoom/pan/fit + info panel
-// ============================================================
-function MappingCanvas({ loading, baseName, clientName, leftNames, rightNames, mappings, infollionExists }) {
+function MappingCanvas({
+  loading, baseName, clientName, clients, clientId, onSelectClient,
+  leftNames, rightNames, mappings, infollionExists,
+}) {
   const wrapRef = useRef(null);
   const svgRef = useRef(null);
   const gRef = useRef(null);
   const zoomRef = useRef(null);
-  const layoutRef = useRef({ w: 1100, h: 560, contentH: 560 });
+  const layoutRef = useRef({ w: 1100, h: 700, contentH: 700 });
 
-  const [dims, setDims] = useState({ w: 1100, h: 560 });
+  const [dims, setDims] = useState({ w: 1100, h: 700 });
   const [focusId, setFocusId] = useState(null);
   const [hoverId, setHoverId] = useState(null);
 
-  // ----- build nodes + ribbons -----
+  // ----- nodes + ribbons -----
   const { leftNodes, rightNodes, ribbons } = useMemo(() => {
     const ln = leftNames.map((name, i) => ({ id: `L::${name}`, name, side: "L", i }));
     const rn = rightNames.map((name, i) => ({ id: `R::${name}`, name, side: "R", i }));
@@ -284,12 +220,14 @@ function MappingCanvas({ loading, baseName, clientName, leftNames, rightNames, m
     return { leftNodes: ln, rightNodes: rn, ribbons: rb };
   }, [leftNames, rightNames, mappings]);
 
-  // ----- geometry (pixel space; viewBox == measured container size) -----
+  const totalMappings = ribbons.length;
+
+  // ----- geometry -----
   const geom = useMemo(() => {
     const w = dims.w || 1100;
     const rowH = 30;
-    const padTop = 50;
-    const padBot = 26;
+    const padTop = 56;
+    const padBot = 30;
     const maxRows = Math.max(leftNodes.length, rightNodes.length, 1);
     const contentH = padTop + maxRows * rowH + padBot;
     const baseX = Math.round(w * 0.40);
@@ -317,11 +255,11 @@ function MappingCanvas({ loading, baseName, clientName, leftNames, rightNames, m
     return () => ro.disconnect();
   }, []);
 
-  // ----- fit-to-screen transform (matches CRM tree fit behavior) -----
+  // ----- fit-to-screen (matches CRM tree fit behavior) -----
   const applyFit = useCallback((animate = true) => {
     if (!svgRef.current || !zoomRef.current) return;
     const { w, h, contentH } = layoutRef.current;
-    const k = Math.min(1.4, Math.max(0.3, (h - 12) / contentH));
+    const k = Math.min(1.4, Math.max(0.3, (h - 16) / contentH));
     const tx = (w - w * k) / 2;
     const ty = (h - contentH * k) / 2;
     const t = d3.zoomIdentity.translate(tx, ty).scale(k);
@@ -330,14 +268,11 @@ function MappingCanvas({ loading, baseName, clientName, leftNames, rightNames, m
       .call(zoomRef.current.transform, t);
   }, []);
 
-  // keep layoutRef current for the imperative zoom helpers
   useEffect(() => {
     layoutRef.current = { w: dims.w, h: dims.h, contentH: geom.contentH };
   }, [dims, geom.contentH]);
 
-  // ----- attach d3.zoom (cursor-centric wheel + drag pan) -----
-  // Depends on [loading, infollionExists] so it (re)attaches once the <svg>
-  // is actually mounted — during the initial load the svg isn't rendered yet.
+  // ----- attach d3.zoom once svg is mounted (cursor-centric wheel + pan) -----
   useEffect(() => {
     if (loading || !infollionExists) return;
     if (!svgRef.current || !gRef.current) return;
@@ -345,18 +280,13 @@ function MappingCanvas({ loading, baseName, clientName, leftNames, rightNames, m
     const g = d3.select(gRef.current);
     const zoom = d3.zoom()
       .scaleExtent([0.3, 4])
-      .filter((event) => {
-        // allow wheel zoom + primary-button drag; ignore right-click
-        if (event.type === "wheel") return true;
-        return !event.button;
-      })
+      .filter((event) => (event.type === "wheel" ? true : !event.button))
       .on("zoom", (event) => { g.attr("transform", event.transform.toString()); });
     zoomRef.current = zoom;
     svg.call(zoom).on("dblclick.zoom", null);
     return () => { svg.on(".zoom", null); zoomRef.current = null; };
   }, [loading, infollionExists]);
 
-  // initial + on-data fit
   useEffect(() => {
     if (loading || !infollionExists) return;
     const id = setTimeout(() => applyFit(false), 80);
@@ -387,175 +317,223 @@ function MappingCanvas({ loading, baseName, clientName, leftNames, rightNames, m
     return [...leftNodes, ...rightNodes].find((n) => n.id === focusId) || null;
   }, [focusId, leftNodes, rightNodes]);
 
-  const { w, contentH, baseX, linkedX, mid, leftY, rightY } = geom;
+  const { w, baseX, linkedX, mid, leftY, rightY } = geom;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden" data-testid="crm-overview-canvas">
-      {/* zoom toolbar */}
-      <div className="px-5 py-2.5 border-b border-gray-100 flex items-center justify-end text-[11px]">
-        <div className="inline-flex items-center bg-gray-100 rounded-lg text-gray-600">
-          <IconBtn onClick={() => zoomBy(1.3)} title="Zoom in" testid="crm-overview-zoom-in"><ZoomIn style={{ fontSize: 16 }} /></IconBtn>
-          <IconBtn onClick={() => zoomBy(1 / 1.3)} title="Zoom out" testid="crm-overview-zoom-out"><ZoomOut style={{ fontSize: 16 }} /></IconBtn>
-          <IconBtn onClick={() => applyFit(true)} title="Fit to screen" testid="crm-overview-fit"><CenterFocusStrong style={{ fontSize: 16 }} /></IconBtn>
-          <IconBtn onClick={() => applyFit(true)} title="Reset view" testid="crm-overview-reset"><Fullscreen style={{ fontSize: 16 }} /></IconBtn>
+    <div ref={wrapRef} className="w-full h-full overflow-hidden bg-white relative" data-testid="crm-overview-canvas">
+      {loading ? (
+        <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-500">Loading mapping…</div>
+      ) : !infollionExists ? (
+        <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-500 px-6 text-center">
+          The master “Infollion Research” segmentation was not found.
         </div>
-      </div>
+      ) : (
+        <svg
+          ref={svgRef}
+          width={dims.w}
+          height={dims.h}
+          viewBox={`0 0 ${dims.w} ${dims.h}`}
+          className="block cursor-grab active:cursor-grabbing"
+          style={{ font: "13px Inter, system-ui, sans-serif" }}
+          data-testid="crm-overview-svg"
+          onClick={() => setFocusId(null)}
+        >
+          <defs>
+            <linearGradient id="ov-ribbon" x1="0" x2="1" y1="0" y2="0">
+              <stop offset="0%" stopColor={BASE_COLOR} stopOpacity={0.95} />
+              <stop offset="100%" stopColor={CLIENT_COLOR} stopOpacity={0.95} />
+            </linearGradient>
+          </defs>
 
-      {/* canvas */}
+          <g ref={gRef}>
+            {/* column headers */}
+            <text x={baseX} y={30} textAnchor="end" fontSize={11} fontWeight={700} fill="#9ca3af" style={{ letterSpacing: 1 }}>
+              {baseName.toUpperCase()}
+            </text>
+            <text x={linkedX} y={30} textAnchor="start" fontSize={11} fontWeight={700} fill="#9ca3af" style={{ letterSpacing: 1 }}>
+              {clientName.toUpperCase()}
+            </text>
+
+            {/* ribbons */}
+            {ribbons.slice().sort((a, b) => (isHi(a) ? 1 : 0) - (isHi(b) ? 1 : 0)).map((r) => {
+              const y1 = leftY[r.srcId];
+              const y2 = rightY[r.tgtId];
+              if (y1 == null || y2 == null) return null;
+              const hi = isHi(r);
+              const path = `M ${baseX + 10},${y1} C ${mid},${y1} ${mid},${y2} ${linkedX - 10},${y2}`;
+              return (
+                <path
+                  key={`${r.srcId}__${r.tgtId}`}
+                  d={path}
+                  fill="none"
+                  stroke="url(#ov-ribbon)"
+                  strokeWidth={hi ? 6 : 3.5}
+                  strokeLinecap="round"
+                  opacity={activeId ? (hi ? 0.92 : 0.08) : 0.45}
+                  style={{ transition: "opacity .18s, stroke-width .18s" }}
+                />
+              );
+            })}
+
+            {/* LEFT nodes */}
+            {leftNodes.map((n) => {
+              const y = leftY[n.id];
+              const hasLink = ribbons.some((r) => r.srcId === n.id);
+              const isFocus = focusId === n.id;
+              const muted = activeId && relatedIds && !relatedIds.has(n.id);
+              return (
+                <g key={n.id} style={{ cursor: "pointer" }}
+                  onClick={(e) => { e.stopPropagation(); setFocusId(n.id === focusId ? null : n.id); }}
+                  onMouseEnter={() => setHoverId(n.id)}
+                  onMouseLeave={() => setHoverId(null)}
+                  data-testid={`crm-overview-left-node-${n.i}`}>
+                  <rect x={0} y={y - 15} width={baseX + 10} height={30} fill="transparent" />
+                  <text x={baseX - 14} y={y + 4} textAnchor="end" fontSize={13}
+                    fontWeight={isFocus ? 700 : hasLink ? 600 : 500}
+                    fill={isFocus ? "#111827" : muted ? "#9ca3af" : "#374151"}
+                    opacity={muted ? 0.55 : 1}>
+                    {n.name}
+                  </text>
+                  <circle cx={baseX} cy={y} r={isFocus ? 7 : 5}
+                    fill={hasLink || isFocus ? BASE_COLOR : "#e5e7eb"}
+                    opacity={muted ? 0.5 : 1}
+                    stroke={isFocus ? "#fff" : "none"} strokeWidth={isFocus ? 2 : 0} />
+                  {isFocus && <circle cx={baseX} cy={y} r={12} fill="none" stroke={BASE_COLOR} strokeWidth={2} opacity={0.4} />}
+                </g>
+              );
+            })}
+
+            {/* RIGHT nodes */}
+            {rightNodes.map((n) => {
+              const y = rightY[n.id];
+              const hasLink = ribbons.some((r) => r.tgtId === n.id);
+              const isFocus = focusId === n.id;
+              const muted = activeId && relatedIds && !relatedIds.has(n.id);
+              return (
+                <g key={n.id} style={{ cursor: "pointer" }}
+                  onClick={(e) => { e.stopPropagation(); setFocusId(n.id === focusId ? null : n.id); }}
+                  onMouseEnter={() => setHoverId(n.id)}
+                  onMouseLeave={() => setHoverId(null)}
+                  data-testid={`crm-overview-right-node-${n.i}`}>
+                  <rect x={linkedX - 10} y={y - 15} width={w - linkedX + 10} height={30} fill="transparent" />
+                  <circle cx={linkedX} cy={y} r={isFocus ? 7 : 5}
+                    fill={hasLink || isFocus ? CLIENT_COLOR : "#e5e7eb"}
+                    opacity={muted ? 0.5 : 1}
+                    stroke={isFocus ? "#fff" : "none"} strokeWidth={isFocus ? 2 : 0} />
+                  {isFocus && <circle cx={linkedX} cy={y} r={12} fill="none" stroke={CLIENT_COLOR} strokeWidth={2} opacity={0.4} />}
+                  <text x={linkedX + 14} y={y + 4} textAnchor="start" fontSize={13}
+                    fontWeight={isFocus ? 700 : hasLink ? 600 : 500}
+                    fill={isFocus ? "#111827" : muted ? "#9ca3af" : "#374151"}
+                    opacity={muted ? 0.55 : 1}>
+                    {n.name}
+                  </text>
+                </g>
+              );
+            })}
+          </g>
+        </svg>
+      )}
+
+      {/* ---- Floating glass HEADER (top-left) ---- */}
       <div
-        ref={wrapRef}
-        className="relative bg-gradient-to-br from-orange-50/30 via-white to-violet-50/30"
-        style={{ height: "calc(100vh - 300px)", minHeight: 460 }}
+        className="absolute top-3 left-3 z-10 flex items-center gap-2 flex-wrap
+                   bg-white/50 backdrop-blur-xl backdrop-saturate-150
+                   border border-white/70 ring-1 ring-black/5
+                   rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.10)] px-2.5 py-1.5"
+        data-testid="crm-overview-header-panel"
+        onMouseDown={(e) => e.stopPropagation()}
       >
-        {loading ? (
-          <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-500">Loading mapping…</div>
-        ) : !infollionExists ? (
-          <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-500 px-6 text-center">
-            The master “Infollion Research” segmentation was not found.
+        <div className="w-7 h-7 rounded-md bg-[#ec9324]/15 text-[#ec9324] flex items-center justify-center flex-shrink-0">
+          <AccountTree sx={{ fontSize: 16 }} />
+        </div>
+        <span className="text-[14px] font-semibold text-gray-900">Linked Segmentation</span>
+        <div className="w-px h-6 bg-black/10 mx-0.5" />
+        {/* base → client */}
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[9px] font-bold" style={{ background: BASE_COLOR }}>IR</span>
+          <span className="text-[13px] font-semibold text-gray-900">{BASE_NAME}</span>
+        </span>
+        <ChevronDown sx={{ fontSize: 16 }} className="text-gray-400 -rotate-90" />
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[9px] font-bold" style={{ background: CLIENT_COLOR }}>
+            {(clientName || "?").slice(0, 2).toUpperCase()}
+          </span>
+          <div className="relative flex items-center">
+            <select
+              value={clientId || ""}
+              onChange={(e) => onSelectClient(e.target.value)}
+              data-testid="crm-overview-client-select"
+              className="appearance-none pr-5 text-[13px] font-semibold bg-transparent border-0 p-0 outline-none cursor-pointer text-gray-900 max-w-[220px] truncate"
+            >
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <ChevronDown sx={{ fontSize: 16 }} className="absolute right-0 text-gray-400 pointer-events-none" />
           </div>
-        ) : (
-          <svg
-            ref={svgRef}
-            viewBox={`0 0 ${dims.w} ${dims.h}`}
-            width={dims.w}
-            height={dims.h}
-            className="block cursor-grab active:cursor-grabbing"
-            data-testid="crm-overview-svg"
-            onClick={() => setFocusId(null)}
-          >
-            <defs>
-              <linearGradient id="ov-ribbon" x1="0" x2="1" y1="0" y2="0">
-                <stop offset="0%" stopColor={BASE_COLOR} stopOpacity={0.95} />
-                <stop offset="100%" stopColor={CLIENT_COLOR} stopOpacity={0.95} />
-              </linearGradient>
-            </defs>
-
-            <g ref={gRef}>
-              {/* column headers */}
-              <text x={baseX} y={26} textAnchor="end" fontSize={11} fontWeight={700} fill="#9ca3af" style={{ letterSpacing: 1 }}>
-                {baseName.toUpperCase()}
-              </text>
-              <text x={linkedX} y={26} textAnchor="start" fontSize={11} fontWeight={700} fill="#9ca3af" style={{ letterSpacing: 1 }}>
-                {clientName.toUpperCase()}
-              </text>
-
-              {/* ribbons — non-highlighted first, highlighted on top */}
-              {ribbons.slice().sort((a, b) => (isHi(a) ? 1 : 0) - (isHi(b) ? 1 : 0)).map((r) => {
-                const y1 = leftY[r.srcId];
-                const y2 = rightY[r.tgtId];
-                if (y1 == null || y2 == null) return null;
-                const hi = isHi(r);
-                const path = `M ${baseX + 10},${y1} C ${mid},${y1} ${mid},${y2} ${linkedX - 10},${y2}`;
-                return (
-                  <path
-                    key={`${r.srcId}__${r.tgtId}`}
-                    d={path}
-                    fill="none"
-                    stroke="url(#ov-ribbon)"
-                    strokeWidth={hi ? 6 : 3.5}
-                    strokeLinecap="round"
-                    opacity={activeId ? (hi ? 0.92 : 0.08) : 0.45}
-                    style={{ transition: "opacity .18s, stroke-width .18s" }}
-                  />
-                );
-              })}
-
-              {/* LEFT nodes */}
-              {leftNodes.map((n) => {
-                const y = leftY[n.id];
-                const hasLink = ribbons.some((r) => r.srcId === n.id);
-                const isFocus = focusId === n.id;
-                const muted = activeId && relatedIds && !relatedIds.has(n.id);
-                return (
-                  <g key={n.id} style={{ cursor: "pointer" }}
-                    onClick={(e) => { e.stopPropagation(); setFocusId(n.id === focusId ? null : n.id); }}
-                    onMouseEnter={() => setHoverId(n.id)}
-                    onMouseLeave={() => setHoverId(null)}
-                    data-testid={`crm-overview-left-node-${n.i}`}>
-                    <rect x={0} y={y - 15} width={baseX + 10} height={30} fill="transparent" />
-                    <text x={baseX - 14} y={y + 4} textAnchor="end" fontSize={13}
-                      fontWeight={isFocus ? 700 : hasLink ? 600 : 500}
-                      fill={isFocus ? "#111827" : muted ? "#9ca3af" : "#374151"}
-                      opacity={muted ? 0.55 : 1}>
-                      {n.name}
-                    </text>
-                    <circle cx={baseX} cy={y} r={isFocus ? 7 : 5}
-                      fill={hasLink || isFocus ? BASE_COLOR : "#e5e7eb"}
-                      opacity={muted ? 0.5 : 1}
-                      stroke={isFocus ? "#fff" : "none"} strokeWidth={isFocus ? 2 : 0} />
-                    {isFocus && <circle cx={baseX} cy={y} r={12} fill="none" stroke={BASE_COLOR} strokeWidth={2} opacity={0.4} />}
-                  </g>
-                );
-              })}
-
-              {/* RIGHT nodes */}
-              {rightNodes.map((n) => {
-                const y = rightY[n.id];
-                const hasLink = ribbons.some((r) => r.tgtId === n.id);
-                const isFocus = focusId === n.id;
-                const muted = activeId && relatedIds && !relatedIds.has(n.id);
-                return (
-                  <g key={n.id} style={{ cursor: "pointer" }}
-                    onClick={(e) => { e.stopPropagation(); setFocusId(n.id === focusId ? null : n.id); }}
-                    onMouseEnter={() => setHoverId(n.id)}
-                    onMouseLeave={() => setHoverId(null)}
-                    data-testid={`crm-overview-right-node-${n.i}`}>
-                    <rect x={linkedX - 10} y={y - 15} width={w - linkedX + 10} height={30} fill="transparent" />
-                    <circle cx={linkedX} cy={y} r={isFocus ? 7 : 5}
-                      fill={hasLink || isFocus ? CLIENT_COLOR : "#e5e7eb"}
-                      opacity={muted ? 0.5 : 1}
-                      stroke={isFocus ? "#fff" : "none"} strokeWidth={isFocus ? 2 : 0} />
-                    {isFocus && <circle cx={linkedX} cy={y} r={12} fill="none" stroke={CLIENT_COLOR} strokeWidth={2} opacity={0.4} />}
-                    <text x={linkedX + 14} y={y + 4} textAnchor="start" fontSize={13}
-                      fontWeight={isFocus ? 700 : hasLink ? 600 : 500}
-                      fill={isFocus ? "#111827" : muted ? "#9ca3af" : "#374151"}
-                      opacity={muted ? 0.55 : 1}>
-                      {n.name}
-                    </text>
-                  </g>
-                );
-              })}
-            </g>
-          </svg>
-        )}
-
-        {/* info panel */}
-        {focusedNode && (
-          <InfoPanel
-            node={focusedNode}
-            baseName={baseName}
-            clientName={clientName}
-            ribbons={ribbons}
-            onClose={() => setFocusId(null)}
-          />
-        )}
-
-        {/* empty-mapping hint */}
-        {!loading && infollionExists && ribbons.length === 0 && (
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-xs text-gray-400 bg-white/80 rounded-full px-3 py-1 border border-gray-100">
-            No mappings yet — create them under CRM → Clients → Link Segmentation.
-          </div>
-        )}
+        </span>
+        <div className="w-px h-6 bg-black/10 mx-0.5" />
+        {/* compact stats */}
+        <span className="text-[11px] text-gray-500">
+          <b className="text-gray-900">{leftNames.length}</b> Infollion
+          <span className="mx-1 text-gray-300">·</span>
+          <b className="text-gray-900">{rightNames.length}</b> Client
+          <span className="mx-1 text-gray-300">·</span>
+          <b className="text-gray-900">{totalMappings}</b> Mappings
+        </span>
       </div>
+
+      {/* ---- Floating glass ZOOM TOOLBAR (top-right) ---- */}
+      {!loading && infollionExists && (
+        <div
+          className="absolute top-3 right-3 z-10 flex flex-col
+                     bg-white/40 backdrop-blur-xl backdrop-saturate-150
+                     border border-white/70 ring-1 ring-black/5
+                     rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.10)]"
+          data-testid="crm-overview-toolbar"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <ToolButton onClick={() => zoomBy(1.3)} icon={<ZoomInIcon sx={{ fontSize: 18 }} />} label="Zoom in" testid="crm-overview-zoom-in" position="top" />
+          <ToolButton onClick={() => zoomBy(1 / 1.3)} icon={<ZoomOutIcon sx={{ fontSize: 18 }} />} label="Zoom out" testid="crm-overview-zoom-out" position="middle" />
+          <ToolButton onClick={() => applyFit(true)} icon={<CenterFocusStrong sx={{ fontSize: 18 }} />} label="Fit to screen" testid="crm-overview-fit" position="bottom" />
+        </div>
+      )}
+
+      {/* ---- Details panel (bottom-right) ---- */}
+      {focusedNode && (
+        <InfoPanel
+          node={focusedNode}
+          baseName={baseName}
+          clientName={clientName}
+          ribbons={ribbons}
+          onClose={() => setFocusId(null)}
+        />
+      )}
+
+      {/* empty hint */}
+      {!loading && infollionExists && ribbons.length === 0 && (
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-xs text-gray-400 bg-white/80 rounded-full px-3 py-1 border border-gray-100">
+          No mappings yet — create them under CRM → Clients → Link Segmentation.
+        </div>
+      )}
     </div>
   );
 }
 
 // ============================================================
-// Info panel (read-only)
+// Details panel (read-only)
 // ============================================================
 function InfoPanel({ node, baseName, clientName, ribbons, onClose }) {
   const isLeft = node.side === "L";
   const touching = ribbons.filter((r) => r.srcId === node.id || r.tgtId === node.id);
-  const linked = touching.map((r) => (isLeft ? r.tgtName : r.srcName));
-  const linkedUniq = Array.from(new Set(linked));
-  const outgoing = ribbons.filter((r) => r.srcId === node.id).length; // left → right
-  const incoming = ribbons.filter((r) => r.tgtId === node.id).length; // right ← left
+  const linkedUniq = Array.from(new Set(touching.map((r) => (isLeft ? r.tgtName : r.srcName))));
+  const outgoing = ribbons.filter((r) => r.srcId === node.id).length;
+  const incoming = ribbons.filter((r) => r.tgtId === node.id).length;
   const otherLabel = isLeft ? clientName : baseName;
   const dotColor = isLeft ? BASE_COLOR : CLIENT_COLOR;
 
   return (
-    <div className="absolute top-4 right-4 w-[300px] bg-white rounded-xl border border-orange-200 shadow-xl overflow-hidden" data-testid="crm-overview-info-panel">
+    <div className="absolute bottom-4 right-4 w-[300px] z-10 bg-white rounded-xl border border-orange-200 shadow-[0_8px_24px_rgba(0,0,0,0.14)] overflow-hidden" data-testid="crm-overview-info-panel">
       <div className="px-4 pt-3 pb-2">
         <div className="flex items-start justify-between">
           <div className="text-[10px] uppercase tracking-wider text-[#ec9324] font-bold">Selected Segment</div>
@@ -570,7 +548,6 @@ function InfoPanel({ node, baseName, clientName, ribbons, onClose }) {
         </div>
       </div>
 
-      {/* incoming / outgoing */}
       <div className="px-4 pb-2 grid grid-cols-2 gap-2">
         <div className="rounded-lg bg-gray-50 border border-gray-100 px-2.5 py-1.5">
           <div className="text-[9px] uppercase tracking-wider text-gray-400 font-bold flex items-center gap-1">
@@ -590,7 +567,7 @@ function InfoPanel({ node, baseName, clientName, ribbons, onClose }) {
         <div className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-1.5">
           Linked {otherLabel} segments · {linkedUniq.length}
         </div>
-        <div className="space-y-1 max-h-44 overflow-y-auto">
+        <div className="space-y-1 max-h-40 overflow-y-auto">
           {linkedUniq.length === 0 ? (
             <div className="text-xs italic text-gray-400">No mapped segments.</div>
           ) : linkedUniq.map((name) => (
@@ -602,19 +579,5 @@ function InfoPanel({ node, baseName, clientName, ribbons, onClose }) {
         </div>
       </div>
     </div>
-  );
-}
-
-function IconBtn({ children, onClick, title, testid }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      data-testid={testid}
-      className="w-8 h-8 flex items-center justify-center hover:bg-white hover:text-gray-900 first:rounded-l-lg last:rounded-r-lg transition-colors"
-    >
-      {children}
-    </button>
   );
 }
