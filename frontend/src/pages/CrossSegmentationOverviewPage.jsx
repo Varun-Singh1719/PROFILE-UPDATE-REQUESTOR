@@ -692,6 +692,7 @@ function SegmentationLinksBar({
               placeholder="Select client…"
               size="sm"
               allowClear={false}
+              loading={loading && (clients || []).length === 0}
               testId="crm-overview-client-select"
             />
           </div>

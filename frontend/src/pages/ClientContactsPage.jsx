@@ -434,6 +434,7 @@ function ClientContactsList() {
                 placeholder="Filter by Client Name"
                 size="sm"
                 allowClear={false}
+                loading={loading && l1Options.length === 0}
                 testId="client-contact-client-filter"
               />
             </div>

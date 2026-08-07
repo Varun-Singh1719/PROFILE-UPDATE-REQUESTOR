@@ -40,13 +40,16 @@ export default function SearchSelect({
   size = "md",
   allowClear = true,
   disabled = false,
+  loading = false,
   className = "",
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
   const boxRef = useRef(null);
   const popRef = useRef(null);
   const inputRef = useRef(null);
+  const listRef = useRef(null);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
 
   const selectedOpts = useMemo(() => {
@@ -105,6 +108,15 @@ export default function SearchSelect({
     if (!q) return options;
     return options.filter((o) => (o.label || "").toLowerCase().includes(q));
   }, [options, query]);
+
+  // reset the keyboard highlight whenever the popup opens or the query changes
+  useEffect(() => { setActiveIndex(0); }, [query, open]);
+  // keep the highlighted option scrolled into view
+  useEffect(() => {
+    if (!open) return;
+    const el = listRef.current?.querySelector(`[data-index="${activeIndex}"]`);
+    if (el) el.scrollIntoView({ block: "nearest" });
+  }, [activeIndex, open]);
 
   const pick = (v) => {
     if (multiple) {
@@ -178,8 +190,27 @@ export default function SearchSelect({
               onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
               onFocus={() => setOpen(true)}
               onKeyDown={(e) => {
-                if (e.key === "Escape") setOpen(false);
-                else if (multiple && e.key === "Backspace" && !query && selectedOpts.length) {
+                if (e.key === "Escape") { setOpen(false); return; }
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  if (!open) { setOpen(true); return; }
+                  setActiveIndex((i) => Math.min(filtered.length - 1, i + 1));
+                } else if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  if (!open) { setOpen(true); return; }
+                  setActiveIndex((i) => Math.max(0, i - 1));
+                } else if (e.key === "Home" && open) {
+                  e.preventDefault();
+                  setActiveIndex(0);
+                } else if (e.key === "End" && open) {
+                  e.preventDefault();
+                  setActiveIndex(filtered.length - 1);
+                } else if (e.key === "Enter") {
+                  if (open && filtered.length) {
+                    e.preventDefault();
+                    pick(filtered[Math.min(activeIndex, filtered.length - 1)].value);
+                  }
+                } else if (multiple && e.key === "Backspace" && !query && selectedOpts.length) {
                   removeVal(selectedOpts[selectedOpts.length - 1].value);
                 }
               }}
@@ -189,7 +220,7 @@ export default function SearchSelect({
             />
           </div>
         </div>
-        {allowClear && hasSelection && !disabled && (
+        {allowClear && hasSelection && !disabled && !loading && (
           <button
             type="button"
             onClick={clearAll}
@@ -200,10 +231,17 @@ export default function SearchSelect({
             <Close sx={{ fontSize: 14 }} />
           </button>
         )}
-        <ChevronDown
-          sx={{ fontSize: 20 }}
-          className={"shrink-0 text-gray-400 transition-transform " + (open ? "rotate-180" : "")}
-        />
+        {loading ? (
+          <span
+            data-testid={testId ? `${testId}-spinner` : undefined}
+            className="shrink-0 w-4 h-4 border-2 border-gray-200 border-t-[#ec9324] rounded-full animate-spin"
+          />
+        ) : (
+          <ChevronDown
+            sx={{ fontSize: 20 }}
+            className={"shrink-0 text-gray-400 transition-transform " + (open ? "rotate-180" : "")}
+          />
+        )}
       </div>
 
       {open && typeof document !== "undefined" && createPortal(
@@ -217,18 +255,29 @@ export default function SearchSelect({
           className="bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden"
           data-testid={testId ? `${testId}-popup` : undefined}
         >
-          <div className="max-h-60 overflow-y-auto py-1">
-            {filtered.length === 0 ? (
+          <div ref={listRef} className="max-h-60 overflow-y-auto py-1">
+            {loading ? (
+              <div className="px-3 py-3 text-xs text-gray-400 flex items-center justify-center gap-2" data-testid={testId ? `${testId}-loading` : undefined}>
+                <span className="w-3.5 h-3.5 border-2 border-gray-200 border-t-[#ec9324] rounded-full animate-spin" />
+                Loading…
+              </div>
+            ) : filtered.length === 0 ? (
               <div className="px-3 py-3 text-xs text-gray-400 text-center">No matches</div>
             ) : (
-              filtered.map((o) => {
+              filtered.map((o, idx) => {
                 const sel = isSel(o.value);
+                const active = idx === activeIndex;
                 return (
                   <button
                     key={o.value}
                     type="button"
+                    data-index={idx}
+                    onMouseEnter={() => setActiveIndex(idx)}
                     onClick={() => pick(o.value)}
-                    className={"w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors " + (sel ? "bg-orange-50" : "hover:bg-orange-50/60")}
+                    className={
+                      "w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors " +
+                      (active ? "bg-orange-100/70 " : sel ? "bg-orange-50 " : "")
+                    }
                     data-testid={testId ? `${testId}-opt-${o.value}` : undefined}
                   >
                     <span
