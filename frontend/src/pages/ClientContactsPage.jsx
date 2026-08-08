@@ -498,7 +498,7 @@ function ClientContactsList() {
               </div>
             ) : (
               <div
-                className="grid grid-cols-1 gap-3"
+                className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
                 data-testid="client-contact-cards"
               >
                 {displayed.map((r) => (
@@ -573,19 +573,17 @@ function ContactCard({ row, onView, onEdit, onDelete }) {
 
   return (
     <div
-      className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-[#ec9324]/40 transition-all p-4"
+      className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-[#ec9324]/40 transition-all p-4 flex flex-col"
       data-testid={`client-contact-card-${row.display_id}`}
     >
-      <div className="flex items-start gap-3 sm:gap-4">
-        {/* Avatar */}
-        <div className="w-11 h-11 rounded-lg bg-[#ec9324] text-white flex items-center justify-center text-sm font-bold flex-shrink-0 shadow-sm">
-          {initials}
-        </div>
-
-        <div className="min-w-0 flex-1">
-          {/* Row 1 — name / id / client + (status · edit · delete on the right) */}
-          <div className="flex items-start gap-2">
-            <div className="min-w-0 flex-1 flex items-center gap-1.5 flex-wrap">
+      {/* Header — initials, name, LinkedIn + contact icons; Status pill top-right */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-full bg-[#ec9324] text-white flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-sm">
+            {initials}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 min-w-0">
               <a
                 href={`/crm/client-contacts/${row.id}`}
                 onClick={(e) => {
@@ -598,58 +596,69 @@ function ContactCard({ row, onView, onEdit, onDelete }) {
               >
                 {row.name}
               </a>
-              <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-gray-100 text-gray-500 flex-shrink-0">
-                ID: {row.display_id}
-              </span>
-              {row.client_name && (
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/30 font-medium truncate max-w-[220px]">
-                  {row.client_name}
-                </span>
-              )}
+              <LinkedInIconBtn
+                url={row.linkedin_url}
+                testId={`client-contact-linkedin-${row.display_id}`}
+              />
+              <CopyableContactIcon
+                email={row.email}
+                phone={fullPhone}
+                testId={`client-contact-contactinfo-${row.display_id}`}
+              />
             </div>
-            {/* Right cluster — Status pill + Edit + Delete */}
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              {row.poc_status && <POCStatusChip status={row.poc_status} />}
-              <ActionIcon label="Edit" onClick={onEdit} testId={`client-contact-edit-${row.display_id}`}>
-                <Pencil sx={{ fontSize: 16 }} />
-              </ActionIcon>
-              <ActionIcon
-                label="Delete"
-                tone="danger"
-                onClick={onDelete}
-                testId={`client-contact-delete-${row.display_id}`}
-              >
-                <Trash sx={{ fontSize: 16 }} />
-              </ActionIcon>
+            <div className="text-[11px] text-gray-500 mt-0.5">
+              ID: <span className="font-mono text-gray-700">{row.display_id}</span>
             </div>
-          </div>
-
-          {/* Row 2 — Designation (left, wraps) with Location parallel on the right */}
-          <div className="mt-1 flex items-start justify-between gap-3">
-            <div className="text-sm text-gray-600 min-w-0 flex-1 break-words">
-              {row.designation || "—"}
-            </div>
-            {location && (
-              <div className="text-[12px] text-gray-500 flex items-center gap-1 flex-shrink-0 pt-0.5">
-                <Place sx={{ fontSize: 14 }} /> {location}
-              </div>
-            )}
-          </div>
-
-          {/* Row 3 — Email + Phone */}
-          <div className="mt-2 flex items-center gap-x-4 gap-y-1 text-[12px] text-gray-500 flex-wrap">
-            {row.email && (
-              <span className="flex items-center gap-1 min-w-0">
-                <Mail sx={{ fontSize: 14 }} /> <span className="truncate">{row.email}</span>
-              </span>
-            )}
-            {fullPhone && (
-              <span className="flex items-center gap-1">
-                <Phone sx={{ fontSize: 14 }} /> {fullPhone}
-              </span>
-            )}
           </div>
         </div>
+        {/* Status pill — top-right corner, parallel to name */}
+        {row.poc_status && (
+          <div className="flex-shrink-0">
+            <POCStatusChip status={row.poc_status} />
+          </div>
+        )}
+      </div>
+
+      {/* Info meta table */}
+      <div className="mt-3 text-[12px] text-gray-700 space-y-1">
+        <MetaRow label="Client Name" value={row.client_name} />
+        {/* Designation + Location parallel; long designation wraps to a new
+            line while Location keeps its place on the right. */}
+        <div className="flex items-start gap-2">
+          <span className="text-gray-500 shrink-0 w-24">Designation:</span>
+          <span className="font-medium text-gray-900 flex-1 min-w-0 break-words">{row.designation || "—"}</span>
+          {location && (
+            <span className="text-gray-600 flex items-start gap-1 shrink-0 max-w-[46%] text-right leading-tight" data-testid={`client-contact-location-${row.display_id}`}>
+              <Place sx={{ fontSize: 13 }} className="mt-[1px] shrink-0" />
+              <span className="break-words">{location}</span>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Metrics row — all in orange (single accent). Reads totals_till_date
+          when the backend supplies it; falls back to "—" otherwise. */}
+      <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-4 gap-1 text-center">
+        <MetricMini value={fmtMetric(row.totals_till_date?.projects)}                  label="Projects" />
+        <MetricMini value={fmtMetric(row.totals_till_date?.serviced)}                  label="Serviced" />
+        <MetricMini value={fmtMetric(row.totals_till_date?.calls)}                     label="Calls" />
+        <MetricMini value={fmtMetric(row.totals_till_date?.revenue, { money: true })}  label="Revenue" />
+      </div>
+
+      {/* Bottom action bar — Edit + Delete at the right corner (View removed) */}
+      <div className="mt-3 pt-3 border-t border-gray-100 flex items-center">
+        <div className="flex-1" />
+        <ActionIcon label="Edit" onClick={onEdit} testId={`client-contact-edit-${row.display_id}`}>
+          <Pencil sx={{ fontSize: 16 }} />
+        </ActionIcon>
+        <ActionIcon
+          label="Delete"
+          tone="danger"
+          onClick={onDelete}
+          testId={`client-contact-delete-${row.display_id}`}
+        >
+          <Trash sx={{ fontSize: 16 }} />
+        </ActionIcon>
       </div>
     </div>
   );

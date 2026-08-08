@@ -1,799 +1,799 @@
-// AUTO-GENERATED country reference data + region mapping.
-// Source: user-supplied "Country List.xlsx" (id, name) and regionCountryMap.
-// `id` is preserved for future backend reference.
+// AUTO-GENERATED from the user-supplied "Country List.xlsx" (columns: id, name).
+// Parsed with openpyxl (NOT an LLM) so ids map exactly: 44=India, 60=United
+// States of America, etc. `regionCountryMap` is verbatim from the business spec
+// and is keyed by these same ids. The country id is preserved for reference.
 
 export const COUNTRIES = [
   {
-    "id": 30,
+    "id": 35,
     "name": "Afghanistan"
   },
   {
-    "id": 37,
+    "id": 42,
     "name": "Albania"
   },
   {
-    "id": 3,
+    "id": 27,
     "name": "Algeria"
   },
   {
-    "id": 228,
+    "id": 3,
     "name": "Americas"
   },
   {
-    "id": 231,
+    "id": 29,
     "name": "Angola"
   },
   {
-    "id": 34,
+    "id": 39,
     "name": "Argentina"
   },
   {
-    "id": 31,
+    "id": 36,
     "name": "Armenia"
   },
   {
-    "id": 32,
+    "id": 37,
     "name": "Aruba"
   },
   {
-    "id": 230,
+    "id": 4,
     "name": "Australasia & Oceania"
   },
   {
-    "id": 174,
+    "id": 180,
     "name": "Australia"
   },
   {
-    "id": 38,
+    "id": 43,
     "name": "Austria"
   },
   {
-    "id": 50,
+    "id": 56,
     "name": "Azerbaijan"
   },
   {
-    "id": 51,
+    "id": 57,
     "name": "Bahamas"
   },
   {
-    "id": 69,
+    "id": 74,
     "name": "Bahrain"
   },
   {
-    "id": 49,
+    "id": 55,
     "name": "Bangladesh"
   },
   {
-    "id": 70,
+    "id": 75,
     "name": "Barbados"
   },
   {
-    "id": 57,
+    "id": 62,
     "name": "Belarus"
   },
   {
-    "id": 58,
+    "id": 63,
     "name": "Belgium"
   },
   {
-    "id": 33,
+    "id": 38,
     "name": "Belize"
   },
   {
-    "id": 234,
+    "id": 31,
     "name": "Benin"
   },
   {
-    "id": 68,
+    "id": 73,
     "name": "Bhutan"
   },
   {
-    "id": 54,
+    "id": 59,
     "name": "Bolivia"
   },
   {
-    "id": 74,
+    "id": 79,
     "name": "Bosnia and Herzegovina"
   },
   {
-    "id": 232,
+    "id": 30,
     "name": "Botswana"
   },
   {
-    "id": 72,
+    "id": 77,
     "name": "Brazil"
   },
   {
-    "id": 29,
+    "id": 34,
     "name": "Brunei Darussalam"
   },
   {
-    "id": 90,
+    "id": 95,
     "name": "Bulgaria"
   },
   {
-    "id": 44,
+    "id": 50,
     "name": "Burkina Faso"
   },
   {
-    "id": 4,
+    "id": 28,
     "name": "Burundi"
   },
   {
-    "id": 48,
+    "id": 54,
     "name": "Cambodia"
   },
   {
-    "id": 42,
+    "id": 48,
     "name": "Cameroon"
   },
   {
-    "id": 35,
+    "id": 40,
     "name": "Canada"
   },
   {
-    "id": 63,
+    "id": 69,
     "name": "Cape Verde"
   },
   {
-    "id": 61,
+    "id": 67,
     "name": "Central African Republic"
   },
   {
-    "id": 77,
+    "id": 84,
     "name": "Chad"
   },
   {
-    "id": 87,
+    "id": 93,
     "name": "Chile"
   },
   {
-    "id": 28,
+    "id": 33,
     "name": "China"
   },
   {
-    "id": 47,
+    "id": 53,
     "name": "China, Hong Kong SAR"
   },
   {
-    "id": 66,
+    "id": 71,
     "name": "China, Macao SAR"
   },
   {
-    "id": 105,
+    "id": 110,
     "name": "Colombia"
   },
   {
-    "id": 41,
+    "id": 47,
     "name": "Comoros"
   },
   {
-    "id": 94,
+    "id": 100,
     "name": "Congo"
   },
   {
-    "id": 53,
+    "id": 58,
     "name": "Costa Rica"
   },
   {
-    "id": 79,
+    "id": 86,
     "name": "Cote dIvoire"
   },
   {
-    "id": 107,
+    "id": 112,
     "name": "Croatia"
   },
   {
-    "id": 85,
+    "id": 91,
     "name": "Cuba"
   },
   {
-    "id": 84,
+    "id": 90,
     "name": "Cyprus"
   },
   {
-    "id": 122,
+    "id": 127,
     "name": "Czech Republic"
   },
   {
-    "id": 225,
+    "id": 231,
     "name": "Democratic People's Republic of Korea"
   },
   {
-    "id": 110,
+    "id": 117,
     "name": "Democratic Republic of the Congo"
   },
   {
-    "id": 91,
+    "id": 96,
     "name": "Denmark"
   },
   {
-    "id": 60,
+    "id": 66,
     "name": "Djibouti"
   },
   {
-    "id": 103,
+    "id": 108,
     "name": "Dominican Republic"
   },
   {
-    "id": 120,
+    "id": 125,
     "name": "Ecuador"
   },
   {
-    "id": 40,
+    "id": 46,
     "name": "Egypt"
   },
   {
-    "id": 71,
+    "id": 76,
     "name": "El Salvador"
   },
   {
-    "id": 125,
+    "id": 130,
     "name": "Equatorial Guinea"
   },
   {
-    "id": 76,
+    "id": 83,
     "name": "Eritrea"
   },
   {
-    "id": 135,
+    "id": 140,
     "name": "Estonia"
   },
   {
-    "id": 93,
+    "id": 99,
     "name": "Ethiopia"
   },
   {
-    "id": 36,
+    "id": 41,
     "name": "Fiji"
   },
   {
-    "id": 108,
+    "id": 113,
     "name": "Finland"
   },
   {
-    "id": 123,
+    "id": 128,
     "name": "France"
   },
   {
-    "id": 133,
+    "id": 138,
     "name": "French Guiana"
   },
   {
-    "id": 56,
+    "id": 61,
     "name": "French Polynesia"
   },
   {
-    "id": 138,
+    "id": 143,
     "name": "Gabon"
   },
   {
-    "id": 96,
+    "id": 102,
     "name": "Gambia"
   },
   {
-    "id": 102,
+    "id": 107,
     "name": "Georgia"
   },
   {
-    "id": 136,
+    "id": 141,
     "name": "Germany"
   },
   {
-    "id": 111,
+    "id": 118,
     "name": "Ghana"
   },
   {
-    "id": 147,
+    "id": 152,
     "name": "Greece"
   },
   {
-    "id": 118,
+    "id": 123,
     "name": "Grenada"
   },
   {
-    "id": 131,
+    "id": 136,
     "name": "Guadeloupe"
   },
   {
-    "id": 73,
+    "id": 78,
     "name": "Guam"
   },
   {
-    "id": 86,
+    "id": 92,
     "name": "Guatemala"
   },
   {
-    "id": 126,
+    "id": 131,
     "name": "Guinea"
   },
   {
-    "id": 139,
+    "id": 144,
     "name": "Guinea-Bissau"
   },
   {
-    "id": 145,
+    "id": 150,
     "name": "Guyana"
   },
   {
-    "id": 143,
+    "id": 148,
     "name": "Haiti"
   },
   {
-    "id": 104,
+    "id": 109,
     "name": "Honduras"
   },
   {
-    "id": 158,
+    "id": 163,
     "name": "Hungary"
   },
   {
-    "id": 148,
+    "id": 153,
     "name": "Iceland"
   },
   {
-    "id": 39,
+    "id": 44,
     "name": "India"
   },
   {
-    "id": 67,
+    "id": 72,
     "name": "Indonesia"
   },
   {
-    "id": 101,
+    "id": 106,
     "name": "Iran"
   },
   {
-    "id": 117,
+    "id": 122,
     "name": "Iraq"
   },
   {
-    "id": 159,
+    "id": 164,
     "name": "Ireland"
   },
   {
-    "id": 130,
+    "id": 135,
     "name": "Israel"
   },
   {
-    "id": 168,
+    "id": 173,
     "name": "Italy"
   },
   {
-    "id": 155,
+    "id": 160,
     "name": "Jamaica"
   },
   {
-    "id": 127,
+    "id": 132,
     "name": "Japan"
   },
   {
-    "id": 142,
+    "id": 147,
     "name": "Jordan"
   },
   {
-    "id": 27,
+    "id": 32,
     "name": "Kazakhstan"
   },
   {
-    "id": 109,
+    "id": 116,
     "name": "Kenya"
   },
   {
-    "id": 227,
+    "id": 234,
     "name": "Kosovo"
   },
   {
-    "id": 154,
+    "id": 159,
     "name": "Kuwait"
   },
   {
-    "id": 46,
+    "id": 51,
     "name": "Kyrgyzstan"
   },
   {
-    "id": 83,
+    "id": 88,
     "name": "Lao Peoples Democratic Republic"
   },
   {
-    "id": 167,
+    "id": 172,
     "name": "Latvia"
   },
   {
-    "id": 163,
+    "id": 168,
     "name": "Lebanon"
   },
   {
-    "id": 43,
+    "id": 49,
     "name": "Lesotho"
   },
   {
-    "id": 151,
+    "id": 156,
     "name": "Liberia"
   },
   {
-    "id": 59,
+    "id": 65,
     "name": "Libyan Arab Jamahiriya"
   },
   {
-    "id": 175,
+    "id": 181,
     "name": "Lithuania"
   },
   {
-    "id": 176,
+    "id": 182,
     "name": "Luxembourg"
   },
   {
-    "id": 222,
+    "id": 227,
     "name": "Macedonia"
   },
   {
-    "id": 124,
+    "id": 129,
     "name": "Madagascar"
   },
   {
-    "id": 137,
+    "id": 142,
     "name": "Malawi"
   },
   {
-    "id": 100,
+    "id": 105,
     "name": "Malaysia"
   },
   {
-    "id": 116,
+    "id": 121,
     "name": "Maldives"
   },
   {
-    "id": 161,
+    "id": 166,
     "name": "Mali"
   },
   {
-    "id": 185,
+    "id": 190,
     "name": "Malta"
   },
   {
-    "id": 164,
+    "id": 169,
     "name": "Martinique"
   },
   {
-    "id": 170,
+    "id": 175,
     "name": "Mauritania"
   },
   {
-    "id": 149,
+    "id": 154,
     "name": "Mauritius"
   },
   {
-    "id": 160,
+    "id": 165,
     "name": "Mayotte"
   },
   {
-    "id": 119,
+    "id": 124,
     "name": "Mexico"
   },
   {
-    "id": 88,
+    "id": 94,
     "name": "Micronesia"
   },
   {
-    "id": 197,
+    "id": 202,
     "name": "Moldova"
   },
   {
-    "id": 226,
+    "id": 232,
     "name": "Monaco"
   },
   {
-    "id": 99,
+    "id": 104,
     "name": "Mongolia"
   },
   {
-    "id": 184,
+    "id": 189,
     "name": "Montenegro"
   },
   {
-    "id": 75,
+    "id": 82,
     "name": "Morocco"
   },
   {
-    "id": 169,
+    "id": 174,
     "name": "Mozambique"
   },
   {
-    "id": 113,
+    "id": 120,
     "name": "Myanmar"
   },
   {
-    "id": 62,
+    "id": 68,
     "name": "Namibia"
   },
   {
-    "id": 129,
+    "id": 134,
     "name": "Nepal"
   },
   {
-    "id": 192,
+    "id": 197,
     "name": "Netherlands"
   },
   {
-    "id": 172,
+    "id": 178,
     "name": "Netherlands Antilles"
   },
   {
-    "id": 106,
+    "id": 111,
     "name": "New Caledonia"
   },
   {
-    "id": 182,
+    "id": 188,
     "name": "New Zealand"
   },
   {
-    "id": 132,
+    "id": 137,
     "name": "Nicaragua"
   },
   {
-    "id": 178,
+    "id": 184,
     "name": "Niger"
   },
   {
-    "id": 187,
+    "id": 192,
     "name": "Nigeria"
   },
   {
-    "id": 198,
+    "id": 203,
     "name": "Norway"
   },
   {
-    "id": 179,
+    "id": 185,
     "name": "Oman"
   },
   {
-    "id": 141,
+    "id": 146,
     "name": "Pakistan"
   },
   {
-    "id": 144,
+    "id": 149,
     "name": "Panama"
   },
   {
-    "id": 121,
+    "id": 126,
     "name": "Papua New Guinea"
   },
   {
-    "id": 156,
+    "id": 161,
     "name": "Paraguay"
   },
   {
-    "id": 165,
+    "id": 170,
     "name": "Peru"
   },
   {
-    "id": 128,
+    "id": 133,
     "name": "Philippines"
   },
   {
-    "id": 191,
+    "id": 196,
     "name": "Poland"
   },
   {
-    "id": 204,
+    "id": 209,
     "name": "Portugal"
   },
   {
-    "id": 180,
+    "id": 186,
     "name": "Puerto Rico"
   },
   {
-    "id": 188,
+    "id": 193,
     "name": "Qatar"
   },
   {
-    "id": 112,
+    "id": 119,
     "name": "Republic of Korea"
   },
   {
-    "id": 203,
+    "id": 208,
     "name": "Romania"
   },
   {
-    "id": 209,
+    "id": 214,
     "name": "Russian Federation"
   },
   {
-    "id": 186,
+    "id": 191,
     "name": "Rwanda"
   },
   {
-    "id": 189,
+    "id": 194,
     "name": "Saint Lucia"
   },
   {
-    "id": 196,
+    "id": 201,
     "name": "Saint Vincent and the Grenadines"
   },
   {
-    "id": 134,
+    "id": 139,
     "name": "Samoa"
   },
   {
-    "id": 150,
+    "id": 155,
     "name": "Sao Tome and Principe"
   },
   {
-    "id": 195,
+    "id": 200,
     "name": "Saudi Arabia"
   },
   {
-    "id": 194,
+    "id": 199,
     "name": "Senegal"
   },
   {
-    "id": 213,
+    "id": 218,
     "name": "Serbia"
   },
   {
-    "id": 200,
+    "id": 205,
     "name": "Sierra Leone"
   },
   {
-    "id": 140,
+    "id": 145,
     "name": "Singapore"
   },
   {
-    "id": 217,
+    "id": 222,
     "name": "Slovakia"
   },
   {
-    "id": 220,
+    "id": 225,
     "name": "Slovenia"
   },
   {
-    "id": 146,
+    "id": 151,
     "name": "Solomon Islands"
   },
   {
-    "id": 193,
+    "id": 198,
     "name": "Somalia"
   },
   {
-    "id": 78,
+    "id": 85,
     "name": "South Africa"
   },
   {
-    "id": 210,
+    "id": 215,
     "name": "Spain"
   },
   {
-    "id": 153,
+    "id": 158,
     "name": "Sri Lanka"
   },
   {
-    "id": 199,
+    "id": 204,
     "name": "Sudan"
   },
   {
-    "id": 173,
+    "id": 179,
     "name": "Suriname"
   },
   {
-    "id": 95,
+    "id": 101,
     "name": "Swaziland"
   },
   {
-    "id": 214,
+    "id": 219,
     "name": "Sweden"
   },
   {
-    "id": 218,
+    "id": 223,
     "name": "Switzerland"
   },
   {
-    "id": 201,
+    "id": 206,
     "name": "Syrian Arab Republic"
   },
   {
-    "id": 224,
+    "id": 230,
     "name": "Taiwan"
   },
   {
-    "id": 65,
+    "id": 70,
     "name": "Tajikistan"
   },
   {
-    "id": 211,
+    "id": 216,
     "name": "Tanzania"
   },
   {
-    "id": 152,
+    "id": 157,
     "name": "Thailand"
   },
   {
-    "id": 162,
+    "id": 167,
     "name": "Timor-Leste"
   },
   {
-    "id": 206,
+    "id": 211,
     "name": "Togo"
   },
   {
-    "id": 157,
+    "id": 162,
     "name": "Tonga"
   },
   {
-    "id": 202,
+    "id": 207,
     "name": "Trinidad and Tobago"
   },
   {
-    "id": 92,
+    "id": 98,
     "name": "Tunisia"
   },
   {
-    "id": 207,
+    "id": 212,
     "name": "Turkey"
   },
   {
-    "id": 82,
+    "id": 87,
     "name": "Turkmenistan"
   },
   {
-    "id": 205,
+    "id": 210,
     "name": "Uganda"
   },
   {
-    "id": 223,
+    "id": 228,
     "name": "Ukraine"
   },
   {
-    "id": 212,
+    "id": 217,
     "name": "United Arab Emirates"
   },
   {
-    "id": 221,
+    "id": 226,
     "name": "United Kingdom"
   },
   {
-    "id": 55,
+    "id": 60,
     "name": "United States of America"
   },
   {
-    "id": 208,
+    "id": 213,
     "name": "United States Virgin Islands"
   },
   {
-    "id": 181,
+    "id": 187,
     "name": "Uruguay"
   },
   {
-    "id": 98,
+    "id": 103,
     "name": "Uzbekistan"
   },
   {
-    "id": 166,
+    "id": 171,
     "name": "Vanuatu"
   },
   {
-    "id": 190,
+    "id": 195,
     "name": "Venezuela"
   },
   {
-    "id": 171,
+    "id": 176,
     "name": "Viet Nam"
   },
   {
-    "id": 216,
+    "id": 221,
     "name": "Yemen"
   },
   {
-    "id": 215,
+    "id": 220,
     "name": "Zambia"
   },
   {
-    "id": 219,
+    "id": 224,
     "name": "Zimbabwe"
   }
 ];
 
-// Region -> list of country ids (verbatim from the business mapping).
 export const regionCountryMap = {
   "AFRICA": [
     27,
@@ -1011,7 +1011,6 @@ export const regionCountryMap = {
   ]
 };
 
-// Human-readable labels for each region key.
 export const REGION_LABELS = {
   "AFRICA": "Africa",
   "UNITED_STATES_OF_AMERICA": "United States of America",
@@ -1025,7 +1024,7 @@ export const REGION_LABELS = {
 
 const REGION_ORDER = ["AFRICA", "UNITED_STATES_OF_AMERICA", "EUROPE", "APAC", "LATAM", "ANZ", "MIDDLE_EAST", "NORTH_AMERICA"];
 
-// Fast lookup id -> region key (first matching region wins on overlaps).
+// id -> region key (first matching region wins on overlaps).
 const _idToRegion = (() => {
   const m = {};
   for (const key of REGION_ORDER) {
@@ -1042,17 +1041,28 @@ const _idToName = (() => {
   return m;
 })();
 
+const _nameToId = (() => {
+  const m = {};
+  for (const c of COUNTRIES) m[c.name.trim().toLowerCase()] = c.id;
+  return m;
+})();
+
 export function getCountryName(id) {
   if (id === null || id === undefined || id === "") return "";
   return _idToName[Number(id)] || "";
 }
 
-// Returns the human-readable region label for a country id, or "" if none.
+export function getCountryIdByName(name) {
+  if (!name) return null;
+  const id = _nameToId[String(name).trim().toLowerCase()];
+  return id === undefined ? null : id;
+}
+
+// Region label for a country id, or "" if none.
 export function getRegionByCountryId(id) {
   if (id === null || id === undefined || id === "") return "";
   const key = _idToRegion[Number(id)];
   return key ? (REGION_LABELS[key] || key) : "";
 }
 
-// Options shaped for the Country dropdown ({ value, label }).
 export const COUNTRY_OPTIONS = COUNTRIES.map((c) => ({ value: c.id, label: c.name }));
