@@ -31,7 +31,6 @@ import {
   Popover, PopoverTrigger, PopoverContent,
 } from "../components/ui/popover";
 import SearchSelect from "../components/SearchSelect";
-import CountrySelect from "../components/CountrySelect";
 import { COUNTRY_OPTIONS, getRegionByCountryId, getCountryName } from "../data/countries";
 import DateFilter from "../components/DateFilter";
 import Pagination from "../components/Pagination";
@@ -54,6 +53,7 @@ import Trash from "@mui/icons-material/DeleteOutlined";
 import LinkedIn from "@mui/icons-material/LinkedIn";
 import Business from "@mui/icons-material/BusinessOutlined";
 import Place from "@mui/icons-material/PlaceOutlined";
+import Public from "@mui/icons-material/PublicOutlined";
 import BackArrow from "@mui/icons-material/ArrowBackOutlined";
 import Upload from "@mui/icons-material/CloudUploadOutlined";
 import FileDown from "@mui/icons-material/DownloadOutlined";
@@ -118,7 +118,6 @@ const REQUIRED_CC_FIELDS = [
   ["email", "Email"],
   ["phone", "Phone No."],
   ["client_name", "Client Name"],
-  ["city", "City"],
   ["country_id", "Country"],
 ];
 
@@ -499,7 +498,7 @@ function ClientContactsList() {
               </div>
             ) : (
               <div
-                className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+                className="grid grid-cols-1 gap-3"
                 data-testid="client-contact-cards"
               >
                 {displayed.map((r) => (
@@ -565,31 +564,31 @@ function ClientContactsList() {
 function ContactCard({ row, onView, onEdit, onDelete }) {
   const initials = (row.name || "?").trim().split(/\s+/)
     .map((s) => s[0]).join("").slice(0, 2).toUpperCase();
-  // Handles both new (phone_isd + phone) and legacy ("+91 9999900000" in phone).
   const fullPhone = (() => {
     if (!row.phone) return "";
     if (row.phone_isd) return `${row.phone_isd} ${row.phone}`.trim();
     return String(row.phone).trim();
   })();
+  const location = [row.city, row.country_name].filter(Boolean).join(", ") || row.base_location || "";
 
   return (
     <div
-      className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-[#ec9324]/40 transition-all p-4 flex flex-col"
+      className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-[#ec9324]/40 transition-all p-4"
       data-testid={`client-contact-card-${row.display_id}`}
     >
-      {/* Header — initials, name, firm logo, LinkedIn + contact icons */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-full bg-[#ec9324] text-white flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-sm">
-            {initials}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 min-w-0">
+      <div className="flex items-start gap-3 sm:gap-4">
+        {/* Avatar */}
+        <div className="w-11 h-11 rounded-lg bg-[#ec9324] text-white flex items-center justify-center text-sm font-bold flex-shrink-0 shadow-sm">
+          {initials}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          {/* Row 1 — name / id / client + (status · edit · delete on the right) */}
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1 flex items-center gap-1.5 flex-wrap">
               <a
                 href={`/crm/client-contacts/${row.id}`}
                 onClick={(e) => {
-                  // Plain-click stays inside the SPA. Ctrl/Cmd/middle-click
-                  // is left to the browser so it opens a new tab natively.
                   if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
                   e.preventDefault();
                   onView();
@@ -599,59 +598,58 @@ function ContactCard({ row, onView, onEdit, onDelete }) {
               >
                 {row.name}
               </a>
-              <FirmLogo name={row.client_name} />
-              <LinkedInIconBtn
-                url={row.linkedin_url}
-                testId={`client-contact-linkedin-${row.display_id}`}
-              />
-              <CopyableContactIcon
-                email={row.email}
-                phone={fullPhone}
-                testId={`client-contact-contactinfo-${row.display_id}`}
-              />
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-gray-100 text-gray-500 flex-shrink-0">
+                ID: {row.display_id}
+              </span>
+              {row.client_name && (
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/30 font-medium truncate max-w-[220px]">
+                  {row.client_name}
+                </span>
+              )}
             </div>
-            <div className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-2 flex-wrap">
-              <span>ID: <span className="font-mono text-gray-700">{row.display_id}</span></span>
+            {/* Right cluster — Status pill + Edit + Delete */}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
               {row.poc_status && <POCStatusChip status={row.poc_status} />}
+              <ActionIcon label="Edit" onClick={onEdit} testId={`client-contact-edit-${row.display_id}`}>
+                <Pencil sx={{ fontSize: 16 }} />
+              </ActionIcon>
+              <ActionIcon
+                label="Delete"
+                tone="danger"
+                onClick={onDelete}
+                testId={`client-contact-delete-${row.display_id}`}
+              >
+                <Trash sx={{ fontSize: 16 }} />
+              </ActionIcon>
             </div>
           </div>
+
+          {/* Row 2 — Designation (left, wraps) with Location parallel on the right */}
+          <div className="mt-1 flex items-start justify-between gap-3">
+            <div className="text-sm text-gray-600 min-w-0 flex-1 break-words">
+              {row.designation || "—"}
+            </div>
+            {location && (
+              <div className="text-[12px] text-gray-500 flex items-center gap-1 flex-shrink-0 pt-0.5">
+                <Place sx={{ fontSize: 14 }} /> {location}
+              </div>
+            )}
+          </div>
+
+          {/* Row 3 — Email + Phone */}
+          <div className="mt-2 flex items-center gap-x-4 gap-y-1 text-[12px] text-gray-500 flex-wrap">
+            {row.email && (
+              <span className="flex items-center gap-1 min-w-0">
+                <Mail sx={{ fontSize: 14 }} /> <span className="truncate">{row.email}</span>
+              </span>
+            )}
+            {fullPhone && (
+              <span className="flex items-center gap-1">
+                <Phone sx={{ fontSize: 14 }} /> {fullPhone}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
-
-      {/* Info meta table */}
-      <div className="mt-3 text-[12px] text-gray-700 space-y-1">
-        <MetaRow label="Client Name" value={row.client_name} />
-        <MetaRow label="Designation" value={row.designation} />
-        <MetaRow label="Base Location" value={row.base_location} />
-      </div>
-
-      {/* Metrics row — all in orange (single accent). Reads totals_till_date
-          when the backend supplies it; falls back to "—" otherwise. */}
-      <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-4 gap-1 text-center">
-        <MetricMini value={fmtMetric(row.totals_till_date?.projects)}                  label="Projects" />
-        <MetricMini value={fmtMetric(row.totals_till_date?.serviced)}                  label="Serviced" />
-        <MetricMini value={fmtMetric(row.totals_till_date?.calls)}                     label="Calls" />
-        <MetricMini value={fmtMetric(row.totals_till_date?.revenue, { money: true })}  label="Revenue" />
-      </div>
-
-      {/* Bottom action bar — just Edit / View / Delete now
-          (email/phone/linkedin moved to the header) */}
-      <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
-        <ActionIcon label="Edit" onClick={onEdit} testId={`client-contact-edit-${row.display_id}`}>
-          <Pencil sx={{ fontSize: 16 }} />
-        </ActionIcon>
-        <ActionIcon label="View" onClick={onView} testId={`client-contact-view-${row.display_id}`}>
-          <Eye sx={{ fontSize: 16 }} />
-        </ActionIcon>
-        <div className="flex-1" />
-        <ActionIcon
-          label="Delete"
-          tone="danger"
-          onClick={onDelete}
-          testId={`client-contact-delete-${row.display_id}`}
-        >
-          <Trash sx={{ fontSize: 16 }} />
-        </ActionIcon>
       </div>
     </div>
   );
@@ -1009,7 +1007,7 @@ function ContactFormDialog({
                 testId="cc-client-name"
               />
             </Field>
-            <Field label="City *">
+            <Field label="City">
               <Input
                 value={form.city}
                 onChange={(e) => patch("city", e.target.value)}
@@ -1018,12 +1016,12 @@ function ContactFormDialog({
               />
             </Field>
             <Field label="Country *">
-              <CountrySelect
+              <SearchSelect
                 options={COUNTRY_OPTIONS}
                 value={form.country_id}
-                onChange={(id, opt) => {
-                  patch("country_id", id);
-                  patch("country_name", opt ? opt.label : "");
+                onChange={(v) => {
+                  patch("country_id", v);
+                  patch("country_name", v != null ? getCountryName(v) : "");
                 }}
                 placeholder="Select country…"
                 testId="cc-country"
@@ -1157,6 +1155,26 @@ function ContactFormDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// HoverTip — dark hover tooltip matching CRM → Client Detail → POC Status
+// Configuration (group-hover reveal, gray-900 bubble). `side` = top | bottom.
+function HoverTip({ label, children, side = "top", align = "center", className = "" }) {
+  const vert = side === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5";
+  const horiz =
+    align === "start" ? "left-0"
+    : align === "end" ? "right-0"
+    : "left-1/2 -translate-x-1/2";
+  return (
+    <span className={`group relative inline-flex items-center ${className}`}>
+      {children}
+      <span
+        className={`pointer-events-none absolute ${vert} ${horiz} px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg`}
+      >
+        {label}
+      </span>
+    </span>
   );
 }
 
@@ -1298,34 +1316,46 @@ function ClientContactDetail({ contactId }) {
                   ID: {row.display_id}
                 </span>
                 {row.client_name && (
-                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/30 font-medium">
-                    {row.client_name}
-                  </span>
-                )}
-                {row.poc_status && (
-                  <span title="POC Status is auto-calculated (read-only)">
-                    <POCStatusChip status={row.poc_status} size="lg" />
-                  </span>
+                  <HoverTip label="Client">
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/30 font-medium">
+                      {row.client_name}
+                    </span>
+                  </HoverTip>
                 )}
               </div>
-              <div className="text-sm text-gray-600 mt-0.5">
-                {row.designation || "—"}
+              <div className="mt-0.5">
+                <HoverTip label="Designation" align="start">
+                  <span className="text-sm text-gray-600">{row.designation || "—"}</span>
+                </HoverTip>
               </div>
               <div className="flex items-center gap-4 text-[12px] text-gray-500 mt-2 flex-wrap">
                 {row.email && (
-                  <span className="flex items-center gap-1">
-                    <Mail sx={{ fontSize: 14 }} /> {row.email}
-                  </span>
+                  <HoverTip label="Email">
+                    <span className="flex items-center gap-1">
+                      <Mail sx={{ fontSize: 14 }} /> {row.email}
+                    </span>
+                  </HoverTip>
                 )}
                 {row.phone && (
-                  <span className="flex items-center gap-1">
-                    <Phone sx={{ fontSize: 14 }} /> {row.phone_isd ? `${row.phone_isd} ` : ""}{row.phone}
-                  </span>
+                  <HoverTip label="Phone No">
+                    <span className="flex items-center gap-1">
+                      <Phone sx={{ fontSize: 14 }} /> {row.phone_isd ? `${row.phone_isd} ` : ""}{row.phone}
+                    </span>
+                  </HoverTip>
                 )}
                 {(row.city || row.country_name || row.base_location) && (
-                  <span className="flex items-center gap-1">
-                    <Place sx={{ fontSize: 14 }} /> {[row.city, row.country_name].filter(Boolean).join(", ") || row.base_location}
-                  </span>
+                  <HoverTip label="Location">
+                    <span className="flex items-center gap-1">
+                      <Place sx={{ fontSize: 14 }} /> {[row.city, row.country_name].filter(Boolean).join(", ") || row.base_location}
+                    </span>
+                  </HoverTip>
+                )}
+                {getRegionByCountryId(row.country_id) && (
+                  <HoverTip label="Region">
+                    <span className="flex items-center gap-1" data-testid="cc-region-value">
+                      <Public sx={{ fontSize: 14 }} /> {getRegionByCountryId(row.country_id)}
+                    </span>
+                  </HoverTip>
                 )}
                 {row.linkedin_url && (
                   <a
@@ -1339,43 +1369,26 @@ function ClientContactDetail({ contactId }) {
                 )}
               </div>
             </div>
-            <button
-              onClick={openEdit}
-              data-testid="cc-detail-edit"
-              className="px-3 py-1.5 rounded-md bg-[#ec9324] text-white text-sm font-medium hover:bg-[#d4811f] flex items-center gap-1"
-            >
-              <Pencil sx={{ fontSize: 15 }} /> Edit
-            </button>
-          </div>
 
-          {/* Location & Region — Region is auto-derived from the Country id. */}
-          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm" data-testid="cc-location-region">
-            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-3">
-              Location
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <div className="text-[11px] text-gray-400 font-medium">City</div>
-                <div className="text-sm text-gray-800 mt-0.5">{row.city || "—"}</div>
-              </div>
-              <div>
-                <div className="text-[11px] text-gray-400 font-medium">Country</div>
-                <div className="text-sm text-gray-800 mt-0.5">
-                  {row.country_name || (row.country_id != null ? getCountryName(row.country_id) : "") || "—"}
-                </div>
-              </div>
-              <div>
-                <div className="text-[11px] text-gray-400 font-medium">Region</div>
-                <div className="mt-1" data-testid="cc-region-value">
-                  {getRegionByCountryId(row.country_id) ? (
-                    <span className="inline-flex items-center text-xs px-2.5 py-1 rounded-full bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/30 font-medium">
-                      {getRegionByCountryId(row.country_id)}
-                    </span>
-                  ) : (
-                    <span className="text-sm text-gray-800">—</span>
-                  )}
-                </div>
-              </div>
+            {/* Right — Status (top corner) with Edit icon-button below it. */}
+            <div className="flex flex-col items-end gap-2 flex-shrink-0">
+              {row.poc_status && (
+                <HoverTip label="Status" side="bottom" align="end">
+                  <POCStatusChip status={row.poc_status} size="lg" />
+                </HoverTip>
+              )}
+              <button
+                type="button"
+                onClick={openEdit}
+                aria-label="Edit"
+                data-testid="cc-detail-edit"
+                className="group relative inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-100 text-gray-600"
+              >
+                <Pencil sx={{ fontSize: 20 }} />
+                <span className="pointer-events-none absolute top-full mt-1.5 right-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+                  Edit
+                </span>
+              </button>
             </div>
           </div>
 

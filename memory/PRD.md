@@ -1,6 +1,25 @@
 # Infollion Utilities — PRD
 
 
+## CRM → Client Contacts — Country dropdown fix + Detail/Card redesign (Aug 08 2026)
+- **Country dropdown bug fixed**: the custom `CountrySelect` (portal popup) was un-clickable & keyboard-dead inside the Radix Dialog. Replaced it with the existing shared **`SearchSelect`** (single-select) — same Link-Segmentation UX, works in dialogs (z-9999 + pointer-events + capture-stopPropagation), full keyboard nav (↑/↓/Enter/Home/End). Deleted `components/CountrySelect.jsx`. `onChange` derives `country_name` via `getCountryName`.
+- **City now optional**, **Country required** (removed `city` from `REQUIRED_CC_FIELDS`; label "City" vs "Country *").
+- **New `HoverTip` component** (in ClientContactsPage) — dark gray-900 group-hover bubble, identical to CRM → Client Detail → POC Status Configuration tooltip.
+- **Detail view redesign** (`ClientContactDetail`):
+  - Removed the separate Location/Region bar.
+  - Location now renders as **"City, Country"** (e.g. "Mumbai, India") in the name-bar meta row.
+  - **Region** shown as a new icon (`Public` globe) + region name right after Location (auto-derived from `country_id`).
+  - Hover tooltips added for Email, Phone No, Location, Region, Designation, Client, Status.
+  - **Status** chip moved to the top-right corner; **Edit** turned into an icon-only round button placed **below** Status (exact POC-Status-Configuration button style + "Edit" hover tooltip). `data-testid="cc-detail-edit"` kept.
+- **Card view redesign** (`ContactCard`) → full-width horizontal row (list grid is now single column):
+  - Removed the client-name firm logo, the metrics row, the View button and the CopyableContactIcon.
+  - Row 1: avatar · name · ID · client chip … (right corner) Status pill + Edit + Delete icons.
+  - Row 2: Designation (wraps to new line if long) with **Location** parallel on the right (renamed from "Base Location").
+  - Row 3: Email + Phone. Responsive via flex-wrap.
+- Verified via 4 Playwright screenshots (country click-select = United Kingdom; card list; detail with Mumbai, India + LATAM region + Region tooltip). Testing agent NOT deployed per user instruction.
+
+
+
 ## CRM → Client Contacts — Base Location split into City + Country + auto Region (Aug 07 2026)
 - **Base Location → City + Country**: the single "Base Location" field in the Add/Edit Client Contact form (`ContactFormDialog`) is now two required fields — **City** (text `Input`) and **Country** (searchable dropdown).
 - **Country data**: new `frontend/src/data/countries.js` (AUTO-GENERATED from the user-supplied `Country List.xlsx`, 197 rows). Exports `COUNTRIES`, `COUNTRY_OPTIONS`, `regionCountryMap` (verbatim business mapping), `REGION_LABELS`, `getCountryName(id)`, `getRegionByCountryId(id)`. The country **id is preserved** for future reference.
