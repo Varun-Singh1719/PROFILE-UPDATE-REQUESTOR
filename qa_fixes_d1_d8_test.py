@@ -21,7 +21,7 @@ from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
 # Backend URL
-BACKEND_URL = "https://form-view-update.preview.emergentagent.com/api"
+BACKEND_URL = "https://sidebar-scroller.preview.emergentagent.com/api"
 
 # Super Admin credentials
 SUPER_ADMIN_EMAIL = "admin@ticketing.com"
