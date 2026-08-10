@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import ChevronDown from "@mui/icons-material/KeyboardArrowDown";
 import Check from "@mui/icons-material/Check";
 import Close from "@mui/icons-material/CloseOutlined";
+import { useWheelScrollIsolation } from "../hooks/useWheelScrollIsolation";
 
 /**
  * SearchSelect — the single dropdown used across the whole CRM.
@@ -51,6 +52,10 @@ export default function SearchSelect({
   const inputRef = useRef(null);
   const listRef = useRef(null);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
+
+  // Trackpad / wheel scrolling for the portalled popup list — works even when
+  // the dropdown is opened inside a Radix Dialog (react-remove-scroll).
+  useWheelScrollIsolation(listRef, open);
 
   const selectedOpts = useMemo(() => {
     if (multiple) {
@@ -255,7 +260,7 @@ export default function SearchSelect({
           className="bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden"
           data-testid={testId ? `${testId}-popup` : undefined}
         >
-          <div ref={listRef} className="max-h-60 overflow-y-auto py-1">
+          <div ref={listRef} className="max-h-60 overflow-y-auto overscroll-contain py-1">
             {loading ? (
               <div className="px-3 py-3 text-xs text-gray-400 flex items-center justify-center gap-2" data-testid={testId ? `${testId}-loading` : undefined}>
                 <span className="w-3.5 h-3.5 border-2 border-gray-200 border-t-[#ec9324] rounded-full animate-spin" />

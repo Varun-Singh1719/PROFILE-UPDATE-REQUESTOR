@@ -3,6 +3,7 @@ import Check from "@mui/icons-material/Check";
 import ChevronsUpDown from "@mui/icons-material/UnfoldMore";
 import X from "@mui/icons-material/Close";
 import Search from "@mui/icons-material/SearchOutlined";
+import { useWheelScrollIsolation } from "../hooks/useWheelScrollIsolation";
 
 /**
  * MultiSelect dropdown with search.
@@ -18,6 +19,9 @@ export default function MultiSelect({ options = [], value = [], onChange, placeh
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const ref = useRef(null);
+  const listRef = useRef(null);
+
+  useWheelScrollIsolation(listRef, open);
 
   useEffect(() => {
     const handler = (e) => {
@@ -97,7 +101,7 @@ export default function MultiSelect({ options = [], value = [], onChange, placeh
               />
             </div>
           </div>
-          <div className="overflow-y-auto max-h-56">
+          <div ref={listRef} className="overflow-y-auto overscroll-contain max-h-56">
             {filtered.length === 0 && (
               <div className="px-3 py-3 text-sm text-gray-400 text-center">No matches</div>
             )}

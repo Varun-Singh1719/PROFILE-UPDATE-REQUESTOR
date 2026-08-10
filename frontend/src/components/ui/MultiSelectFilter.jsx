@@ -38,6 +38,7 @@ import ChevronUp from "@mui/icons-material/KeyboardArrowUp";
 import Check from "@mui/icons-material/Check";
 import Search from "@mui/icons-material/SearchOutlined";
 import X from "@mui/icons-material/Close";
+import { useWheelScrollIsolation } from "../../hooks/useWheelScrollIsolation";
 
 export default function MultiSelectFilter({
   label,
@@ -141,6 +142,10 @@ export default function MultiSelectFilter({
   useLayoutEffect(() => {
     if (open) updatePosition();
   }, [open]);
+
+  // Trackpad / wheel scrolling for the portalled popup list — works even when
+  // this filter is opened inside a Radix Dialog (react-remove-scroll).
+  useWheelScrollIsolation(listRef, open);
 
   // Reset search + highlight whenever the popup closes so re-opening is fresh
   useEffect(() => {

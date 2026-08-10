@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo, useContext } from "react";
+import { createPortal } from "react-dom";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { usePermissions } from "../hooks/usePermissions";
@@ -132,16 +133,48 @@ function applyDynamicLabels(items, labels) {
 }
 
 // --------------------------------------------------------------------------
-// Tooltip wrapper (CSS-only)
+// Tooltip wrapper — renders the tooltip in a fixed-position portal on
+// document.body so it is NEVER clipped by a scrollable/overflow-hidden
+// ancestor (the collapsed sidebar rail scrolls vertically, which would
+// otherwise cut off a CSS-only tooltip that extends to the right).
 // --------------------------------------------------------------------------
 function Tip({ label, children, show }) {
+  const wrapRef = useRef(null);
+  const [pos, setPos] = useState(null);
+
   if (!show) return children;
+
+  const handleEnter = () => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setPos({ top: r.top + r.height / 2, left: r.right + 8 });
+  };
+  const handleLeave = () => setPos(null);
+
   return (
-    <div className="relative group">
+    <div
+      ref={wrapRef}
+      className="relative"
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+    >
       {children}
-      <span className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
-        {label}
-      </span>
+      {pos && typeof document !== "undefined" && createPortal(
+        <span
+          style={{
+            position: "fixed",
+            top: pos.top,
+            left: pos.left,
+            transform: "translateY(-50%)",
+            zIndex: 9999,
+          }}
+          className="pointer-events-none px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap shadow-lg"
+        >
+          {label}
+        </span>,
+        document.body
+      )}
     </div>
   );
 }
@@ -547,7 +580,7 @@ function SidebarNav({ navConfig = NAV_CONFIG, collapsed, currentPath, can, isSup
   }
 
   return (
-    <nav className={`flex-1 py-3 space-y-1 ${collapsed ? "px-1.5 overflow-visible" : "px-3 overflow-y-auto overflow-x-hidden"}`}>
+    <nav className={`flex-1 py-3 space-y-1 ${collapsed ? "px-1.5 overflow-y-auto overflow-x-hidden no-scrollbar" : "px-3 overflow-y-auto overflow-x-hidden"}`}>
       {navConfig.map(item => {
         if (item.kind === "link") {
           // Dashboard link is only shown when the user has any dashboard access.

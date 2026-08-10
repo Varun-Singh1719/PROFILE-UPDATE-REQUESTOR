@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import ChevronsUpDown from "@mui/icons-material/UnfoldMore";
 import X from "@mui/icons-material/Close";
 import Search from "@mui/icons-material/SearchOutlined";
+import { useWheelScrollIsolation } from "../hooks/useWheelScrollIsolation";
 
 /**
  * SingleSelect dropdown — plain list style (no checkboxes).
@@ -36,6 +37,7 @@ export default function SingleSelect({
   const ref = useRef(null);
   const triggerRef = useRef(null);
   const popupRef = useRef(null);
+  const listRef = useRef(null);
   // Portal-based popup position — same pattern as MultiSelectFilter so the
   // dropdown can never be clipped by a parent with `overflow: hidden` (e.g.
   // the Permission Sets edit page table rows).
@@ -84,6 +86,10 @@ export default function SingleSelect({
   useLayoutEffect(() => {
     if (open) updatePosition();
   }, [open]);
+
+  // Trackpad / wheel scrolling for the portalled popup list — works even when
+  // this dropdown is opened inside a Radix Dialog (react-remove-scroll).
+  useWheelScrollIsolation(listRef, open);
 
   const selected = options.find((o) => o.value === value) || null;
 
@@ -188,7 +194,7 @@ export default function SingleSelect({
               </div>
             </div>
           )}
-          <div className="overflow-y-auto max-h-60" onWheel={(e) => e.stopPropagation()}>
+          <div ref={listRef} className="overflow-y-auto overscroll-contain max-h-60" onWheel={(e) => e.stopPropagation()}>
             {filtered.length === 0 && (
               <div className="px-3 py-3 text-sm text-gray-400 text-center">No matches</div>
             )}
