@@ -646,7 +646,7 @@ function ContactCard({ row, onView, onEdit, onDelete }) {
       </div>
 
       {/* Bottom action bar — Edit + Delete at the right corner (View removed) */}
-      <div className="mt-3 pt-3 border-t border-gray-100 flex items-center">
+      <div className="mt-2 pt-2 border-t border-gray-100 flex items-center">
         <div className="flex-1" />
         <ActionIcon label="Edit" onClick={onEdit} testId={`client-contact-edit-${row.display_id}`}>
           <Pencil sx={{ fontSize: 16 }} />
