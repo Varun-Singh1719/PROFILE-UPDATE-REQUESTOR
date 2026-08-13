@@ -135,14 +135,18 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
   // In "request" mode the page maps to `workstation_requests`; in booking mode to
   // `workstation_bookings`. The catalog defines different function keys per page.
   const permPageKey = isRequestMode ? "workstation_requests" : "workstation_bookings";
-  const { fn: permFn } = useEffectivePage("desk_booking", permPageKey);
+  const { fn: permFn, canEdit: pageCanEdit } = useEffectivePage("desk_booking", permPageKey);
   const permBook    = permFn(isRequestMode ? "create" : "book");
   const permCancel  = permFn(isRequestMode ? "cancel" : "cancel_booking");
   const permRefresh = permFn("refresh");
   const permExport  = permFn("export");
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const canEdit = user?.role === "Super Admin";
+  // canEdit now honours the v3 permission set: a user with page-level Edit
+  // on Workstation Bookings (or Super Admin, who is permissive) can create /
+  // modify bookings — not just Super Admin. Matches the backend gate
+  // (require_v3_page_edit on the workstation-bookings write endpoints).
+  const canEdit = pageCanEdit;
   // Right-panel tab: `form` (default) or `my-bookings`. Only rendered when
   // the page is in "request" mode (i.e. Request Workstation page).
   const [panelTab, setPanelTab] = useState("form");
@@ -250,13 +254,13 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
   const loadReference = useCallback(async () => {
     setRefLoading(true);
     try {
-      const [empRes, teamRes] = await Promise.all([
-        api.get("/contacts?status=Active&limit=2000"),
-        api.get("/teams"),
-      ]);
-      const empItems = (empRes.data?.items || empRes.data || []).filter(c => (c.status || "").toLowerCase() === "active");
+      // Desk-booking directory: active employees + teams (with members).
+      // NOT gated behind manage.employees, so a Workspace-Manager-only
+      // permission set can still assign seats to employees / teams.
+      const res = await api.get("/desk-booking/directory");
+      const empItems = (res.data?.employees || []).filter(c => (c.status || "").toLowerCase() === "active");
       setEmployees(empItems);
-      setTeams(teamRes.data || []);
+      setTeams(res.data?.teams || []);
     } catch (e) {
       toast.error(formatApiError(e?.response?.data?.detail) || "Failed to load employees/teams");
     } finally {
@@ -298,14 +302,11 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
     })();
     (async () => {
       try {
-        const [empRes, teamRes] = await Promise.all([
-          api.get("/contacts?status=Active&limit=2000"),
-          api.get("/teams"),
-        ]);
+        const res = await api.get("/desk-booking/directory");
         if (cancelled) return;
-        const empItems = (empRes.data?.items || empRes.data || []).filter(c => (c.status || "").toLowerCase() === "active");
+        const empItems = (res.data?.employees || []).filter(c => (c.status || "").toLowerCase() === "active");
         setEmployees(empItems);
-        setTeams(teamRes.data || []);
+        setTeams(res.data?.teams || []);
       } catch (e) {
         if (!cancelled) toast.error(formatApiError(e?.response?.data?.detail) || "Failed to load employees/teams");
       } finally {

@@ -670,3 +670,82 @@ async def get_booking(booking_id: str, user=Depends(get_current_user)):
         raise HTTPException(404, "Booking not found")
     enriched = await _enrich_bookings_with_team([doc])
     return _booking_view(enriched[0])
+
+
+
+# --------------------------------------------------------------------------- #
+# Desk-booking directory (employees + teams) — reference data for the         #
+# Workstation Booking / Request and Meeting Room Booking screens.             #
+#                                                                             #
+# These screens let a user assign a seat to / add as an attendee ANY active   #
+# employee (and pick whole teams), which requires the org directory. That     #
+# data must NOT be gated behind manage.employees (the admin Employee List),   #
+# otherwise a Permission Set that grants Edit on the booking pages (but not    #
+# on Manage → Employees) cannot actually use those pages. We therefore expose  #
+# a lightweight, desk-booking-scoped directory here instead of reusing        #
+# GET /contacts (admin-only) or GET /teams (returns a members-stripped lite    #
+# payload to non-manage.teams users).                                         #
+# --------------------------------------------------------------------------- #
+
+@api_router.get("/desk-booking/directory")
+async def desk_booking_directory(
+    user=Depends(require_any_v3_page_view(
+        ("desk_booking", "workstation_bookings"),
+        ("desk_booking", "workstation_requests"),
+        ("desk_booking", "meeting_room_bookings"),
+        ("desk_booking", "floor_layout"),
+        ("desk_booking", "pending_approvals"),
+    )),
+):
+    """Active employees + teams (with members) for the booking assignment UIs.
+
+    Response:
+        {
+          "employees": [{id, name, email, emp_id, status, team_ids[]}],
+          "teams":     [{id, name, color, initials, member_ids[], manager_ids[],
+                         members: [{id, name, email, emp_id}], member_count}]
+        }
+    """
+    contacts = await db.contacts.find(
+        {"status": "Active"},
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "emp_id": 1, "status": 1},
+    ).to_list(5000)
+    cmap = {c["id"]: c for c in contacts}
+
+    teams = await db.teams.find(
+        {},
+        {"_id": 0, "id": 1, "name": 1, "color": 1, "initials": 1,
+         "member_ids": 1, "manager_ids": 1},
+    ).to_list(2000)
+
+    # Build employee -> team_ids so the workstation form can tell which team(s)
+    # each employee belongs to.
+    emp_team: Dict[str, List[str]] = {}
+    for t in teams:
+        for mid in (t.get("member_ids") or []):
+            emp_team.setdefault(mid, []).append(t["id"])
+    for c in contacts:
+        c["team_ids"] = emp_team.get(c["id"], [])
+
+    out_teams: List[Dict[str, Any]] = []
+    for t in teams:
+        members = []
+        for mid in (t.get("member_ids") or []):
+            m = cmap.get(mid)
+            if m:
+                members.append({
+                    "id": m["id"], "name": m.get("name"),
+                    "email": m.get("email"), "emp_id": m.get("emp_id"),
+                })
+        out_teams.append({
+            "id": t.get("id"),
+            "name": t.get("name"),
+            "color": t.get("color"),
+            "initials": t.get("initials"),
+            "member_ids": t.get("member_ids") or [],
+            "manager_ids": t.get("manager_ids") or [],
+            "members": members,
+            "member_count": len(t.get("member_ids") or []),
+        })
+
+    return {"employees": contacts, "teams": out_teams}

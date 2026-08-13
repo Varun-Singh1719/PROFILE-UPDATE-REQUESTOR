@@ -1419,14 +1419,13 @@ function AttendeePicker({ selected, onChange, onClose }) {
     let cancelled = false;
     (async () => {
       try {
-        const [uRes, tRes] = await Promise.all([
-          api.get("/contacts?limit=200").catch(() => ({ data: [] })),
-          api.get("/teams").catch(() => ({ data: [] })),
-        ]);
+        // Desk-booking directory: active employees + teams (with members).
+        // NOT gated behind manage.employees, so a Workspace-Manager-only
+        // permission set can still add employees / teams as attendees.
+        const res = await api.get("/desk-booking/directory").catch(() => ({ data: {} }));
         if (cancelled) return;
-        const ulist = Array.isArray(uRes.data) ? uRes.data : (uRes.data?.rows || uRes.data?.items || []);
-        setUsers(ulist);
-        setTeams(Array.isArray(tRes.data) ? tRes.data : (tRes.data?.rows || []));
+        setUsers(Array.isArray(res.data?.employees) ? res.data.employees : []);
+        setTeams(Array.isArray(res.data?.teams) ? res.data.teams : []);
       } finally { if (!cancelled) setLoadingList(false); }
     })();
     return () => { cancelled = true; };

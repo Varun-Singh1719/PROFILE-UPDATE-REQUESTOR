@@ -47,7 +47,7 @@ from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from core import api_router, db, get_current_user, require_role, now_iso, log_audit, client as _mongo_client
-from routers.permissions_v3 import require_any_v3_page_view
+from routers.permissions_v3 import require_any_v3_page_view, require_v3_page_edit
 
 
 # --------------------------------------------------------------------------- #
@@ -352,7 +352,7 @@ async def get_workstation_booking(booking_id: str, user=Depends(get_current_user
 @api_router.post("/workstation-bookings")
 async def create_workstation_booking(
     payload: WorkstationBookingCreate,
-    user=Depends(require_role("Super Admin")),
+    user=Depends(require_v3_page_edit("desk_booking", "workstation_bookings")),
 ):
     """Create one or many workstation bookings.
 
@@ -700,7 +700,7 @@ async def create_workstation_booking(
 async def update_workstation_booking(
     booking_id: str,
     payload: WorkstationBookingUpdate,
-    user=Depends(require_role("Super Admin")),
+    user=Depends(require_v3_page_edit("desk_booking", "workstation_bookings")),
 ):
     """Reschedule / reassign a single booking. Validates against duplicates."""
     doc = await db.workstation_bookings.find_one({"id": booking_id}, {"_id": 0})
@@ -767,7 +767,7 @@ async def update_workstation_booking(
 async def cancel_workstation_booking(
     booking_id: str,
     series: bool = Query(False, description="Cancel the entire recurring series"),
-    user=Depends(require_role("Super Admin")),
+    user=Depends(require_v3_page_edit("desk_booking", "workstation_bookings")),
 ):
     doc = await db.workstation_bookings.find_one({"id": booking_id}, {"_id": 0})
     if not doc:
