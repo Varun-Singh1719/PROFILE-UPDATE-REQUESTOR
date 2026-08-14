@@ -19,7 +19,7 @@ from core import (
     _public_contact, ist_now,
     ContactCreate, ContactUpdate, BulkContactStatus, BulkContactRole, BulkContactPermissionSets,
 )
-from routers.permissions_v3 import require_v3_page_view, require_v3_page_edit
+from routers.permissions_v3 import require_v3_page_view, require_v3_page_edit, require_v3_function
 from notifications import (
     send_email, render_new_employee_email, render_admin_password_reset_email,
 )
@@ -235,7 +235,7 @@ async def list_assignable_contacts(user=Depends(get_current_user)):
 
 @api_router.get("/contacts/export.csv")
 async def export_contacts_csv(
-    user=Depends(require_role("Super Admin")),
+    user=Depends(require_v3_function("manage", "employees", "export")),
     q: Optional[str] = None,
     role: Optional[str] = None,
     status: Optional[str] = None,
@@ -310,7 +310,7 @@ async def export_contacts_csv(
 
 @api_router.get("/contacts/export.xlsx")
 async def export_contacts_xlsx(
-    user=Depends(require_role("Super Admin")),
+    user=Depends(require_v3_function("manage", "employees", "export")),
     q: Optional[str] = None,
     role: Optional[str] = None,
     status: Optional[str] = None,
@@ -405,7 +405,7 @@ async def export_contacts_xlsx(
 
 
 @api_router.post("/contacts/bulk-status")
-async def bulk_contact_status(body: BulkContactStatus, user=Depends(require_role("Super Admin"))):
+async def bulk_contact_status(body: BulkContactStatus, user=Depends(require_v3_page_edit("manage", "employees"))):
     if not body.contact_ids:
         raise HTTPException(400, "No contacts selected")
     targets = [cid for cid in body.contact_ids if cid != user["id"]]
@@ -432,7 +432,7 @@ async def bulk_contact_status(body: BulkContactStatus, user=Depends(require_role
 
 
 @api_router.post("/contacts/bulk-role")
-async def bulk_contact_role(body: BulkContactRole, user=Depends(require_role("Super Admin"))):
+async def bulk_contact_role(body: BulkContactRole, user=Depends(require_v3_page_edit("manage", "employees"))):
     if not body.contact_ids:
         raise HTTPException(400, "No contacts selected")
     targets = [cid for cid in body.contact_ids if cid != user["id"]]
@@ -449,7 +449,7 @@ async def bulk_contact_role(body: BulkContactRole, user=Depends(require_role("Su
 
 
 @api_router.post("/contacts/bulk-permission-sets")
-async def bulk_contact_permission_sets(body: BulkContactPermissionSets, user=Depends(require_role("Super Admin"))):
+async def bulk_contact_permission_sets(body: BulkContactPermissionSets, user=Depends(require_v3_page_edit("manage", "employees"))):
     """Assign / add / remove permission sets on multiple employees at once.
 
     `mode` controls how ``permission_set_ids`` is applied:
@@ -524,7 +524,7 @@ async def bulk_contact_permission_sets(body: BulkContactPermissionSets, user=Dep
 
 
 @api_router.post("/contacts")
-async def create_contact(body: ContactCreate, user=Depends(require_role("Super Admin"))):
+async def create_contact(body: ContactCreate, user=Depends(require_v3_function("manage", "employees", "create"))):
     email = body.email.lower().strip()
     if not body.emp_id or not body.emp_id.strip():
         raise HTTPException(400, "Employee ID is required")
@@ -627,7 +627,7 @@ async def get_contact(contact_id: str, user=Depends(require_v3_page_view("manage
 
 
 @api_router.get("/contacts/{contact_id}/password")
-async def get_contact_password(contact_id: str, user=Depends(require_role("Super Admin"))):
+async def get_contact_password(contact_id: str, user=Depends(require_v3_function("manage", "employees", "copy_password"))):
     c = await db.contacts.find_one({"id": contact_id})
     if not c:
         raise HTTPException(404, "Not found")
@@ -638,7 +638,7 @@ async def get_contact_password(contact_id: str, user=Depends(require_role("Super
 
 
 @api_router.post("/contacts/{contact_id}/reset-password")
-async def reset_contact_password(contact_id: str, user=Depends(require_role("Super Admin"))):
+async def reset_contact_password(contact_id: str, user=Depends(require_v3_function("manage", "employees", "reset_password"))):
     c = await db.contacts.find_one({"id": contact_id})
     if not c:
         raise HTTPException(404, "Not found")

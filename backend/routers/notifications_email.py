@@ -8,7 +8,7 @@ from core import (
     api_router, db, log_audit, now_iso, require_role,
     EmailTemplateIn, EmailTemplateUpdate,
 )
-from routers.permissions_v3 import require_v3_page_view
+from routers.permissions_v3 import require_v3_page_view, require_v3_function, get_v3_function
 
 
 def _csv_list(v):
@@ -31,7 +31,7 @@ def _csv_list(v):
 # ---------- Notifications Outbox ----------
 @api_router.get("/notifications/outbox")
 async def list_notifications(
-    user=Depends(require_role("Super Admin")),
+    user=Depends(require_v3_page_view("manage", "notifications")),
     kind: Optional[str] = None,
     status: Optional[str] = None,
     q: Optional[str] = None,
@@ -80,7 +80,7 @@ async def list_notifications(
 
 
 @api_router.get("/notifications/outbox/{notif_id}")
-async def get_notification(notif_id: str, user=Depends(require_role("Super Admin"))):
+async def get_notification(notif_id: str, user=Depends(require_v3_page_view("manage", "notifications"))):
     n = await db.notifications_outbox.find_one({"id": notif_id}, {"_id": 0})
     if not n:
         raise HTTPException(404, "Not found")
@@ -88,13 +88,13 @@ async def get_notification(notif_id: str, user=Depends(require_role("Super Admin
 
 
 @api_router.delete("/notifications/outbox/{notif_id}")
-async def delete_notification(notif_id: str, user=Depends(require_role("Super Admin"))):
+async def delete_notification(notif_id: str, user=Depends(require_v3_function("manage", "notifications", "delete"))):
     await db.notifications_outbox.delete_one({"id": notif_id})
     return {"ok": True}
 
 
 @api_router.post("/notifications/outbox/{notif_id}/retry")
-async def retry_notification(notif_id: str, user=Depends(require_role("Super Admin"))):
+async def retry_notification(notif_id: str, user=Depends(require_v3_function("manage", "notifications", "retry"))):
     """Re-attempt delivery for a failed outbox row.
 
     Behaviour:
@@ -154,7 +154,7 @@ async def list_email_templates(user=Depends(require_v3_page_view("manage", "emai
 
 
 @api_router.post("/email-templates")
-async def create_email_template(body: EmailTemplateIn, user=Depends(require_role("Super Admin"))):
+async def create_email_template(body: EmailTemplateIn, user=Depends(require_v3_function("manage", "email_templates", "create"))):
     if not body.name.strip():
         raise HTTPException(400, "Name is required")
     if not body.kind.strip():
@@ -180,16 +180,19 @@ async def create_email_template(body: EmailTemplateIn, user=Depends(require_role
 
 
 @api_router.patch("/email-templates/{tpl_id}")
-async def update_email_template(tpl_id: str, body: EmailTemplateUpdate, user=Depends(require_role("Super Admin", "Admin"))):
+async def update_email_template(tpl_id: str, body: EmailTemplateUpdate, user=Depends(require_v3_page_view("manage", "email_templates"))):
     tpl = await db.email_templates.find_one({"id": tpl_id})
     if not tpl:
         raise HTTPException(404, "Template not found")
     upd = {k: v for k, v in body.model_dump().items() if v is not None}
-    # Admin (non-Super) can only toggle status; Super Admin can edit content
-    if user["role"] != "Super Admin":
+    # Content editing needs the manage.email_templates "edit" function (Super
+    # Admin is permissive). Without it a viewer can still toggle status only.
+    edit_fn = await get_v3_function(user, "manage", "email_templates", "edit")
+    can_edit_content = bool(edit_fn and edit_fn.get("enabled") and edit_fn.get("visible"))
+    if not can_edit_content:
         upd = {k: v for k, v in upd.items() if k == "status"}
         if not upd:
-            raise HTTPException(403, "Only Super Admin can edit template content")
+            raise HTTPException(403, "You don't have permission to edit template content")
     upd["updated_at"] = now_iso()
     upd["updated_by"] = user["id"]
     await db.email_templates.update_one({"id": tpl_id}, {"$set": upd})
@@ -200,7 +203,7 @@ async def update_email_template(tpl_id: str, body: EmailTemplateUpdate, user=Dep
 
 
 @api_router.post("/email-templates/{tpl_id}/duplicate")
-async def duplicate_email_template(tpl_id: str, user=Depends(require_role("Super Admin"))):
+async def duplicate_email_template(tpl_id: str, user=Depends(require_v3_function("manage", "email_templates", "create"))):
     tpl = await db.email_templates.find_one({"id": tpl_id}, {"_id": 0})
     if not tpl:
         raise HTTPException(404, "Template not found")
@@ -213,7 +216,7 @@ async def duplicate_email_template(tpl_id: str, user=Depends(require_role("Super
 
 
 @api_router.delete("/email-templates/{tpl_id}")
-async def delete_email_template(tpl_id: str, user=Depends(require_role("Super Admin"))):
+async def delete_email_template(tpl_id: str, user=Depends(require_v3_function("manage", "email_templates", "delete"))):
     tpl = await db.email_templates.find_one({"id": tpl_id})
     if not tpl:
         raise HTTPException(404, "Template not found")

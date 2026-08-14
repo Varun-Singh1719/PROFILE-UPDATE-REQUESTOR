@@ -9,7 +9,7 @@ from core import (
     TEAM_COLOR_PALETTE,
     TeamCreate, TeamUpdate,
 )
-from routers.permissions_v3 import has_v3_page_view, require_v3_page_view, has_any_v3_module_access
+from routers.permissions_v3 import has_v3_page_view, require_v3_page_view, has_any_v3_module_access, require_v3_function
 
 
 async def _next_unused_color(exclude_team_id: Optional[str] = None) -> str:
@@ -152,7 +152,7 @@ async def get_team(team_id: str, user=Depends(require_v3_page_view("manage", "te
 
 
 @api_router.post("/teams")
-async def create_team(body: TeamCreate, user=Depends(require_role("Super Admin"))):
+async def create_team(body: TeamCreate, user=Depends(require_v3_function("manage", "teams", "create"))):
     if not body.name.strip():
         raise HTTPException(400, "Team name required")
     if await db.teams.find_one({"name": body.name.strip()}):
@@ -201,7 +201,7 @@ async def create_team(body: TeamCreate, user=Depends(require_role("Super Admin")
 
 
 @api_router.patch("/teams/{team_id}")
-async def update_team(team_id: str, body: TeamUpdate, user=Depends(require_role("Super Admin"))):
+async def update_team(team_id: str, body: TeamUpdate, user=Depends(require_v3_function("manage", "teams", "edit"))):
     team = await db.teams.find_one({"id": team_id})
     if not team:
         raise HTTPException(404, "Team not found")
@@ -239,6 +239,6 @@ async def update_team(team_id: str, body: TeamUpdate, user=Depends(require_role(
 
 
 @api_router.delete("/teams/{team_id}")
-async def delete_team(team_id: str, user=Depends(require_role("Super Admin"))):
+async def delete_team(team_id: str, user=Depends(require_v3_function("manage", "teams", "delete"))):
     await db.teams.delete_one({"id": team_id})
     return {"ok": True}

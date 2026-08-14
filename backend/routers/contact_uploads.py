@@ -32,6 +32,7 @@ from core import (
     hash_password, encrypt_password, generate_password,
 )
 from notifications import send_email, render_new_employee_email
+from routers.permissions_v3 import require_v3_function, require_v3_page_view
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +155,7 @@ async def _resolve_permission_sets(raw) -> tuple[List[str], List[str]]:
 
 
 @api_router.get("/contacts/sample-template")
-async def download_sample_template(format: str = "xlsx", user=Depends(require_role("Super Admin"))):
+async def download_sample_template(format: str = "xlsx", user=Depends(require_v3_function("manage", "employees", "download_sample"))):
     fmt = (format or "xlsx").lower()
     if fmt not in ("csv", "xlsx"):
         raise HTTPException(400, "format must be 'csv' or 'xlsx'")
@@ -309,7 +310,7 @@ def _read_rows_any(file_bytes: bytes, filename: str) -> tuple[List[str], List[tu
 @api_router.post("/contacts/bulk-upload")
 async def bulk_upload_contacts(
     file: UploadFile = File(...),
-    user=Depends(require_role("Super Admin")),
+    user=Depends(require_v3_function("manage", "employees", "import")),
 ):
     if not file.filename or not (
         file.filename.lower().endswith(".xlsx") or file.filename.lower().endswith(".csv")
@@ -526,7 +527,7 @@ async def bulk_upload_contacts(
 async def list_upload_history(
     page: int = 1,
     page_size: int = 25,
-    user=Depends(require_role("Super Admin")),
+    user=Depends(require_v3_page_view("manage", "employees")),
 ):
     page = max(1, page)
     page_size = max(1, min(page_size, 200))
@@ -543,7 +544,7 @@ async def list_upload_history(
 
 
 @api_router.get("/contacts/upload-history/{upload_id}")
-async def get_upload_session(upload_id: str, user=Depends(require_role("Super Admin"))):
+async def get_upload_session(upload_id: str, user=Depends(require_v3_page_view("manage", "employees"))):
     doc = await db.contact_uploads.find_one({"id": upload_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Upload not found")
@@ -551,7 +552,7 @@ async def get_upload_session(upload_id: str, user=Depends(require_role("Super Ad
 
 
 @api_router.get("/contacts/upload-history/{upload_id}/error-report.xlsx")
-async def download_error_report(upload_id: str, user=Depends(require_role("Super Admin"))):
+async def download_error_report(upload_id: str, user=Depends(require_v3_function("manage", "employees", "import"))):
     doc = await db.contact_uploads.find_one({"id": upload_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Upload not found")

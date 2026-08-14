@@ -797,7 +797,7 @@ async def cancel_workstation_booking(
 # --------------------------------------------------------------------------- #
 
 @api_router.post("/workstation-bookings/release-inactive")
-async def release_inactive(user=Depends(require_role("Super Admin"))):
+async def release_inactive(user=Depends(require_v3_page_edit("desk_booking", "workstation_bookings"))):
     """Cancel future workstation bookings owned by employees whose status is Inactive.
     Idempotent — safe to call repeatedly."""
     inactive_docs = await db.contacts.find({"status": "Inactive"}, {"_id": 0, "id": 1}).to_list(5000)

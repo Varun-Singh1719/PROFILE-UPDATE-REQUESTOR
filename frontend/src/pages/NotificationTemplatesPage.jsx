@@ -32,6 +32,7 @@ import Chair from "@mui/icons-material/Chair";
 import EventAvailable from "@mui/icons-material/EventAvailableOutlined";
 import Timer from "@mui/icons-material/AccessTimeOutlined";
 import { useAuth } from "../context/AuthContext";
+import { useEffectivePage } from "../context/EffectivePermissionsContext";
 
 /**
  * NotificationTemplatesPage — Redesigned (Jul 2026)
@@ -298,6 +299,11 @@ function buildPreviewPayload(kind) {
 export default function NotificationTemplatesPage() {
   const { user } = useAuth();
   const isSuperAdmin = user?.role === "Super Admin";
+  // Content editing now honours the manage.notification_templates "edit"
+  // permission (Super Admin permissive), matching the backend gate. Non-editors
+  // can still toggle a template's Active/Inactive status.
+  const { fn: ntPermFn } = useEffectivePage("manage", "notification_templates");
+  const canEditContent = isSuperAdmin || ntPermFn("edit").canUse;
 
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -453,7 +459,7 @@ export default function NotificationTemplatesPage() {
                 <span className="font-semibold text-gray-900">
                   {formatPollInterval(settings?.poll_interval_ms)}
                 </span>
-                {isSuperAdmin && (
+                {canEditContent && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
@@ -703,7 +709,7 @@ export default function NotificationTemplatesPage() {
 
       <EditTemplateModal
         template={editing}
-        canEditContent={isSuperAdmin}
+        canEditContent={canEditContent}
         onClose={() => setEditing(null)}
         onSaved={(fresh) => {
           setItems((prev) => prev.map((x) => (x.id === fresh.id ? fresh : x)));

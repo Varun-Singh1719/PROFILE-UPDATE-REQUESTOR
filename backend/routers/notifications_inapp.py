@@ -22,6 +22,7 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from core import api_router, db, get_current_user, log_audit, now_iso, require_role
+from routers.permissions_v3 import require_v3_function, get_v3_function
 
 
 # ---------------------------------------------------------------------------
@@ -119,11 +120,15 @@ async def update_notification_template(
     if not tpl:
         raise HTTPException(404, "Template not found")
     upd = {k: v for k, v in body.model_dump().items() if v is not None}
-    if user["role"] != "Super Admin":
-        # Non–Super Admin can only toggle Active/Inactive
+    # Content editing needs manage.notification_templates "edit" (Super Admin
+    # permissive). Without it, only the Active/Inactive status can be toggled.
+    edit_fn = await get_v3_function(user, "manage", "notification_templates", "edit")
+    can_edit_content = bool(edit_fn and edit_fn.get("enabled") and edit_fn.get("visible"))
+    if not can_edit_content:
+        # Non-editors can only toggle Active/Inactive
         upd = {k: v for k, v in upd.items() if k == "status"}
         if not upd:
-            raise HTTPException(403, "Only Super Admin can edit template content")
+            raise HTTPException(403, "You don't have permission to edit template content")
     if "status" in upd and upd["status"] not in ("Active", "Inactive"):
         raise HTTPException(400, "status must be 'Active' or 'Inactive'")
     upd["updated_at"] = now_iso()
@@ -508,7 +513,7 @@ async def get_notification_settings(user=Depends(get_current_user)):
 @api_router.put("/notifications/settings")
 async def update_notification_settings(
     body: NotificationSettingsUpdate,
-    user=Depends(require_role("Super Admin")),
+    user=Depends(require_v3_function("manage", "notification_templates", "edit")),
 ):
     """Update the bell-poll cadence. Super Admin only."""
     upd = {

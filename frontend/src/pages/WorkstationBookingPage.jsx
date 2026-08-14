@@ -1136,7 +1136,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
             <div ref={formRef} className="lg:w-1/4 w-full lg:max-w-[420px] flex flex-col bg-white">
               {!canEdit && (
                 <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 flex items-center gap-2 text-xs text-amber-800">
-                  <ShieldAlert sx={{ fontSize: 14 }}/> You don't have permission to {isRequestMode ? "submit workstation requests" : "create or modify workstation bookings"}.
+                  <ShieldAlert sx={{ fontSize: 14 }}/> You do not have permission to {isRequestMode ? "submit workstation requests" : "create or modify workstation bookings"}.
                 </div>
               )}
 
