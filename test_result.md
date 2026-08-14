@@ -103,6 +103,168 @@
 #====================================================================================================
 
 user_problem_statement: |
+  User reported: Permission Set 165 ("Workspace Manager - HR Manager") is assigned to Arpita Bansal
+  and has the Workspace Manager → Bookings tab turned ON. But when Arpita logs in, the "Bookings"
+  item does not appear under the "Workspace Manager" group in the sidebar.
+
+frontend:
+  - task: "Sidebar - Workspace Manager > Bookings tab visibility (v3 permissions)"
+    implemented: true
+    working: true
+    file: "frontend/src/components/Sidebar.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            ROOT CAUSE: The "Bookings" nav item (line 72) was the only child in the
+            "Workspace Manager" group without a `v3: { module, page }` mapping. Every
+            sibling has one. Because of that, the sidebar filter at Sidebar.jsx:198-202
+            fell through to the legacy `can("desk_booking","seat_request","view")` check,
+            which reads /permissions/me/effective. A v3-only permission set (like 165)
+            leaves that legacy map empty for this action, so the item was hidden for
+            v3-only users like Arpita — even though her v3 set had bookings_history:
+            view.enabled=true, visible=true.
+            FIX: Added `v3: { module: "desk_booking", page: "bookings_history" }` to the
+            Bookings nav item. Route App.js:154 already uses the same v3 page. Now the
+            sidebar honors the v3 gate (authoritative per the comment at Sidebar.jsx:192-197).
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ BUG FIX VERIFIED - ALL 6 TESTS PASSED (Aug 14 2026)
+            
+            Comprehensive testing of sidebar Bookings tab visibility bug fix completed.
+            Test credentials: arpita.bansal@infollion.com / KjIYlWC3l5Op9# (v3-only Permission Set 165)
+            
+            **TEST RESULTS:**
+            
+            1. ✅ Login as arpita.bansal (v3-only user) - PASS
+               - Successfully logged in with v3-only Permission Set 165 "Workspace Manager - HR Manager"
+               - Landed on dashboard at /admin
+            
+            2. ✅ Locate and expand "Workspace Manager" group - PASS
+               - Workspace Manager group found in sidebar (data-testid="sidebar-group-workspace-manager")
+               - Group expanded successfully
+            
+            3. ✅ Verify "Bookings" item is present - PASS
+               - "Bookings" link FOUND in sidebar (data-testid="sidebar-link-bookings")
+               - Link text: "Bookings"
+               - Link href: "/workspace-manager/bookings" ✓
+               - THIS IS THE KEY FIX - Bookings tab now appears for v3-only users
+            
+            4. ✅ Click Bookings and verify navigation - PASS
+               - Clicked Bookings link successfully
+               - Navigated to /workspace-manager/bookings ✓
+               - NO Access Denied errors ✓
+               - NO 403 errors ✓
+               - Page content loaded successfully ✓
+            
+            5. ✅ Verify other Workspace Manager items still visible - PASS
+               - Found 4 other Workspace Manager items (regression check):
+                 * Floor Layout
+                 * Workstation Booking
+                 * Meeting Room Booking
+                 * Pending Approvals
+               - All items visible and accessible ✓
+               - No side effects from the fix ✓
+            
+            6. ✅ Super Admin regression check - PASS
+               - Logged out and logged in as admin@ticketing.com / Admin@123
+               - Bookings link is still visible for Super Admin ✓
+               - No regression for Super Admin users ✓
+            
+            **KEY FINDINGS:**
+            - The v3 gate `v3: { module: "desk_booking", page: "bookings_history" }` is now correctly
+              consulting the v3 permission matrix (/api/me/permissions) instead of falling through
+              to the legacy /permissions/me/effective check
+            - v3-only users (like Arpita with Permission Set 165) can now see and access the Bookings tab
+            - Navigation to /workspace-manager/bookings works without any authorization errors
+            - Other Workspace Manager items remain visible (no side effects)
+            - Super Admin access preserved (no regression)
+            
+            **SCREENSHOTS:**
+            - test2-workspace-manager-expanded.png: Workspace Manager group expanded with Bookings visible
+            - test3-bookings-visible.png: Bookings link present in sidebar for Arpita
+            - test4-bookings-page.png: Successful navigation to Bookings page
+            - test5-other-items-visible.png: Other Workspace Manager items still visible
+            - test6-super-admin-bookings-visible.png: Bookings visible for Super Admin
+            
+            NO ISSUES FOUND. Bug fix is complete and working as specified.
+  - task: "Employees Password field hide/show via v3 permissions"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/ContactListPage.jsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Added view_password / edit_password v3 function permissions under
+            manage.employees + wired PasswordField (with a new `mode` prop) so
+            the Password block is hidden client-side when the corresponding
+            function is not visible. Also wired copy_password / reset_password
+            for the Copy / Reset buttons. Super Admin bypass preserved.
+
+backend: []
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: true
+
+test_plan:
+  current_focus:
+    - "Sidebar - Workspace Manager > Bookings tab visibility (v3 permissions)"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    - agent: "main"
+      message: |
+        Fixed the Sidebar "Bookings" item to consume the v3 permission
+        (desk_booking.bookings_history) instead of falling through to the
+        legacy /permissions/me/effective check. Please verify:
+
+        Preconditions to test:
+        1. Log in as admin@ticketing.com / Admin@123 (Super Admin).
+        2. Manage → Permissions → open set 165 "Workspace Manager - HR Manager"
+           → confirm Manage → Workspace Manager → "Bookings" (bookings_history)
+           has view.enabled=true, view.visible=true. If not, toggle it on and
+           save.
+        3. Confirm set 165 is assigned to Arpita Bansal (or ANY test admin
+           with only this v3 set). If Arpita is not present, pick a test admin
+           whose only permission set is 165 (or create/assign one for testing).
+
+        Assertion:
+        - Log in as that user.
+        - Open the sidebar → the "Workspace Manager" group should expand and
+          contain a "Bookings" child linking to /workspace-manager/bookings.
+        - Click it → the BookingsPage should render (no 403 / no redirect).
+    - agent: "testing"
+      message: |
+        ✅ BUG FIX VERIFIED SUCCESSFULLY (Aug 14 2026)
+        
+        Completed comprehensive testing of the sidebar Bookings tab visibility bug fix.
+        All 6 test scenarios passed without any issues.
+        
+        **VERIFIED:**
+        - Bookings tab now appears for arpita.bansal@infollion.com (v3-only Permission Set 165)
+        - Navigation to /workspace-manager/bookings works without 403/Access Denied errors
+        - Other Workspace Manager items remain visible (no side effects)
+        - Super Admin can still see Bookings tab (no regression)
+        
+        The v3 gate fix is working correctly. The sidebar now consults the v3 permission
+        matrix instead of falling through to the legacy /permissions/me/effective check.
+        
+        NO FURTHER ACTION REQUIRED. Bug fix is complete.
+
+user_problem_statement: |
   Workspace Manager >> Floor Layout — Meeting room availability by CURRENT TIME (Jul 29 2026):
   Previously the meeting-room boxes on the Floor Layout view were coloured
   purely by "has any booking on the selected date" (RED if any booking existed

@@ -69,7 +69,7 @@ const NAV_CONFIG = [
       { to: "/workspace-manager/request-workstation", label: "Request Workstation", icon: EventSeatRoundedIcon, perm: { module: "desk_booking", feature: "seat_request", action: "view" }, v3: { module: "desk_booking", page: "workstation_requests" } },
       { to: "/workspace-manager/meeting-room-booking", label: "Meeting Room Booking", icon: CalendarClock, perm: { module: "desk_booking", feature: "seat_request", action: "view" }, v3: { module: "desk_booking", page: "meeting_room_bookings" } },
       { to: "/workspace-manager/pending-approvals", label: "Pending Approvals", icon: AddTaskIcon, perm: { module: "desk_booking", feature: "seat_request", action: "view" }, v3: { module: "desk_booking", page: "pending_approvals" } },
-      { to: "/workspace-manager/bookings",     label: "Bookings",          icon: ClipboardList, perm: { module: "desk_booking", feature: "seat_request", action: "view" } },
+      { to: "/workspace-manager/bookings",     label: "Bookings",          icon: ClipboardList, perm: { module: "desk_booking", feature: "seat_request", action: "view" }, v3: { module: "desk_booking", page: "bookings_history" } },
       { to: "/workspace-manager/floor-plans",  label: "Floor Calibration", icon: Crosshair,   perm: { module: "desk_booking", feature: "seat_request", action: "edit" }, v3: { module: "desk_booking", page: "floor_plans" } },
     ],
   },
