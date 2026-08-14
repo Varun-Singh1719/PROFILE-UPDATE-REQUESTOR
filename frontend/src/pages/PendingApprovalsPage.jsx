@@ -68,14 +68,20 @@ const fmtDateTime = (iso) => {
 
 export default function PendingApprovalsPage() {
   const { user } = useAuth();
-  // Until the Permissions module lands, gate to Super Admin (mirrors WS Booking).
-  const canApprove = user?.role === "Super Admin";
+  const isSuperAdmin = user?.role === "Super Admin";
   // ── Permissions V3 (Round 3) ──
   const { fn: permFn } = useEffectivePage("desk_booking", "pending_approvals");
   const permApprove   = permFn("approve");
   const permReject    = permFn("reject");
   const permConfigure = permFn("configure_auto_approval");
   const permRefresh   = permFn("refresh");
+  // `canApprove` is the coarse "can act on approvals at all" gate used to show
+  // the approve/decline controls and the settings gear. It now honours the v3
+  // permission set (approve OR reject function granted) instead of being
+  // hard-locked to Super Admin. Per-button gates still check the specific
+  // function (permApprove.canUse / permReject.canUse / permConfigure.canUse),
+  // and the backend enforces the same via require_v3_function.
+  const canApprove = isSuperAdmin || permApprove.canUse || permReject.canUse || permConfigure.canUse;
 
   // ----- floor plans -----
   const [plans, setPlans] = useState([]);
@@ -390,7 +396,7 @@ export default function PendingApprovalsPage() {
 
   // -------- Approve / Decline actions --------
   const approve = async (req) => {
-    if (!canApprove) { toast.error("Only Super Admin can approve requests"); return; }
+    if (!canApprove) { toast.error("You don't have permission to approve requests"); return; }
     setDecidingId(req.id);
     try {
       const isMR = req._type === "meeting_room";
@@ -422,7 +428,7 @@ export default function PendingApprovalsPage() {
   };
 
   const decline = async (req) => {
-    if (!canApprove) { toast.error("Only Super Admin can decline requests"); return; }
+    if (!canApprove) { toast.error("You don't have permission to decline requests"); return; }
     setDecidingId(req.id);
     try {
       const isMR = req._type === "meeting_room";
@@ -566,7 +572,7 @@ export default function PendingApprovalsPage() {
               onClick={() => setSettingsOpen(true)}
               disabled={!canApprove || !permConfigure.canUse}
               className="h-9 w-9 inline-flex items-center justify-center rounded-md border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50"
-              title={canApprove ? "Approval settings" : "Only Super Admin can configure"}
+              title={canApprove ? "Approval settings" : "You don't have permission to configure"}
               aria-label="Approval settings"
               data-testid="approval-settings-btn"
             >
@@ -578,7 +584,7 @@ export default function PendingApprovalsPage() {
 
         {!canApprove && (
           <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 flex items-center gap-2 text-xs text-amber-800">
-            <ShieldAlert sx={{ fontSize: 14 }}/> Only Super Admin can approve or decline workstation requests.
+            <ShieldAlert sx={{ fontSize: 14 }}/> You don't have permission to approve or decline requests.
           </div>
         )}
 

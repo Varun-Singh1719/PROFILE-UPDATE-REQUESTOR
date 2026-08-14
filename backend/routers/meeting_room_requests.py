@@ -45,7 +45,7 @@ from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from core import api_router, db, get_current_user, require_role, now_iso, log_audit
-from routers.permissions_v3 import require_any_v3_page_view
+from routers.permissions_v3 import require_any_v3_page_view, require_v3_function
 
 
 # --------------------------------------------------------------------------- #
@@ -751,7 +751,7 @@ async def reschedule_meeting_room_request(
 @api_router.post("/meeting-room-requests/{request_id}/approve")
 async def approve_meeting_room_request(
     request_id: str,
-    user=Depends(require_role("Super Admin")),
+    user=Depends(require_v3_function("desk_booking", "pending_approvals", "approve")),
 ):
     req = await db.meeting_room_requests.find_one({"id": request_id}, {"_id": 0})
     if not req:
@@ -816,7 +816,7 @@ async def approve_meeting_room_request(
 @api_router.post("/meeting-room-requests/{request_id}/decline")
 async def decline_meeting_room_request(
     request_id: str,
-    user=Depends(require_role("Super Admin")),
+    user=Depends(require_v3_function("desk_booking", "pending_approvals", "reject")),
 ):
     req = await db.meeting_room_requests.find_one({"id": request_id}, {"_id": 0})
     if not req:

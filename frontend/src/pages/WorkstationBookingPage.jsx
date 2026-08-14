@@ -742,8 +742,8 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
   const openProposalReview = () => {
     if (!canEdit) {
       toast.error(isRequestMode
-        ? "Only Super Admin can submit workstation requests"
-        : "Only Super Admin can create workstation bookings");
+        ? "You don't have permission to submit workstation requests"
+        : "You don't have permission to create workstation bookings");
       return;
     }
     const err = validate();
@@ -793,8 +793,8 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
     // in the dialog are dropped here).
     if (!canEdit) {
       toast.error(isRequestMode
-        ? "Only Super Admin can submit workstation requests"
-        : "Only Super Admin can create workstation bookings");
+        ? "You don't have permission to submit workstation requests"
+        : "You don't have permission to create workstation bookings");
       return;
     }
     const err = validate();
@@ -1136,7 +1136,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
             <div ref={formRef} className="lg:w-1/4 w-full lg:max-w-[420px] flex flex-col bg-white">
               {!canEdit && (
                 <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 flex items-center gap-2 text-xs text-amber-800">
-                  <ShieldAlert sx={{ fontSize: 14 }}/> Only Super Admin can {isRequestMode ? "submit workstation requests" : "create or modify workstation bookings"}.
+                  <ShieldAlert sx={{ fontSize: 14 }}/> You don't have permission to {isRequestMode ? "submit workstation requests" : "create or modify workstation bookings"}.
                 </div>
               )}
 

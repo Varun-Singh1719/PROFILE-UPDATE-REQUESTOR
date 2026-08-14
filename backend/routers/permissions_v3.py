@@ -1174,6 +1174,23 @@ def require_v3_page_edit(mkey: str, pkey: str):
     return _dep
 
 
+def require_v3_function(mkey: str, pkey: str, fkey: str):
+    """FastAPI dependency: 403 unless user has function `fkey` enabled+visible on
+    page (mkey, pkey). Super Admin is permissive (handled by get_v3_function).
+
+    Used for ACTION-level gates that the frontend already checks per-function —
+    e.g. Pending Approvals → approve / reject / configure_auto_approval — so a
+    Permission Set that enables the action lets a non-Super-Admin perform it,
+    instead of the endpoint hard-requiring the Super Admin role.
+    """
+    async def _dep(user=Depends(get_current_user)):
+        entry = await get_v3_function(user, mkey, pkey, fkey)
+        if not entry or not entry.get("enabled") or not entry.get("visible"):
+            raise HTTPException(403, f"Access denied — {mkey}.{pkey}.{fkey} not granted")
+        return user
+    return _dep
+
+
 async def has_any_v3_module_access(user: dict, *modules: str) -> bool:
     """Returns True if the user has ANY (page, view.enabled+visible) inside ANY
     of the given module keys. Used to gate cross-module payloads (e.g. teams

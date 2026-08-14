@@ -48,6 +48,7 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
 from core import api_router, db, require_role, now_iso, log_audit, ist_now
+from routers.permissions_v3 import require_v3_function
 
 
 # --------------------------------------------------------------------------- #
@@ -253,7 +254,7 @@ async def read_approval_settings(user=Depends(require_role("Super Admin", "Admin
 @api_router.put("/approval-settings")
 async def update_approval_settings(
     payload: SettingsIn,
-    user=Depends(require_role("Super Admin")),
+    user=Depends(require_v3_function("desk_booking", "pending_approvals", "configure_auto_approval")),
 ):
     """Update the enabled flag and/or matrix. Fields omitted are left untouched."""
     if payload.enabled is None and payload.matrix is None:
@@ -290,7 +291,7 @@ async def update_approval_settings(
 
 
 @api_router.post("/approval-settings/reset")
-async def reset_approval_settings(user=Depends(require_role("Super Admin"))):
+async def reset_approval_settings(user=Depends(require_v3_function("desk_booking", "pending_approvals", "configure_auto_approval"))):
     """Reset to defaults — Auto-Approval OFF, every cell unchecked."""
     current = await get_settings()
     defaults = {"enabled": False, "matrix": _default_matrix()}

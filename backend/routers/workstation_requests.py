@@ -67,7 +67,7 @@ from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from core import api_router, db, get_current_user, require_role, now_iso, log_audit, client as _mongo_client
-from routers.permissions_v3 import require_any_v3_page_view
+from routers.permissions_v3 import require_any_v3_page_view, require_v3_page_edit, require_v3_function
 
 
 # --------------------------------------------------------------------------- #
@@ -568,7 +568,7 @@ async def get_workstation_request(request_id: str, user=Depends(get_current_user
 @api_router.post("/workstation-requests")
 async def create_workstation_request(
     payload: WorkstationRequestCreate,
-    user=Depends(require_role("Super Admin")),
+    user=Depends(require_v3_page_edit("desk_booking", "workstation_requests")),
 ):
     """Submit one or more workstation requests (no recurring).
 
@@ -873,7 +873,7 @@ async def create_workstation_request(
 @api_router.post("/workstation-requests/{request_id}/approve")
 async def approve_workstation_request(
     request_id: str,
-    user=Depends(require_role("Super Admin")),
+    user=Depends(require_v3_function("desk_booking", "pending_approvals", "approve")),
 ):
     """Approve a pending request → create a workstation booking + mark approved.
 
@@ -976,7 +976,7 @@ async def approve_workstation_request(
 @api_router.post("/workstation-requests/{request_id}/decline")
 async def decline_workstation_request(
     request_id: str,
-    user=Depends(require_role("Super Admin")),
+    user=Depends(require_v3_function("desk_booking", "pending_approvals", "reject")),
 ):
     req = await db.workstation_requests.find_one({"id": request_id}, {"_id": 0})
     if not req:
@@ -1282,7 +1282,7 @@ async def _decline_one(request_id: str, actor: dict) -> dict:
 @api_router.post("/workstation-requests/bulk-approve")
 async def bulk_approve_workstation_requests(
     payload: BulkRequestIds,
-    user=Depends(require_role("Super Admin")),
+    user=Depends(require_v3_function("desk_booking", "pending_approvals", "approve")),
 ):
     """Approve multiple requests. Successful ones are processed; failures are
     listed in the response. Never rolls back already-approved items."""
@@ -1312,7 +1312,7 @@ async def bulk_approve_workstation_requests(
 @api_router.post("/workstation-requests/bulk-decline")
 async def bulk_decline_workstation_requests(
     payload: BulkRequestIds,
-    user=Depends(require_role("Super Admin")),
+    user=Depends(require_v3_function("desk_booking", "pending_approvals", "reject")),
 ):
     actor = _actor(user)
     results = []
