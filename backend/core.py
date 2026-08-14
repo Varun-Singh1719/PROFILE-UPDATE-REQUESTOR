@@ -423,6 +423,8 @@ PERMISSION_MODULES_V3 = [
                     {"key": "bulk_activate",   "label": "Bulk Activate",      "scoped": False},
                     {"key": "bulk_deactivate", "label": "Bulk Deactivate",    "scoped": False},
                     {"key": "bulk_change_role","label": "Bulk Change Role",   "scoped": False},
+                    {"key": "view_password",   "label": "Password (View page)", "scoped": False},
+                    {"key": "edit_password",   "label": "Password (Edit page)", "scoped": False},
                     {"key": "copy_password",   "label": "Copy Password",      "scoped": False},
                     {"key": "reset_password",  "label": "Reset Password",     "scoped": False},
                     {"key": "login_as",        "label": "Login As",           "scoped": False},

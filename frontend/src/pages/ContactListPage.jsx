@@ -143,7 +143,22 @@ const ROLE_OPTIONS = ["Super Admin", "Admin"];
 const ALL_ROLE_FILTERS = ["Super Admin", "Admin"];
 const EMPTY_FORM = { email: "", name: "", phone: "", phone_isd: DEFAULT_ISD, role: "Admin", emp_id: "", doj: "", permission_set_ids: [] };
 
-function PasswordField({ contactId, testIdPrefix = "contact" }) {
+function PasswordField({ contactId, testIdPrefix = "contact", mode = "view" }) {
+  // v3 permission gating (Aug 14 2026): Manage → Employees.
+  //   - view_password  → controls the whole Password block on the View (detail) page
+  //   - edit_password  → controls the whole Password block on the Edit dialog
+  //   - copy_password  → controls the Copy button
+  //   - reset_password → controls the Reset button
+  // When the corresponding permission is not visible/enabled, the element is
+  // simply not rendered (client-side hide).
+  const { fn, isSuperAdmin } = useEffectivePage("manage", "employees");
+  const gateKey = mode === "edit" ? "edit_password" : "view_password";
+  const gate = fn(gateKey);
+  const copyGate = fn("copy_password");
+  const resetGate = fn("reset_password");
+  // Super Admin always sees the field; otherwise honor the visibility flag.
+  const fieldVisible = isSuperAdmin ? true : gate.isVisible;
+
   const [pwd, setPwd] = useState(null); // decrypted password (or null)
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -182,8 +197,11 @@ function PasswordField({ contactId, testIdPrefix = "contact" }) {
 
   const displayValue = pwd ? (show ? pwd : "•".repeat(Math.max(pwd.length, 10))) : "••••••••••";
 
+  // Hide the entire Password block when the user lacks view_password / edit_password.
+  if (!fieldVisible) return null;
+
   return (
-    <div>
+    <div className="border-t border-gray-100 pt-4 mt-2">
       <Label className="flex items-center gap-1.5">
         <KeyRound sx={{ fontSize: 14 }} className="text-gray-500"/> Password
       </Label>
@@ -211,7 +229,7 @@ function PasswordField({ contactId, testIdPrefix = "contact" }) {
             {show ? "Hide" : "Show"}
           </span>
         </div>
-        {pwd && (
+        {pwd && copyGate.isVisible && (
           <div className="relative group">
             <Button
               type="button"
@@ -221,6 +239,7 @@ function PasswordField({ contactId, testIdPrefix = "contact" }) {
               data-testid={`${testIdPrefix}-password-copy`}
               className="border-gray-300"
               aria-label="Copy password"
+              disabled={!copyGate.canUse}
             >
               <Copy sx={{ fontSize: 16 }}/>
             </Button>
@@ -229,13 +248,14 @@ function PasswordField({ contactId, testIdPrefix = "contact" }) {
             </span>
           </div>
         )}
+        {resetGate.isVisible && (
         <div className="relative group">
           <Button
             type="button"
             size="icon"
             variant="outline"
             onClick={reset}
-            disabled={loading}
+            disabled={loading || !resetGate.canUse}
             data-testid={`${testIdPrefix}-password-reset`}
             className="border-gray-300"
             aria-label="Reset password"
@@ -246,6 +266,7 @@ function PasswordField({ contactId, testIdPrefix = "contact" }) {
             Reset
           </span>
         </div>
+        )}
       </div>
     </div>
   );
@@ -366,9 +387,7 @@ function EmployeeDetailModal({ contact, open, onClose }) {
           </div>
 
           {/* Password */}
-          <div className="border-t border-gray-100 pt-3">
-            <PasswordField contactId={contact.id} testIdPrefix="detail" />
-          </div>
+          <PasswordField contactId={contact.id} testIdPrefix="detail" mode="view" />
 
           {/* Footer meta */}
           <div className="flex items-center justify-between text-[11px] text-gray-500 border-t border-gray-100 pt-3">
@@ -1579,9 +1598,7 @@ export default function ContactListPage() {
               </div>
             </div>
             {editing && (
-              <div className="border-t pt-4">
-                <PasswordField contactId={editing.id} testIdPrefix="edit" />
-              </div>
+              <PasswordField contactId={editing.id} testIdPrefix="edit" mode="edit" />
             )}
             <DialogFooter>
               <Button type="submit" className="bg-[#ec9324] hover:bg-[#d4811f] text-white" data-testid="submit-contact-btn">

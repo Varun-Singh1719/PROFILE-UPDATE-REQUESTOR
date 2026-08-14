@@ -9,7 +9,7 @@
       "notes": [
         "manage.teams.view: enabled=true, visible=false",
         "Manage group has superAdminOnly=true - will NOT show in sidebar",
-        "Direct URL /admin/teams: https://sidebar-scroller.preview.emergentagent.com/admin",
+        "Direct URL /admin/teams: https://perm-password-hide.preview.emergentagent.com/admin",
         "Testing if visible=false prevents page access"
       ]
     },
@@ -32,32 +32,32 @@
     {
       "url": "/admin/contacts",
       "blocked": true,
-      "current_url": "https://sidebar-scroller.preview.emergentagent.com/admin"
+      "current_url": "https://perm-password-hide.preview.emergentagent.com/admin"
     },
     {
       "url": "/admin/teams",
       "blocked": true,
-      "current_url": "https://sidebar-scroller.preview.emergentagent.com/admin"
+      "current_url": "https://perm-password-hide.preview.emergentagent.com/admin"
     },
     {
       "url": "/admin/permissions",
       "blocked": true,
-      "current_url": "https://sidebar-scroller.preview.emergentagent.com/admin"
+      "current_url": "https://perm-password-hide.preview.emergentagent.com/admin"
     },
     {
       "url": "/admin/email-templates",
       "blocked": true,
-      "current_url": "https://sidebar-scroller.preview.emergentagent.com/admin"
+      "current_url": "https://perm-password-hide.preview.emergentagent.com/admin"
     },
     {
       "url": "/workspace-manager/floor-layout",
       "blocked": false,
-      "current_url": "https://sidebar-scroller.preview.emergentagent.com/workspace-manager/floor-layout"
+      "current_url": "https://perm-password-hide.preview.emergentagent.com/workspace-manager/floor-layout"
     },
     {
       "url": "/workspace-manager/pending-approvals",
       "blocked": false,
-      "current_url": "https://sidebar-scroller.preview.emergentagent.com/workspace-manager/pending-approvals"
+      "current_url": "https://perm-password-hide.preview.emergentagent.com/workspace-manager/pending-approvals"
     },
     {
       "api": "/contacts",
