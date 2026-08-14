@@ -66,7 +66,7 @@ from typing import List, Optional, Dict, Any
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from core import api_router, db, get_current_user, require_role, now_iso, log_audit, client as _mongo_client
+from core import api_router, db, get_current_user, require_role, now_iso, log_audit, ist_now, client as _mongo_client
 from routers.permissions_v3 import require_any_v3_page_view, require_v3_page_edit, require_v3_function
 
 
@@ -78,6 +78,7 @@ STATUS_PENDING = "Pending Approval"
 STATUS_APPROVED = "Approved"
 STATUS_DECLINED = "Declined"
 STATUS_CANCELLED = "Cancelled"
+STATUS_NO_ACTION = "No Action Taken"  # auto-set when a pending request's date has passed
 
 ACTIVE_PENDING_STATUSES = [STATUS_PENDING]  # statuses that "lock" the seat
 
@@ -625,7 +626,11 @@ async def create_workstation_request(
         if (emp.get("status") or "").lower() != "active":
             raise HTTPException(400, f"Employee is not active: {emp.get('name') or eid}")
 
-    target_date = _parse_date(payload.date).isoformat()
+    target_date_obj = _parse_date(payload.date)
+    # Past-date guard: cannot request a workstation for a date that has passed.
+    if target_date_obj < ist_now().date():
+        raise HTTPException(400, "Cannot request a workstation for a past date. Please choose today or a future date.")
+    target_date = target_date_obj.isoformat()
 
     # ---- Cross-check #1: any seat already booked?
     seat_conflict = await db.workstation_bookings.find_one(
@@ -1335,3 +1340,47 @@ async def bulk_decline_workstation_requests(
         "results": results,
         "summary": f"{len(declined)} declined" + (f", {len(failed)} failed" if failed else ""),
     }
+
+
+
+# --------------------------------------------------------------------------- #
+# Scheduled sweep — auto "No Action Taken"                                     #
+#                                                                             #
+# Called once a day (and on startup) by the scheduler in server.py. Any        #
+# workstation request still in "Pending Approval" whose date is BEFORE today   #
+# (IST) is auto-moved to "No Action Taken" — nobody approved/declined it in    #
+# time, so the seat lock is released and it drops out of the pending queue.    #
+# --------------------------------------------------------------------------- #
+
+async def sweep_no_action_workstation_requests() -> int:
+    """Flip expired pending workstation requests to 'No Action Taken'.
+
+    A request is expired when its `date` (a single calendar day, YYYY-MM-DD)
+    is strictly before today in IST. Returns the number of requests updated.
+    """
+    today_iso = ist_now().date().isoformat()
+    now = now_iso()
+    res = await db.workstation_requests.update_many(
+        {"status": STATUS_PENDING, "date": {"$lt": today_iso}},
+        {
+            "$set": {
+                "status": STATUS_NO_ACTION,
+                "updated_at": now,
+                "no_action_at": now,
+                "no_action_reason": "Scheduled date passed with no approval/decision",
+            }
+        },
+    )
+    count = res.modified_count or 0
+    if count:
+        try:
+            await log_audit(
+                actor={"id": "system", "email": "system", "name": "System (scheduler)"},
+                action="workstation_requests.auto_no_action",
+                resource="workstation_request",
+                detail=f"Auto-moved {count} expired pending request(s) to No Action Taken",
+                metadata={"count": count, "cutoff_date": today_iso},
+            )
+        except Exception:  # noqa: BLE001 — never let audit break the sweep
+            pass
+    return count

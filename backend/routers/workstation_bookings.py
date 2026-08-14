@@ -46,7 +46,7 @@ from typing import List, Optional, Dict, Any
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from core import api_router, db, get_current_user, require_role, now_iso, log_audit, client as _mongo_client
+from core import api_router, db, get_current_user, require_role, now_iso, log_audit, ist_now, client as _mongo_client
 from routers.permissions_v3 import require_any_v3_page_view, require_v3_page_edit
 
 
@@ -417,6 +417,10 @@ async def create_workstation_booking(
 
     # ---- Compute target dates (recurring expansion)
     start_date = _parse_date(payload.date)
+    # Past-date guard: a booking cannot be scheduled for a date that has
+    # already passed (compared against "today" in IST).
+    if start_date < ist_now().date():
+        raise HTTPException(400, "Cannot create a booking for a past date. Please choose today or a future date.")
     if payload.recurring:
         dates = _expand_recurring(start_date, payload.recurring)
         series_id = str(uuid.uuid4())

@@ -56,6 +56,7 @@ STATUS_PENDING = "Pending Approval"
 STATUS_APPROVED = "Approved"
 STATUS_DECLINED = "Declined"
 STATUS_CANCELLED = "Cancelled"
+STATUS_NO_ACTION = "No Action Taken"  # auto-set when a pending request's end time has passed
 
 ACTIVE_PENDING_STATUSES = [STATUS_PENDING]
 
@@ -297,6 +298,10 @@ async def create_meeting_room_request(
     end = _parse_iso(payload.end_at, "end_at")
     if end <= start:
         raise HTTPException(400, "end_at must be after start_at")
+    # Past-date guard: cannot request a meeting whose start time is already in
+    # the past. `start` is a naive-UTC datetime (see _parse_iso).
+    if start < datetime.utcnow():
+        raise HTTPException(400, "Cannot schedule a meeting in the past. Please choose a future date and time.")
 
     # Build occurrence list (single or recurring)
     occurrences = [(start, end)]
@@ -939,3 +944,68 @@ async def cancel_meeting_room_request(
         metadata={"was_approved": was_approved, "booking_id": booking_id},
     )
     return {"ok": True, "was_approved": was_approved, "booking_id": booking_id}
+
+
+
+# --------------------------------------------------------------------------- #
+# Scheduled sweep — auto "No Action Taken"                                     #
+#                                                                             #
+# Called once a day (and on startup) by the scheduler in server.py. Any        #
+# meeting-room request still in "Pending Approval" whose END time has passed   #
+# is auto-moved to "No Action Taken".                                          #
+# --------------------------------------------------------------------------- #
+
+async def sweep_no_action_meeting_room_requests() -> int:
+    """Flip expired pending meeting-room requests to 'No Action Taken'.
+
+    A request is expired when its meeting END time (`end_at`) is in the past.
+    `end_at` is stored as a UTC ISO string; we evaluate in Python so both the
+    new `...Z` and any legacy naive strings parse correctly. Returns the number
+    of requests updated.
+    """
+    now_utc = datetime.utcnow()
+    pending = await db.meeting_room_requests.find(
+        {"status": STATUS_PENDING},
+        {"_id": 0, "id": 1, "end_at": 1},
+    ).to_list(5000)
+
+    expired_ids: List[str] = []
+    for r in pending:
+        end_raw = r.get("end_at")
+        if not end_raw:
+            continue
+        try:
+            end_dt = _parse_iso(end_raw, "end_at")  # naive UTC
+        except Exception:  # noqa: BLE001 — skip unparseable rows
+            continue
+        if end_dt < now_utc:
+            expired_ids.append(r["id"])
+
+    if not expired_ids:
+        return 0
+
+    now = now_iso()
+    res = await db.meeting_room_requests.update_many(
+        {"id": {"$in": expired_ids}, "status": STATUS_PENDING},
+        {
+            "$set": {
+                "status": STATUS_NO_ACTION,
+                "updated_at": now,
+                "no_action_at": now,
+                "no_action_reason": "Scheduled time passed with no approval/decision",
+            }
+        },
+    )
+    count = res.modified_count or 0
+    if count:
+        try:
+            await log_audit(
+                actor={"id": "system", "email": "system", "name": "System (scheduler)"},
+                action="meeting_room_requests.auto_no_action",
+                resource="meeting_room_request",
+                detail=f"Auto-moved {count} expired pending request(s) to No Action Taken",
+                metadata={"count": count},
+            )
+        except Exception:  # noqa: BLE001 — never let audit break the sweep
+            pass
+    return count

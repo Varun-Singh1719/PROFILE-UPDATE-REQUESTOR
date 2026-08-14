@@ -15,8 +15,11 @@ from fastapi.responses import Response
 from core import (
     app, api_router, db, client,
     now_iso, hash_password, verify_password, encrypt_password,
-    DEFAULT_PRESETS, DEFAULT_TEMPLATES,
+    DEFAULT_PRESETS, DEFAULT_TEMPLATES, IST,
 )
+
+# Daily scheduler handle (APScheduler) — set in startup(), stopped in shutdown().
+_scheduler = None
 
 # Register all routes by importing each router module (side-effect on api_router).
 from routers import auth as _auth  # noqa: F401
@@ -357,7 +360,51 @@ async def startup():
                     "password_encrypted": encrypt_password(u["password"])
                 }})
 
+    # ------------------------------------------------------------------ #
+    # Daily sweep — auto "No Action Taken"                                #
+    # Any workstation/meeting-room request still in "Pending Approval"    #
+    # whose scheduled time has passed is auto-moved to "No Action Taken". #
+    # Runs once on startup (catch-up) + every day at 00:15 IST.           #
+    # ------------------------------------------------------------------ #
+    from routers.workstation_requests import sweep_no_action_workstation_requests
+    from routers.meeting_room_requests import sweep_no_action_meeting_room_requests
+
+    async def _run_no_action_sweep():
+        try:
+            w = await sweep_no_action_workstation_requests()
+            m = await sweep_no_action_meeting_room_requests()
+            if w or m:
+                logger.info(f"[no-action sweep] flipped to 'No Action Taken' — workstation={w}, meeting_room={m}")
+        except Exception as _e:  # noqa: BLE001 — never break the app
+            logger.warning(f"[no-action sweep] failed: {_e}")
+
+    # Catch-up run on startup
+    await _run_no_action_sweep()
+
+    # Schedule the daily run (00:15 IST)
+    global _scheduler
+    try:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from apscheduler.triggers.cron import CronTrigger
+        _scheduler = AsyncIOScheduler(timezone=IST)
+        _scheduler.add_job(
+            _run_no_action_sweep,
+            CronTrigger(hour=0, minute=15),
+            id="no_action_sweep",
+            replace_existing=True,
+        )
+        _scheduler.start()
+        logger.info("Scheduler started — daily 'No Action Taken' sweep at 00:15 IST")
+    except Exception as _e:  # noqa: BLE001 — scheduler is best-effort
+        logger.warning(f"Scheduler start failed: {_e}")
+
 
 @app.on_event("shutdown")
 async def shutdown():
+    global _scheduler
+    if _scheduler is not None:
+        try:
+            _scheduler.shutdown(wait=False)
+        except Exception:  # noqa: BLE001
+            pass
     client.close()
