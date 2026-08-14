@@ -28,9 +28,10 @@ from typing import List, Optional, Dict, Any, Tuple
 from fastapi import Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
-from core import api_router, db, get_current_user, now_iso, IST, ist_now, ist_today
+from core import api_router, db, get_current_user, now_iso, IST, ist_now, ist_today, V3_TO_V2_SCOPE
 from routers.room_bookings import _enrich_bookings_with_team
-from routers.permissions_v3 import require_any_v3_page_view, require_v3_page_view
+from routers.permissions_v3 import require_any_v3_page_view, require_v3_page_view, _normalize_v3_modules, _migrate_legacy_to_v3
+from routers.permissions import get_user_scope_context
 
 
 # --------------------------------------------------------------------------- #
@@ -699,6 +700,18 @@ async def desk_booking_directory(
 ):
     """Active employees + teams (with members) for the booking assignment UIs.
 
+    The employees list is FILTERED by the user's broadest effective view scope
+    across the desk_booking pages that the user has access to. Concretely:
+      - `overall`   → all active employees (no restriction).
+      - `team`      → only members/managers of the teams the user belongs to
+                      (plus the user themself).
+      - `individual`→ only the user themself.
+      - Super Admin → all active employees.
+
+    This closes the Aug 14 2026 bug where a Permission Set with `individual`
+    scope on Workspace Manager pages still saw every employee in the booking
+    form's "Employee Name" dropdown.
+
     Response:
         {
           "employees": [{id, name, email, emp_id, status, team_ids[]}],
@@ -706,8 +719,68 @@ async def desk_booking_directory(
                          members: [{id, name, email, emp_id}], member_count}]
         }
     """
+    # Compute the broadest desk_booking view scope across the user's assigned
+    # permission sets (v3 shape). Values: "overall" > "team" > "individual".
+    # Super Admin always gets "overall".
+    scope: Optional[str] = None
+    if user.get("role") == "Super Admin":
+        scope = "overall"
+    else:
+        set_ids: List[str] = list(user.get("permission_set_ids") or [])
+        # Pages whose view scope determines who the user can pick as an
+        # employee in the booking UIs.
+        SCOPE_PAGES = (
+            "workstation_bookings", "workstation_requests",
+            "meeting_room_bookings", "pending_approvals", "floor_layout",
+        )
+        rank = {"individual": 1, "team": 2, "overall": 3}
+        best_rank = 0
+        if set_ids:
+            docs = await db.permission_sets.find(
+                {"id": {"$in": set_ids}, "deleted_at": {"$in": [None]}},
+                {"_id": 0},
+            ).to_list(500)
+            for doc in docs:
+                modules = doc.get("modules") or {}
+                if doc.get("version") != 3:
+                    modules = (_migrate_legacy_to_v3(doc) or {}).get("modules") or {}
+                else:
+                    modules = _normalize_v3_modules(modules)
+                desk = ((modules or {}).get("desk_booking") or {}).get("pages") or {}
+                for pkey in SCOPE_PAGES:
+                    v = ((desk.get(pkey) or {}).get("view") or {})
+                    if not (v.get("enabled") and v.get("visible", True)):
+                        continue
+                    sc = v.get("scope") or "individual"
+                    r = rank.get(sc, 0)
+                    if r > best_rank:
+                        best_rank = r
+        if best_rank == 3:
+            scope = "overall"
+        elif best_rank == 2:
+            scope = "team"
+        elif best_rank == 1:
+            scope = "individual"
+        else:
+            # No assigned sets → permissive fallback (pre-onboarded behavior
+            # matches EffectivePermissionsContext); show everyone so the
+            # booking screens keep working before permissions are configured.
+            scope = "overall"
+
+    # Build the id whitelist that gates which contacts we return.
+    allowed_ids: Optional[set] = None
+    if scope == "individual":
+        allowed_ids = {user["id"]}
+    elif scope == "team":
+        ctx = await get_user_scope_context(user)
+        allowed_ids = set(ctx.get("team_member_ids") or [user["id"]])
+    # scope == "overall" → allowed_ids stays None (no restriction).
+
+    q: Dict[str, Any] = {"status": "Active"}
+    if allowed_ids is not None:
+        q["id"] = {"$in": list(allowed_ids)}
     contacts = await db.contacts.find(
-        {"status": "Active"},
+        q,
         {"_id": 0, "id": 1, "name": 1, "email": 1, "emp_id": 1, "status": 1},
     ).to_list(5000)
     cmap = {c["id"]: c for c in contacts}
@@ -726,6 +799,17 @@ async def desk_booking_directory(
             emp_team.setdefault(mid, []).append(t["id"])
     for c in contacts:
         c["team_ids"] = emp_team.get(c["id"], [])
+
+    # Filter the outgoing teams list to match the same scope semantics used
+    # for `employees` — individual users shouldn't see any team option;
+    # team-scope users see only their own teams; overall sees all teams.
+    if scope == "individual":
+        teams = []
+    elif scope == "team":
+        teams = [
+            t for t in teams
+            if user["id"] in (t.get("member_ids") or []) or user["id"] in (t.get("manager_ids") or [])
+        ]
 
     out_teams: List[Dict[str, Any]] = []
     for t in teams:

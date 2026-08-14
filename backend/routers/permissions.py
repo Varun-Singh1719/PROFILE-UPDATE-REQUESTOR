@@ -9,6 +9,7 @@ from core import (
     PERMISSION_MODULES, ALL_ACTIONS, SCOPED_ACTIONS, SCOPED_MODULES, SCOPE_VALUES,
     feature_actions, is_scoped, scope_precedence, scope_or_merge,
     action_precedence,
+    V3_TO_V2_SCOPE,
     PermissionsIn, PermRuleIn, PermRulesBulkIn, PresetCreateIn, PresetApplyIn,
 )
 
@@ -183,6 +184,63 @@ def _full_access_effective() -> Dict[str, Dict[str, Dict[str, Any]]]:
     return eff
 
 
+def _fold_v3_into_legacy_effective(v3_modules: Dict[str, dict], effective: Dict[str, Dict[str, Dict[str, Any]]]) -> None:
+    """Translate a v3-shaped `modules` tree into the legacy `effective[module][feature][action]`
+    map, in-place. Only maps the entries other code paths actually consult today —
+    right now that's just `profix.ticket.{view|edit|assign|approve}`. Anything else
+    the v3 UI/route protection reads directly from `/api/me/permissions` (v3 map),
+    so we don't need to translate it.
+
+    Mapping rules (v3 → legacy):
+      profix.pages.all_requests.view.scope   ─┐
+      profix.pages.open_requests.view.scope   ├─ OR-merge → profix.ticket.view
+      profix.pages.ticket_detail.view.scope  ─┘
+      profix.pages.ticket_detail.functions.edit.scope   → profix.ticket.edit
+      profix.pages.ticket_detail.functions.assign.scope ─┐
+      profix.pages.unassigned.functions.assign.scope     ├─ OR-merge → profix.ticket.assign
+      profix.pages.ticket_detail.functions.change_status.scope → profix.ticket.approve
+
+    Scope values are translated `individual → respective`, `team → team`, `overall → all`
+    to match legacy `SCOPE_VALUES`. Disabled or missing entries do not contribute.
+    """
+    profix = (v3_modules or {}).get("profix") or {}
+    pages = (profix.get("pages") or {})
+    if not pages:
+        return
+
+    def _v3_scope(entry: Any) -> Any:
+        if not isinstance(entry, dict):
+            return False
+        if not (entry.get("enabled") and entry.get("visible", True)):
+            return False
+        raw = entry.get("scope")
+        return V3_TO_V2_SCOPE.get(raw, False) if raw else False
+
+    def _contrib(action: str, sc: Any) -> None:
+        if not sc:
+            return
+        mod = effective.setdefault("profix", {})
+        feat = mod.setdefault("ticket", {})
+        feat[action] = scope_or_merge(feat.get(action, False), sc)
+
+    # profix.ticket.view — broadest across the three viewer pages
+    for pkey in ("all_requests", "open_requests", "ticket_detail"):
+        _contrib("view", _v3_scope(((pages.get(pkey) or {}).get("view"))))
+
+    # profix.ticket.edit — from ticket_detail.functions.edit
+    td_fns = ((pages.get("ticket_detail") or {}).get("functions") or {})
+    _contrib("edit", _v3_scope(td_fns.get("edit")))
+
+    # profix.ticket.assign — from ticket_detail.functions.assign + unassigned.functions.assign
+    _contrib("assign", _v3_scope(td_fns.get("assign")))
+    un_fns = ((pages.get("unassigned") or {}).get("functions") or {})
+    _contrib("assign", _v3_scope(un_fns.get("assign")))
+
+    # profix.ticket.approve — best-effort from ticket_detail.functions.change_status
+    _contrib("approve", _v3_scope(td_fns.get("change_status")))
+
+
+
 async def _compute_effective(employee: dict) -> dict:
     """Compute effective access for `employee`.
 
@@ -239,6 +297,15 @@ async def _compute_effective(employee: dict) -> dict:
 
     effective: Dict[str, Dict[str, Dict[str, Any]]] = {}
     for s in sets_assigned:
+        # v3-shape detection: `modules.<mkey>.pages.<pkey>.{view|edit|functions}` triple.
+        # Fold v3 shape into legacy `profix.ticket.{view|edit|assign}` entries so
+        # downstream helpers (`get_effective_scope`, `_ticket_view_filter`) work
+        # transparently for v3-only permission sets. See Aug 14 2026 bug: Aanchal
+        # Sharma / set 166 v3-only got empty ticket lists because this loop was
+        # only iterating the legacy shape and produced an empty `effective` map.
+        if s.get("version") == 3:
+            _fold_v3_into_legacy_effective(s.get("modules") or {}, effective)
+            continue
         for mkey, features in (s.get("modules") or {}).items():
             mod_eff = effective.setdefault(mkey, {})
             for fkey, actions in (features or {}).items():
