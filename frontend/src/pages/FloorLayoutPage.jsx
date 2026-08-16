@@ -15,6 +15,7 @@ import X from "@mui/icons-material/Close";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import Layout from "../components/Layout";
+import { useEffectivePage } from "../context/EffectivePermissionsContext";
 import WorkstationFloorMap from "../components/WorkstationFloorMap";
 import FloorSeatDetailDialog from "../components/FloorSeatDetailDialog";
 import RoomBookingDetailDialog from "../components/RoomBookingDetailDialog";
@@ -207,6 +208,9 @@ function DateStepper({ value, onChange }) {
 // ---------- Interactive combined view (per plan) ----------
 function PlanInteractiveView({ plan, onBack, hideBack = false, embedded = false }) {
   const navigate = useNavigate();
+  // v3 permission gating for the Floor Layout filters (desk_booking.floor_layout).
+  const { fn: flPermFn } = useEffectivePage("desk_booking", "floor_layout");
+  const permTeamFilter = flPermFn("filter_team");
   const [date, setDate] = useState(todayIso());
   const [availability, setAvailability] = useState(null);
   const [roomBookings, setRoomBookings] = useState([]);
@@ -282,7 +286,8 @@ function PlanInteractiveView({ plan, onBack, hideBack = false, embedded = false 
     return m;
   }, [roomBookings]);
 
-  // Build the team list from the day's bookings (each team appears once).
+  // Build the team list from the day's bookings (each team appears once) —
+  // used to pull the per-team COLOUR that shows up on the map for that date.
   const teamsInBookings = useMemo(() => {
     const map = new Map();
     for (const b of (availability?.bookings || [])) {
@@ -298,11 +303,36 @@ function PlanInteractiveView({ plan, onBack, hideBack = false, embedded = false 
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [availability]);
 
+  // ALL teams (loaded once) — the Team filter should list every team by
+  // default, not only the teams that happen to have a booking on the selected
+  // date. Colours are taken from the day's bookings when available, else the
+  // team's own configured colour.
+  const [allTeams, setAllTeams] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    api.get("/teams").then((res) => {
+      if (cancelled) return;
+      const arr = Array.isArray(res.data) ? res.data : (res.data?.items || res.data?.teams || []);
+      setAllTeams(arr.map((t) => ({ id: t.id, name: t.name, color: t.color })));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  // Merge: prefer the booking-derived colour (matches the map) but list every team.
+  const teamOptions = useMemo(() => {
+    const colorById = new Map(teamsInBookings.map((t) => [t.id, t.color]));
+    const source = allTeams.length ? allTeams : teamsInBookings;
+    return source
+      .map((t) => ({ id: t.id, name: t.name, color: colorById.get(t.id) || t.color }))
+      .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  }, [allTeams, teamsInBookings]);
+
   // Multi-select team filter state — controls both the dim-map effect and the
   // Meeting Bookings list filter.
   const [selectedTeamIds, setSelectedTeamIds] = useState([]);
-  // Reset the filter when the plan/date changes (list may no longer match)
-  useEffect(() => { setSelectedTeamIds([]); }, [plan.id, date]);
+  // Reset the filter only when the PLAN changes — NOT on date change, so a
+  // user's selected team(s) stay put as they step through dates.
+  useEffect(() => { setSelectedTeamIds([]); }, [plan.id]);
 
   // Which seats to zoom to (only when exactly one team is selected).
   const zoomTargetSeatIds = useMemo(() => {
@@ -464,16 +494,18 @@ function PlanInteractiveView({ plan, onBack, hideBack = false, embedded = false 
               <DateStepper value={date} onChange={setDate}/>
             </div>
 
-            {/* Filter by Team (multi-select) */}
+            {/* Filter by Team (multi-select) — v3-gated by desk_booking.floor_layout.filter_team */}
+            {permTeamFilter.isVisible && (
             <div className="px-4 pt-3 pb-3 border-b border-gray-100" data-testid="floor-layout-team-filter">
               <div className="text-[11px] font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
                 <Users sx={{ fontSize: 12 }} className="text-[#ec9324]"/>
                 Filter by Team
               </div>
               <TeamFilter
-                teams={teamsInBookings}
+                teams={teamOptions}
                 value={selectedTeamIds}
                 onChange={setSelectedTeamIds}
+                disabled={!permTeamFilter.canUse}
               />
               {selectedTeamIds.length === 1 && (
                 <div className="mt-1 text-[10px] text-[#ec9324]">Zoomed in on selected team.</div>
@@ -482,6 +514,7 @@ function PlanInteractiveView({ plan, onBack, hideBack = false, embedded = false 
                 <div className="mt-1 text-[10px] text-gray-500">Filtering {selectedTeamIds.length} teams — pan/zoom manually.</div>
               )}
             </div>
+            )}
 
             {/* Total Seats stats card */}
             <div className="px-4 pt-3 pb-3 border-b border-gray-100" data-testid="floor-layout-stats-card">
@@ -595,7 +628,7 @@ function StatRow({ label, value, color, testId }) {
   );
 }
 
-function TeamFilter({ teams, value, onChange }) {
+function TeamFilter({ teams, value, onChange, disabled = false }) {
   const [open, setOpen] = useState(false);
   const ref = React.useRef(null);
   useEffect(() => {
@@ -610,11 +643,12 @@ function TeamFilter({ teams, value, onChange }) {
   const clear = (e) => { e.stopPropagation(); onChange([]); };
   const selectedTeams = teams.filter((t) => value.includes(t.id));
   return (
-    <div ref={ref} className="relative" data-testid="floor-layout-team-filter-dropdown">
+    <div ref={ref} className={`relative ${disabled ? "opacity-50" : ""}`} data-testid="floor-layout-team-filter-dropdown">
       <button
         type="button"
+        disabled={disabled}
         onClick={() => setOpen((v) => !v)}
-        className="w-full min-h-[34px] px-2 py-1 border border-gray-300 rounded-md text-left text-xs bg-white hover:border-[#ec9324] transition-colors flex items-center gap-1.5 flex-wrap"
+        className="w-full min-h-[34px] px-2 py-1 border border-gray-300 rounded-md text-left text-xs bg-white hover:border-[#ec9324] transition-colors flex items-center gap-1.5 flex-wrap disabled:cursor-not-allowed disabled:hover:border-gray-300"
         data-testid="floor-layout-team-filter-toggle"
       >
         {selectedTeams.length === 0 ? (
@@ -653,7 +687,7 @@ function TeamFilter({ teams, value, onChange }) {
       {open && (
         <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-64 overflow-y-auto" data-testid="floor-layout-team-filter-menu">
           {teams.length === 0 ? (
-            <div className="px-3 py-2 text-[11px] text-gray-400">No team bookings for this day.</div>
+            <div className="px-3 py-2 text-[11px] text-gray-400">No teams found.</div>
           ) : teams.map((t) => {
             const active = value.includes(t.id);
             const stops = paletteForTeamStops(t.color);

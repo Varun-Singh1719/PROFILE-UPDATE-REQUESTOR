@@ -611,6 +611,7 @@ PERMISSION_MODULES_V3 = [
                     {"key": "search",       "label": "Search",          "scoped": False, "category": "filter"},
                     {"key": "filter_floor", "label": "Floor",  "scoped": False, "category": "filter"},
                     {"key": "filter_zone",  "label": "Zone",   "scoped": False, "category": "filter"},
+                    {"key": "filter_team",  "label": "Team",   "scoped": False, "category": "filter"},
                 ],
             },
             {

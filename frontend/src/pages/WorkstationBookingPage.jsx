@@ -83,7 +83,7 @@ import DuplicatePendingConfirmDialog from "../components/DuplicatePendingConfirm
 import PendingConflictConfirmDialog from "../components/PendingConflictConfirmDialog";
 import SingleDatePicker from "../components/SingleDatePicker";
 import { useAuth } from "../context/AuthContext";
-import { useEffectivePage } from "../context/EffectivePermissionsContext";
+import { useEffectivePage, useEffectivePermissionsState } from "../context/EffectivePermissionsContext";
 
 // ---------- date helpers (IST is the local timezone for this module) ----------
 const todayIso = () => {
@@ -131,6 +131,13 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
   const submitLabel = isRequestMode ? "Submit Request" : "Save";
   const submitInProgressLabel = isRequestMode ? "Submitting…" : "Saving…";
   const { user } = useAuth();
+  // Desk-booking dashboard access level governs WHO the booker may pick in the
+  // "Employee Name" field:
+  //   • individual → only themselves (auto-selected & locked)
+  //   • manager    → members of the team(s) they belong to / manage
+  //   • overall    → everyone (Super Admin always resolves to "overall")
+  const { getDashboardAccess } = useEffectivePermissionsState();
+  const wsAccess = getDashboardAccess("workspace_manager"); // "overall"|"manager"|"individual"|null
   // ── Permissions V3 (Round 3) ──
   // In "request" mode the page maps to `workstation_requests`; in booking mode to
   // `workstation_bookings`. The catalog defines different function keys per page.
@@ -406,7 +413,45 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
     [employees, bookedEmpIds],
   );
 
-  // Employee dropdown options — show ALL active employees, tag the ones
+  // Restrict the bookable-employee pool by the desk-booking access level.
+  //   individual → just the current user
+  //   manager    → union of members of every team the user is in/manages (+ self)
+  //   overall/null(super-admin) → everyone (no restriction)
+  const eligibleEmployeeIds = useMemo(() => {
+    if (wsAccess === "individual") {
+      return new Set(user?.id ? [user.id] : []);
+    }
+    if (wsAccess === "manager") {
+      const ids = new Set();
+      for (const t of teams) {
+        const members = [...(t.member_ids || []), ...(t.manager_ids || [])];
+        if (user?.id && members.includes(user.id)) {
+          members.forEach((m) => ids.add(m));
+        }
+      }
+      if (user?.id) ids.add(user.id);
+      return ids;
+    }
+    return null; // overall / super-admin / no-dashboard → unrestricted
+  }, [wsAccess, teams, user]);
+
+  const scopedEmployees = useMemo(() => {
+    if (!eligibleEmployeeIds) return employees;
+    return employees.filter((e) => eligibleEmployeeIds.has(e.id));
+  }, [employees, eligibleEmployeeIds]);
+
+  const lockEmployeeToSelf = wsAccess === "individual";
+
+  // Individual access → the booker can only book for THEMSELVES. Keep the
+  // Employee field pinned to the current user even after the various form
+  // resets (date/seat changes clear employeeId). The guard prevents a loop.
+  useEffect(() => {
+    if (lockEmployeeToSelf && user?.id && employeeId !== user.id) {
+      setEmployeeId(user.id);
+    }
+  }, [lockEmployeeToSelf, user?.id, employeeId]);
+
+  // Employee dropdown options — show ALL eligible active employees, tag the ones
   // already booked / with a pending request on this date with the correct
   // chip. Booked-elsewhere is disabled; pending-only is still selectable
   // (submit will trigger the Duplicate-Pending replace confirmation).
@@ -415,7 +460,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
   //   2. Pending — alphabetical
   //   3. Alloted (booked) — alphabetical
   const employeeOptions = useMemo(() => {
-    return employees
+    return scopedEmployees
       .filter((e) => (e.status || "").toLowerCase() !== "inactive")
       .map((e) => {
         const booked = bookedEmpIdsOnly.has(e.id);
@@ -439,7 +484,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
           { sensitivity: "base" }
         );
       });
-  }, [employees, bookedEmpIdsOnly, pendingOnlyEmpIds]);
+  }, [scopedEmployees, bookedEmpIdsOnly, pendingOnlyEmpIds]);
 
   // Team eligible members for the manual allocation modal.
   //
@@ -1412,11 +1457,16 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                             value={employeeId}
                             onChange={(v) => setEmployeeId(v || "")}
                             placeholder={refLoading ? "Loading…" : "Select employee"}
-                            disabled={!canEdit || !isSingle || refLoading}
+                            disabled={!canEdit || !isSingle || refLoading || lockEmployeeToSelf}
                             searchable={employeeOptions.length > 8}
                             allowClear={false}
                             testId="ws-employee-select"
                           />
+                          {lockEmployeeToSelf && (
+                            <div className="mt-1 text-[10px] text-gray-500" data-testid="ws-employee-self-note">
+                              You can only book for yourself.
+                            </div>
+                          )}
                         </div>
                       </div>
 
