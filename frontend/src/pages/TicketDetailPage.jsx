@@ -25,6 +25,18 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import EditIcon from "@mui/icons-material/EditOutlined";
 import EditTicketModal from "../components/EditTicketModal";
 
+// Rank tables for `max_editable_status` — kept in sync with backend
+// (permissions_v3.py::_MAX_EDITABLE_STATUS_RANK / TICKET_STATUS_RANK).
+// Edit is hidden once the ticket's status rank exceeds the allowed rank.
+const _TICKET_STATUS_RANK = { "Open": 1, "In Progress": 2, "Closed": 3 };
+const _MAX_EDIT_RANK = { "open": 1, "in_progress": 2, "closed": 3 };
+function isEditAllowedForStatus(ticket, maxEditableStatus) {
+  if (!maxEditableStatus) return true;
+  const cur = _TICKET_STATUS_RANK[ticket?.status || "Open"] || 1;
+  const lim = _MAX_EDIT_RANK[maxEditableStatus] || 2;
+  return cur <= lim;
+}
+
 function fmt(iso) { if (!iso) return "-"; try { return new Date(iso).toLocaleString(undefined, { timeZone: "Asia/Kolkata" }); } catch { return iso; } }
 
 export default function TicketDetailPage() {
@@ -113,7 +125,7 @@ export default function TicketDetailPage() {
       title={`Request ${numericId(ticket.ticket_id)}`}
       actions={
         <div className="flex gap-2">
-          {isAdmin && permEdit.isVisible && ticket.status !== "Closed" && (
+          {isAdmin && permEdit.isVisible && ticket.status !== "Closed" && isEditAllowedForStatus(ticket, permEdit.maxEditableStatus) && (
             <Button
               variant="outline"
               onClick={() => setEditOpen(true)}

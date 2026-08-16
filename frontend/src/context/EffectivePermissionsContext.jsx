@@ -84,8 +84,14 @@ function _lookup(state, moduleKey, pageKey, functionKey) {
   const page =
     ((state?.modules || {})[moduleKey] || {}).pages?.[pageKey] || null;
   if (!page) return null;
-  if (functionKey === "view") return page.view || null;
-  if (functionKey === "edit") return page.edit || null;
+  // For "view" and "edit" the catalog exposes BOTH a page-level
+  // {enabled,visible,scope} triple AND (on some pages) a `functions.<key>`
+  // entry with the same name. When the admin toggles the function-level
+  // entry (e.g. sets `profix.ticket_detail.functions.edit.max_editable_status`)
+  // that entry is the authoritative source of truth — prefer it, and only
+  // fall back to the page-level triple when no function entry is defined.
+  if (functionKey === "view") return (page.functions || {}).view || page.view || null;
+  if (functionKey === "edit") return (page.functions || {}).edit || page.edit || null;
   return (page.functions || {})[functionKey] || null;
 }
 
@@ -232,6 +238,10 @@ export function useEffectivePage(moduleKey, pageKey) {
         isVisible: !!entry.visible,
         canUse: !!entry.enabled && !!entry.visible,
         scope: entry.scope || null,
+        // Passed through as-is for callers that need per-function extras
+        // (e.g. `profix.ticket_detail.edit.max_editable_status` locks the
+        // Edit action once a ticket moves beyond a given status).
+        maxEditableStatus: entry.max_editable_status || null,
       };
     },
     [state, moduleKey, pageKey, isPermissive]

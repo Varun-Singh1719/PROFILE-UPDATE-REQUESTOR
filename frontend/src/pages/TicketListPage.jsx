@@ -253,6 +253,7 @@ export default function TicketListPage({
   const permAssignRow  = permDetailFn("assign");
   const canViewRow    = permDetailCanView;                // v3 `profix.ticket_detail.view.visible`
   const canEditRow    = permEditRow.isVisible;            // v3 `profix.ticket_detail.edit.visible`
+  const editMaxStatusRow = permEditRow.maxEditableStatus || null;  // v3 `profix.ticket_detail.edit.max_editable_status`
   const canReopenRow  = permReopenRow.isVisible;          // v3 `profix.ticket_detail.reopen.visible`
   const canStatusRow  = permStatusRow.isVisible;          // v3 `profix.ticket_detail.change_status.visible`
   const canAssignRow  = permAssignRow.isVisible;          // v3 `profix.ticket_detail.assign.visible`
@@ -477,6 +478,7 @@ export default function TicketListPage({
             onReopen={openReopen}
             canView={canViewRow}
             canEdit={canEditRow}
+            editMaxStatus={editMaxStatusRow}
             canReopen={canReopenRow}
             canUpdateStatus={canStatusRow}
             canAssign={canAssignRow}

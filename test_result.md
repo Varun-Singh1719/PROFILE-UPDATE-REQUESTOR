@@ -108,6 +108,219 @@ user_problem_statement: |
   item does not appear under the "Workspace Manager" group in the sidebar.
 
 frontend:
+  - task: "Ticket Edit action honours max_editable_status status-lock (UI hide)"
+    implemented: true
+    working: true
+    file: "frontend/src/context/EffectivePermissionsContext.jsx, frontend/src/components/TicketTable.jsx, frontend/src/pages/TicketListPage.jsx, frontend/src/pages/TicketDetailPage.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            BUG: The per-set "Edit only until status ___" lock
+            (profix.ticket_detail.edit.max_editable_status) was enforced by
+            the BACKEND (returns 403) but the UI still showed the Edit menu
+            item + button after the ticket moved beyond that status. User
+            saw Edit for TKT-1120 (In Progress) even though set 166 pins
+            max_editable_status="open".
+            FIX:
+              1. useEffectivePage("profix","ticket_detail").fn("edit") now
+                 returns `maxEditableStatus` (was omitted before).
+              2. TicketTable accepts a new `editMaxStatus` prop and hides
+                 the Edit row-action once the ticket's status rank exceeds
+                 the configured lock (rank tables mirror
+                 backend/permissions_v3.py: Open=1, In Progress=2, Closed=3).
+              3. TicketListPage passes `permEditRow.maxEditableStatus` to
+                 TicketTable.
+              4. TicketDetailPage's top-right Edit button applies the same
+                 status-rank check via `isEditAllowedForStatus(ticket, ...)`.
+            Backend enforcement unchanged; this is a UI-visibility layer so
+            users don't see a button that would 403 on click.
+        - working: false
+          agent: "testing"
+          comment: |
+            ❌ PARTIAL FIX - 2 CRITICAL BUGS FOUND (Aug 16 2026)
+            
+            Comprehensive testing of the status-lock fix completed. 9/11 tests passed.
+            Test credentials: aanchal.sharma@infollion.com / MdJdAhYDVUmz4$ (Permission Set 166, max_editable_status="open")
+            
+            **VERIFIED CONFIGURATION:**
+            - /api/me/permissions confirms: profix.ticket_detail.edit.max_editable_status = "open" ✓
+            - TKT-1141 status: Open ✓
+            - TKT-1120 status: In Progress ✓
+            
+            **SCENARIO A: Aanchal Sharma (max_editable_status="open") - 5/7 PASS**
+            
+            ✅ A.2 PASS: TKT-1141 (Open) row-action menu
+            - Edit menu item IS PRESENT (correct - status within lock)
+            - Screenshot: a2-tkt-1141-menu-open.png
+            
+            ❌ A.3.1 FAIL: TKT-1120 (In Progress) row-action menu - **CRITICAL BUG #1**
+            - Edit menu item IS PRESENT (INCORRECT - should be hidden)
+            - Expected: Edit hidden because status rank (In Progress=2) > max_editable_status rank (open=1)
+            - Actual: Edit shown alongside View, Update Status, Assign
+            - Screenshot: a3-tkt-1120-menu-open.png clearly shows Edit present
+            - ROOT CAUSE: TicketTable.isEditAllowedForStatus() is returning true when it should return false
+            - Likely issue: editMaxStatus prop is null/undefined, causing the early return at line 59
+            
+            ✅ A.3.2 PASS: TKT-1120 (In Progress) row-action menu
+            - View menu item IS PRESENT (correct)
+            
+            ✅ A.4 PASS: TKT-1120 detail page header
+            - Edit button IS NOT RENDERED (correct - status exceeds lock)
+            - Screenshot: a4-tkt-1120-detail-header.png shows no Edit button
+            - This proves the TicketDetailPage implementation IS working correctly
+            
+            ❌ A.5 FAIL: TKT-1141 (Open) detail page header - **CRITICAL BUG #2**
+            - Edit button IS NOT RENDERED (INCORRECT - should be visible)
+            - Expected: Edit visible because status rank (Open=1) <= max_editable_status rank (open=1)
+            - Actual: Edit button missing from header
+            - Screenshot: a5-tkt-1141-detail-header.png shows no Edit button
+            - This is inconsistent with A.2 where the row-action Edit IS present for the same ticket
+            
+            **SCENARIO B: Super Admin (Bypass) - 2/2 PASS**
+            
+            ✅ B.1 PASS: TKT-1120 (In Progress) row-action menu
+            - Edit menu item IS PRESENT (correct - Super Admin bypasses lock)
+            - Screenshot: b1-super-admin-tkt-1120-menu.png
+            
+            ✅ B.2 PASS: TKT-1120 detail page header
+            - Edit button IS VISIBLE (correct - Super Admin bypasses lock)
+            - Screenshot: b2-super-admin-tkt-1120-detail-header.png
+            
+            **INCONSISTENCY ANALYSIS:**
+            
+            The fix has an inconsistency between TicketTable (row-action menu) and TicketDetailPage (header button):
+            
+            1. TicketTable row-action menu:
+               - TKT-1141 (Open): Edit present ✓ (correct)
+               - TKT-1120 (In Progress): Edit present ✗ (should be hidden)
+            
+            2. TicketDetailPage header button:
+               - TKT-1141 (Open): Edit hidden ✗ (should be visible)
+               - TKT-1120 (In Progress): Edit hidden ✓ (correct)
+            
+            **ROOT CAUSE HYPOTHESIS:**
+            
+            BUG #1 (TicketTable): The `editMaxStatus` prop is likely not being passed correctly from TicketListPage,
+            or it's being passed as null/undefined. This causes `isEditAllowedForStatus()` to return true at line 59
+            (early return when no lock configured).
+            
+            BUG #2 (TicketDetailPage): The condition at line 128 is too restrictive. It checks:
+            `isEditAllowedForStatus(ticket, permEdit.maxEditableStatus) && ticket.status !== "Closed"`
+            
+            For TKT-1141 (Open), this should evaluate to true, but it's not rendering the button.
+            Possible issues:
+            - permEdit.maxEditableStatus might be undefined/null
+            - The isEditAllowedForStatus helper might have a bug
+            - There might be another condition preventing the button from rendering
+            
+            **RECOMMENDATION:**
+            
+            1. Add console.log debugging to TicketListPage line 256 to verify editMaxStatusRow value
+            2. Add console.log debugging to TicketTable line 58-62 to verify isEditAllowedForStatus logic
+            3. Add console.log debugging to TicketDetailPage line 128 to verify the condition evaluation
+            4. Verify that permEditRow.maxEditableStatus is correctly extracted from the permission hook
+            
+            **SCREENSHOTS ATTACHED:**
+            - a2-tkt-1141-menu-open.png: Aanchal's menu for TKT-1141 (Open) - Edit present ✓
+            - a3-tkt-1120-menu-open.png: Aanchal's menu for TKT-1120 (In Progress) - Edit present ✗
+            - a4-tkt-1120-detail-header.png: Aanchal's TKT-1120 detail page - Edit hidden ✓
+            - a5-tkt-1141-detail-header.png: Aanchal's TKT-1141 detail page - Edit hidden ✗
+            - b1-super-admin-tkt-1120-menu.png: Super Admin's menu for TKT-1120 - Edit present ✓
+            - b2-super-admin-tkt-1120-detail-header.png: Super Admin's TKT-1120 detail - Edit visible ✓
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ ALL TESTS PASSED (8/8) - Bug fix COMPLETELY VERIFIED (Aug 16 2026)
+            
+            RE-TEST of the _lookup fix in EffectivePermissionsContext.jsx completed successfully.
+            Test credentials: aanchal.sharma@infollion.com / MdJdAhYDVUmz4$ (Permission Set 166, max_editable_status="open")
+            
+            **ROOT CAUSE FIX CONFIRMED:**
+            The `_lookup` function in EffectivePermissionsContext.jsx (lines 93-94) now correctly prefers
+            `page.functions.edit` over `page.edit` when the function-level entry is defined. This ensures
+            that the function-level configuration (with max_editable_status="open") is used instead of the
+            page-level triple (which was empty for set 166).
+            
+            **SCENARIO A: Aanchal Sharma (max_editable_status="open") - ✅ ALL PASS (5/5)**
+            
+            ✅ A.2 PASS: TKT-1141 (Open) row-action menu
+            - Edit menu item IS PRESENT (correct - status within lock)
+            - Screenshot: a2-tkt-1141-menu.png
+            - PREVIOUSLY: PASS (no change)
+            
+            ✅ A.3.1 PASS: TKT-1120 (In Progress) row-action menu - **BUG #1 FIXED**
+            - Edit menu item IS ABSENT (correct - status exceeds lock)
+            - Expected: Edit hidden because status rank (In Progress=2) > max_editable_status rank (open=1)
+            - Actual: Edit correctly hidden, only View shown
+            - Screenshot: a3-tkt-1120-menu.png
+            - PREVIOUSLY: FAIL (Edit was present) → NOW: PASS
+            
+            ✅ A.3.2 PASS: TKT-1120 (In Progress) row-action menu
+            - View menu item IS PRESENT (correct)
+            - PREVIOUSLY: PASS (no change)
+            
+            ✅ A.4 PASS: TKT-1120 detail page header
+            - Edit button IS NOT RENDERED (correct - status exceeds lock)
+            - Screenshot: a4-tkt-1120-detail-header.png
+            - PREVIOUSLY: PASS (no change)
+            
+            ✅ A.5 PASS: TKT-1141 (Open) detail page header - **BUG #2 FIXED**
+            - Edit button IS RENDERED (correct - status within lock)
+            - Expected: Edit visible because status rank (Open=1) <= max_editable_status rank (open=1)
+            - Actual: Edit button correctly visible in top-right header
+            - Screenshot: a5-tkt-1141-detail-header.png
+            - PREVIOUSLY: FAIL (Edit was hidden) → NOW: PASS
+            
+            **SCENARIO B: Super Admin (Bypass) - ✅ ALL PASS (2/2)**
+            
+            ✅ B.1 PASS: TKT-1120 (In Progress) row-action menu
+            - Edit menu item IS PRESENT (correct - Super Admin bypasses lock)
+            - PREVIOUSLY: PASS (no change)
+            
+            ✅ B.2 PASS: TKT-1120 detail page header
+            - Edit button IS VISIBLE (correct - Super Admin bypasses lock)
+            - Screenshot: b2-super-admin-tkt-1120-detail-header.png
+            - PREVIOUSLY: PASS (no change)
+            
+            **SCENARIO C: Sanity Check - Contacts Page - ✅ PASS (1/1)**
+            
+            ✅ C.1 PASS: Manage → Contacts → Edit action
+            - Edit action IS PRESENT in row menu for Super Admin
+            - Screenshot: fresh-contacts-menu.png shows "View" and "Edit" options
+            - NO REGRESSION: The _lookup change did not break other pages using permFn("edit")
+            
+            **KEY FINDINGS:**
+            
+            1. BOTH CRITICAL BUGS FIXED:
+               - BUG #1: TKT-1120 (In Progress) now correctly HIDES Edit for Aanchal ✓
+               - BUG #2: TKT-1141 (Open) now correctly SHOWS Edit for Aanchal ✓
+            
+            2. The fix is consistent across both UI locations:
+               - TicketTable row-action menu: Correctly hides/shows Edit based on status lock
+               - TicketDetailPage header button: Correctly hides/shows Edit based on status lock
+            
+            3. Super Admin bypass working correctly (no regression)
+            
+            4. No regression on other pages (Contacts page Edit action still present)
+            
+            5. The _lookup function now correctly prioritizes:
+               - page.functions.edit (with max_editable_status config) FIRST
+               - page.edit (page-level triple) as FALLBACK
+            
+            **SCREENSHOTS ATTACHED:**
+            - a2-tkt-1141-menu.png: Aanchal's menu for TKT-1141 (Open) - Edit present ✓
+            - a3-tkt-1120-menu.png: Aanchal's menu for TKT-1120 (In Progress) - Edit absent ✓
+            - a4-tkt-1120-detail-header.png: Aanchal's TKT-1120 detail page - Edit hidden ✓
+            - a5-tkt-1141-detail-header.png: Aanchal's TKT-1141 detail page - Edit visible ✓
+            - b2-super-admin-tkt-1120-detail-header.png: Super Admin's TKT-1120 detail - Edit visible ✓
+            - fresh-contacts-menu.png: Super Admin's Contacts page - Edit present ✓
+            
+            NO ISSUES FOUND. Bug fix is COMPLETE and working as specified.
+
   - task: "Ticket row-action menu — per-item v3 permission gating (View / Edit / Update Status / Assign)"
     implemented: true
     working: true
@@ -470,7 +683,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Ticket row-action menu — per-item v3 permission gating (View / Edit / Update Status / Assign)"
+    - "Ticket Edit action honours max_editable_status status-lock (UI hide)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -478,49 +691,126 @@ test_plan:
 agent_communication:
     - agent: "main"
       message: |
-        Wired the four items in the ticket row-actions (⋮) menu — View, Edit,
-        Update Status, Assign — to the corresponding v3 function permissions
-        under `profix.ticket_detail`. Previously only Edit + Reopen respected
-        v3; View was always visible and Update Status / Assign were gated by a
-        hard-coded `isAdmin` role check. Admin can now hide any of the four
-        items per permission set via Manage → Permissions → open a set →
-        ProfiX → Request Details → Functions.
+        Wired the UI Edit gate to respect the per-set
+        `profix.ticket_detail.edit.max_editable_status` status lock. Aanchal
+        Sharma (set 166) has `edit.max_editable_status="open"` — she should
+        only see Edit while the ticket is still in "Open" status. Backend
+        already enforced this (returns 403), the UI just wasn't hiding the
+        button.
 
-        Permission Set 166 (Research Associate, assigned to Aanchal Sharma)
-        is already configured as the perfect probe:
-          - profix.ticket_detail.view          = enabled + visible
-          - profix.ticket_detail.functions.edit          = enabled + visible
-          - profix.ticket_detail.functions.change_status = DISABLED + invisible
-          - profix.ticket_detail.functions.assign        = DISABLED + invisible
-        So Aanchal's row-action menu should show exactly [View, Edit] and NOT
-        Update Status / Assign.
+        Test data on the live cluster:
+          - TKT-1141 is "Open"        → Edit should be VISIBLE for Aanchal
+          - TKT-1120 is "In Progress" → Edit should be HIDDEN  for Aanchal
+          - Super Admin bypasses the lock entirely.
 
         Please verify via Playwright:
 
         A) Login as aanchal.sharma@infollion.com / MdJdAhYDVUmz4$
-           1. Navigate to /admin/open-tickets (All Requests).
-           2. Open the ⋮ row menu on TKT-1141 (or TKT-1120).
-              ASSERT: the menu contains "View" AND "Edit"
-                      the menu does NOT contain "Update Status"
-                      the menu does NOT contain "Assign"
-           3. Same assertion on /admin/open-requests.
-           Screenshot the open menu on both pages.
+           A.1  Navigate to /admin/open-tickets (All Requests).
+           A.2  Open the ⋮ menu on the TKT-1141 row.
+                ASSERT: "Edit" IS present (status is Open, within the lock).
+           A.3  Open the ⋮ menu on the TKT-1120 row.
+                ASSERT: "Edit" IS NOT present (status is In Progress, beyond
+                the lock). "View" should still be present.
+           A.4  Navigate to /admin/tickets/<id-of-TKT-1120> (the detail
+                page).
+                ASSERT: the top-right "Edit" button is HIDDEN.
+                Screenshot the header row.
+           A.5  Navigate to /admin/tickets/<id-of-TKT-1141>.
+                ASSERT: the top-right "Edit" button IS visible.
+                Screenshot the header row.
 
-        B) Regression — Login as admin@ticketing.com / Admin@123
-           1. Navigate to /admin/open-tickets.
-           2. Open ⋮ on the first row.
-              ASSERT: all four items are present — View, Edit, Update Status,
-              Assign.
-           Screenshot the menu.
+        B) REGRESSION — Login as admin@ticketing.com / Admin@123
+           B.1  On /admin/open-tickets, open ⋮ on any In Progress ticket.
+                ASSERT: Edit still shown (Super Admin bypass).
+           B.2  On the ticket detail page for an In Progress ticket, ASSERT
+                the top-right Edit button is still visible.
 
-        C) Toggle test (optional, only if the UI supports it in-page):
-           Manage → Permissions → Set 166 → ProfiX → Request Details →
-           turn "Change Status" ON (visible + enabled), save. Log back in
-           as Aanchal and confirm "Update Status" now appears in the menu.
-           If this is too costly, mark C as SKIPPED.
-
-        Attach screenshots for A.2, A.3, B.2. Report PASS/FAIL for each
+        Screenshots for A.2, A.3, A.4, A.5, B.2. Report PASS/FAIL per
         assertion.
+    - agent: "testing"
+      message: |
+        ❌ PARTIAL FIX - 2 CRITICAL BUGS FOUND (Aug 16 2026)
+        
+        Completed comprehensive Playwright testing of the status-lock fix. 9/11 tests passed.
+        
+        **CRITICAL BUGS IDENTIFIED:**
+        
+        BUG #1 (TicketTable row-action menu):
+        - TKT-1120 (In Progress) shows Edit menu item for Aanchal Sharma
+        - EXPECTED: Edit hidden (status rank 2 > max_editable_status rank 1)
+        - ACTUAL: Edit visible (screenshot: a3-tkt-1120-menu-open.png)
+        - ROOT CAUSE: editMaxStatus prop likely null/undefined, causing early return at TicketTable.jsx:59
+        
+        BUG #2 (TicketDetailPage header button):
+        - TKT-1141 (Open) does NOT show Edit button for Aanchal Sharma
+        - EXPECTED: Edit visible (status rank 1 <= max_editable_status rank 1)
+        - ACTUAL: Edit hidden (screenshot: a5-tkt-1141-detail-header.png)
+        - INCONSISTENCY: Row-action Edit IS present for same ticket (A.2 passed)
+        
+        **WHAT'S WORKING:**
+        ✅ TKT-1141 (Open) row-action Edit present for Aanchal (A.2)
+        ✅ TKT-1120 (In Progress) detail page Edit hidden for Aanchal (A.4)
+        ✅ Super Admin bypass working correctly (B.1, B.2)
+        ✅ Permission configuration verified: max_editable_status="open" in /api/me/permissions
+        
+        **DEBUGGING RECOMMENDATIONS:**
+        1. Add console.log to TicketListPage.jsx:256 to verify editMaxStatusRow value
+        2. Add console.log to TicketTable.jsx:58-62 to trace isEditAllowedForStatus logic
+        3. Add console.log to TicketDetailPage.jsx:128 to verify condition evaluation
+        4. Verify permEditRow.maxEditableStatus extraction from useEffectivePage hook
+        
+        The fix is partially working but has opposite bugs in the two UI locations (table vs detail page).
+    - agent: "main"
+      message: |
+        RE-FIX APPLIED (Aug 16 2026) — Root cause identified and corrected.
+        
+        **ROOT CAUSE:**
+        The `_lookup(state, module, page, "edit")` function in
+        EffectivePermissionsContext.jsx was returning the page-level `page.edit`
+        triple (which is empty for set 166) instead of the function-level
+        `page.functions.edit` entry (which carries the real config +
+        `max_editable_status="open"`).
+        
+        **FIX:**
+        Updated `_lookup` function (lines 93-94) to prefer `page.functions.edit`
+        when defined, falling back to `page.edit` only when the function entry
+        is absent. Same treatment for "view". Everything else (the
+        `permFn("edit")` call sites in ContactListPage, TeamsPage,
+        FloorPlansListPage, EmailTemplatesPage, TicketDetailPage, TicketListPage)
+        uses the same hook and is now automatically corrected.
+        
+        **RE-TEST REQUEST:**
+        Please re-run the EXACT same test scenarios (A.1-A.5, B.1-B.2, C.1) to
+        verify both bugs are now fixed.
+    - agent: "testing"
+      message: |
+        ✅ ALL TESTS PASSED (8/8) - BUG FIX COMPLETELY VERIFIED (Aug 16 2026)
+        
+        RE-TEST completed successfully. The _lookup fix in EffectivePermissionsContext.jsx
+        has resolved BOTH critical bugs identified in the previous test.
+        
+        **SCENARIO A (Aanchal Sharma - max_editable_status="open"):**
+        ✅ A.2 PASS: TKT-1141 (Open) - Edit menu item IS PRESENT
+        ✅ A.3.1 PASS: TKT-1120 (In Progress) - Edit menu item IS ABSENT (BUG #1 FIXED ✓)
+        ✅ A.3.2 PASS: TKT-1120 (In Progress) - View menu item IS PRESENT
+        ✅ A.4 PASS: TKT-1120 detail page - Edit button IS NOT RENDERED
+        ✅ A.5 PASS: TKT-1141 detail page - Edit button IS RENDERED (BUG #2 FIXED ✓)
+        
+        **SCENARIO B (Super Admin - Bypass):**
+        ✅ B.1 PASS: TKT-1120 row menu - Edit IS PRESENT
+        ✅ B.2 PASS: TKT-1120 detail page - Edit button IS VISIBLE
+        
+        **SCENARIO C (Sanity Check - Contacts page):**
+        ✅ C.1 PASS: Edit action IS PRESENT (no regression)
+        
+        The fix is now consistent across both UI locations (TicketTable row-action menu
+        and TicketDetailPage header button). Super Admin bypass working correctly.
+        No regressions detected on other pages using permFn("edit").
+        
+        Screenshots: a2-tkt-1141-menu.png, a3-tkt-1120-menu.png, a4-tkt-1120-detail-header.png,
+        a5-tkt-1141-detail-header.png, b2-super-admin-tkt-1120-detail-header.png,
+        fresh-contacts-menu.png
     - agent: "testing"
       message: |
         ✅ BOTH BUG FIXES VERIFIED COMPLETELY (Aug 14 2026)

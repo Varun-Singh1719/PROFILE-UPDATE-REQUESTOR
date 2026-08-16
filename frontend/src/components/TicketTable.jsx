@@ -40,12 +40,27 @@ export default function TicketTable({
   onReopen,       // (ticket)             => void — open the Reopen dialog
   canView = true,          // gate visibility of the View menu item (v3-driven)
   canEdit = false,         // gate visibility of the Edit menu item (v3-driven)
+  editMaxStatus = null,    // "open" | "in_progress" | "closed" | null — status-lock from v3 edit fn
   canReopen = false,       // gate visibility of the Reopen menu item (v3-driven)
   canUpdateStatus = false, // gate visibility of Update Status (v3-driven)
   canAssign = false,       // gate visibility of Assign submenu (v3-driven)
 }) {
   const navigate = useNavigate();
   const allSelected = tickets.length > 0 && selected.length === tickets.length;
+
+  // Rank tables for the `max_editable_status` gate — must stay in sync with
+  // backend/routers/permissions_v3.py::_MAX_EDITABLE_STATUS_RANK. Edit is
+  // hidden once the ticket's current status rank exceeds the allowed rank
+  // (e.g. editMaxStatus="open" hides Edit for "In Progress" and "Closed"
+  // tickets). Backend still enforces this — this is the UI layer.
+  const TICKET_STATUS_RANK = { "Open": 1, "In Progress": 2, "Closed": 3 };
+  const MAX_EDIT_RANK = { "open": 1, "in_progress": 2, "closed": 3 };
+  const isEditAllowedForStatus = (t) => {
+    if (!editMaxStatus) return true; // no lock configured → allow
+    const cur = TICKET_STATUS_RANK[t?.status || "Open"] || 1;
+    const lim = MAX_EDIT_RANK[editMaxStatus] || 2;
+    return cur <= lim;
+  };
 
   const renderRowActions = (t) => (
     <DropdownMenu>
@@ -67,9 +82,13 @@ export default function TicketTable({
           </DropdownMenuItem>
         )}
 
-        {/* Edit — permission-gated by profix.ticket_detail.edit + max_editable_status.
-            Backend still enforces; UI just hides the row when clearly denied. */}
-        {onEdit && canEdit && t.status !== "Closed" && (
+        {/* Edit — v3-gated by profix.ticket_detail.edit.visible AND the
+            per-set `max_editable_status` lock. Backend still enforces both;
+            UI hides the item once the ticket's status rank exceeds the
+            allowed rank (e.g. lock=Open hides Edit for In Progress + Closed).
+            The legacy `t.status !== "Closed"` guard is preserved for the
+            default (no-lock) case. */}
+        {onEdit && canEdit && isEditAllowedForStatus(t) && t.status !== "Closed" && (
           <DropdownMenuItem
             onClick={() => onEdit(t)}
             data-testid={`row-action-edit-${t.ticket_id}`}
