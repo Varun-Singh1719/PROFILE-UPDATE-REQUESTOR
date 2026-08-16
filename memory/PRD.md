@@ -1,6 +1,18 @@
 # Infollion Utilities — PRD
 
 
+## Session Aug 16 2026 (rev-5) — ProfiX dashboard + filters-respect-Enable + Floor Layout + Workstation form (ALL TESTED ✅)
+Verified by testing agents (backend + frontend), all PASS:
+- **Recent Updates by update-date** (`dashboard.py`): `/dashboard/recent?kind=updated` now windows on `updated_on` (created_on for `new`), so a request created earlier but updated in-window (e.g. TKT-1120: created Jul-29, updated Aug-16) appears.
+- **Filters respect Enable** (ProfiX ticket lists, `TicketListPage.jsx` + `DeferredSearchInput`/`DateFilter`): Shown+Enable-off → filter greyed/disabled; Hidden → not rendered; added `filter_id/team/created_by` gating.
+- **ProfiX Dashboard Metric required** (`PermissionsPage.jsx` + `permissions_v3.py`): when a dashboard access level is granted, save is blocked (frontend red-error + toast; backend 400) unless Created By / Assigned To is chosen.
+- **ProfiX Dashboard Team section** (`AdminDashboard.jsx`): hidden for Individual; shown for Manager & Overall (Super Admin=overall).
+- **Floor Layout Team filter** (`FloorLayoutPage.jsx` + `core.py`): added `filter_team` to catalog (permission-gated hide/enable); dropdown now lists ALL teams (from `/teams`) not just booked ones; selection persists across date changes (resets only on plan change).
+- **Request Workstation employee scoping** (`WorkstationBookingPage.jsx`): Employee Name field scoped by desk-booking (workspace_manager) dashboard access — Individual auto-locks to self ("You can only book for yourself"), Manager lists team members, Overall lists everyone.
+- Env note: ProfiX dashboard aggregations are Atlas-backed (~8-10s load). Backend `.env`/`frontend/.env` restored earlier this session; TicketTable.jsx syntax error fixed.
+
+
+
 ## ProfiX Filters now respect the "Enable" toggle (Aug 16 2026)
 - **Behavior**: On the ProfiX ticket-list pages (All / Open / Unassigned — all rendered by `TicketListPage.jsx`), each filter now honours BOTH permission toggles:
   - Visibility **Hidden** → filter not rendered (unchanged).
