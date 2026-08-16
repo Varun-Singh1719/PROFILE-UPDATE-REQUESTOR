@@ -246,6 +246,7 @@ export default function AdminDashboard() {
       navigate={navigate}
       headerActions={tabBar}
       metricsBasedOn={profixMetric}
+      accessLevel={profixAccess}
     />
   );
 }
@@ -266,8 +267,13 @@ function NoDashboardShared({ productLabel }) {
 }
 
 // ---------- Profix dashboard content ----------
-function ProfixDashboardBody({ navigate, headerActions, metricsBasedOn }) {
+function ProfixDashboardBody({ navigate, headerActions, metricsBasedOn, accessLevel }) {
   const { user } = useAuth();
+  // The "Team" section is a manager-and-above concept — it summarises OTHER
+  // people's workload. On the Individual dashboard the user only sees their
+  // own data, so the Team section is hidden. Shown for "manager" and
+  // "overall" (and Super Admin, who resolves to "overall").
+  const showTeamSection = accessLevel === "manager" || accessLevel === "overall";
   const [stats, setStats] = useState({});
   const [dqs, setDqs] = useState([]);
   const [recent, setRecent] = useState([]);
@@ -349,52 +355,56 @@ function ProfixDashboardBody({ navigate, headerActions, metricsBasedOn }) {
         <MetricCard label="Closed" value={stats.closed} color="#b2b2b2" icon={CheckCircle2} onClick={() => goto("Closed")} />
       </div>
 
-      <h2 className="text-lg font-semibold text-gray-900 mt-8 mb-3 flex items-center gap-2">
-        <Users sx={{ fontSize: 18 }} className="text-[#ec9324]"/> Team
-      </h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {dqs.length === 0 && <div className="text-sm text-gray-400">No team members with Profix access yet.</div>}
-        {dqs.map((m) => (
-          <button
-            key={m.id}
-            onClick={() => gotoMember(m.id)}
-            data-testid={`dq-perf-${m.email}`}
-            className="text-left bg-white rounded-xl p-4 border border-gray-100 shadow-soft hover:shadow-soft-hover transition-all duration-200"
-          >
-            <div className="flex items-center gap-3">
-              <UserAvatar user={m} size={40} showStatusDot={false}/>
-              <div>
-                <div className="font-semibold text-gray-900">{m.name}</div>
-                <div className="text-xs text-gray-500">{m.email}</div>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3 mt-4 text-center">
-              <div className="bg-[#ec9324]/5 rounded-lg py-2">
-                <div className="text-2xl font-bold text-[#ec9324]">{m.open}</div>
-                <div className="text-[10px] uppercase tracking-wide text-gray-500 mt-0.5">Open</div>
-              </div>
-              <div className="bg-green-50 rounded-lg py-2">
-                <div className="text-2xl font-bold text-green-600">{m.in_progress}</div>
-                <div className="text-[10px] uppercase tracking-wide text-gray-500 mt-0.5">In Progress</div>
-              </div>
-            </div>
-            <div className="mt-3 bg-gray-50 rounded-lg py-2.5 px-3"
-              data-testid={`dq-profiles-assigned-${m.email}`}>
-              <div className="text-[11px] uppercase tracking-wide text-gray-500 font-medium mb-1.5">Profiles</div>
-              <div className="grid grid-cols-2 gap-2 text-center">
-                <div>
-                  <div className="text-base font-bold text-[#ec9324]">{m.open_profiles ?? 0}</div>
-                  <div className="text-[10px] uppercase tracking-wide text-gray-500 mt-0.5">Open</div>
+      {showTeamSection && (
+        <>
+          <h2 className="text-lg font-semibold text-gray-900 mt-8 mb-3 flex items-center gap-2">
+            <Users sx={{ fontSize: 18 }} className="text-[#ec9324]"/> Team
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {dqs.length === 0 && <div className="text-sm text-gray-400">No team members with Profix access yet.</div>}
+            {dqs.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => gotoMember(m.id)}
+                data-testid={`dq-perf-${m.email}`}
+                className="text-left bg-white rounded-xl p-4 border border-gray-100 shadow-soft hover:shadow-soft-hover transition-all duration-200"
+              >
+                <div className="flex items-center gap-3">
+                  <UserAvatar user={m} size={40} showStatusDot={false}/>
+                  <div>
+                    <div className="font-semibold text-gray-900">{m.name}</div>
+                    <div className="text-xs text-gray-500">{m.email}</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-base font-bold text-green-600">{m.in_progress_profiles ?? 0}</div>
-                  <div className="text-[10px] uppercase tracking-wide text-gray-500 mt-0.5">In Progress</div>
+                <div className="grid grid-cols-2 gap-3 mt-4 text-center">
+                  <div className="bg-[#ec9324]/5 rounded-lg py-2">
+                    <div className="text-2xl font-bold text-[#ec9324]">{m.open}</div>
+                    <div className="text-[10px] uppercase tracking-wide text-gray-500 mt-0.5">Open</div>
+                  </div>
+                  <div className="bg-green-50 rounded-lg py-2">
+                    <div className="text-2xl font-bold text-green-600">{m.in_progress}</div>
+                    <div className="text-[10px] uppercase tracking-wide text-gray-500 mt-0.5">In Progress</div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          </button>
-        ))}
-      </div>
+                <div className="mt-3 bg-gray-50 rounded-lg py-2.5 px-3"
+                  data-testid={`dq-profiles-assigned-${m.email}`}>
+                  <div className="text-[11px] uppercase tracking-wide text-gray-500 font-medium mb-1.5">Profiles</div>
+                  <div className="grid grid-cols-2 gap-2 text-center">
+                    <div>
+                      <div className="text-base font-bold text-[#ec9324]">{m.open_profiles ?? 0}</div>
+                      <div className="text-[10px] uppercase tracking-wide text-gray-500 mt-0.5">Open</div>
+                    </div>
+                    <div>
+                      <div className="text-base font-bold text-green-600">{m.in_progress_profiles ?? 0}</div>
+                      <div className="text-[10px] uppercase tracking-wide text-gray-500 mt-0.5">In Progress</div>
+                    </div>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       <h2 className="text-lg font-semibold text-gray-900 mt-8 mb-3">Recent Updates</h2>
       <div className="grid grid-cols-1 gap-3">

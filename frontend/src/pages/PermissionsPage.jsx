@@ -331,7 +331,7 @@ function PageDetail({ page, state, onView, onEdit, onFunction, onEnableAll, onHi
 }
 
 // ------------- DashboardModuleCard — single-choice per product
-function DashboardModuleCard({ mod, state, expanded, onToggle, onClear, Icon, updateState }) {
+function DashboardModuleCard({ mod, state, expanded, onToggle, onClear, Icon, updateState, metricError = false, onClearMetricError }) {
   const levels = mod.access_levels || [
     { key: "individual", label: "Individual" },
     { key: "manager",    label: "Manager"    },
@@ -351,6 +351,7 @@ function DashboardModuleCard({ mod, state, expanded, onToggle, onClear, Icon, up
   // ProfiX-only: extra Super-Admin dropdown controlling which ticket-owner
   // field the ProfiX dashboard uses (Created By / Assigned To).
   const setPageMetric = (pkey, val) => {
+    if (val && typeof onClearMetricError === "function") onClearMetricError();
     updateState((prev) => {
       const nm = { ...(prev[mod.key] || { pages: {} }) };
       const np = { ...(nm.pages || {}) };
@@ -463,32 +464,45 @@ function DashboardModuleCard({ mod, state, expanded, onToggle, onClear, Icon, up
                 </div>
 
                 {/* ProfiX-only: Dashboard Metrics Based On */}
-                {metricsField && (
-                  <div className="mt-4 pt-4 border-t border-dashed border-gray-200"
+                {metricsField && (() => {
+                  // Required whenever an access level is granted for this ProfiX
+                  // dashboard — the cards + team stats are computed on this field.
+                  const showRequiredError = !!(metricError && page.key === "profix" && current && !currentMetric);
+                  return (
+                  <div className={`mt-4 pt-4 border-t border-dashed ${showRequiredError ? "border-red-300" : "border-gray-200"}`}
                        data-testid={`dashboard-metrics-${page.key}`}>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-semibold text-gray-900">
                           {metricsField.label}
+                          {current && <span className="text-red-500 ml-0.5" title="Required when a dashboard access level is granted">*</span>}
                         </div>
                         <div className="text-[11px] text-gray-500 mt-0.5">
                           Controls which ticket-owner field ProfiX dashboard cards + team metrics are calculated on.
                         </div>
+                        {showRequiredError && (
+                          <div className="text-[11px] font-semibold text-red-600 mt-1" data-testid={`dashboard-metrics-error-${page.key}`}>
+                            Please select a metric — required when a dashboard access level is granted.
+                          </div>
+                        )}
                       </div>
                       <div className="w-full sm:w-64">
-                        <SingleSelect
-                          options={(metricsField.options || []).map((o) => ({ value: o.key, label: o.label }))}
-                          value={currentMetric}
-                          onChange={(v) => setPageMetric(page.key, v || null)}
-                          placeholder="— select —"
-                          testId={`dashboard-metrics-select-${page.key}`}
-                          size="sm"
-                          allowClear
-                        />
+                        <div className={showRequiredError ? "rounded-md ring-1 ring-red-400" : ""}>
+                          <SingleSelect
+                            options={(metricsField.options || []).map((o) => ({ value: o.key, label: o.label }))}
+                            value={currentMetric}
+                            onChange={(v) => setPageMetric(page.key, v || null)}
+                            placeholder="— select —"
+                            testId={`dashboard-metrics-select-${page.key}`}
+                            size="sm"
+                            allowClear
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
-                )}
+                  );
+                })()}
               </div>
             );
           })}
@@ -1068,6 +1082,7 @@ export default function PermissionsPage() {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState({});
   const [saving, setSaving] = useState(false);
+  const [metricError, setMetricError] = useState(false);
   const [copyOpen, setCopyOpen] = useState(false);
   const [loginAsOpen, setLoginAsOpen] = useState(false);
   const [copiedFromId, setCopiedFromId] = useState(null);
@@ -1165,6 +1180,20 @@ export default function PermissionsPage() {
 
   const doSave = async () => {
     if (!title.trim()) { notify.error("Title is required"); return; }
+    // ProfiX Dashboard: when any access level is granted, a Dashboard Metric
+    // (Created By / Assigned To) MUST be chosen — the dashboard cards + team
+    // stats are computed on this field, so it can't be left unset.
+    const profixDash = state?.[DASHBOARD_MODULE_KEY]?.pages?.profix;
+    if (
+      profixDash?.access_level &&
+      profixDash.metrics_based_on !== "created_by" &&
+      profixDash.metrics_based_on !== "assigned_to"
+    ) {
+      setMetricError(true);
+      setExpanded((e) => ({ ...e, [DASHBOARD_MODULE_KEY]: true }));
+      notify.error("Select a Dashboard Metric (Created By / Assigned To) for the ProfiX Dashboard before saving.");
+      return;
+    }
     setSaving(true);
     try {
       const payload = { title: title.trim(), description, modules: state, copied_from_id: copiedFromId };
@@ -1346,6 +1375,8 @@ export default function PermissionsPage() {
                   onClear={() => clearModule(m.key)}
                   Icon={LayoutDashboard}
                   updateState={setState}
+                  metricError={metricError}
+                  onClearMetricError={() => setMetricError(false)}
                 />
               ) : (
                 <ModuleAccordion

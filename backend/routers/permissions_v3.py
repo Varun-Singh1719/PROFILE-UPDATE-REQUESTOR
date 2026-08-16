@@ -538,9 +538,25 @@ def _actor(user: dict) -> dict:
     return {"id": user.get("id"), "email": user.get("email"), "name": user.get("name")}
 
 
+def _validate_profix_dashboard_metric(modules: dict) -> None:
+    """Enforce: when the ProfiX Dashboard is granted an access level, a
+    Dashboard Metric ("created_by" | "assigned_to") MUST be selected — the
+    dashboard cards + team stats are computed on this field, so it can't be
+    left unset. Raises 400 otherwise. `modules` must already be normalized."""
+    profix = (((modules or {}).get("dashboard") or {}).get("pages") or {}).get("profix") or {}
+    access = profix.get("access_level")
+    metric = profix.get("metrics_based_on")
+    if access and metric not in ("created_by", "assigned_to"):
+        raise HTTPException(
+            400,
+            "Select a Dashboard Metric (Created By / Assigned To) for the ProfiX Dashboard — it is required when a dashboard access level is granted.",
+        )
+
+
 @api_router.post("/permission-sets-v3")
 async def create_v3_set(body: PermissionSetV3In, user=Depends(require_role("Super Admin"))):
     modules = _normalize_v3_modules(body.modules or {})
+    _validate_profix_dashboard_metric(modules)
     seq = await _next_seq()
     doc = {
         "id": f"pset-{uuid.uuid4()}",
@@ -580,6 +596,7 @@ async def update_v3_set(
         raise HTTPException(400, "Cannot edit a deleted permission set")
 
     modules = _normalize_v3_modules(body.modules or {})
+    _validate_profix_dashboard_metric(modules)
     updates = {
         "title": body.title.strip(),
         "description": (body.description or "").strip(),
