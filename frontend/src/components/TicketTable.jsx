@@ -170,6 +170,7 @@ export default function TicketTable({
       </DropdownMenuContent>
     </DropdownMenu>
   );
+  };
 
   return (
     <div className="w-full">

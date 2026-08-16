@@ -3,7 +3,7 @@ import os
 import pytest
 import requests
 
-BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://perm-password-hide.preview.emergentagent.com").rstrip("/")
+BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://hidden-assignee-bug.preview.emergentagent.com").rstrip("/")
 API = f"{BASE}/api"
 
 CREDS = {

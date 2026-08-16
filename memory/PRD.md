@@ -1,6 +1,20 @@
 # Infollion Utilities — PRD
 
 
+## ProfiX Permissions — Filter-visibility fix + build repair (Aug 16 2026)
+- **Root cause**: The whole app was down/stale — (1) both `backend/.env` and `frontend/.env` were missing, and (2) `frontend/src/components/TicketTable.jsx` had a **syntax error** (the `renderRowActions` arrow function was converted to a block body `=> {` for the "empty-menu auto-hide" feature but was never closed with `};`), so webpack failed to compile and the user kept seeing the last-good (pre-fix) bundle.
+- **Fixes**:
+  - Recreated `backend/.env` (Atlas `cluster0.vmgql1i` · DB `app_db` · user `sakshamsinghal_db_user`, per user-supplied creds; fresh JWT_SECRET + FERNET_KEY) and `frontend/.env` (`REACT_APP_BACKEND_URL` = preview URL).
+  - Added the missing `};` in `TicketTable.jsx` → frontend compiles again.
+- **Verified (Permission Set #166 "Research Associate", assigned to Aanchal Sharma, Admin)**:
+  - Editor → ProfiX → All Requests → Filters now shows all toggles incl. **ID / Team / Created By** (Team & Created By = Shown) and **Assignee = Hidden** (red badge). Catalog already carried these keys in `backend/core.py`.
+  - Impersonating Aanchal on `/admin/open-tickets` → filter bar renders only Search / Status / Priority / Date; the **Assigned To filter is correctly hidden** (enforced via `EffectivePermissionsContext` + `TicketListPage`).
+  - Same page-level gating applies to Open Requests & Unassigned (catalog + `permPageKey`).
+  - Empty-menu auto-hide (⋮ hidden when a row has zero visible actions) is implemented in `TicketTable.jsx` and now compiles.
+- Testing agent NOT deployed (per explicit user instruction). Note: if the user was testing a **deployed** build, they must redeploy (Save to GitHub → deploy) to pick up these fixes.
+
+
+
 ## CRM → Client Contacts — Country dropdown fix + Detail/Card redesign (Aug 08 2026)
 - **Country dropdown bug fixed**: the custom `CountrySelect` (portal popup) was un-clickable & keyboard-dead inside the Radix Dialog. Replaced it with the existing shared **`SearchSelect`** (single-select) — same Link-Segmentation UX, works in dialogs (z-9999 + pointer-events + capture-stopPropagation), full keyboard nav (↑/↓/Enter/Home/End). Deleted `components/CountrySelect.jsx`. `onChange` derives `country_name` via `getCountryName`.
 - **City now optional**, **Country required** (removed `city` from `REQUIRED_CC_FIELDS`; label "City" vs "Country *").

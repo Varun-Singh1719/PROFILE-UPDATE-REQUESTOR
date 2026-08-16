@@ -2,7 +2,7 @@
 
 **Test Date:** July 29, 2026  
 **Tester:** Testing Agent (Automated)  
-**Environment:** https://perm-password-hide.preview.emergentagent.com  
+**Environment:** https://hidden-assignee-bug.preview.emergentagent.com  
 **Test Approach:** FAST-PATH Impersonation with FIXED wait pattern for permsReady
 
 ---
