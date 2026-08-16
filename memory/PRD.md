@@ -1,6 +1,18 @@
 # Infollion Utilities — PRD
 
 
+## ProfiX Filters now respect the "Enable" toggle (Aug 16 2026)
+- **Behavior**: On the ProfiX ticket-list pages (All / Open / Unassigned — all rendered by `TicketListPage.jsx`), each filter now honours BOTH permission toggles:
+  - Visibility **Hidden** → filter not rendered (unchanged).
+  - Visibility **Shown** + Enable **on** → filter rendered and interactive (unchanged).
+  - Visibility **Shown** + Enable **off** → filter rendered but **greyed-out / disabled** (NEW — previously it was fully usable).
+- **Impl**: `TicketListPage` passes `disabled={!permFilterX.canUse}` to every filter (`filter_id`, `search`, `filter_status`, `filter_priority`, `filter_team`, `filter_created_by`, `filter_assignee`, `filter_date`). `canUse = enabled && visible`. Added a `disabled` prop to `DeferredSearchInput.jsx` and `DateFilter.jsx`; `MultiSelectFilter.jsx` already supported it.
+- **Verified** via impersonating Aanchal Sharma (set #166): Status set to Shown+Enable-off → greyed & non-clickable; Priority (Enable-on) → active; Assignee (Hidden) → absent. Also matched the user's own live config where Team/Created By were Shown+Enable-off → both rendered greyed.
+- **Audit of other Permission-tab pages**: Only ProfiX pages currently permission-gate their FILTERS. Every other list page (Employees, Teams, Notifications Outbox, Email Templates, Bookings, Meeting Rooms, Workstation, Pending Approvals, Floor Plans, CRM) does **not** gate its search/filter controls by permissions at all (their action BUTTONS already respect enable+visibility). So "make filters respect Enable" has no effect there yet — wiring full filter gating (visibility + enable) on those pages is a separate, larger task pending user confirmation.
+- Testing agent NOT deployed (per user instruction).
+
+
+
 ## ProfiX Permissions — Filter-visibility fix + build repair (Aug 16 2026)
 - **Root cause**: The whole app was down/stale — (1) both `backend/.env` and `frontend/.env` were missing, and (2) `frontend/src/components/TicketTable.jsx` had a **syntax error** (the `renderRowActions` arrow function was converted to a block body `=> {` for the "empty-menu auto-hide" feature but was never closed with `};`), so webpack failed to compile and the user kept seeing the last-good (pre-fix) bundle.
 - **Fixes**:

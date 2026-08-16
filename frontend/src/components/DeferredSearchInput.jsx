@@ -36,6 +36,7 @@ export default function DeferredSearchInput({
   showLeftIcon = true,
   numericOnly = false,
   ariaLabel,
+  disabled = false,
 }) {
   // Local buffer for the text the user is currently typing.
   const [buffer, setBuffer] = useState(value ?? "");
@@ -45,6 +46,7 @@ export default function DeferredSearchInput({
   useEffect(() => { setBuffer(value ?? ""); }, [value]);
 
   const commit = () => {
+    if (disabled) return;
     const next = (buffer ?? "").trim();
     if ((value ?? "") === next) return;   // no-op if unchanged
     onCommit?.(next);
@@ -64,7 +66,7 @@ export default function DeferredSearchInput({
   };
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative ${className} ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}>
       {showLeftIcon && (
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" sx={{ fontSize: 16 }}/>
       )}
@@ -72,7 +74,8 @@ export default function DeferredSearchInput({
         placeholder={placeholder}
         data-testid={testId}
         aria-label={ariaLabel || placeholder}
-        className={`${showLeftIcon ? "pl-9" : "pl-3"} pr-9 h-9 ${inputClassName}`}
+        disabled={disabled}
+        className={`${showLeftIcon ? "pl-9" : "pl-3"} pr-9 h-9 ${inputClassName} disabled:cursor-not-allowed`}
         value={buffer}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
@@ -81,10 +84,11 @@ export default function DeferredSearchInput({
       <button
         type="button"
         onClick={commit}
+        disabled={disabled}
         data-testid={testId ? `${testId}-btn` : undefined}
         aria-label="Search"
         title="Search"
-        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center text-gray-600"
+        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center text-gray-600 disabled:cursor-not-allowed disabled:hover:bg-gray-100"
       >
         <SendIcon sx={{ fontSize: 14 }}/>
       </button>

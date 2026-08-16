@@ -100,6 +100,9 @@ export default function DateFilter({
   // singleDate is true to disable out-of-range days on the calendar.
   minDate,
   maxDate,
+  // When true, the whole filter trigger is disabled (greyed out, can't open).
+  // Used by permission gating: filter is Shown but its Enable flag is off.
+  disabled = false,
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -169,14 +172,15 @@ export default function DateFilter({
   }, [minDate, maxDate]);
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => { if (disabled) return; setOpen(o); }}>
       <DialogTrigger asChild>
         <button
           type="button"
           data-testid={`${testId}-trigger`}
+          disabled={disabled}
           className={`inline-flex items-center gap-2 h-9 px-3 rounded-md border border-gray-200 bg-white
                       hover:border-gray-300 text-xs text-gray-700 focus:outline-none focus:ring-2
-                      focus:ring-[#ec9324]/30 ${className}`}
+                      focus:ring-[#ec9324]/30 disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
         >
           <CalendarIcon sx={{ fontSize: 14 }} className="text-[#ec9324] shrink-0"/>
           <span className="truncate max-w-[280px]">{trigger}</span>

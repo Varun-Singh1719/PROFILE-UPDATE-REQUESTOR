@@ -386,6 +386,7 @@ export default function TicketListPage({
             showLeftIcon={false}
             numericOnly
             ariaLabel="Search by ID"
+            disabled={!permFilterId.canUse}
           />
         )}
         {/* ── Description search — gated by profix.<page>.search ─────────── */}
@@ -397,6 +398,7 @@ export default function TicketListPage({
             value={descQuery}
             onCommit={(v) => { setDescInput(v); setDescQuery(v); }}
             ariaLabel="Search by description"
+            disabled={!permFilterSearch.canUse}
           />
         )}
         {!lockedStatus && permFilterStatus.isVisible && (
@@ -411,6 +413,7 @@ export default function TicketListPage({
             ]}
             testIdPrefix="filter-status"
             className="w-32 shrink-0"
+            disabled={!permFilterStatus.canUse}
           />
         )}
         {permFilterPriority.isVisible && (
@@ -425,6 +428,7 @@ export default function TicketListPage({
             ]}
             testIdPrefix="filter-priority"
             className="w-32 shrink-0"
+            disabled={!permFilterPriority.canUse}
           />
         )}
         {permFilterTeam.isVisible && (
@@ -435,6 +439,7 @@ export default function TicketListPage({
             options={teams.map(t => ({ value: t.id, label: t.name }))}
             testIdPrefix="filter-team"
             className="w-32 shrink-0"
+            disabled={!permFilterTeam.canUse}
           />
         )}
         {permFilterCreatedBy.isVisible && (
@@ -445,6 +450,7 @@ export default function TicketListPage({
             options={creators.map(c => ({ value: c.id, label: c.name }))}
             testIdPrefix="filter-created-by"
             className="w-36 shrink-0"
+            disabled={!permFilterCreatedBy.canUse}
           />
         )}
         {!isDQ && permFilterAssignee.isVisible && (
@@ -458,10 +464,11 @@ export default function TicketListPage({
             ]}
             testIdPrefix="filter-assigned-to"
             className="w-36 shrink-0"
+            disabled={!permFilterAssignee.canUse}
           />
         )}
         {permFilterDate.isVisible && (
-          <div className="shrink-0"><DateFilter value={dateFilter} onChange={setDateFilter} /></div>
+          <div className="shrink-0"><DateFilter value={dateFilter} onChange={setDateFilter} disabled={!permFilterDate.canUse} /></div>
         )}
         {hasActiveFilters && (
           <Button
