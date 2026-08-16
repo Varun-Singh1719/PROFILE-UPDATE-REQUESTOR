@@ -245,6 +245,15 @@ export default function TicketListPage({
   const permExport     = permFn("export_tickets");
   const permCreate     = permFn("create_ticket");
   const permBulkAssign = permFn("bulk_assign");
+  // Filter-visibility gates (v3 category="filter" on the current page).
+  const permFilterId         = permFn("filter_id");
+  const permFilterSearch     = permFn("search");           // Description search box
+  const permFilterStatus     = permFn("filter_status");
+  const permFilterPriority   = permFn("filter_priority");
+  const permFilterTeam       = permFn("filter_team");
+  const permFilterCreatedBy  = permFn("filter_created_by");
+  const permFilterAssignee   = permFn("filter_assignee");
+  const permFilterDate       = permFn("filter_date");
   // Row-level actions live on the ticket_detail page in the catalog.
   const { fn: permDetailFn, canView: permDetailCanView } = useEffectivePage("profix", "ticket_detail");
   const permEditRow    = permDetailFn("edit");
@@ -366,27 +375,31 @@ export default function TicketListPage({
     >
       <div className="shrink-0 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
         <div className="flex flex-nowrap gap-2 items-center bg-white p-3 rounded-xl shadow-soft border border-gray-100 overflow-x-auto" data-testid="tickets-filter-bar">
-        {/* ── ID search (numeric, exact match) ───────────────────────────── */}
-        <DeferredSearchInput
-          className="w-28 shrink-0"
-          placeholder="ID"
-          testId="search-id-input"
-          value={idQuery}
-          onCommit={(v) => { setIdInput(v); setIdQuery(v); }}
-          showLeftIcon={false}
-          numericOnly
-          ariaLabel="Search by ID"
-        />
-        {/* ── Description search (substring, all chars allowed) ──────────── */}
-        <DeferredSearchInput
-          className="flex-1 min-w-[200px] shrink"
-          placeholder="Search description..."
-          testId="search-desc-input"
-          value={descQuery}
-          onCommit={(v) => { setDescInput(v); setDescQuery(v); }}
-          ariaLabel="Search by description"
-        />
-        {!lockedStatus && (
+        {/* ── ID search (numeric, exact match) — gated by profix.<page>.filter_id ─ */}
+        {permFilterId.isVisible && (
+          <DeferredSearchInput
+            className="w-28 shrink-0"
+            placeholder="ID"
+            testId="search-id-input"
+            value={idQuery}
+            onCommit={(v) => { setIdInput(v); setIdQuery(v); }}
+            showLeftIcon={false}
+            numericOnly
+            ariaLabel="Search by ID"
+          />
+        )}
+        {/* ── Description search — gated by profix.<page>.search ─────────── */}
+        {permFilterSearch.isVisible && (
+          <DeferredSearchInput
+            className="flex-1 min-w-[200px] shrink"
+            placeholder="Search description..."
+            testId="search-desc-input"
+            value={descQuery}
+            onCommit={(v) => { setDescInput(v); setDescQuery(v); }}
+            ariaLabel="Search by description"
+          />
+        )}
+        {!lockedStatus && permFilterStatus.isVisible && (
           <MultiSelectFilter
             label="Status"
             value={statusArr}
@@ -400,35 +413,41 @@ export default function TicketListPage({
             className="w-32 shrink-0"
           />
         )}
-        <MultiSelectFilter
-          label="Priority"
-          value={priorityArr}
-          onChange={(arr) => setParam("priority", arr.join(","))}
-          options={[
-            { value: "High", label: "High" },
-            { value: "Medium", label: "Medium" },
-            { value: "Low", label: "Low" },
-          ]}
-          testIdPrefix="filter-priority"
-          className="w-32 shrink-0"
-        />
-        <MultiSelectFilter
-          label="Team"
-          value={teamFilter}
-          onChange={setTeamFilter}
-          options={teams.map(t => ({ value: t.id, label: t.name }))}
-          testIdPrefix="filter-team"
-          className="w-32 shrink-0"
-        />
-        <MultiSelectFilter
-          label="Created By"
-          value={createdBy}
-          onChange={setCreatedBy}
-          options={creators.map(c => ({ value: c.id, label: c.name }))}
-          testIdPrefix="filter-created-by"
-          className="w-36 shrink-0"
-        />
-        {!isDQ && (
+        {permFilterPriority.isVisible && (
+          <MultiSelectFilter
+            label="Priority"
+            value={priorityArr}
+            onChange={(arr) => setParam("priority", arr.join(","))}
+            options={[
+              { value: "High", label: "High" },
+              { value: "Medium", label: "Medium" },
+              { value: "Low", label: "Low" },
+            ]}
+            testIdPrefix="filter-priority"
+            className="w-32 shrink-0"
+          />
+        )}
+        {permFilterTeam.isVisible && (
+          <MultiSelectFilter
+            label="Team"
+            value={teamFilter}
+            onChange={setTeamFilter}
+            options={teams.map(t => ({ value: t.id, label: t.name }))}
+            testIdPrefix="filter-team"
+            className="w-32 shrink-0"
+          />
+        )}
+        {permFilterCreatedBy.isVisible && (
+          <MultiSelectFilter
+            label="Created By"
+            value={createdBy}
+            onChange={setCreatedBy}
+            options={creators.map(c => ({ value: c.id, label: c.name }))}
+            testIdPrefix="filter-created-by"
+            className="w-36 shrink-0"
+          />
+        )}
+        {!isDQ && permFilterAssignee.isVisible && (
           <MultiSelectFilter
             label="Assigned To"
             value={assigneeFilter}
@@ -441,7 +460,9 @@ export default function TicketListPage({
             className="w-36 shrink-0"
           />
         )}
-        <div className="shrink-0"><DateFilter value={dateFilter} onChange={setDateFilter} /></div>
+        {permFilterDate.isVisible && (
+          <div className="shrink-0"><DateFilter value={dateFilter} onChange={setDateFilter} /></div>
+        )}
         {hasActiveFilters && (
           <Button
             variant="ghost"

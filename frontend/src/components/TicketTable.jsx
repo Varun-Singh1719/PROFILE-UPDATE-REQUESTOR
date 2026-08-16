@@ -62,7 +62,18 @@ export default function TicketTable({
     return cur <= lim;
   };
 
-  const renderRowActions = (t) => (
+  const renderRowActions = (t) => {
+    // Compute per-row visibility for all 4 items up-front so we can hide the
+    // trigger entirely when nothing would render (Aug 14 2026 auto-hide UX
+    // request: no empty popovers). Mirrors the individual gates below.
+    const showViewItem   = !!(showView && canView);
+    const showEditItem   = !!(onEdit && canEdit && isEditAllowedForStatus(t) && t.status !== "Closed");
+    const showReopenItem = !!(onReopen && canReopen && t.status === "Closed");
+    const showStatusItem = !!(onUpdateStatus && (canUpdateStatus || (isDQ && t.assigned_to_id === currentUserId && t.status !== "Closed")));
+    const showAssignItem = !!(canAssign && onReassign);
+    const anyVisible = showViewItem || showEditItem || showReopenItem || showStatusItem || showAssignItem;
+    if (!anyVisible) return null;
+    return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button size="sm" variant="ghost" data-testid={`row-actions-${t.ticket_id}`} className="h-8 w-8 p-0" title="Actions" aria-label="Actions">
@@ -73,7 +84,7 @@ export default function TicketTable({
         {/* View — hidden either by the legacy `showView` prop (kept for
             backwards-compat) or by lack of v3 `profix.ticket_detail.view`
             visibility. */}
-        {showView && canView && (
+        {showViewItem && (
           <DropdownMenuItem
             onClick={() => navigate(`${basePath}/${t.id}`)}
             data-testid={`row-action-view-${t.ticket_id}`}
@@ -88,7 +99,7 @@ export default function TicketTable({
             allowed rank (e.g. lock=Open hides Edit for In Progress + Closed).
             The legacy `t.status !== "Closed"` guard is preserved for the
             default (no-lock) case. */}
-        {onEdit && canEdit && isEditAllowedForStatus(t) && t.status !== "Closed" && (
+        {onEdit && showEditItem && (
           <DropdownMenuItem
             onClick={() => onEdit(t)}
             data-testid={`row-action-edit-${t.ticket_id}`}
@@ -101,7 +112,7 @@ export default function TicketTable({
             profix.ticket_detail.reopen; creators are also allowed at the
             backend but we still show the item to admins here so it appears
             in every "actions" list. */}
-        {onReopen && canReopen && t.status === "Closed" && (
+        {onReopen && showReopenItem && (
           <DropdownMenuItem
             onClick={() => onReopen(t)}
             data-testid={`row-action-reopen-${t.ticket_id}`}
@@ -114,7 +125,7 @@ export default function TicketTable({
             (canUpdateStatus). Legacy DQ carve-out kept for backwards-compat:
             DQ users still get their own-ticket status flow even when the v3
             catalog entry is missing. */}
-        {onUpdateStatus && (canUpdateStatus || (isDQ && t.assigned_to_id === currentUserId && t.status !== "Closed")) && (
+        {showStatusItem && (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger data-testid={`row-action-status-${t.ticket_id}`}>Update Status</DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
