@@ -38,8 +38,11 @@ export default function TicketTable({
   onAssignSelf,   // (ticketId) => void
   onEdit,         // (ticket)             => void — open the Edit Ticket modal
   onReopen,       // (ticket)             => void — open the Reopen dialog
-  canEdit = false,   // gate visibility of the Edit menu item (permission-driven)
-  canReopen = false, // gate visibility of the Reopen menu item (permission-driven)
+  canView = true,          // gate visibility of the View menu item (v3-driven)
+  canEdit = false,         // gate visibility of the Edit menu item (v3-driven)
+  canReopen = false,       // gate visibility of the Reopen menu item (v3-driven)
+  canUpdateStatus = false, // gate visibility of Update Status (v3-driven)
+  canAssign = false,       // gate visibility of Assign submenu (v3-driven)
 }) {
   const navigate = useNavigate();
   const allSelected = tickets.length > 0 && selected.length === tickets.length;
@@ -52,8 +55,10 @@ export default function TicketTable({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        {/* View */}
-        {showView && (
+        {/* View — hidden either by the legacy `showView` prop (kept for
+            backwards-compat) or by lack of v3 `profix.ticket_detail.view`
+            visibility. */}
+        {showView && canView && (
           <DropdownMenuItem
             onClick={() => navigate(`${basePath}/${t.id}`)}
             data-testid={`row-action-view-${t.ticket_id}`}
@@ -86,8 +91,11 @@ export default function TicketTable({
           </DropdownMenuItem>
         )}
 
-        {/* Update Status — Admin can always; DQ only for own open tickets */}
-        {(isAdmin || (isDQ && t.assigned_to_id === currentUserId && t.status !== "Closed")) && onUpdateStatus && (
+        {/* Update Status — v3-gated by `profix.ticket_detail.change_status`
+            (canUpdateStatus). Legacy DQ carve-out kept for backwards-compat:
+            DQ users still get their own-ticket status flow even when the v3
+            catalog entry is missing. */}
+        {onUpdateStatus && (canUpdateStatus || (isDQ && t.assigned_to_id === currentUserId && t.status !== "Closed")) && (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger data-testid={`row-action-status-${t.ticket_id}`}>Update Status</DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
@@ -98,11 +106,9 @@ export default function TicketTable({
           </DropdownMenuSub>
         )}
 
-        {/* Assign — Admin can reassign to any eligible user; DQ can only
-            self-assign when unassigned. When no eligible users exist we
-            still surface the submenu with a helpful empty-state item so
-            admins understand WHY the list is empty. */}
-        {isAdmin && onReassign && (
+        {/* Assign — v3-gated by `profix.ticket_detail.assign` (canAssign).
+            Legacy DQ self-assign carve-out is unchanged below. */}
+        {canAssign && onReassign && (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger data-testid={`row-action-assign-${t.ticket_id}`}>Assign</DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="max-h-72 overflow-y-auto">

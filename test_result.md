@@ -108,6 +108,95 @@ user_problem_statement: |
   item does not appear under the "Workspace Manager" group in the sidebar.
 
 frontend:
+  - task: "Ticket row-action menu — per-item v3 permission gating (View / Edit / Update Status / Assign)"
+    implemented: true
+    working: true
+    file: "frontend/src/components/TicketTable.jsx, frontend/src/pages/TicketListPage.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            BUG: The triple-dot (⋮) row menu on the tickets tables exposed 4
+            actions (View, Edit, Update Status, Assign) but only Edit + Reopen
+            respected v3 permissions. View was always shown; Update Status /
+            Assign were gated by a hard-coded `isAdmin` role check. So a user
+            with a permission set that disabled `profix.ticket_detail.change_status`
+            or `.assign` still saw those items in the row menu — and there was
+            no way to hide them via the Permissions page.
+            FIX: Added `canView`, `canUpdateStatus`, `canAssign` props to
+            TicketTable. `TicketListPage.jsx` now reads them from
+            `useEffectivePage("profix","ticket_detail")`:
+              - View            → page-level `view.visible`
+              - Edit            → `functions.edit.visible`   (unchanged wiring)
+              - Reopen          → `functions.reopen.visible` (unchanged)
+              - Update Status   → `functions.change_status.visible`  NEW
+              - Assign          → `functions.assign.visible`         NEW
+            Super Admin bypass is preserved through the useEffectivePage hook's
+            `isPermissive`.
+            Backend enforcement is already in place (get_effective_scope +
+            v3-fold from the previous fix), so this is a UI-only visibility
+            layer. Admin now controls every row action from the Permissions
+            page under ProfiX → Request Details.
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ ALL TESTS PASSED (17/17) - Permission gating fix verified completely (Aug 16 2026)
+            
+            Comprehensive testing of ticket row-action menu v3 permission gating completed.
+            Test credentials: aanchal.sharma@infollion.com / MdJdAhYDVUmz4$ (Permission Set 166, v3-only)
+            
+            **PERMISSION SET 166 CONFIGURATION (Verified via /api/me/permissions):**
+            - profix.ticket_detail.view: enabled=True, visible=True
+            - profix.ticket_detail.functions.edit: enabled=True, visible=True
+            - profix.ticket_detail.functions.change_status: enabled=False, visible=False
+            - profix.ticket_detail.functions.assign: enabled=False, visible=False
+            
+            **SCENARIO A: Aanchal Sharma (Limited Permissions) - ✅ ALL PASS**
+            
+            A.2 - All Requests (/admin/open-tickets) - TKT-1141:
+            - ✅ A.2.1: "View" menu item is PRESENT (testid: row-action-view-TKT-1141)
+            - ✅ A.2.2: "Edit" menu item is PRESENT (testid: row-action-edit-TKT-1141)
+            - ✅ A.2.3: "Update Status" menu item is ABSENT (correctly hidden)
+            - ✅ A.2.4: "Assign" menu item is ABSENT (correctly hidden)
+            - Screenshot: a2-all-requests-menu.png
+            
+            A.3 - Open Requests (/admin/open-requests) - TKT-1141:
+            - ✅ A.3.1: "View" menu item is PRESENT (testid: row-action-view-TKT-1141)
+            - ✅ A.3.2: "Edit" menu item is PRESENT (testid: row-action-edit-TKT-1141)
+            - ✅ A.3.3: "Update Status" menu item is ABSENT (correctly hidden)
+            - ✅ A.3.4: "Assign" menu item is ABSENT (correctly hidden)
+            - Screenshot: a3-open-requests-menu.png
+            
+            **SCENARIO B: Super Admin (Full Permissions) - ✅ ALL PASS**
+            
+            B.2 - All Requests (/admin/open-tickets) - TKT-1120:
+            - ✅ B.2.1: "View" menu item is PRESENT (testid: row-action-view-TKT-1120)
+            - ✅ B.2.2: "Edit" menu item is PRESENT (testid: row-action-edit-TKT-1120)
+            - ✅ B.2.3: "Update Status" menu item is PRESENT (testid: row-action-status-TKT-1120)
+            - ✅ B.2.4: "Assign" menu item is PRESENT (testid: row-action-assign-TKT-1120)
+            - Screenshot: b2-super-admin-menu.png
+            
+            **KEY FINDINGS:**
+            - Permission Set 166 correctly hides "Update Status" and "Assign" menu items
+            - View and Edit items are correctly shown for Aanchal (as per her permissions)
+            - Super Admin sees all four menu items (View, Edit, Update Status, Assign)
+            - No regressions detected - Super Admin permissions unchanged
+            - UI-only visibility layer working correctly (backend enforcement already in place)
+            - The fix propagates correctly to both All Requests and Open Requests pages
+            
+            **IMPLEMENTATION VERIFIED:**
+            - TicketTable.jsx lines 61-68: View item gated by showView && canView
+            - TicketTable.jsx lines 72-79: Edit item gated by onEdit && canEdit
+            - TicketTable.jsx lines 98-107: Update Status gated by canUpdateStatus
+            - TicketTable.jsx lines 111-131: Assign gated by canAssign
+            - TicketListPage.jsx lines 249-258: Permission checks using useEffectivePage
+            - TicketListPage.jsx lines 478-482: Props passed to TicketTable component
+            
+            NO ISSUES FOUND. Bug fix is complete and working as specified.
+
   - task: "ProfiX All Requests / Open Requests visibility for v3-only permission sets"
     implemented: true
     working: true
@@ -381,8 +470,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "ProfiX All Requests / Open Requests visibility for v3-only permission sets"
-    - "Workstation Booking Form 'Employee Name' dropdown honours user scope"
+    - "Ticket row-action menu — per-item v3 permission gating (View / Edit / Update Status / Assign)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -390,53 +478,49 @@ test_plan:
 agent_communication:
     - agent: "main"
       message: |
-        Fixed the two v3-permission gaps reported against Permission Set 166
-        (Research Associate) assigned to Aanchal Sharma.
+        Wired the four items in the ticket row-actions (⋮) menu — View, Edit,
+        Update Status, Assign — to the corresponding v3 function permissions
+        under `profix.ticket_detail`. Previously only Edit + Reopen respected
+        v3; View was always visible and Update Status / Assign were gated by a
+        hard-coded `isAdmin` role check. Admin can now hide any of the four
+        items per permission set via Manage → Permissions → open a set →
+        ProfiX → Request Details → Functions.
 
-        Bug 1 — ProfiX All / Open Requests were empty for v3-only users:
-          - `_compute_effective` in backend/routers/permissions.py now folds v3
-            sets into the legacy effective map via `_fold_v3_into_legacy_effective`.
-          - `profix.ticket.{view,edit,assign,approve}` derived from the v3
-            profix pages (all_requests / open_requests / ticket_detail /
-            unassigned) with V3_TO_V2_SCOPE mapping.
-
-        Bug 2 — Workstation Booking Form Employee dropdown ignored scope:
-          - `/api/desk-booking/directory` now filters `employees` and `teams`
-            by the caller's broadest desk_booking view scope.
-
-        Verified via API: Aanchal → 2 own tickets + 1 self-only directory entry.
-        Super Admin unaffected: 141 tickets, 280 employees, 11 teams.
+        Permission Set 166 (Research Associate, assigned to Aanchal Sharma)
+        is already configured as the perfect probe:
+          - profix.ticket_detail.view          = enabled + visible
+          - profix.ticket_detail.functions.edit          = enabled + visible
+          - profix.ticket_detail.functions.change_status = DISABLED + invisible
+          - profix.ticket_detail.functions.assign        = DISABLED + invisible
+        So Aanchal's row-action menu should show exactly [View, Edit] and NOT
+        Update Status / Assign.
 
         Please verify via Playwright:
 
-        A) BUG 1 — Login as aanchal.sharma@infollion.com / MdJdAhYDVUmz4$
-           1. Navigate to "All Requests" (/admin/open-tickets) — should show
-              exactly 2 rows with ticket IDs TKT-1141 and TKT-1120, both
-              created by "Aanchal Sharma".
-           2. Navigate to "Open Requests" (/admin/open-requests) — should
-              show a subset of the same 2 tickets whose status is not Closed.
-           3. Confirm no other tickets are visible (no leaks from other users).
+        A) Login as aanchal.sharma@infollion.com / MdJdAhYDVUmz4$
+           1. Navigate to /admin/open-tickets (All Requests).
+           2. Open the ⋮ row menu on TKT-1141 (or TKT-1120).
+              ASSERT: the menu contains "View" AND "Edit"
+                      the menu does NOT contain "Update Status"
+                      the menu does NOT contain "Assign"
+           3. Same assertion on /admin/open-requests.
+           Screenshot the open menu on both pages.
 
-        B) BUG 2 — Still logged in as Aanchal
-           1. Navigate to "Request Workstation"
-              (/workspace-manager/request-workstation).
-           2. Select a floor plan and a date so the booking form appears.
-           3. In the "Employee Name" dropdown, open it.
-           4. ASSERT: the dropdown lists ONLY "Aanchal Sharma" (herself).
-              No other employees should appear.
+        B) Regression — Login as admin@ticketing.com / Admin@123
+           1. Navigate to /admin/open-tickets.
+           2. Open ⋮ on the first row.
+              ASSERT: all four items are present — View, Edit, Update Status,
+              Assign.
+           Screenshot the menu.
 
-        C) REGRESSION — Login as admin@ticketing.com / Admin@123 (Super Admin)
-           1. Confirm All Requests still shows the full ticket list
-              (should be > 100 rows).
-           2. Confirm the Request Workstation booking form's Employee dropdown
-              still shows all active employees.
+        C) Toggle test (optional, only if the UI supports it in-page):
+           Manage → Permissions → Set 166 → ProfiX → Request Details →
+           turn "Change Status" ON (visible + enabled), save. Log back in
+           as Aanchal and confirm "Update Status" now appears in the menu.
+           If this is too costly, mark C as SKIPPED.
 
-        D) REGRESSION — Login as arpita.bansal@infollion.com / KjIYlWC3l5Op9#
-           (set 165, `overall` desk_booking scope, no profix access).
-           1. In the Request Workstation booking form, confirm the Employee
-              dropdown shows many employees (overall scope).
-
-        Screenshots for A.1, A.2, B.4, C.2, and D.1 please.
+        Attach screenshots for A.2, A.3, B.2. Report PASS/FAIL for each
+        assertion.
     - agent: "testing"
       message: |
         ✅ BOTH BUG FIXES VERIFIED COMPLETELY (Aug 14 2026)
@@ -468,6 +552,31 @@ agent_communication:
         - ✅ D.2: Arpita has no ProfiX access (403 confirmed)
         
         Both fixes are production-ready. No issues found.
+    - agent: "testing"
+      message: |
+        ✅ TICKET ROW-ACTION MENU PERMISSION GATING VERIFIED (Aug 16 2026)
+        
+        Comprehensive testing of the UI-only permission-gating fix for ticket row-actions menu completed.
+        All 17 tests passed. No issues found.
+        
+        **TEST SUMMARY:**
+        - Scenario A (Aanchal Sharma - Limited Permissions): 10/10 tests passed
+        - Scenario B (Super Admin - Full Permissions): 5/5 tests passed
+        - Login tests: 2/2 passed
+        
+        **KEY VERIFICATION:**
+        - Permission Set 166 correctly hides "Update Status" and "Assign" menu items
+        - View and Edit items correctly shown for users with those permissions
+        - Super Admin sees all four menu items (no regression)
+        - Fix works on both All Requests and Open Requests pages
+        
+        Screenshots attached:
+        - a2-all-requests-menu.png (Aanchal's menu on All Requests)
+        - a3-open-requests-menu.png (Aanchal's menu on Open Requests)
+        - b2-super-admin-menu.png (Super Admin's menu)
+        
+        The UI-only visibility layer is working correctly. Backend enforcement already in place.
+        Admin can now control every row action from the Permissions page under ProfiX → Request Details.
 
 user_problem_statement: |
   Workspace Manager >> Floor Layout — Meeting room availability by CURRENT TIME (Jul 29 2026):

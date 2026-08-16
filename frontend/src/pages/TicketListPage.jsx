@@ -246,11 +246,16 @@ export default function TicketListPage({
   const permCreate     = permFn("create_ticket");
   const permBulkAssign = permFn("bulk_assign");
   // Row-level actions live on the ticket_detail page in the catalog.
-  const { fn: permDetailFn } = useEffectivePage("profix", "ticket_detail");
-  const permEditRow   = permDetailFn("edit");
-  const permReopenRow = permDetailFn("reopen");
-  const canEditRow    = isAdmin && permEditRow.isVisible;      // Backend still enforces max_editable_status
-  const canReopenRow  = permReopenRow.isVisible;               // creator or admin — creator always OK on backend
+  const { fn: permDetailFn, canView: permDetailCanView } = useEffectivePage("profix", "ticket_detail");
+  const permEditRow    = permDetailFn("edit");
+  const permReopenRow  = permDetailFn("reopen");
+  const permStatusRow  = permDetailFn("change_status");
+  const permAssignRow  = permDetailFn("assign");
+  const canViewRow    = permDetailCanView;                // v3 `profix.ticket_detail.view.visible`
+  const canEditRow    = permEditRow.isVisible;            // v3 `profix.ticket_detail.edit.visible`
+  const canReopenRow  = permReopenRow.isVisible;          // v3 `profix.ticket_detail.reopen.visible`
+  const canStatusRow  = permStatusRow.isVisible;          // v3 `profix.ticket_detail.change_status.visible`
+  const canAssignRow  = permAssignRow.isVisible;          // v3 `profix.ticket_detail.assign.visible`
 
   // ── Edit modal + Reopen dialog state ──
   const [editTicket, setEditTicket] = useState(null);
@@ -470,8 +475,11 @@ export default function TicketListPage({
             onAssignSelf={assignSelf}
             onEdit={openEdit}
             onReopen={openReopen}
+            canView={canViewRow}
             canEdit={canEditRow}
             canReopen={canReopenRow}
+            canUpdateStatus={canStatusRow}
+            canAssign={canAssignRow}
           />
         </div>
         {/* Pagination footer — pinned inside the card, above the viewport bottom */}
