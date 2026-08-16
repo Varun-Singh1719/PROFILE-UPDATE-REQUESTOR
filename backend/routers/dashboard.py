@@ -284,7 +284,14 @@ async def dashboard_recent(
         else:
             base["created_by_id"] = user["id"]
 
-    base = {**base, **_date_match(date_from, date_to, date_field)}
+    # Recent Updates must filter on the SAME timestamp it sorts by, otherwise a
+    # request created in a prior period but updated within the selected window is
+    # wrongly hidden (e.g. a July-created ticket whose status changed in August
+    # never appears on an August dashboard). kind="updated" → updated_on,
+    # kind="new" → created_on. This overrides whatever date_field the caller
+    # sends (the dashboard-wide filter is "Created At" by default).
+    effective_date_field = "updated_at" if kind == "updated" else "created_at"
+    base = {**base, **_date_match(date_from, date_to, effective_date_field)}
     # Scope enforcement
     view_filter = await _ticket_view_filter(user)
     base = _merge_query(base, view_filter)
