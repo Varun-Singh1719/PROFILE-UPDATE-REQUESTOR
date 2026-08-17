@@ -10,7 +10,7 @@ import sys
 from typing import Optional
 
 # Configuration
-BACKEND_URL = "https://hidden-assignee-bug.preview.emergentagent.com/api"
+BACKEND_URL = "https://emp-team-select.preview.emergentagent.com/api"
 ADMIN_EMAIL = "admin@ticketing.com"
 ADMIN_PASSWORD = "Admin@123"
 

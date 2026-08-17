@@ -17,8 +17,8 @@ with open("/app/qa_permissions/fixtures.json") as f:
 with open("/app/qa_permissions/fixtures_take3.json") as f:
     FIXTURES_TAKE3 = json.load(f)
 
-BASE_API = "https://hidden-assignee-bug.preview.emergentagent.com/api"
-BASE_UI = "https://hidden-assignee-bug.preview.emergentagent.com"
+BASE_API = "https://emp-team-select.preview.emergentagent.com/api"
+BASE_UI = "https://emp-team-select.preview.emergentagent.com"
 
 SA_EMAIL = "admin@ticketing.com"
 SA_PASSWORD = "Admin@123"
