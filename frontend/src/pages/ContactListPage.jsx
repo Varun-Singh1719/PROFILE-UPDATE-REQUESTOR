@@ -1526,6 +1526,7 @@ export default function ContactListPage() {
                   hideLabelPrefix
                   fullWidth
                   searchInTrigger
+                  renderChipsBelow={false}
                 />
               </div>
               {/* Selected sets shown as removable chips — same treatment as the

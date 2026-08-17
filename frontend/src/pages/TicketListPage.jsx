@@ -180,7 +180,20 @@ export default function TicketListPage({
   };
 
   const toggle = (id) => setSelected((s) => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
-  const toggleAll = (v) => setSelected(v ? tickets.map(t => t.id) : []);
+  // Header "select all" acts only on the currently visible rows: it merges the
+  // visible ticket ids into the selection (keeping any selected rows hidden by
+  // the active filter) and, when toggled off, removes only the visible ones.
+  // Filters change visibility, never the selection itself.
+  const toggleAll = (v) => {
+    const visibleIds = tickets.map((t) => t.id);
+    setSelected((s) => {
+      if (v) return Array.from(new Set([...s, ...visibleIds]));
+      const vis = new Set(visibleIds);
+      return s.filter((id) => !vis.has(id));
+    });
+  };
+  const clearSelection = () => setSelected([]);
+  const hiddenSelectedCount = selected.filter((id) => !tickets.some((t) => t.id === id)).length;
 
   const bulkAssignSelf = async () => {
     try {
@@ -353,6 +366,25 @@ export default function TicketListPage({
                 </DropdownMenuContent>
               </DropdownMenu>
             </>
+          )}
+          {selected.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearSelection}
+              data-testid="tickets-clear-selection"
+              className="h-9 text-xs text-gray-600 hover:text-[#ec9324] hover:bg-[#ec9324]/10 px-2 gap-1 shrink-0"
+              title={hiddenSelectedCount > 0
+                ? `${hiddenSelectedCount} selected item(s) are hidden by the current filters`
+                : "Clear selection"}
+            >
+              <X sx={{ fontSize: 14 }}/> Clear selection
+              {hiddenSelectedCount > 0 && (
+                <span className="ml-1 inline-flex items-center h-4 px-1.5 rounded-full bg-[#ec9324]/10 text-[#ec9324] text-[10px] font-semibold tabular-nums">
+                  {hiddenSelectedCount} hidden
+                </span>
+              )}
+            </Button>
           )}
           {permRefresh.isVisible && (
             <Button variant="outline" onClick={load} data-testid="refresh-btn" size="icon" className="h-9 w-9" title="Refresh" aria-label="Refresh" disabled={!permRefresh.canUse}>

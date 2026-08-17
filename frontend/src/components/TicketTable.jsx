@@ -46,7 +46,10 @@ export default function TicketTable({
   canAssign = false,       // gate visibility of Assign submenu (v3-driven)
 }) {
   const navigate = useNavigate();
-  const allSelected = tickets.length > 0 && selected.length === tickets.length;
+  // "Select all" reflects only whether every *visible* row is selected — the
+  // selection may also contain rows hidden by the active filter, so a simple
+  // length comparison would be wrong.
+  const allSelected = tickets.length > 0 && tickets.every((t) => selected.includes(t.id));
 
   // Rank tables for the `max_editable_status` gate — must stay in sync with
   // backend/routers/permissions_v3.py::_MAX_EDITABLE_STATUS_RANK. Edit is
