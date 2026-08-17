@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Input } from "./ui/input";
 import Search from "@mui/icons-material/SearchOutlined";
 import SendIcon from "@mui/icons-material/Send";
+import X from "@mui/icons-material/Close";
 
 /**
  * DeferredSearchInput
@@ -65,6 +66,17 @@ export default function DeferredSearchInput({
     }
   };
 
+  // Clear ONLY this field: wipe the local buffer and clear the committed value
+  // so the applied filter for this box is removed (other filters untouched).
+  const clear = () => {
+    if (disabled) return;
+    setBuffer("");
+    if ((value ?? "") !== "") onCommit?.("");
+  };
+
+  // Show the clear (✕) affordance only when there is text in the box.
+  const showClear = !disabled && (buffer ?? "").length > 0;
+
   return (
     <div className={`relative ${className} ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}>
       {showLeftIcon && (
@@ -75,12 +87,24 @@ export default function DeferredSearchInput({
         data-testid={testId}
         aria-label={ariaLabel || placeholder}
         disabled={disabled}
-        className={`${showLeftIcon ? "pl-9" : "pl-3"} pr-9 h-9 ${inputClassName} disabled:cursor-not-allowed`}
+        className={`${showLeftIcon ? "pl-9" : "pl-3"} ${showClear ? "pr-16" : "pr-9"} h-9 ${inputClassName} disabled:cursor-not-allowed`}
         value={buffer}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         inputMode={numericOnly ? "numeric" : undefined}
       />
+      {showClear && (
+        <button
+          type="button"
+          onClick={clear}
+          data-testid={testId ? `${testId}-clear` : undefined}
+          aria-label="Clear search"
+          title="Clear"
+          className="absolute right-9 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full hover:bg-gray-200 flex items-center justify-center text-gray-400 hover:text-gray-700"
+        >
+          <X sx={{ fontSize: 14 }}/>
+        </button>
+      )}
       <button
         type="button"
         onClick={commit}

@@ -132,6 +132,19 @@ export default function ChipInput({
     }
   };
 
+  // Clear ONLY this field: drop all chips + typed buffer, and commit the empty
+  // list so this filter is removed (other filters stay intact).
+  const clearAll = () => {
+    setChips([]);
+    setBuffer("");
+    if (!arraysEqual([], value || [])) {
+      onCommit?.([]);
+    }
+  };
+
+  // Show the clear (✕) affordance only when this field has something applied.
+  const showClear = chips.length > 0 || (buffer || "").trim().length > 0;
+
   const focusInput = () => inputRef.current?.focus();
 
   const chipId = (v) =>
@@ -142,7 +155,7 @@ export default function ChipInput({
       <div
         onClick={focusInput}
         data-testid={testId ? `${testId}-container` : undefined}
-        className="min-h-9 flex flex-wrap items-center gap-1.5 rounded-md border border-gray-300 bg-white pl-2 pr-10 py-1 cursor-text transition-colors focus-within:border-[#ec9324] focus-within:ring-2 focus-within:ring-[#ec9324]/25"
+        className={`min-h-9 flex flex-wrap items-center gap-1.5 rounded-md border border-gray-300 bg-white pl-2 ${showClear ? "pr-16" : "pr-10"} py-1 cursor-text transition-colors focus-within:border-[#ec9324] focus-within:ring-2 focus-within:ring-[#ec9324]/25`}
       >
         {chips.map((c) => (
           <span
@@ -182,6 +195,18 @@ export default function ChipInput({
           aria-label={ariaLabel || placeholder}
         />
       </div>
+      {showClear && (
+        <button
+          type="button"
+          onClick={clearAll}
+          className="absolute right-9 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full hover:bg-gray-200 flex items-center justify-center text-gray-400 hover:text-gray-700"
+          aria-label="Clear"
+          title="Clear"
+          data-testid={testId ? `${testId}-clear` : undefined}
+        >
+          <X sx={{ fontSize: 14 }} />
+        </button>
+      )}
       <button
         type="button"
         onClick={commit}

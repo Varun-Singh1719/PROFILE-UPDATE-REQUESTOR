@@ -1804,24 +1804,25 @@ export default function ContactListPage() {
 
       <div className="shrink-0 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
         <div className="bg-white p-4 rounded-xl shadow-soft border border-gray-100" data-testid="contacts-filter-bar">
-          {/* Single-row filter bar — wraps to next line if width is limited */}
-          <div className="flex gap-2.5 flex-wrap items-center">
+          {/* Single-row filter bar — all filters stay on ONE line; the free-text
+              inputs shrink (min-w-0) to make room, dropdowns keep a fixed width. */}
+          <div className="flex gap-2 flex-nowrap items-center">
             <DeferredSearchInput
-              className="min-w-[200px] flex-1 basis-[200px]"
+              className="flex-1 min-w-0 basis-[120px]"
               placeholder="Search name..."
               testId="contact-search"
               value={q}
               onCommit={setQ}
             />
             <ChipInput
-              className="min-w-[220px] flex-1 basis-[220px]"
+              className="flex-1 min-w-0 basis-[120px]"
               value={empIds}
               onCommit={setEmpIds}
               placeholder="Employee IDs (INF857, INF631…)"
               testId="contact-empid-chips"
             />
             <ChipInput
-              className="min-w-[240px] flex-1 basis-[240px]"
+              className="flex-1 min-w-0 basis-[120px]"
               value={emails}
               onCommit={setEmails}
               placeholder="Email IDs (a@b.com, x@y.com…)"
@@ -1834,7 +1835,7 @@ export default function ContactListPage() {
               onChange={setRole}
               options={ALL_ROLE_FILTERS.map((r) => ({ value: r, label: r }))}
               testIdPrefix="contact-role-filter"
-              className="w-40"
+              className="w-32 shrink-0"
             />
             <MultiSelectFilter
               label="Status"
@@ -1845,7 +1846,7 @@ export default function ContactListPage() {
                 { value: "Inactive", label: "Inactive" },
               ]}
               testIdPrefix="contact-status-filter"
-              className="w-36"
+              className="w-32 shrink-0"
             />
             {permTeamFilter.isVisible && (
               <MultiSelectFilter
@@ -1854,7 +1855,7 @@ export default function ContactListPage() {
                 onChange={setTeamFilter}
                 options={teams.map((t) => ({ value: t.id, label: t.name || "Untitled" }))}
                 testIdPrefix="contact-team-filter"
-                className="w-44"
+                className="w-36 shrink-0"
                 placeholder="Team"
                 hideLabelPrefix
                 showCountOnly
@@ -1888,7 +1889,7 @@ export default function ContactListPage() {
                 };
               })}
               testIdPrefix="contact-pset-filter"
-              className="w-52"
+              className="w-44 shrink-0"
               placeholder="Permission Set"
               hideLabelPrefix
               showCountOnly
@@ -1910,7 +1911,7 @@ export default function ContactListPage() {
                   sp.delete("permission_set");
                   setSearchParams(sp, { replace: true });
                 }}
-                className="inline-flex items-center gap-1 h-8 px-2.5 rounded-md border border-gray-300 bg-white text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-800 hover:border-gray-400 transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-1 h-8 px-2.5 rounded-md border border-gray-300 bg-white text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-800 hover:border-gray-400 transition-colors whitespace-nowrap shrink-0"
                 data-testid="clear-all-filters-btn"
                 title="Clear all filters"
               >
