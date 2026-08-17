@@ -24,6 +24,8 @@ import Timer from "@mui/icons-material/HourglassBottomOutlined";
 import api from "../lib/api";
 import notify from "../lib/notify";
 import { Calendar } from "./ui/calendar";
+import SingleSelect from "./SingleSelect";
+import TimePickerOrange from "./ui/TimePickerOrange";
 import { Dialog, DialogContent } from "./ui/dialog";
 import { Button } from "./ui/button";
 
@@ -218,23 +220,23 @@ function TimeRuleDialog({ open, onOpenChange, resourceLabel, value, onSave }) {
             <div className="grid grid-cols-2 gap-4">
               <label className="block">
                 <span className="text-xs font-medium text-gray-600">From</span>
-                <input
-                  type="time"
-                  value={draft.from || ""}
-                  onChange={(e) => setDraft({ ...draft, from: e.target.value || null })}
-                  className="mt-1 w-full h-10 rounded-md border border-gray-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]"
-                  data-testid="approval-time-from"
-                />
+                <div className="mt-1">
+                  <TimePickerOrange
+                    value={draft.from || ""}
+                    onChange={(v) => setDraft({ ...draft, from: v || null })}
+                    testIdPrefix="approval-time-from"
+                  />
+                </div>
               </label>
               <label className="block">
                 <span className="text-xs font-medium text-gray-600">To</span>
-                <input
-                  type="time"
-                  value={draft.to || ""}
-                  onChange={(e) => setDraft({ ...draft, to: e.target.value || null })}
-                  className="mt-1 w-full h-10 rounded-md border border-gray-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]"
-                  data-testid="approval-time-to"
-                />
+                <div className="mt-1">
+                  <TimePickerOrange
+                    value={draft.to || ""}
+                    onChange={(v) => setDraft({ ...draft, to: v || null })}
+                    testIdPrefix="approval-time-to"
+                  />
+                </div>
               </label>
             </div>
           ) : (
@@ -242,13 +244,13 @@ function TimeRuleDialog({ open, onOpenChange, resourceLabel, value, onSave }) {
               <span className="text-xs font-medium text-gray-600">
                 {op === "on" ? "At exactly" : op.charAt(0).toUpperCase() + op.slice(1)}
               </span>
-              <input
-                type="time"
-                value={draft.from || ""}
-                onChange={(e) => setDraft({ ...draft, from: e.target.value || null })}
-                className="mt-1 w-full h-10 rounded-md border border-gray-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]"
-                data-testid="approval-time-from"
-              />
+              <div className="mt-1">
+                <TimePickerOrange
+                  value={draft.from || ""}
+                  onChange={(v) => setDraft({ ...draft, from: v || null })}
+                  testIdPrefix="approval-time-from"
+                />
+              </div>
             </label>
           )}
         </div>
@@ -288,28 +290,33 @@ function DurationRuleDialog({ open, onOpenChange, resourceLabel, value, onSave }
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="text-xs font-medium text-gray-600">Value</span>
-              <select
-                value={draft.value}
-                onChange={(e) => setDraft({ ...draft, value: Number(e.target.value) })}
-                className="mt-1 w-full h-10 rounded-md border border-gray-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]"
-                data-testid="approval-duration-value"
-              >
-                {numOptions.map((n) => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </select>
+              <div className="mt-1">
+                <SingleSelect
+                  options={numOptions.map((n) => ({ value: String(n), label: String(n) }))}
+                  value={String(draft.value)}
+                  onChange={(v) => setDraft({ ...draft, value: Number(v) || 1 })}
+                  placeholder="Select value"
+                  allowClear={false}
+                  searchable
+                  testId="approval-duration-value"
+                />
+              </div>
             </label>
             <label className="block">
               <span className="text-xs font-medium text-gray-600">Unit</span>
-              <select
-                value={draft.unit}
-                onChange={(e) => setDraft({ ...draft, unit: e.target.value })}
-                className="mt-1 w-full h-10 rounded-md border border-gray-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#ec9324]/30 focus:border-[#ec9324]"
-                data-testid="approval-duration-unit"
-              >
-                <option value="min">Minutes</option>
-                <option value="hour">Hours</option>
-              </select>
+              <div className="mt-1">
+                <SingleSelect
+                  options={[
+                    { value: "min", label: "Minutes" },
+                    { value: "hour", label: "Hours" },
+                  ]}
+                  value={draft.unit}
+                  onChange={(v) => setDraft({ ...draft, unit: v || "min" })}
+                  placeholder="Select unit"
+                  allowClear={false}
+                  testId="approval-duration-unit"
+                />
+              </div>
             </label>
           </div>
         </div>
