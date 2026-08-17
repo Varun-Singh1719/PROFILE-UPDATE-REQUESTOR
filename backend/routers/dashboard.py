@@ -217,6 +217,7 @@ async def dq_performance(
             closed_c,
             agg_open,
             agg_ip,
+            agg_closed,
         ) = await asyncio.gather(
             db.tickets.count_documents(base),
             db.tickets.count_documents(q_open),
@@ -230,9 +231,14 @@ async def dq_performance(
                 {"$match": q_ip},
                 {"$group": {"_id": None, "total": {"$sum": "$number_of_profiles"}}},
             ]).to_list(1),
+            db.tickets.aggregate([
+                {"$match": q_closed},
+                {"$group": {"_id": None, "total": {"$sum": "$number_of_profiles"}}},
+            ]).to_list(1),
         )
         open_profiles = agg_open[0]["total"] if agg_open else 0
         in_progress_profiles = agg_ip[0]["total"] if agg_ip else 0
+        closed_profiles = agg_closed[0]["total"] if agg_closed else 0
         return {
             "id": m["id"], "name": m["name"], "email": m["email"],
             "total": total,
@@ -241,6 +247,7 @@ async def dq_performance(
             "closed": closed_c,
             "open_profiles": open_profiles,
             "in_progress_profiles": in_progress_profiles,
+            "closed_profiles": closed_profiles,
             "profiles_assigned": open_profiles + in_progress_profiles,
         }
 

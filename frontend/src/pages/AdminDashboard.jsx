@@ -266,6 +266,40 @@ function NoDashboardShared({ productLabel }) {
   );
 }
 
+// A single coloured stat: a small dot + number. Muted grey when the value is 0
+// so active counts stand out. tone: "open" (orange) | "prog" (green) | "closed" (grey).
+function TeamStat({ value = 0, tone = "open" }) {
+  const on = !!value;
+  const map = {
+    open:   { text: "text-[#ec9324]", dot: "bg-[#ec9324]" },
+    prog:   { text: "text-green-600", dot: "bg-green-500" },
+    closed: { text: "text-gray-500",  dot: "bg-gray-400" },
+  };
+  const c = map[tone] || map.open;
+  return (
+    <span className={`inline-flex items-center gap-1 text-[13px] font-bold ${on ? c.text : "text-gray-300"}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${on ? c.dot : "bg-gray-200"}`} />
+      {value ?? 0}
+    </span>
+  );
+}
+
+// One "Requests" / "Profiles" row inside a member card — label on the left,
+// the three Open / In Progress / Closed stats on the right.
+function TeamStatLine({ label, open, inProgress, closed, testId }) {
+  return (
+    <div className="flex items-center justify-between" data-testid={testId}>
+      <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">{label}</span>
+      <span className="flex items-center gap-3">
+        <TeamStat value={open} tone="open" />
+        <TeamStat value={inProgress} tone="prog" />
+        <TeamStat value={closed} tone="closed" />
+      </span>
+    </div>
+  );
+}
+
+
 // ---------- Profix dashboard content ----------
 function ProfixDashboardBody({ navigate, headerActions, metricsBasedOn, accessLevel }) {
   const { user } = useAuth();
@@ -357,48 +391,49 @@ function ProfixDashboardBody({ navigate, headerActions, metricsBasedOn, accessLe
 
       {showTeamSection && (
         <>
-          <h2 className="text-lg font-semibold text-gray-900 mt-8 mb-3 flex items-center gap-2">
-            <Users sx={{ fontSize: 18 }} className="text-[#ec9324]"/> Team
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="flex items-center justify-between mt-8 mb-3">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <Users sx={{ fontSize: 18 }} className="text-[#ec9324]"/> Team
+              {dqs.length > 0 && <span className="text-gray-400 font-medium text-sm">({dqs.length})</span>}
+            </h2>
+            {dqs.length > 0 && (
+              <div className="flex items-center gap-4 text-[11px] font-medium text-gray-500">
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#ec9324]"/> Open</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500"/> In Progress</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-400"/> Closed</span>
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {dqs.length === 0 && <div className="text-sm text-gray-400">No team members with Profix access yet.</div>}
             {dqs.map((m) => (
               <button
                 key={m.id}
                 onClick={() => gotoMember(m.id)}
                 data-testid={`dq-perf-${m.email}`}
-                className="text-left bg-white rounded-xl p-4 border border-gray-100 shadow-soft hover:shadow-soft-hover transition-all duration-200"
+                className="text-left bg-white rounded-xl p-3.5 border border-gray-100 shadow-soft hover:shadow-soft-hover hover:border-[#ec9324]/30 transition-all duration-200"
               >
-                <div className="flex items-center gap-3">
-                  <UserAvatar user={m} size={40} showStatusDot={false}/>
-                  <div>
-                    <div className="font-semibold text-gray-900">{m.name}</div>
-                    <div className="text-xs text-gray-500">{m.email}</div>
+                <div className="flex items-center gap-2.5 mb-3">
+                  <UserAvatar user={m} size={36} showStatusDot={false}/>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-gray-900 text-[13px] leading-tight truncate">{m.name}</div>
+                    <div className="text-[11px] text-gray-400 truncate">{m.email}</div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3 mt-4 text-center">
-                  <div className="bg-[#ec9324]/5 rounded-lg py-2">
-                    <div className="text-2xl font-bold text-[#ec9324]">{m.open}</div>
-                    <div className="text-[10px] uppercase tracking-wide text-gray-500 mt-0.5">Open</div>
-                  </div>
-                  <div className="bg-green-50 rounded-lg py-2">
-                    <div className="text-2xl font-bold text-green-600">{m.in_progress}</div>
-                    <div className="text-[10px] uppercase tracking-wide text-gray-500 mt-0.5">In Progress</div>
-                  </div>
-                </div>
-                <div className="mt-3 bg-gray-50 rounded-lg py-2.5 px-3"
-                  data-testid={`dq-profiles-assigned-${m.email}`}>
-                  <div className="text-[11px] uppercase tracking-wide text-gray-500 font-medium mb-1.5">Profiles</div>
-                  <div className="grid grid-cols-2 gap-2 text-center">
-                    <div>
-                      <div className="text-base font-bold text-[#ec9324]">{m.open_profiles ?? 0}</div>
-                      <div className="text-[10px] uppercase tracking-wide text-gray-500 mt-0.5">Open</div>
-                    </div>
-                    <div>
-                      <div className="text-base font-bold text-green-600">{m.in_progress_profiles ?? 0}</div>
-                      <div className="text-[10px] uppercase tracking-wide text-gray-500 mt-0.5">In Progress</div>
-                    </div>
-                  </div>
+                <div className="space-y-1.5 border-t border-gray-50 pt-2.5">
+                  <TeamStatLine
+                    label="Requests"
+                    open={m.open}
+                    inProgress={m.in_progress}
+                    closed={m.closed}
+                  />
+                  <TeamStatLine
+                    label="Profiles"
+                    open={m.open_profiles ?? 0}
+                    inProgress={m.in_progress_profiles ?? 0}
+                    closed={m.closed_profiles ?? 0}
+                    testId={`dq-profiles-assigned-${m.email}`}
+                  />
                 </div>
               </button>
             ))}
