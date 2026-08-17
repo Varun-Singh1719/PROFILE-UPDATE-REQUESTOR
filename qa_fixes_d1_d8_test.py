@@ -21,7 +21,7 @@ from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
 # Backend URL
-BACKEND_URL = "https://emp-team-select.preview.emergentagent.com/api"
+BACKEND_URL = "https://checkbox-orange.preview.emergentagent.com/api"
 
 # Super Admin credentials
 SUPER_ADMIN_EMAIL = "admin@ticketing.com"

@@ -2,7 +2,7 @@
 
 **Test Date:** July 29, 2026  
 **Tester:** Testing Agent (Automated)  
-**Environment:** https://emp-team-select.preview.emergentagent.com  
+**Environment:** https://checkbox-orange.preview.emergentagent.com  
 **Test Approach:** FAST-PATH Impersonation (Direct JWT minting via /api/auth/impersonate)
 
 ---

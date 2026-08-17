@@ -467,7 +467,7 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
                 type="checkbox"
                 checked={enabled}
                 onChange={(e) => setEnabled(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-[#ec9324] focus:ring-[#ec9324]"
+                className="h-4 w-4 rounded border-gray-300 accent-[#ec9324] text-[#ec9324] focus:ring-[#ec9324]"
                 data-testid="settings-master-enabled"
               />
               <span className="text-sm font-medium text-gray-900">Auto Approval enabled</span>
@@ -523,7 +523,7 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
                           type="checkbox"
                           checked={!!matrix[r.key]?.[c.key]}
                           onChange={() => toggleCell(r.key, c.key)}
-                          className="h-4 w-4 rounded border-gray-300 text-[#ec9324] focus:ring-[#ec9324]"
+                          className="h-4 w-4 rounded border-gray-300 accent-[#ec9324] text-[#ec9324] focus:ring-[#ec9324]"
                           data-testid={`settings-cell-${r.key}-${c.key}`}
                           aria-label={`${c.label} for ${r.label}`}
                         />
@@ -611,14 +611,6 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
               </tbody>
             </table>
           </div>
-
-          <p className="text-[11px] text-gray-500 mt-3">
-            <b>Manager</b> and <b>Team Member</b> combine with <b>OR</b>; within each, the configured
-            <b> Booked for date</b>/<b>Time</b>/<b>Duration</b> criteria must <b>all</b> match (AND).
-            e.g. <i>(Manager AND Booked-for-date AND Time) OR (Team Member AND Booked-for-date AND Time)</i>.
-            Rules apply only to <b>new</b> requests submitted after Save. Existing pending requests keep going through
-            the normal approval workflow.
-          </p>
         </div>
 
         {/* Footer */}
