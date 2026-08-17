@@ -15,8 +15,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import X from "@mui/icons-material/Close";
 import RotateCcw from "@mui/icons-material/RestartAlt";
 import Save from "@mui/icons-material/SaveOutlined";
-import CheckSquare from "@mui/icons-material/CheckBoxOutlined";
-import Square from "@mui/icons-material/CheckBoxOutlineBlank";
 import Settings from "@mui/icons-material/SettingsOutlined";
 import CalendarIcon from "@mui/icons-material/CalendarTodayOutlined";
 import Clock from "@mui/icons-material/AccessTime";
@@ -130,8 +128,7 @@ function DateRuleDialog({ open, onOpenChange, resourceLabel, value, onSave }) {
         overlayClassName="z-[1000]"
         data-testid="approval-date-rule-dialog">
         <div className="px-5 pt-4 pb-3 border-b border-gray-100">
-          <h4 className="text-base font-semibold text-gray-900">Auto-Approve by Booked for date — {resourceLabel}</h4>
-          <p className="text-xs text-gray-500 mt-0.5">Requests whose booking date matches this rule will be auto-approved.</p>
+          <h4 className="text-base font-semibold text-gray-900">Booked for date — {resourceLabel}</h4>
         </div>
         {/* Same picker (tabs + date inputs + calendars) as the CRM DateFilter */}
         <DateRangePanel
@@ -172,7 +169,6 @@ function TimeRuleDialog({ open, onOpenChange, resourceLabel, value, onSave }) {
         data-testid="approval-time-rule-dialog">
         <div className="px-6 pt-5 pb-3 border-b border-gray-100">
           <h4 className="text-base font-semibold text-gray-900">Auto-Approve by Time — {resourceLabel}</h4>
-          <p className="text-xs text-gray-500 mt-0.5">Requests whose booking time (or submission time for workstations) matches will be auto-approved.</p>
         </div>
         <div className="flex gap-2 px-6 border-b border-gray-100 pt-3">
           {["on", "before", "after", "between"].map((m) => (
@@ -270,9 +266,9 @@ function DurationRuleDialog({ open, onOpenChange, resourceLabel, value, onSave }
                   options={numOptions.map((n) => ({ value: String(n), label: String(n) }))}
                   value={String(draft.value)}
                   onChange={(v) => setDraft({ ...draft, value: Number(v) || 1 })}
-                  placeholder="Select value"
+                  placeholder="Type or select value"
                   allowClear={false}
-                  searchable
+                  searchInTrigger
                   testId="approval-duration-value"
                 />
               </div>
@@ -371,26 +367,6 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
     }));
   };
 
-  const allChecked = RESOURCES.every((r) => columnAllChecked(r.key));
-  const toggleAll = () => {
-    const next = !allChecked;
-    const nxt = {};
-    for (const r of RESOURCES) {
-      const row = matrix[r.key] || emptyRow();
-      const durationRelevant = r.key === "meeting_room";
-      nxt[r.key] = {
-        team_member: next,
-        manager: next,
-        date: { ...(row.date || EMPTY_DATE()), enabled: next && !!row.date?.from },
-        time: { ...(row.time || EMPTY_TIME()), enabled: next && !!row.time?.from },
-        duration: durationRelevant
-          ? { ...(row.duration || EMPTY_DURATION()), enabled: next && !!row.duration?.value }
-          : (row.duration || EMPTY_DURATION()),
-      };
-    }
-    setMatrix(nxt);
-  };
-
   const doReset = async () => {
     setResetting(true);
     try {
@@ -445,9 +421,6 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
         <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Approval Configuration</h3>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Choose which request types are auto-approved when Auto Approval is ON.
-            </p>
           </div>
           <button
             onClick={onClose}
@@ -461,26 +434,31 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
 
         {/* Body */}
         <div className="p-5 overflow-y-auto">
-          {/* Master toggle + Select all */}
+          {/* Master toggle */}
           <div className="flex items-center justify-between mb-4">
-            <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-              <OrangeCheckbox
-                checked={enabled}
-                onChange={(v) => setEnabled(v)}
-                testId="settings-master-enabled"
-                ariaLabel="Auto Approval enabled"
-              />
+            <div className="inline-flex items-center gap-2">
               <span className="text-sm font-medium text-gray-900">Auto Approval enabled</span>
-            </label>
-            <button
-              onClick={toggleAll}
-              className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-gray-200 hover:bg-gray-50"
-              data-testid="settings-select-all"
-              type="button"
-            >
-              {allChecked ? <CheckSquare sx={{ fontSize: 14 }}/> : <Square sx={{ fontSize: 14 }}/>}
-              Select all (Entire Matrix)
-            </button>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={enabled}
+                aria-label="Auto Approval enabled"
+                onClick={() => setEnabled((v) => !v)}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#ec9324] focus:ring-offset-1 ${
+                  enabled ? "bg-[#ec9324]" : "bg-gray-300"
+                }`}
+                data-testid="settings-master-enabled"
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    enabled ? "translate-x-4" : "translate-x-0.5"
+                  }`}
+                />
+              </button>
+              <span className={`text-[10px] font-semibold ${enabled ? "text-[#ec9324]" : "text-gray-400"}`}>
+                {enabled ? "ON" : "OFF"}
+              </span>
+            </div>
           </div>
 
           {/* Matrix */}

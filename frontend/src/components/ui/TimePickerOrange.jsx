@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import Clock from "@mui/icons-material/AccessTime";
+import { useWheelScrollIsolation } from "../../hooks/useWheelScrollIsolation";
 
 /**
  * Orange-themed time picker (HH:MM in 24-hour internal format).
@@ -122,6 +123,17 @@ export default function TimePickerOrange({
     onChange(`${String(newH).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
   };
 
+  // Arrow-key increment/decrement directly on the input box.
+  //   ArrowUp/ArrowDown   → ±minuteStep (carries into the hour, wraps at 24h)
+  //   PageUp/PageDown     → ±1 hour
+  const adjust = (deltaMin) => {
+    let total = hour * 60 + minute + deltaMin;
+    total = ((total % 1440) + 1440) % 1440;
+    const nh = Math.floor(total / 60);
+    const nm = total % 60;
+    onChange(`${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}`);
+  };
+
   // Column data
   const hours = format === '12h'
     ? Array.from({ length: 12 }, (_, i) => (i === 0 ? 12 : i)) // 12, 1, 2, … 11
@@ -140,6 +152,13 @@ export default function TimePickerOrange({
         type="button"
         disabled={disabled}
         onClick={() => !disabled && setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (disabled) return;
+          if (e.key === 'ArrowUp') { e.preventDefault(); adjust(minuteStep); }
+          else if (e.key === 'ArrowDown') { e.preventDefault(); adjust(-minuteStep); }
+          else if (e.key === 'PageUp') { e.preventDefault(); adjust(60); }
+          else if (e.key === 'PageDown') { e.preventDefault(); adjust(-60); }
+        }}
         data-testid={`${testIdPrefix}-trigger`}
         className={[
           'w-full px-2 py-1.5 border rounded text-sm bg-white text-left',
@@ -160,12 +179,16 @@ export default function TimePickerOrange({
         <div
           ref={popupRef}
           data-testid={`${testIdPrefix}-popup`}
+          onPointerDownCapture={(e) => e.stopPropagation()}
+          onMouseDownCapture={(e) => e.stopPropagation()}
+          onWheel={(e) => e.stopPropagation()}
           style={{
             position: 'absolute',
             top: popupRect.top,
             left: popupRect.left,
             width: popupRect.width,
             zIndex: 9999,
+            pointerEvents: 'auto',
           }}
           className="bg-white border border-gray-200 rounded-md shadow-xl overflow-hidden"
         >
@@ -224,12 +247,27 @@ export default function TimePickerOrange({
 }
 
 function Column({ items, selected, onPick, label, isStringList, testId }) {
+  const scrollRef = useRef(null);
+  useWheelScrollIsolation(scrollRef, true);
   return (
     <div className="border-r last:border-r-0 border-gray-100" data-testid={testId}>
       <div className="text-[10px] text-gray-500 text-center py-1 border-b border-gray-100 bg-gray-50 font-semibold">
         {label}
       </div>
-      <div className="max-h-48 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+      <div
+        ref={scrollRef}
+        tabIndex={0}
+        onWheel={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            const el = scrollRef.current;
+            if (el) el.scrollBy({ top: e.key === 'ArrowDown' ? 40 : -40 });
+          }
+        }}
+        className="max-h-48 overflow-y-auto overscroll-contain focus:outline-none"
+        style={{ scrollbarWidth: 'thin' }}
+      >
         {items.map((it) => {
           const isSelected = isStringList ? it === selected : it === selected;
           const text = isStringList ? it : String(it).padStart(2, '0');

@@ -20,6 +20,8 @@ import { useWheelScrollIsolation } from "../hooks/useWheelScrollIsolation";
  * - size?:        "sm" | "md"    (default "md")
  * - allowClear?:  boolean (default true)
  * - searchable?:  boolean (default false — pass true if the option list is long)
+ * - searchInTrigger?: boolean (default false — combobox mode: the trigger IS
+ *                 a text input you type into to filter; no separate search bar)
  */
 export default function SingleSelect({
   options = [],
@@ -31,6 +33,7 @@ export default function SingleSelect({
   size = "md",
   allowClear = true,
   searchable = false,
+  searchInTrigger = false,
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -38,6 +41,7 @@ export default function SingleSelect({
   const triggerRef = useRef(null);
   const popupRef = useRef(null);
   const listRef = useRef(null);
+  const inputRef = useRef(null);
   // Portal-based popup position — same pattern as MultiSelectFilter so the
   // dropdown can never be clipped by a parent with `overflow: hidden` (e.g.
   // the Permission Sets edit page table rows).
@@ -93,7 +97,7 @@ export default function SingleSelect({
 
   const selected = options.find((o) => o.value === value) || null;
 
-  const filtered = searchable
+  const filtered = (searchable || searchInTrigger)
     ? options.filter((o) => {
         const q = search.trim().toLowerCase();
         if (!q) return true;
@@ -119,6 +123,55 @@ export default function SingleSelect({
 
   return (
     <div className="relative" ref={ref}>
+      {searchInTrigger ? (
+        <div
+          ref={triggerRef}
+          className={`w-full ${h} flex items-center justify-between rounded-md border bg-white px-3 text-left transition-colors ${
+            disabled
+              ? "border-gray-200 text-gray-400 cursor-not-allowed opacity-70"
+              : open
+              ? "border-[#ec9324] ring-2 ring-[#ec9324]/40"
+              : "border-gray-300 hover:border-gray-400"
+          }`}
+          onClick={() => { if (!disabled) { setOpen(true); } }}
+        >
+          <input
+            type="text"
+            ref={inputRef}
+            disabled={disabled}
+            data-testid={testId}
+            value={open ? search : (selected ? selected.label : "")}
+            placeholder={selected ? selected.label : placeholder}
+            onFocus={() => { if (!disabled) { setOpen(true); setSearch(""); } }}
+            onChange={(e) => { setSearch(e.target.value); if (!open) setOpen(true); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (filtered.length > 0) pick(filtered[0].value);
+              } else if (e.key === "Escape") {
+                setOpen(false); setSearch("");
+              }
+            }}
+            className={`w-full bg-transparent outline-none truncate ${selected ? "text-gray-900" : "text-gray-400"} placeholder:text-gray-400`}
+          />
+          <span className="flex items-center gap-1 ml-2 flex-shrink-0">
+            {allowClear && selected && !disabled && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={clear}
+                onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && clear(e)}
+                className="p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 cursor-pointer"
+                data-testid={testId ? `${testId}-clear` : undefined}
+                aria-label="Clear"
+              >
+                <X sx={{ fontSize: 12 }}/>
+              </span>
+            )}
+            <ChevronsUpDown sx={{ fontSize: 13 }} className="text-gray-400"/>
+          </span>
+        </div>
+      ) : (
       <button
         type="button"
         ref={triggerRef}
@@ -153,6 +206,7 @@ export default function SingleSelect({
           <ChevronsUpDown sx={{ fontSize: 13 }} className="text-gray-400"/>
         </span>
       </button>
+      )}
 
       {open && typeof document !== "undefined" && createPortal(
         <div
@@ -178,7 +232,7 @@ export default function SingleSelect({
           }}
           className="bg-white border border-[#ec9324]/40 rounded-md shadow-lg max-h-72 overflow-hidden flex flex-col"
         >
-          {searchable && (
+          {searchable && !searchInTrigger && (
             <div className="px-2 py-2 border-b border-gray-100">
               <div className="relative">
                 <Search sx={{ fontSize: 13 }} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400"/>
