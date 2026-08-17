@@ -327,20 +327,28 @@ async def bulk_upload_contacts(
     if missing:
         raise HTTPException(400, f"Missing required column(s): {', '.join(sorted(missing))}")
 
-    # Pre-load existing emails + emp_ids for uniqueness check.
+    # Pre-load existing emails + emp_ids + phones for uniqueness check.
     existing_emails: set = set()
     existing_emp_ids: set = set()
-    async for c in db.contacts.find({}, {"_id": 0, "email": 1, "emp_id": 1}):
+    existing_phones: set = set()
+    async for c in db.contacts.find({}, {"_id": 0, "email": 1, "emp_id": 1, "phone": 1}):
         if c.get("email"):
             existing_emails.add(c["email"].lower())
         if c.get("emp_id"):
             existing_emp_ids.add(c["emp_id"].strip())
+        if c.get("phone"):
+            pn = re.sub(r"\D", "", str(c["phone"]))
+            if pn:
+                existing_phones.add(pn)
 
     seen_emails: set = set()
     seen_emp_ids: set = set()
+    seen_phones: set = set()
 
     success_records: List[Dict[str, Any]] = []
     errors: List[Dict[str, Any]] = []
+    duplicates: List[Dict[str, Any]] = []       # collide on Emp ID / Email / Phone
+    missing_details: List[Dict[str, Any]] = []  # required field missing / invalid
     total = 0
 
     for row_offset, row in enumerate(data_rows, start=2):  # row 1 = header
@@ -360,59 +368,79 @@ async def bulk_upload_contacts(
         role = _cell_text(d.get("Role"))
         psets_raw = d.get("Permission Sets")
 
-        row_errors: List[str] = []
-        # Mandatory field validation
+        phone_norm = re.sub(r"\D", "", phone) if phone else ""
+
+        # ── 1) Missing / invalid required details ──────────────────────────
+        # Required: Name, Email, Employee ID, Role, DOJ. Invalid formats are
+        # surfaced the same way (e.g. "Role Invalid", "Email Invalid").
+        detail_issues: List[str] = []
         if not name:
-            row_errors.append("Name is required")
+            detail_issues.append("Name Missing")
         if not email:
-            row_errors.append("Email is required")
+            detail_issues.append("Email Missing")
         elif not EMAIL_RE.match(email):
-            row_errors.append("Email format is invalid")
+            detail_issues.append("Email Invalid")
         if not emp_id:
-            row_errors.append("Employee ID is required")
+            detail_issues.append("Employee ID Missing")
         if not role:
-            row_errors.append("Role is required")
+            detail_issues.append("Role Missing")
         elif role not in VALID_ROLES:
-            row_errors.append(f"Role must be one of: {', '.join(sorted(VALID_ROLES))}")
-        # DOJ
+            detail_issues.append("Role Invalid")
         doj_iso = _normalize_doj_mmddyyyy(doj_raw)
         if doj_raw in (None, ""):
-            row_errors.append("DOJ is required")
+            detail_issues.append("DOJ Missing")
         elif not doj_iso:
-            row_errors.append("DOJ must be in MM-DD-YYYY format")
+            detail_issues.append("DOJ Invalid")
 
-        # Permission sets — resolve to internal ids, unknown values become
-        # per-row errors so users know exactly which names to fix.
+        # Permission sets — resolve to internal ids; unknown names are surfaced
+        # as an invalid detail so users know exactly which names to fix.
         resolved_pset_ids, unknown_psets = await _resolve_permission_sets(psets_raw)
         if unknown_psets:
-            row_errors.append(
-                f"Unknown Permission Set(s): {', '.join(unknown_psets)}"
-            )
+            detail_issues.append(f"Permission Set(s) Invalid: {', '.join(unknown_psets)}")
 
-        # Uniqueness — check in-file dup BEFORE system-exists so users see the
-        # more accurate reason when two rows in the same file collide.
-        if email:
-            if email in seen_emails:
-                row_errors.append("Duplicate Email in upload file")
-            elif email in existing_emails:
-                row_errors.append("Email already exists in system")
-        if emp_id:
-            if emp_id in seen_emp_ids:
-                row_errors.append("Duplicate Employee ID in upload file")
-            elif emp_id in existing_emp_ids:
-                row_errors.append("Employee ID already exists in system")
-
-        if row_errors:
-            errors.append({
+        if detail_issues:
+            rec = {
                 "row": excel_row_num,
-                "name": name,
-                "reason": "; ".join(row_errors),
-            })
+                "name": name, "emp_id": emp_id, "email": email, "phone": phone,
+                "missing": ", ".join(detail_issues),
+            }
+            missing_details.append(rec)
+            errors.append({"row": excel_row_num, "name": name, "reason": rec["missing"]})
+            continue
+
+        # ── 2) Duplicate check — Employee ID, Email OR Phone ───────────────
+        # In-file collisions are reported before system-exists collisions so
+        # the reason is the most accurate one.
+        dup_reasons: List[str] = []
+        if email in seen_emails:
+            dup_reasons.append("Duplicate Email in file")
+        elif email in existing_emails:
+            dup_reasons.append("Email already exists")
+        if emp_id in seen_emp_ids:
+            dup_reasons.append("Duplicate Employee ID in file")
+        elif emp_id in existing_emp_ids:
+            dup_reasons.append("Employee ID already exists")
+        if phone_norm:
+            if phone_norm in seen_phones:
+                dup_reasons.append("Duplicate Phone in file")
+            elif phone_norm in existing_phones:
+                dup_reasons.append("Phone already exists")
+
+        if dup_reasons:
+            rec = {
+                "row": excel_row_num,
+                "name": name, "emp_id": emp_id, "email": email, "phone": phone,
+                "reason": "; ".join(dup_reasons),
+            }
+            duplicates.append(rec)
+            errors.append({"row": excel_row_num, "name": name, "reason": rec["reason"]})
             continue
 
         # Reserve in-file uniqueness as we go
         seen_emails.add(email)
         seen_emp_ids.add(emp_id)
+        if phone_norm:
+            seen_phones.add(phone_norm)
 
         # Build the contact doc + insert
         generated_pwd = generate_password()
@@ -451,6 +479,8 @@ async def bulk_upload_contacts(
         # Reserve uniqueness for subsequent rows
         existing_emails.add(email)
         existing_emp_ids.add(emp_id)
+        if phone_norm:
+            existing_phones.add(phone_norm)
 
     # Send notification emails (best-effort, after all rows processed).
     login_url = (os.environ.get("APP_PUBLIC_URL", "") or "") + "/login"
@@ -514,8 +544,14 @@ async def bulk_upload_contacts(
         "filename": file.filename,
         "total": total,
         "success": success_count,
+        "created": success_count,
         "failed": failed_count,
         "status": status,
+        # Structured buckets for the confirmation popup.
+        "duplicates_count": len(duplicates),
+        "duplicates": duplicates[:1000],
+        "missing_count": len(missing_details),
+        "missing_details": missing_details[:1000],
         "errors": errors[:50],
         "has_more_errors": failed_count > 50,
     }

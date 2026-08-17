@@ -448,8 +448,10 @@ function BulkUploadModal({ open, onClose, onComplete }) {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState(null);
+  const [showDupes, setShowDupes] = useState(false);
+  const [showMissing, setShowMissing] = useState(false);
 
-  const reset = () => { setFile(null); setProgress(0); setResult(null); setUploading(false); };
+  const reset = () => { setFile(null); setProgress(0); setResult(null); setUploading(false); setShowDupes(false); setShowMissing(false); };
 
   const close = () => { reset(); onClose(); };
 
@@ -512,7 +514,7 @@ function BulkUploadModal({ open, onClose, onComplete }) {
         const data = JSON.parse(xhr.responseText);
         if (xhr.status >= 200 && xhr.status < 300) {
           setResult(data);
-          notify.success(`Upload complete — ${data.success} succeeded, ${data.failed} failed`);
+          notify.success(`Upload complete — ${data.created ?? data.success} created, ${data.duplicates_count ?? 0} duplicate(s), ${data.missing_count ?? 0} with missing details`);
           onComplete?.();
         } else {
           notify.error(data?.detail || "Upload failed");
@@ -666,65 +668,128 @@ function BulkUploadModal({ open, onClose, onComplete }) {
 
         {result && (
           <div className="space-y-4" data-testid="upload-result">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-gray-900" data-testid="upload-total">{result.total}</div>
-                <div className="text-xs text-gray-500 uppercase tracking-wider">Total</div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-green-100 text-green-600 flex items-center justify-center shrink-0">
+                <CheckCircle2 sx={{ fontSize: 22 }}/>
               </div>
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-green-700 flex items-center justify-center gap-1" data-testid="upload-success">
-                  <CheckCircle2 sx={{ fontSize: 20 }}/> {result.success}
-                </div>
-                <div className="text-xs text-green-600 uppercase tracking-wider">Success</div>
-              </div>
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-red-700 flex items-center justify-center gap-1" data-testid="upload-failed">
-                  <AlertTriangle sx={{ fontSize: 20 }}/> {result.failed}
-                </div>
-                <div className="text-xs text-red-600 uppercase tracking-wider">Failed</div>
+              <div>
+                <div className="text-base font-semibold text-gray-900" data-testid="upload-result-title">Employees Created Successfully</div>
+                <div className="text-xs text-gray-500">File: <span className="font-mono">{result.filename}</span></div>
               </div>
             </div>
 
-            <div className="text-xs text-gray-500">
-              Status: <span className="font-medium text-gray-700">{result.status}</span> · File: <span className="font-mono">{result.filename}</span>
+            <div className="rounded-lg border border-gray-200 divide-y divide-gray-100">
+              {/* Employee Created */}
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="text-sm font-medium text-gray-700">Employee Created</span>
+                <span className="text-lg font-bold text-green-700 tabular-nums" data-testid="upload-created-count">
+                  {result.created ?? result.success ?? 0}
+                </span>
+              </div>
+
+              {/* Duplicates */}
+              <div className="px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700">Duplicates</span>
+                  <div className="flex items-center gap-3">
+                    {(result.duplicates_count ?? 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowDupes((v) => !v)}
+                        className="text-xs font-semibold text-[#ec9324] hover:underline"
+                        data-testid="toggle-duplicates-details"
+                      >
+                        {showDupes ? "Hide details" : "See details"}
+                      </button>
+                    )}
+                    <span className="text-lg font-bold text-amber-600 tabular-nums" data-testid="upload-duplicates-count">
+                      {result.duplicates_count ?? 0}
+                    </span>
+                  </div>
+                </div>
+                {showDupes && (result.duplicates?.length > 0) && (
+                  <div className="mt-2 border border-amber-100 rounded-lg overflow-hidden" data-testid="duplicates-details">
+                    <div className="max-h-56 overflow-y-auto">
+                      <table className="w-full text-xs">
+                        <thead className="bg-amber-50 text-amber-800 sticky top-0">
+                          <tr>
+                            <th className="px-2.5 py-1.5 text-left font-semibold">Name</th>
+                            <th className="px-2.5 py-1.5 text-left font-semibold">Emp ID</th>
+                            <th className="px-2.5 py-1.5 text-left font-semibold">Email</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {result.duplicates.map((d, i) => (
+                            <tr key={i} className="border-t border-gray-100" data-testid={`duplicate-row-${i}`}>
+                              <td className="px-2.5 py-1.5 text-gray-800 font-medium">{d.name || "—"}</td>
+                              <td className="px-2.5 py-1.5 text-gray-600 font-mono">{d.emp_id || "—"}</td>
+                              <td className="px-2.5 py-1.5 text-gray-600">{d.email || "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Missing Details */}
+              <div className="px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700">Missing Details</span>
+                  <div className="flex items-center gap-3">
+                    {(result.missing_count ?? 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowMissing((v) => !v)}
+                        className="text-xs font-semibold text-[#ec9324] hover:underline"
+                        data-testid="toggle-missing-details"
+                      >
+                        {showMissing ? "Hide details" : "See details"}
+                      </button>
+                    )}
+                    <span className="text-lg font-bold text-red-600 tabular-nums" data-testid="upload-missing-count">
+                      {result.missing_count ?? 0}
+                    </span>
+                  </div>
+                </div>
+                {showMissing && (result.missing_details?.length > 0) && (
+                  <div className="mt-2 border border-red-100 rounded-lg overflow-hidden" data-testid="missing-details">
+                    <div className="max-h-56 overflow-y-auto">
+                      <table className="w-full text-xs">
+                        <thead className="bg-red-50 text-red-800 sticky top-0">
+                          <tr>
+                            <th className="px-2.5 py-1.5 text-left font-semibold">Name</th>
+                            <th className="px-2.5 py-1.5 text-left font-semibold">Emp ID</th>
+                            <th className="px-2.5 py-1.5 text-left font-semibold">Email</th>
+                            <th className="px-2.5 py-1.5 text-left font-semibold">Missing Detail</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {result.missing_details.map((m, i) => (
+                            <tr key={i} className="border-t border-gray-100" data-testid={`missing-row-${i}`}>
+                              <td className="px-2.5 py-1.5 text-gray-800 font-medium">{m.name || "—"}</td>
+                              <td className="px-2.5 py-1.5 text-gray-600 font-mono">{m.emp_id || "—"}</td>
+                              <td className="px-2.5 py-1.5 text-gray-600">{m.email || "—"}</td>
+                              <td className="px-2.5 py-1.5 text-red-700 font-medium">{m.missing}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {result.failed > 0 && (
-              <>
-                <div className="border border-red-100 rounded-lg overflow-hidden">
-                  <div className="bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 flex items-center justify-between">
-                    <span>Error preview ({Math.min(result.errors.length, 10)} of {result.failed})</span>
-                    {result.has_more_errors && <span className="text-red-600">Download full report below</span>}
-                  </div>
-                  <div className="max-h-48 overflow-y-auto">
-                    <table className="w-full text-xs">
-                      <thead className="bg-gray-50 text-gray-600">
-                        <tr>
-                          <th className="px-2 py-1 text-left">Row</th>
-                          <th className="px-2 py-1 text-left">Name</th>
-                          <th className="px-2 py-1 text-left">Reason</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(result.errors || []).slice(0, 10).map((e, i) => (
-                          <tr key={i} className="border-t border-gray-100">
-                            <td className="px-2 py-1 text-gray-600 font-mono">{e.row}</td>
-                            <td className="px-2 py-1 text-gray-700">{e.name || "—"}</td>
-                            <td className="px-2 py-1 text-red-700">{e.reason}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                <Button
-                  variant="outline" onClick={downloadErrorReport}
-                  className="border-red-300 text-red-700 hover:bg-red-50 w-full"
-                  data-testid="download-error-report-btn"
-                >
-                  <FileDown sx={{ fontSize: 14 }} className="mr-2"/> Download Error Report (.xlsx)
-                </Button>
-              </>
+              <Button
+                variant="outline" onClick={downloadErrorReport}
+                className="border-gray-300 text-gray-700 hover:bg-gray-50 w-full"
+                data-testid="download-error-report-btn"
+              >
+                <FileDown sx={{ fontSize: 14 }} className="mr-2"/> Download Full Report (.xlsx)
+              </Button>
             )}
 
             <DialogFooter>
