@@ -1063,7 +1063,11 @@ export default function ContactListPage() {
       setContacts(r.data);
       setTotal(r.data.length);
     }
-    setSelected([]);
+    // NOTE: selection is intentionally NOT reset here. Filters/pagination/sort
+    // only change which rows are *visible* — the set of selected employees is
+    // preserved across filter changes. A selection is cleared only when the
+    // user explicitly deselects a row or clicks "Clear selection", or after a
+    // bulk action completes.
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [q, empIds, emails, role, status, psetFilter, teamFilter, page, pageSize, sortBy, sortDir]);
   useEffect(() => { setPage(1); /* reset on filter change */ }, [q, empIds, emails, role, status, psetFilter, teamFilter, pageSize]);
@@ -1073,12 +1077,22 @@ export default function ContactListPage() {
     else { setSortBy(field); setSortDir("asc"); }
   };
 
+  // Header "select all" acts only on the *currently visible* rows: checking it
+  // adds every visible employee to the selection (keeping any already-selected
+  // rows that are hidden by the active filter); unchecking removes only the
+  // visible rows and leaves hidden selections intact.
   const toggleAll = (checked) => {
-    setSelected(checked ? contacts.map((c) => c.id) : []);
+    const visibleIds = contacts.map((c) => c.id);
+    setSelected((s) => {
+      if (checked) return Array.from(new Set([...s, ...visibleIds]));
+      const vis = new Set(visibleIds);
+      return s.filter((id) => !vis.has(id));
+    });
   };
   const toggleOne = (id, checked) => {
     setSelected((s) => checked ? [...s, id] : s.filter((x) => x !== id));
   };
+  const clearSelection = () => setSelected([]);
 
   const bulkActivate = async (newStatus) => {
     if (selected.length === 0) return;
@@ -1288,6 +1302,10 @@ export default function ContactListPage() {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const allSelected = contacts.length > 0 && contacts.every((c) => selected.includes(c.id));
   const anySelected = selected.length > 0;
+  // How many selected employees are currently hidden by the active filters /
+  // not on the current page — used to reassure the user their picks are kept.
+  const visibleIdSet = React.useMemo(() => new Set(contacts.map((c) => c.id)), [contacts]);
+  const hiddenSelectedCount = selected.filter((id) => !visibleIdSet.has(id)).length;
 
   return (
     <Layout
@@ -1311,6 +1329,24 @@ export default function ContactListPage() {
                 <DropdownMenuItem onClick={openBulkPset} data-testid="bulk-assign-psets">Assign Permission Sets…</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+          )}
+          {anySelected && (
+            <button
+              type="button"
+              onClick={clearSelection}
+              data-testid="clear-selection-btn"
+              title={hiddenSelectedCount > 0
+                ? `${hiddenSelectedCount} selected employee(s) are hidden by the current filters`
+                : "Clear all selected employees"}
+              className="inline-flex items-center gap-1 h-9 px-2.5 rounded-md border border-gray-300 bg-white text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-800 hover:border-gray-400 transition-colors whitespace-nowrap"
+            >
+              <X sx={{ fontSize: 13 }} /> Clear selection
+              {hiddenSelectedCount > 0 && (
+                <span className="ml-1 inline-flex items-center h-4 px-1.5 rounded-full bg-[#ec9324]/10 text-[#ec9324] text-[10px] font-semibold tabular-nums">
+                  {hiddenSelectedCount} hidden
+                </span>
+              )}
+            </button>
           )}
           {permExport.isVisible && (
             <DropdownMenu>
@@ -1822,7 +1858,7 @@ export default function ContactListPage() {
             set" strip. Each is collapsed to "<LABEL>  N Selected" and expands
             into colour-coded removable chips on click. */}
         {(psetFilter.length > 0 || (permTeamFilter.isVisible && teamFilter.length > 0)) && (
-          <div className="mt-2 flex flex-col gap-2" data-testid="contact-filter-summaries">
+          <div className="mt-2 flex flex-wrap items-start gap-x-4 gap-y-2" data-testid="contact-filter-summaries">
             {permTeamFilter.isVisible && teamFilter.length > 0 && (
               <FilterSelectionSummary
                 label="Team"
