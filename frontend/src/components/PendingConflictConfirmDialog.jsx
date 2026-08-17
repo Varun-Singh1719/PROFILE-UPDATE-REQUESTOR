@@ -72,30 +72,27 @@ export default function PendingConflictConfirmDialog({
             Confirm the auto-decline of the listed pending workstation
             requests before the new bookings are created.
           </DialogDescription>
-          {/* Spec-mandated summary */}
-          <div className="mt-2 text-[13px] font-semibold text-gray-900">
-            <span
-              className="inline-flex items-center justify-center h-6 px-2 mr-1 rounded text-white text-[11.5px] font-bold"
-              style={{ backgroundColor: "#ec9324" }}
-              data-testid="pending-conflict-summary-count"
-            >
-              {pendingCount}
-            </span>
-            Pending Approval request{pendingCount === 1 ? "" : "s"} will be
-            automatically declined and{" "}
-            <span
-              className="inline-flex items-center justify-center h-6 px-2 mx-1 rounded text-white text-[11.5px] font-bold"
-              style={{ backgroundColor: "#ec9324" }}
-            >
-              {proposedCount}
-            </span>
-            workstation booking{proposedCount === 1 ? "" : "s"} will be created.
-          </div>
-          <div className="mt-2 text-[12px] text-gray-700 leading-snug">
-            The following users have Workstation Requests in Pending
-            Approval for the selected date. If you continue, these requests
-            will be automatically declined and new workstation bookings
-            will be created.
+          {/* Spec-mandated summary — shown on two separate lines */}
+          <div className="mt-2 space-y-1.5 text-[13px] font-semibold text-gray-900">
+            <div className="flex items-center gap-1.5">
+              <span
+                className="inline-flex items-center justify-center h-6 px-2 rounded text-white text-[11.5px] font-bold"
+                style={{ backgroundColor: "#ec9324" }}
+                data-testid="pending-conflict-summary-count"
+              >
+                {pendingCount}
+              </span>
+              <span>Pending Approval request{pendingCount === 1 ? "" : "s"} will be automatically declined and</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span
+                className="inline-flex items-center justify-center h-6 px-2 rounded text-white text-[11.5px] font-bold"
+                style={{ backgroundColor: "#ec9324" }}
+              >
+                {proposedCount}
+              </span>
+              <span>workstation booking{proposedCount === 1 ? "" : "s"} will be created.</span>
+            </div>
           </div>
         </DialogHeader>
 
