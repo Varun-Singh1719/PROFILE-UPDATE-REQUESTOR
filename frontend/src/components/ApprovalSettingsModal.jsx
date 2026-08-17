@@ -43,8 +43,11 @@ const BOOL_CRITERIA = [
 
 // Configurable criteria (gear cells)
 const CONFIG_CRITERIA = [
-  { key: "date",     label: "Date",     icon: CalendarIcon },
-  { key: "time",     label: "Time",     icon: Clock },
+  { key: "date",     label: "Booked for date", icon: CalendarIcon },
+  { key: "time",     label: "Time",     icon: Clock,
+    // A workstation booking has a date but no time-of-day, so the Time rule
+    // only applies to meeting rooms. Workstations render a disabled cell.
+    resources: ["meeting_room"] },
   { key: "duration", label: "Duration", icon: Timer,
     // Duration rule only applies to time-bounded resources (meeting rooms).
     // For workstations we render a disabled placeholder cell.
@@ -126,7 +129,7 @@ function DateRuleDialog({ open, onOpenChange, resourceLabel, value, onSave }) {
         overlayClassName="z-[1000]"
         data-testid="approval-date-rule-dialog">
         <div className="px-5 pt-4 pb-3 border-b border-gray-100">
-          <h4 className="text-base font-semibold text-gray-900">Auto-Approve by Date — {resourceLabel}</h4>
+          <h4 className="text-base font-semibold text-gray-900">Auto-Approve by Booked for date — {resourceLabel}</h4>
           <p className="text-xs text-gray-500 mt-0.5">Requests whose booking date matches this rule will be auto-approved.</p>
         </div>
         {/* Same picker (tabs + date inputs + calendars) as the CRM DateFilter */}
@@ -610,7 +613,9 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
           </div>
 
           <p className="text-[11px] text-gray-500 mt-3">
-            Rules combine using <b>OR</b> — any configured criterion that matches a new request will auto-approve it.
+            <b>Manager</b> and <b>Team Member</b> combine with <b>OR</b>; within each, the configured
+            <b> Booked for date</b>/<b>Time</b>/<b>Duration</b> criteria must <b>all</b> match (AND).
+            e.g. <i>(Manager AND Booked-for-date AND Time) OR (Team Member AND Booked-for-date AND Time)</i>.
             Rules apply only to <b>new</b> requests submitted after Save. Existing pending requests keep going through
             the normal approval workflow.
           </p>

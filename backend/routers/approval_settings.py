@@ -487,16 +487,17 @@ async def _match_matrix_row(
     if date_rule.get("enabled"):
         attr_checks.append(matches_date_rule(date_rule, booking_date))
 
-    time_rule = row.get("time") or {}
-    if time_rule.get("enabled"):
-        time_of_day = booking_time
-        if not time_of_day:
-            now = ist_now()
-            time_of_day = f"{now.hour:02d}:{now.minute:02d}"
-        attr_checks.append(matches_time_rule(time_rule, time_of_day))
-
-    # Duration — meeting rooms only; must never be evaluated for workstations.
+    # Time + Duration apply to meeting rooms only. A workstation booking has a
+    # date but no time-of-day, so the Time rule is never evaluated for it.
     if resource == "meeting_room":
+        time_rule = row.get("time") or {}
+        if time_rule.get("enabled"):
+            time_of_day = booking_time
+            if not time_of_day:
+                now = ist_now()
+                time_of_day = f"{now.hour:02d}:{now.minute:02d}"
+            attr_checks.append(matches_time_rule(time_rule, time_of_day))
+
         dur_rule = row.get("duration") or {}
         if dur_rule.get("enabled"):
             attr_checks.append(matches_duration_rule(dur_rule, booking_duration_minutes))
