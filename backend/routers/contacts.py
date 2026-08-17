@@ -107,6 +107,7 @@ async def list_contacts(
     type: Optional[str] = None,
     status: Optional[str] = None,
     permission_set_id: Optional[str] = None,
+    team_id: Optional[str] = None,
     emp_ids: Optional[str] = None,
     emails: Optional[str] = None,
     page: Optional[int] = None,
@@ -139,6 +140,16 @@ async def list_contacts(
             else:
                 resolved.append(pid)
         query["permission_set_ids"] = {"$in": resolved} if len(resolved) > 1 else resolved[0]
+    # Team filter — membership lives on the `teams` collection (member_ids +
+    # manager_ids), so resolve the selected team ids into a set of contact ids.
+    team_list = _csv_list(team_id)
+    if team_list:
+        member_ids: set = set()
+        async for t in db.teams.find({"id": {"$in": team_list}}, {"_id": 0, "member_ids": 1, "manager_ids": 1}):
+            member_ids.update(t.get("member_ids") or [])
+            member_ids.update(t.get("manager_ids") or [])
+        # Empty selection resolves to a filter that matches nothing.
+        query["id"] = {"$in": list(member_ids) if member_ids else ["__none__"]}
     # Multi-value chip filters — Emp ID (exact match) and Email
     # (case-insensitive). When BOTH are provided we OR them together — the
     # user is asking for "records matching any of these emp_ids OR any of
