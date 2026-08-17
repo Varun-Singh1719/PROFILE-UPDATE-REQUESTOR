@@ -28,6 +28,7 @@ import SingleSelect from "./SingleSelect";
 import TimePickerOrange from "./ui/TimePickerOrange";
 import { Dialog, DialogContent } from "./ui/dialog";
 import { Button } from "./ui/button";
+import OrangeCheckbox from "./OrangeCheckbox";
 
 // Column definition — add future resources here.
 const RESOURCES = [
@@ -463,12 +464,11 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
           {/* Master toggle + Select all */}
           <div className="flex items-center justify-between mb-4">
             <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
+              <OrangeCheckbox
                 checked={enabled}
-                onChange={(e) => setEnabled(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 accent-[#ec9324] text-[#ec9324] focus:ring-[#ec9324]"
-                data-testid="settings-master-enabled"
+                onChange={(v) => setEnabled(v)}
+                testId="settings-master-enabled"
+                ariaLabel="Auto Approval enabled"
               />
               <span className="text-sm font-medium text-gray-900">Auto Approval enabled</span>
             </label>
@@ -519,14 +519,14 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
                     </td>
                     {RESOURCES.map((r) => (
                       <td key={r.key} className="text-center px-3 py-3 align-middle">
-                        <input
-                          type="checkbox"
-                          checked={!!matrix[r.key]?.[c.key]}
-                          onChange={() => toggleCell(r.key, c.key)}
-                          className="h-4 w-4 rounded border-gray-300 accent-[#ec9324] text-[#ec9324] focus:ring-[#ec9324]"
-                          data-testid={`settings-cell-${r.key}-${c.key}`}
-                          aria-label={`${c.label} for ${r.label}`}
-                        />
+                        <div className="inline-flex items-center justify-center">
+                          <OrangeCheckbox
+                            checked={!!matrix[r.key]?.[c.key]}
+                            onChange={() => toggleCell(r.key, c.key)}
+                            testId={`settings-cell-${r.key}-${c.key}`}
+                            ariaLabel={`${c.label} for ${r.label}`}
+                          />
+                        </div>
                       </td>
                     ))}
                   </tr>
