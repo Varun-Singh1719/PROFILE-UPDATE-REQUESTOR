@@ -111,10 +111,8 @@ export default function ISDPicker({
                 aria-selected={active}
                 data-testid={`${testId}-option-${c.iso}`}
               >
-                <span className="truncate">
-                  {c.name.toLowerCase()} <span className="text-gray-500">({c.dial})</span>
-                </span>
-                <span className="text-[10px] text-gray-400 flex-shrink-0">{c.iso}</span>
+                <span className="truncate">{c.name}</span>
+                <span className={`text-xs flex-shrink-0 ${active ? "text-[#ec9324] font-medium" : "text-gray-500"}`}>{c.dial}</span>
               </button>
             );
           })}
