@@ -1540,7 +1540,7 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
                             {teamPool.length < seatCount && (
                               <div className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-1.5 flex items-start gap-1">
                                 <AlertTriangle sx={{ fontSize: 12 }} className="mt-[1px]"/>
-                                <span>Not enough available team members ({teamPool.length}) for {seatCount} workstation(s).</span>
+                                <span>Team Members available without Workstation = {teamPool.length}</span>
                               </div>
                             )}
                           </div>
