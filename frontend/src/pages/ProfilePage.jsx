@@ -45,13 +45,31 @@ function fmtDateTime(iso) {
   } catch { return iso; }
 }
 
-function InfoRow({ icon: Icon, label, value, testid }) {
+// Format an ISO/date string as "Mon YYYY" (e.g. "Jan 2024"); null on failure.
+function monthYear(iso) {
+  if (!iso) return null;
+  try {
+    const d = new Date(String(iso).length <= 10 ? `${iso}T00:00:00` : iso);
+    if (isNaN(d.getTime())) return null;
+    return d.toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
+  } catch { return null; }
+}
+
+// Icon-chip info tile used in the Employee Information grid.
+function InfoTile({ icon: Icon, label, value, muted, testid }) {
   return (
-    <div className="flex items-start gap-3 py-2" data-testid={testid}>
-      <Icon size={15} className="text-gray-400 mt-0.5 flex-shrink-0"/>
+    <div
+      className="flex items-start gap-3 rounded-xl border border-gray-100 p-3.5 hover:border-[#ec9324]/40 transition-colors"
+      data-testid={testid}
+    >
+      <span className="w-9 h-9 rounded-lg bg-gray-50 text-gray-500 flex items-center justify-center flex-shrink-0">
+        <Icon sx={{ fontSize: 18 }}/>
+      </span>
       <div className="min-w-0 flex-1">
-        <div className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">{label}</div>
-        <div className="text-sm text-gray-900 break-words">{value || <span className="text-gray-400">—</span>}</div>
+        <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">{label}</div>
+        <div className={`text-sm font-medium mt-0.5 break-words ${muted ? "text-gray-400" : "text-gray-900"}`}>
+          {value}
+        </div>
       </div>
     </div>
   );
@@ -317,78 +335,117 @@ export default function ProfilePage() {
           <Loader2 sx={{ fontSize: 20 }} className="animate-spin mr-2"/> Loading profile…
         </div>
       ) : (
-        <div className="max-w-3xl space-y-5">
-          {/* Header card — avatar + name + role */}
-          <section className="bg-white border border-gray-200 rounded-xl p-6 flex items-center gap-5" data-testid="profile-header">
-            <div className="relative">
-              <UserAvatar user={profile} size={96} online showStatusDot/>
-              <button
-                onClick={() => setAvatarOpen(true)}
-                className="absolute -bottom-1 -right-1 bg-[#ec9324] hover:bg-[#d4811f] text-white rounded-full p-1.5 shadow-md"
-                data-testid="profile-edit-avatar-btn"
-                aria-label="Edit avatar"
-              >
-                <Camera sx={{ fontSize: 14 }}/>
-              </button>
-            </div>
-            <div className="flex-1 min-w-0">
-              <h1 className="text-2xl font-bold text-gray-900 truncate" data-testid="profile-name">{profile.name || initialsFor(profile.name)}</h1>
-              <div className="text-sm text-gray-600 truncate flex items-center gap-1.5 mt-0.5">
-                <Mail sx={{ fontSize: 13 }} className="text-gray-400"/> {profile.email}
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#ec9324]/10 text-[#ec9324] rounded-full text-xs font-medium">
-                  <ShieldCheck sx={{ fontSize: 11 }}/> {profile.role}
-                </span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-medium">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> Online
-                </span>
-              </div>
-            </div>
-          </section>
+        <div className="max-w-6xl">
+          <div className="grid grid-cols-12 gap-5">
 
-          {/* Basic + Team + Permissions */}
-          <section className="bg-white border border-gray-200 rounded-xl p-6" data-testid="profile-info-card">
-            <h2 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wider">Employee Information</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 divide-y divide-gray-100 md:divide-y-0">
-              <InfoRow icon={IdCard} label="Employee ID" value={profile.emp_id} testid="profile-empid"/>
-              <InfoRow icon={Mail}   label="Email"       value={profile.email} testid="profile-email"/>
-              <InfoRow icon={Phone}  label="Phone"       value={profile.phone} testid="profile-phone"/>
-              <InfoRow icon={Calendar} label="Date of Joining" value={profile.doj} testid="profile-doj"/>
-              <InfoRow icon={UsersIcon} label="Team Name" value={profile.team_name} testid="profile-team"/>
-              <InfoRow icon={ShieldCheck} label="Permission Set(s)"
-                value={(profile.permission_set_names || []).length
-                  ? profile.permission_set_names.join(", ")
-                  : ""}
-                testid="profile-permission-sets"
-              />
-            </div>
-          </section>
-
-          {/* Password section */}
-          <section className="bg-white border border-gray-200 rounded-xl p-6" data-testid="profile-password-card">
-            <h2 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wider">Password</h2>
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <KeyRound sx={{ fontSize: 18 }} className="text-gray-400 mt-0.5"/>
-                <div>
-                  <div className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">Last Updated</div>
-                  <div className="text-sm text-gray-900" data-testid="profile-password-last-updated">
-                    {profile.password_changed_at
-                      ? fmtDateTime(profile.password_changed_at)
-                      : <span className="text-gray-400">Never changed since account creation</span>}
+            {/* LEFT — identity card */}
+            <section className="col-span-12 lg:col-span-4" data-testid="profile-header">
+              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+                <div className="h-24" style={{ background: "linear-gradient(120deg,#ec9324 0%,#f6b35c 55%,#8ec06c 100%)" }}/>
+                <div className="px-6 pb-6 -mt-12 flex flex-col items-center text-center">
+                  <div className="relative">
+                    <div className="rounded-full ring-4 ring-white shadow-md">
+                      <UserAvatar user={profile} size={96} online showStatusDot/>
+                    </div>
+                    <button
+                      onClick={() => setAvatarOpen(true)}
+                      className="absolute bottom-0 right-0 bg-[#ec9324] hover:bg-[#d4811f] text-white rounded-full p-1.5 shadow-md ring-2 ring-white"
+                      data-testid="profile-edit-avatar-btn"
+                      aria-label="Edit avatar"
+                    >
+                      <Camera sx={{ fontSize: 14 }}/>
+                    </button>
+                  </div>
+                  <h1 className="mt-3 text-xl font-bold text-gray-900 truncate max-w-full" data-testid="profile-name">
+                    {profile.name || initialsFor(profile.name)}
+                  </h1>
+                  <div className="mt-0.5 text-sm text-gray-500 flex items-center gap-1.5 max-w-full">
+                    <Mail sx={{ fontSize: 13 }} className="text-gray-400 flex-shrink-0"/>
+                    <span className="truncate">{profile.email}</span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#ec9324]/10 text-[#ec9324] rounded-full text-xs font-semibold">
+                      <ShieldCheck sx={{ fontSize: 11 }}/> {profile.role}
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-semibold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> Online
+                    </span>
+                  </div>
+                  <div className="w-full border-t border-gray-100 mt-5 pt-4 grid grid-cols-2 gap-3 text-left">
+                    <div className="rounded-xl bg-gray-50 px-3 py-2.5">
+                      <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Employee ID</div>
+                      <div className="text-sm font-semibold text-gray-900 mt-0.5 truncate">{profile.emp_id || "—"}</div>
+                    </div>
+                    <div className="rounded-xl bg-gray-50 px-3 py-2.5">
+                      <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Member Since</div>
+                      <div className="text-sm font-semibold text-gray-900 mt-0.5 truncate">
+                        {monthYear(profile.doj) || monthYear(profile.created_on) || "—"}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-              <Button
-                onClick={() => setCpOpen(true)}
-                className="bg-[#ec9324] hover:bg-[#d4811f] text-white"
-                data-testid="profile-change-password-btn"
-              >
-                <KeyRound sx={{ fontSize: 14 }} className="mr-2"/> Change Password
-              </Button>
+            </section>
+
+            {/* RIGHT — details */}
+            <div className="col-span-12 lg:col-span-8 space-y-5">
+              {/* Employee information */}
+              <section className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6" data-testid="profile-info-card">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="w-8 h-8 rounded-lg bg-[#ec9324]/10 text-[#ec9324] flex items-center justify-center">
+                    <IdCard sx={{ fontSize: 18 }}/>
+                  </span>
+                  <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Employee Information</h2>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <InfoTile icon={IdCard} label="Employee ID" value={profile.emp_id || "—"} muted={!profile.emp_id} testid="profile-empid"/>
+                  <InfoTile icon={Mail} label="Email" value={profile.email} testid="profile-email"/>
+                  <InfoTile icon={Phone} label="Phone" value={profile.phone || "—"} muted={!profile.phone} testid="profile-phone"/>
+                  <InfoTile icon={Calendar} label="Date of Joining" value={profile.doj || "—"} muted={!profile.doj} testid="profile-doj"/>
+                  <InfoTile icon={UsersIcon} label="Team Name" value={profile.team_name || "Not assigned"} muted={!profile.team_name} testid="profile-team"/>
+                  <InfoTile
+                    icon={ShieldCheck}
+                    label="Permission Set(s)"
+                    value={(profile.permission_set_names || []).length ? profile.permission_set_names.join(", ") : "None"}
+                    muted={!(profile.permission_set_names || []).length}
+                    testid="profile-permission-sets"
+                  />
+                </div>
+              </section>
+
+              {/* Security */}
+              <section className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6" data-testid="profile-password-card">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="w-8 h-8 rounded-lg bg-[#ec9324]/10 text-[#ec9324] flex items-center justify-center">
+                    <KeyRound sx={{ fontSize: 18 }}/>
+                  </span>
+                  <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Security</h2>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-xl border border-gray-100 p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="w-10 h-10 rounded-lg bg-gray-50 text-gray-500 flex items-center justify-center flex-shrink-0">
+                      <KeyRound sx={{ fontSize: 18 }}/>
+                    </span>
+                    <div>
+                      <div className="text-sm font-semibold text-gray-900">Password</div>
+                      <div className="text-xs text-gray-500 mt-0.5" data-testid="profile-password-last-updated">
+                        {profile.password_changed_at
+                          ? `Last updated ${fmtDateTime(profile.password_changed_at)}`
+                          : "Never changed since account creation"}
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => setCpOpen(true)}
+                    className="bg-[#ec9324] hover:bg-[#d4811f] text-white flex-shrink-0"
+                    data-testid="profile-change-password-btn"
+                  >
+                    <KeyRound sx={{ fontSize: 14 }} className="mr-2"/> Change Password
+                  </Button>
+                </div>
+              </section>
             </div>
-          </section>
+          </div>
         </div>
       )}
 
