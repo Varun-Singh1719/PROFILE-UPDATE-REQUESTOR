@@ -455,32 +455,66 @@ async def _match_matrix_row(
     booking_time: Optional[str],
     booking_duration_minutes: Optional[int] = None,
 ) -> bool:
-    """Shared logic for workstation + meeting-room auto-approval."""
+    """Shared auto-approval logic for workstation + meeting-room.
+
+    AND + OR semantics (not a flat OR):
+
+        (Manager  AND Date AND Time [AND Duration])
+      OR
+        (Team Member AND Date AND Time [AND Duration])
+
+    where only the criteria actually configured (enabled) are included. The
+    two role selections (Manager / Team Member) form OR-ed rule *sets*; the
+    attribute criteria (Date / Time / Duration) are AND-ed *within* each set.
+    Because the attribute set is identical across both role sets, this reduces
+    to: the submitter must belong to one of the configured roles AND every
+    configured attribute must match. Duration participates for meeting rooms
+    only — it is never evaluated for workstations.
+    """
     settings = await get_settings()
     if not settings.get("enabled"):
         return False
     row = (settings.get("matrix") or {}).get(resource) or {}
 
-    submitter_is_manager = await is_manager(submitter)
-    if submitter_is_manager and row.get("manager"):
-        return True
-    if (not submitter_is_manager) and row.get("team_member"):
-        return True
+    # Role sets that are configured (OR-ed together).
+    configured_roles = [r for r in ("manager", "team_member") if row.get(r)]
 
-    if matches_date_rule(row.get("date") or {}, booking_date):
-        return True
+    # Configured attribute criteria + whether each currently matches. These are
+    # AND-ed together inside every role set.
+    attr_checks: list[bool] = []
 
-    time_of_day = booking_time
-    if not time_of_day:
-        now = ist_now()
-        time_of_day = f"{now.hour:02d}:{now.minute:02d}"
-    if matches_time_rule(row.get("time") or {}, time_of_day):
-        return True
+    date_rule = row.get("date") or {}
+    if date_rule.get("enabled"):
+        attr_checks.append(matches_date_rule(date_rule, booking_date))
 
-    # Duration rule only applies to meeting rooms and requires a caller-
-    # provided duration (workstation requests don't have a meeting length).
-    if resource == "meeting_room" and booking_duration_minutes is not None:
-        if matches_duration_rule(row.get("duration") or {}, booking_duration_minutes):
-            return True
+    time_rule = row.get("time") or {}
+    if time_rule.get("enabled"):
+        time_of_day = booking_time
+        if not time_of_day:
+            now = ist_now()
+            time_of_day = f"{now.hour:02d}:{now.minute:02d}"
+        attr_checks.append(matches_time_rule(time_rule, time_of_day))
 
-    return False
+    # Duration — meeting rooms only; must never be evaluated for workstations.
+    if resource == "meeting_room":
+        dur_rule = row.get("duration") or {}
+        if dur_rule.get("enabled"):
+            attr_checks.append(matches_duration_rule(dur_rule, booking_duration_minutes))
+
+    # Nothing configured for this resource → no auto-approval.
+    if not configured_roles and not attr_checks:
+        return False
+
+    # Role gate: when any role set is configured, each set is scoped to its
+    # role, so the submitter must belong to one of the configured roles. When
+    # no role is configured, the attribute criteria apply to everyone.
+    if configured_roles:
+        submitter_role = "manager" if await is_manager(submitter) else "team_member"
+        if submitter_role not in configured_roles:
+            return False
+
+    # Attribute gate: ALL configured attributes must match (AND).
+    if not all(attr_checks):
+        return False
+
+    return True
