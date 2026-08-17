@@ -77,6 +77,11 @@ export default function WorkspaceOverallDashboard() {
   const [weekStart, setWeekStart] = useState(() => isoWeekMondayFor(istTodayISO()));
   const [weekData, setWeekData] = useState({ days: [], start: "" });
   const [weekLoading, setWeekLoading] = useState(false);
+  // Org presence-per-day for the SELECTED week (Mon–Sun), so it stays aligned
+  // with the "This week" strip above. The overall-dashboard endpoint returns
+  // the 7 days ENDING on the given date, so we query the week's Sunday to get
+  // exactly Mon…Sun of the displayed week.
+  const [weekOrg, setWeekOrg] = useState([]);
 
   // Popup: full floor plan (reuse existing one)
   const [floorOpen, setFloorOpen] = useState(false);
@@ -117,6 +122,18 @@ export default function WorkspaceOverallDashboard() {
        .finally(() => setWeekLoading(false));
   }, [weekStart]);
 
+  // Presence-per-day for the displayed week — fetch the org week ending on the
+  // Sunday of `weekStart` so the chart shows Mon…Sun of the SAME week as the
+  // strip above (and updates on prev/next/Today navigation).
+  useEffect(() => {
+    const sunday = toISO(new Date(new Date(weekStart + "T00:00:00").getTime() + 6 * 86400000));
+    let cancelled = false;
+    api.get(`/my-workspace/overall-dashboard`, { params: { date: sunday } })
+       .then((r) => { if (!cancelled) setWeekOrg(r.data?.org_week || []); })
+       .catch(() => { if (!cancelled) setWeekOrg([]); });
+    return () => { cancelled = true; };
+  }, [weekStart]);
+
   const openFloor = () => {
     if (!overall?.my_seat?.plan_id && !overall?.org_occupancy?.total_seats) return;
     setFloorOpen(true);
@@ -129,7 +146,7 @@ export default function WorkspaceOverallDashboard() {
 
   const mySeat  = overall?.my_seat || null;
   const occ     = overall?.org_occupancy || { total_seats: 0, present: 0, free: 0, occupancy_pct: 0 };
-  const orgWeek = overall?.org_week || [];
+  const orgWeek = weekOrg;
   const rooms   = overall?.meeting_rooms_today || [];
   const teams   = overall?.all_teams || [];
   const activity= overall?.recent_activity || [];
@@ -447,25 +464,28 @@ export default function WorkspaceOverallDashboard() {
           <div className="p-4 flex-1 flex flex-col min-h-0">
             <div className="text-[11px] uppercase tracking-widest text-gray-500 font-bold mb-2">Presence per day</div>
             <div className="grid grid-cols-7 gap-1.5 flex-1 min-h-0">
-              {orgWeek.map((w) => (
+              {orgWeek.map((w) => {
+                const isToday = w.date === today;
+                return (
                 <div
                   key={w.date}
-                  className={`rounded-lg border p-1.5 text-center flex flex-col ${w.today ? "border-[#ec9324] bg-orange-50" : "border-gray-200"}`}
+                  className={`rounded-lg border p-1.5 text-center flex flex-col ${isToday ? "border-[#ec9324] bg-orange-50" : "border-gray-200"}`}
                 >
                   <div className="text-[10px] font-semibold text-gray-500">{w.day}</div>
-                  <div className={`text-sm font-bold ${w.today ? "text-[#ec9324]" : "text-gray-900"}`}>{w.n}</div>
+                  <div className={`text-sm font-bold ${isToday ? "text-[#ec9324]" : "text-gray-900"}`}>{w.n}</div>
                   <div className="mt-1 flex-1 flex items-end justify-center min-h-[24px]">
                     <div
                       className="w-2.5 rounded-t"
                       style={{
                         height: `${(w.count / maxOrgWeek) * 100}%`,
-                        background: w.today ? ORANGE : "#d1d5db",
+                        background: isToday ? ORANGE : "#d1d5db",
                       }}
                     />
                   </div>
                   <div className="text-[9px] text-gray-500 mt-0.5">{w.count}</div>
                 </div>
-              ))}
+                );
+              })}
             </div>
             <div className="mt-2 text-[10px] text-gray-500 flex items-center justify-between">
               <span>Peak: <b className="text-gray-800">{peakOf(orgWeek)}</b></span>
