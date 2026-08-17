@@ -45,6 +45,7 @@ import UsersRound from "@mui/icons-material/GroupsOutlined";
 import Download from "@mui/icons-material/FileDownloadOutlined";
 import ChevronLeft from "@mui/icons-material/ChevronLeft";
 import ChevronRight from "@mui/icons-material/ChevronRight";
+import ExpandMore from "@mui/icons-material/ExpandMore";
 import MoreHorizontal from "@mui/icons-material/MoreHoriz";
 import MoreVertical from "@mui/icons-material/MoreVert";
 import ShieldCheck from "@mui/icons-material/GppGoodOutlined";
@@ -881,6 +882,77 @@ function GeneratedPasswordModal({ password, email, onClose }) {
   );
 }
 
+/**
+ * FilterSelectionSummary — collapsible summary of an active multi-select
+ * filter. Collapsed it shows "<LABEL>  N Selected ⌄"; clicking expands into
+ * colour-coded removable chips (same orange treatment as the old
+ * "Filtered by permission set" strip). Each `item` is { value, name, meta? }
+ * where `meta` (optional) is a small ID pill shown on the chip.
+ */
+function FilterSelectionSummary({ label, items, onRemove, onClearAll, testIdPrefix }) {
+  const [open, setOpen] = React.useState(false);
+  if (!items || items.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-1.5" data-testid={`${testIdPrefix}-summary`}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="self-start inline-flex items-center gap-2 rounded-full bg-[#ec9324]/10 border border-[#ec9324]/40 text-[#ec9324] pl-3 pr-2 py-1 text-xs font-semibold hover:bg-[#ec9324]/15 transition-colors"
+        data-testid={`${testIdPrefix}-summary-toggle`}
+        title={open ? "Hide selection" : "Show selection"}
+      >
+        <span className="uppercase tracking-wider text-[10px] font-bold text-[#ec9324]/80">{label}</span>
+        <span className="inline-flex items-center h-5 px-2 rounded-full bg-white/70 border border-[#ec9324]/30 tabular-nums">
+          {items.length} Selected
+        </span>
+        <ExpandMore
+          sx={{ fontSize: 16 }}
+          className={`transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && (
+        <div className="flex flex-wrap items-center gap-2" data-testid={`${testIdPrefix}-summary-chips`}>
+          {items.map((it) => (
+            <span
+              key={it.value}
+              data-testid={`${testIdPrefix}-summary-chip-${it.value}`}
+              className="inline-flex items-center gap-2 rounded-full bg-[#ec9324]/10 border border-[#ec9324]/40 text-[#ec9324] pl-3 pr-1 py-1 text-xs font-semibold"
+              title={it.meta != null ? `${it.name} (ID ${it.meta})` : it.name}
+            >
+              <span className="max-w-[260px] truncate">{it.name}</span>
+              {it.meta != null && (
+                <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-full bg-white/70 border border-[#ec9324]/30 text-[10px] font-mono tabular-nums">
+                  <span className="text-[#ec9324]/70 font-sans font-normal">ID</span>
+                  <span>{it.meta}</span>
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => onRemove(it.value)}
+                className="rounded-full p-0.5 hover:bg-[#ec9324]/20"
+                aria-label={`Remove ${it.name}`}
+                data-testid={`${testIdPrefix}-summary-chip-remove-${it.value}`}
+              ><X sx={{ fontSize: 11 }}/></button>
+            </span>
+          ))}
+          {onClearAll && items.length > 1 && (
+            <button
+              type="button"
+              onClick={onClearAll}
+              className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full border border-gray-300 bg-white text-[11px] text-gray-600 hover:bg-gray-50 hover:border-gray-400 transition-colors"
+              data-testid={`${testIdPrefix}-summary-clear`}
+            >
+              <X sx={{ fontSize: 11 }}/> Clear
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 export default function ContactListPage() {
   // ── Permissions V3 (Round 3) ──
   const { fn: permFn } = useEffectivePage("manage", "employees");
@@ -889,6 +961,10 @@ export default function ContactListPage() {
   const permInvite = permFn("invite");
   const permImport = permFn("import");
   const permExport = permFn("export");
+  // Team filter visibility is controlled from the Permissions page
+  // (Manage → Employees → Filters → "Team"). Super Admin / permissive
+  // users always see it via isVisible=true.
+  const permTeamFilter = permFn("filter_team");
 
   const [contacts, setContacts] = useState([]);
   const [total, setTotal] = useState(0);
@@ -901,6 +977,8 @@ export default function ContactListPage() {
   const [emails, setEmails] = useState([]);      // chip-based Email ID filter
   const [role, setRole] = useState([]);
   const [status, setStatus] = useState([]);
+  const [teamFilter, setTeamFilter] = useState([]);   // multi-select Team filter (default: all)
+  const [teams, setTeams] = useState([]);              // all teams (for the Team filter dropdown)
   // NOTE: `psetFilter` state is declared further below, seeded from the URL
   // synchronously to avoid an initial-load race with the deep-link
   // `?permission_set=` param.
@@ -952,6 +1030,18 @@ export default function ContactListPage() {
     })();
   }, []);
 
+  // Load all teams for the Team filter dropdown (shows every team name).
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await api.get("/teams");
+        setTeams(Array.isArray(r.data) ? r.data : (r.data?.items || []));
+      } catch {
+        setTeams([]);
+      }
+    })();
+  }, []);
+
   const load = async () => {
     const r = await api.get("/contacts", {
       params: {
@@ -961,6 +1051,7 @@ export default function ContactListPage() {
         role: role.length ? role.join(",") : undefined,
         status: status.length ? status.join(",") : undefined,
         permission_set_id: psetFilter.length ? psetFilter.join(",") : undefined,
+        team_id: teamFilter.length ? teamFilter.join(",") : undefined,
         page, page_size: pageSize, sort_by: sortBy, sort_dir: sortDir,
       },
     });
@@ -974,8 +1065,8 @@ export default function ContactListPage() {
     }
     setSelected([]);
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [q, empIds, emails, role, status, psetFilter, page, pageSize, sortBy, sortDir]);
-  useEffect(() => { setPage(1); /* reset on filter change */ }, [q, empIds, emails, role, status, psetFilter, pageSize]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [q, empIds, emails, role, status, psetFilter, teamFilter, page, pageSize, sortBy, sortDir]);
+  useEffect(() => { setPage(1); /* reset on filter change */ }, [q, empIds, emails, role, status, psetFilter, teamFilter, pageSize]);
 
   const toggleSort = (field) => {
     if (sortBy === field) setSortDir(sortDir === "asc" ? "desc" : "asc");
@@ -1610,49 +1701,6 @@ export default function ContactListPage() {
       </Dialog>
 
       <div className="shrink-0 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
-        {/* Prominent chip when filtering by a permission set (deep-link from Permission Sets tab) */}
-        {psetFilter.length > 0 && (
-          <div className="mb-2 flex flex-wrap items-center gap-2" data-testid="contact-pset-chip-row">
-            <span className="text-[11px] uppercase tracking-wider font-semibold text-gray-500">Filtered by permission set:</span>
-            {psetFilter.map((pid) => {
-              const p = permissionSets.find((x) => x.id === pid);
-              const num = p ? (p.numeric_id || p.seq_no || "?") : "?";
-              const name = p ? (p.title || p.name || "Untitled") : pid;
-              return (
-                <span
-                  key={pid}
-                  data-testid={`contact-pset-chip-${pid}`}
-                  className="inline-flex items-center gap-2 rounded-full bg-[#ec9324]/10 border border-[#ec9324]/40 text-[#ec9324] pl-3 pr-1 py-1 text-xs font-semibold"
-                  title={`${name} (ID ${num})`}
-                >
-                  <span className="max-w-[260px] truncate">{name}</span>
-                  {/* Separator dot + ID pill — avoids ambiguity when the name
-                      itself contains " - " (e.g. "HR - Workspace Manager"). */}
-                  <span
-                    className="inline-flex items-center gap-1 h-5 px-1.5 rounded-full bg-white/70 border border-[#ec9324]/30 text-[10px] font-mono tabular-nums"
-                    aria-label={`ID ${num}`}
-                  >
-                    <span className="text-[#ec9324]/70 font-sans font-normal">ID</span>
-                    <span>{num}</span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next = psetFilter.filter((x) => x !== pid);
-                      setPsetFilter(next);
-                      const sp = new URLSearchParams(searchParams);
-                      if (next.length === 1) sp.set("permission_set", next[0]);
-                      else sp.delete("permission_set");
-                      setSearchParams(sp, { replace: true });
-                    }}
-                    className="rounded-full p-0.5 hover:bg-[#ec9324]/20"
-                    aria-label="Remove filter"
-                  ><X sx={{ fontSize: 11 }}/></button>
-                </span>
-              );
-            })}
-          </div>
-        )}
         <div className="bg-white p-4 rounded-xl shadow-soft border border-gray-100" data-testid="contacts-filter-bar">
           {/* Single-row filter bar — wraps to next line if width is limited */}
           <div className="flex gap-2.5 flex-wrap items-center">
@@ -1697,6 +1745,20 @@ export default function ContactListPage() {
               testIdPrefix="contact-status-filter"
               className="w-36"
             />
+            {permTeamFilter.isVisible && (
+              <MultiSelectFilter
+                label="Team"
+                value={teamFilter}
+                onChange={setTeamFilter}
+                options={teams.map((t) => ({ value: t.id, label: t.name || "Untitled" }))}
+                testIdPrefix="contact-team-filter"
+                className="w-44"
+                placeholder="Team"
+                hideLabelPrefix
+                showCountOnly
+                countUnitLabel="Selected"
+              />
+            )}
             <MultiSelectFilter
               label="Permission Set"
               value={psetFilter}
@@ -1727,12 +1789,11 @@ export default function ContactListPage() {
               className="w-52"
               placeholder="Permission Set"
               hideLabelPrefix
-              searchInTrigger
-              showCountBadge={false}
-              renderChipsBelow={false}
+              showCountOnly
+              countUnitLabel="Selected"
               align="right"
             />
-            {(q || empIds.length > 0 || emails.length > 0 || role.length > 0 || status.length > 0 || psetFilter.length > 0) && (
+            {(q || empIds.length > 0 || emails.length > 0 || role.length > 0 || status.length > 0 || psetFilter.length > 0 || teamFilter.length > 0) && (
               <button
                 type="button"
                 onClick={() => {
@@ -1742,6 +1803,7 @@ export default function ContactListPage() {
                   setRole([]);
                   setStatus([]);
                   setPsetFilter([]);
+                  setTeamFilter([]);
                   const sp = new URLSearchParams(searchParams);
                   sp.delete("permission_set");
                   setSearchParams(sp, { replace: true });
@@ -1755,6 +1817,54 @@ export default function ContactListPage() {
             )}
           </div>
         </div>
+
+        {/* Active-selection summaries — replaces the old "Filtered by permission
+            set" strip. Each is collapsed to "<LABEL>  N Selected" and expands
+            into colour-coded removable chips on click. */}
+        {(psetFilter.length > 0 || (permTeamFilter.isVisible && teamFilter.length > 0)) && (
+          <div className="mt-2 flex flex-col gap-2" data-testid="contact-filter-summaries">
+            {permTeamFilter.isVisible && teamFilter.length > 0 && (
+              <FilterSelectionSummary
+                label="Team"
+                testIdPrefix="contact-team-filter"
+                items={teamFilter.map((tid) => {
+                  const t = teams.find((x) => x.id === tid);
+                  return { value: tid, name: t ? (t.name || "Untitled") : tid };
+                })}
+                onRemove={(tid) => setTeamFilter(teamFilter.filter((x) => x !== tid))}
+                onClearAll={() => setTeamFilter([])}
+              />
+            )}
+            {psetFilter.length > 0 && (
+              <FilterSelectionSummary
+                label="Permission Set"
+                testIdPrefix="contact-pset-filter"
+                items={psetFilter.map((pid) => {
+                  const p = permissionSets.find((x) => x.id === pid);
+                  return {
+                    value: pid,
+                    name: p ? (p.title || p.name || "Untitled") : pid,
+                    meta: p ? (p.numeric_id || p.seq_no || "?") : "?",
+                  };
+                })}
+                onRemove={(pid) => {
+                  const next = psetFilter.filter((x) => x !== pid);
+                  setPsetFilter(next);
+                  const sp = new URLSearchParams(searchParams);
+                  if (next.length === 1) sp.set("permission_set", next[0]);
+                  else sp.delete("permission_set");
+                  setSearchParams(sp, { replace: true });
+                }}
+                onClearAll={() => {
+                  setPsetFilter([]);
+                  const sp = new URLSearchParams(searchParams);
+                  sp.delete("permission_set");
+                  setSearchParams(sp, { replace: true });
+                }}
+              />
+            )}
+          </div>
+        )}
       </div>
 
       <div className="mt-6 flex-1 min-h-0 flex flex-col bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden">
