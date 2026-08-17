@@ -437,7 +437,7 @@ export default function ApprovalSettingsModal({ open, onClose, initial, onSaved 
           {/* Master toggle */}
           <div className="flex items-center justify-between mb-4">
             <div className="inline-flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-900">Auto Approval enabled</span>
+              <span className="text-sm font-medium text-gray-900">Auto Approval</span>
               <button
                 type="button"
                 role="switch"

@@ -65,8 +65,8 @@ export default function ChangePasswordModal({ open, onClose, onSuccess }) {
           <DialogTitle className="flex items-center gap-2">
             <KeyRound sx={{ fontSize: 18 }} className="text-[#ec9324]"/> Change Password
           </DialogTitle>
-          <DialogDescription>
-            Enter your current password and choose a strong new one.
+          <DialogDescription className="sr-only">
+            Change your account password.
           </DialogDescription>
         </DialogHeader>
 
