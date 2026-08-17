@@ -23,7 +23,7 @@ import Clock from "@mui/icons-material/AccessTime";
 import Timer from "@mui/icons-material/HourglassBottomOutlined";
 import api from "../lib/api";
 import notify from "../lib/notify";
-import { Calendar } from "./ui/calendar";
+import { DateRangePanel } from "./DateFilter";
 import SingleSelect from "./SingleSelect";
 import TimePickerOrange from "./ui/TimePickerOrange";
 import { Dialog, DialogContent } from "./ui/dialog";
@@ -122,61 +122,32 @@ function DateRuleDialog({ open, onOpenChange, resourceLabel, value, onSave }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-3xl p-0 overflow-hidden z-[1000]"
+        className={`${mode === "between" ? "max-w-xl" : "max-w-sm"} p-0 gap-0 overflow-hidden z-[1000]`}
         overlayClassName="z-[1000]"
         data-testid="approval-date-rule-dialog">
-        <div className="px-6 pt-5 pb-3 border-b border-gray-100">
+        <div className="px-5 pt-4 pb-3 border-b border-gray-100">
           <h4 className="text-base font-semibold text-gray-900">Auto-Approve by Date — {resourceLabel}</h4>
           <p className="text-xs text-gray-500 mt-0.5">Requests whose booking date matches this rule will be auto-approved.</p>
         </div>
-        <div className="flex gap-2 px-6 border-b border-gray-100 pt-3">
-          {["between", "on", "before", "after"].map((m) => (
-            <button
-              key={m}
-              type="button"
-              data-testid={`approval-date-mode-${m}`}
-              onClick={() => setDraft({ ...draft, mode: m, to: m === "between" ? draft.to : null })}
-              className={`px-4 py-2 text-sm font-medium relative ${
-                mode === m ? "text-[#ec9324]" : "text-gray-500 hover:text-gray-800"
-              }`}
-            >
-              {m.charAt(0).toUpperCase() + m.slice(1)}
-              {mode === m && <span className="absolute left-2 right-2 -bottom-px h-0.5 bg-[#ec9324] rounded-full" />}
-            </button>
-          ))}
-        </div>
-        <div className="px-6 py-5">
-          {mode === "between" ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <div className="text-xs font-medium text-gray-600 mb-2">From</div>
-                <Calendar mode="single" selected={fromDate || undefined}
-                  onSelect={(d) => setDraft({ ...draft, from: toISO(d) })} initialFocus />
-              </div>
-              <div>
-                <div className="text-xs font-medium text-gray-600 mb-2">To</div>
-                <Calendar mode="single" selected={toDate || undefined}
-                  onSelect={(d) => setDraft({ ...draft, to: toISO(d) })} />
-              </div>
-            </div>
-          ) : (
-            <div className="max-w-md">
-              <div className="text-xs font-medium text-gray-600 mb-2">
-                {mode.charAt(0).toUpperCase() + mode.slice(1)}
-              </div>
-              <Calendar mode="single" selected={fromDate || undefined}
-                onSelect={(d) => setDraft({ ...draft, from: toISO(d) })} initialFocus />
-            </div>
-          )}
-        </div>
-        <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100 bg-gray-50/60">
+        {/* Same picker (tabs + date inputs + calendars) as the CRM DateFilter */}
+        <DateRangePanel
+          testId="approval-date"
+          draft={{ mode, from: fromDate, to: toDate }}
+          onDraft={(d) => setDraft({
+            ...draft,
+            mode: d.mode || mode,
+            from: d.from ? toISO(d.from) : null,
+            to: d.to ? toISO(d.to) : null,
+          })}
+        />
+        <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50/50">
           <Button variant="outline" onClick={() => { onSave(EMPTY_DATE()); onOpenChange(false); }}
-            data-testid="approval-date-clear" className="rounded-md">Clear rule</Button>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-md">Cancel</Button>
+            data-testid="approval-date-clear" className="rounded-full px-6">Clear rule</Button>
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-full px-6">Cancel</Button>
             <Button onClick={() => { onSave({ ...draft, enabled: !!draft.from }); onOpenChange(false); }}
               data-testid="approval-date-save"
-              className="bg-[#ec9324] hover:bg-[#d4811f] text-white rounded-md">Save</Button>
+              className="bg-[#ec9324] hover:bg-[#d4811f] text-white rounded-full px-8">Save</Button>
           </div>
         </div>
       </DialogContent>

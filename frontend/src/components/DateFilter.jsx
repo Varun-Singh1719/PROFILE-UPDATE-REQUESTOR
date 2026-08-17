@@ -107,23 +107,11 @@ export default function DateFilter({
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
 
-  // Controlled month for each calendar so typed / arrow-key date edits
-  // navigate the calendar, while the prev/next nav buttons still work.
-  const [fromMonth, setFromMonth] = useState(() => value?.from || new Date());
-  const [toMonth, setToMonth] = useState(() => value?.to || new Date());
-
   useEffect(() => {
     if (open) {
       setDraft(value);
-      setFromMonth(value?.from || new Date());
-      setToMonth(value?.to || new Date());
     }
   }, [open, value]);
-
-  // Keep the displayed month in sync when the bound date changes (typing /
-  // arrow keys / calendar select land here via draft updates).
-  useEffect(() => { if (draft?.from) setFromMonth(draft.from); }, [draft?.from]);
-  useEffect(() => { if (draft?.to) setToMonth(draft.to); }, [draft?.to]);
 
   const showFieldSelector = !singleDate && fields.length > 1;
   // Ensure the value's field is always one of the allowed fields
@@ -231,78 +219,15 @@ export default function DateFilter({
           </div>
         )}
 
-        {/* Mode tabs — hidden in singleDate mode */}
-        {!singleDate && (
-        <div className="flex gap-1 px-5 border-b border-gray-100 pt-2">
-          {(["between", "on", "before", "after"]).map((m) => (
-            <button
-              key={m}
-              type="button"
-              data-testid={`${testId}-mode-${m}`}
-              onClick={() => setDraft({ ...draft, mode: m, to: m === "between" ? draft?.to : null })}
-              className={`px-3 py-2.5 text-sm font-medium relative ${
-                mode === m ? "text-[#ec9324]" : "text-gray-500 hover:text-gray-800"
-              }`}
-            >
-              {MODE_LABEL[m]}
-              {mode === m && <span className="absolute left-2 right-2 -bottom-px h-0.5 bg-[#ec9324] rounded-full"/>}
-            </button>
-          ))}
-        </div>
-        )}
-
-        {/* Date inputs + calendars */}
-        <div className="px-4 py-3">
-          {mode === "between" ? (
-            <div className="flex flex-wrap justify-center gap-5">
-              <div className="w-[248px]">
-                <DateInput label="From" testId={`${testId}-from`} value={draft?.from} onChange={(d) => setDraft({ ...draft, from: d })} />
-                <div className="mt-2 flex justify-center">
-                  <Calendar
-                    mode="single"
-                    month={fromMonth}
-                    onMonthChange={setFromMonth}
-                    selected={draft?.from || undefined}
-                    onSelect={(d) => setDraft({ ...draft, from: d || null })}
-                    initialFocus
-                    disabled={disabledMatcher}
-                    classNames={CAL_CLASSNAMES}
-                  />
-                </div>
-              </div>
-              <div className="w-[248px]">
-                <DateInput label="To" testId={`${testId}-to`} value={draft?.to} onChange={(d) => setDraft({ ...draft, to: d })} />
-                <div className="mt-2 flex justify-center">
-                  <Calendar
-                    mode="single"
-                    month={toMonth}
-                    onMonthChange={setToMonth}
-                    selected={draft?.to || undefined}
-                    onSelect={(d) => setDraft({ ...draft, to: d || null })}
-                    disabled={disabledMatcher}
-                    classNames={CAL_CLASSNAMES}
-                  />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="w-[248px] mx-auto">
-              <DateInput label={singleDate ? "Date" : MODE_LABEL[mode]} testId={`${testId}-single`} value={draft?.from} onChange={(d) => setDraft({ ...draft, from: d })}/>
-              <div className="mt-2 flex justify-center">
-                <Calendar
-                  mode="single"
-                  month={fromMonth}
-                  onMonthChange={setFromMonth}
-                  selected={draft?.from || undefined}
-                  onSelect={(d) => setDraft({ ...draft, from: d || null, mode: singleDate ? "on" : (draft?.mode || "on") })}
-                  initialFocus
-                  disabled={disabledMatcher}
-                  classNames={CAL_CLASSNAMES}
-                />
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Mode tabs + date inputs + calendars — shared panel (also used by
+            the Auto-Approval "by Date" dialog so the two are pixel-identical). */}
+        <DateRangePanel
+          draft={draft}
+          onDraft={setDraft}
+          singleDate={singleDate}
+          testId={testId}
+          disabledMatcher={disabledMatcher}
+        />
 
         {/* Footer */}
         <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50/50">
@@ -319,6 +244,98 @@ export default function DateFilter({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Shared inner panel: mode tabs (Between/On/Before/After) + labelled date
+// input boxes + calendar(s). Extracted so DateFilter AND the Auto-Approval
+// "by Date" dialog render the exact same picker (size, spacing, inputs,
+// solid-orange selected day). `draft.from`/`draft.to` are Date objects.
+export function DateRangePanel({
+  draft,
+  onDraft,
+  singleDate = false,
+  testId = "date-filter",
+  disabledMatcher,
+}) {
+  const [fromMonth, setFromMonth] = useState(() => draft?.from || new Date());
+  const [toMonth, setToMonth] = useState(() => draft?.to || new Date());
+  useEffect(() => { if (draft?.from) setFromMonth(draft.from); }, [draft?.from]);
+  useEffect(() => { if (draft?.to) setToMonth(draft.to); }, [draft?.to]);
+  const mode = singleDate ? "on" : (draft?.mode || "between");
+  const set = (patch) => onDraft?.({ ...draft, ...patch });
+  return (
+    <>
+      {!singleDate && (
+        <div className="flex gap-1 px-5 border-b border-gray-100 pt-2">
+          {(["between", "on", "before", "after"]).map((m) => (
+            <button
+              key={m}
+              type="button"
+              data-testid={`${testId}-mode-${m}`}
+              onClick={() => set({ mode: m, to: m === "between" ? draft?.to : null })}
+              className={`px-3 py-2.5 text-sm font-medium relative ${
+                mode === m ? "text-[#ec9324]" : "text-gray-500 hover:text-gray-800"
+              }`}
+            >
+              {MODE_LABEL[m]}
+              {mode === m && <span className="absolute left-2 right-2 -bottom-px h-0.5 bg-[#ec9324] rounded-full"/>}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="px-4 py-3">
+        {mode === "between" ? (
+          <div className="flex flex-wrap justify-center gap-5">
+            <div className="w-[248px]">
+              <DateInput label="From" testId={`${testId}-from`} value={draft?.from} onChange={(d) => set({ from: d })} />
+              <div className="mt-2 flex justify-center">
+                <Calendar
+                  mode="single"
+                  month={fromMonth}
+                  onMonthChange={setFromMonth}
+                  selected={draft?.from || undefined}
+                  onSelect={(d) => set({ from: d || null })}
+                  initialFocus
+                  disabled={disabledMatcher}
+                  classNames={CAL_CLASSNAMES}
+                />
+              </div>
+            </div>
+            <div className="w-[248px]">
+              <DateInput label="To" testId={`${testId}-to`} value={draft?.to} onChange={(d) => set({ to: d })} />
+              <div className="mt-2 flex justify-center">
+                <Calendar
+                  mode="single"
+                  month={toMonth}
+                  onMonthChange={setToMonth}
+                  selected={draft?.to || undefined}
+                  onSelect={(d) => set({ to: d || null })}
+                  disabled={disabledMatcher}
+                  classNames={CAL_CLASSNAMES}
+                />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="w-[248px] mx-auto">
+            <DateInput label={singleDate ? "Date" : MODE_LABEL[mode]} testId={`${testId}-single`} value={draft?.from} onChange={(d) => set({ from: d })}/>
+            <div className="mt-2 flex justify-center">
+              <Calendar
+                mode="single"
+                month={fromMonth}
+                onMonthChange={setFromMonth}
+                selected={draft?.from || undefined}
+                onSelect={(d) => set({ from: d || null, mode: singleDate ? "on" : (draft?.mode || "on") })}
+                initialFocus
+                disabled={disabledMatcher}
+                classNames={CAL_CLASSNAMES}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
