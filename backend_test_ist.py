@@ -15,7 +15,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Optional, Tuple
 
 # Backend URL from environment
-BACKEND_URL = "https://checkbox-orange.preview.emergentagent.com/api"
+BACKEND_URL = "https://emp-perm-filter.preview.emergentagent.com/api"
 
 # Super Admin credentials
 ADMIN_EMAIL = "admin@ticketing.com"

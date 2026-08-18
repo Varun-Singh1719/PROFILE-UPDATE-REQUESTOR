@@ -1896,10 +1896,7 @@ export default function ContactListPage() {
                   label: nm,
                   searchText: `${num} ${nm}`,
                   meta: (
-                    <>
-                      <span className="text-gray-500">ID&nbsp;:&nbsp;</span>
-                      <span className="font-semibold text-[#ec9324]">{num}</span>
-                    </>
+                    <span className="font-semibold text-[#ec9324]">{num}</span>
                   ),
                 };
               })}

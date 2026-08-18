@@ -12,8 +12,8 @@ import time
 import requests
 from datetime import datetime
 
-BASE_API = "https://checkbox-orange.preview.emergentagent.com/api"
-BASE_UI = "https://checkbox-orange.preview.emergentagent.com"
+BASE_API = "https://emp-perm-filter.preview.emergentagent.com/api"
+BASE_UI = "https://emp-perm-filter.preview.emergentagent.com"
 
 # Super Admin credentials
 SA_EMAIL = "admin@ticketing.com"

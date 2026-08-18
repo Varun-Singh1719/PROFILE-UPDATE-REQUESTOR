@@ -68,7 +68,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "../components/ui/dialog";
@@ -1747,12 +1746,12 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
         open={!!autoSuggestion}
         onOpenChange={(open) => { if (!open) setAutoSuggestion(null); }}
       >
-        <DialogContent data-testid="ws-auto-suggestion-dialog" className="sm:max-w-md">
+        <DialogContent data-testid="ws-auto-suggestion-dialog" className="sm:max-w-md max-w-[calc(100vw-2rem)] overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-amber-700">
               <AlertTriangle sx={{ fontSize: 18 }}/> Not enough consecutive seats
             </DialogTitle>
-            <DialogDescription className="text-sm text-gray-700 pt-2">
+            <DialogDescription className="text-sm text-gray-700 pt-2 break-words">
               {autoSuggestion && (
                 <>
                   <span className="font-semibold">
@@ -1788,16 +1787,17 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
             </div>
           )}
 
-          <DialogFooter className="gap-2 sm:gap-2">
+          <div className="flex flex-col gap-2 pt-2">
             <Button
-              variant="outline"
-              onClick={() => setAutoSuggestion(null)}
-              data-testid="ws-suggestion-cancel"
+              onClick={acceptSuggestion}
+              className="w-full bg-[#ec9324] hover:bg-[#d8821a] text-white"
+              data-testid="ws-suggestion-use"
             >
-              Cancel
+              <CheckCircle2 sx={{ fontSize: 14 }} className="mr-1.5"/> Use Suggested Block
             </Button>
             <Button
               variant="outline"
+              className="w-full"
               onClick={() => {
                 setAutoSuggestion(null);
                 toast.info("Click a different starting workstation on the map.");
@@ -1807,13 +1807,14 @@ export default function WorkstationBookingPage({ mode = "booking" } = {}) {
               Choose Another Starting Workstation
             </Button>
             <Button
-              onClick={acceptSuggestion}
-              className="bg-[#ec9324] hover:bg-[#d8821a] text-white"
-              data-testid="ws-suggestion-use"
+              variant="outline"
+              className="w-full"
+              onClick={() => setAutoSuggestion(null)}
+              data-testid="ws-suggestion-cancel"
             >
-              <CheckCircle2 sx={{ fontSize: 14 }} className="mr-1.5"/> Use Suggested Block
+              Cancel
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

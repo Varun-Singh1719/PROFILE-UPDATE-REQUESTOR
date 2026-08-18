@@ -10,7 +10,7 @@ import sys
 from typing import Optional
 
 # Configuration
-BACKEND_URL = "https://checkbox-orange.preview.emergentagent.com/api"
+BACKEND_URL = "https://emp-perm-filter.preview.emergentagent.com/api"
 ADMIN_EMAIL = "admin@ticketing.com"
 ADMIN_PASSWORD = "Admin@123"
 

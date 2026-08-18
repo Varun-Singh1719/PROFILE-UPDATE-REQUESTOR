@@ -1,6 +1,12 @@
 # Infollion Utilities — PRD
 
 
+## Session Aug 18 2026 — Permission filter ID display + Workstation auto-assign popup layout
+- **Manage → Employees → Permission Set filter** (`ContactListPage.jsx`): dropdown rows now show Name + bare numeric ID (orange) only — removed the "ID :" prefix from the `meta` render. Verified visually (e.g. "HR 171").
+- **Workstation Booking → Team Auto Assignment "Not enough consecutive seats" dialog** (`WorkstationBookingPage.jsx`): footer buttons were overflowing the box. Replaced `DialogFooter` (sm:flex-row) with a vertical `flex flex-col gap-2` of full-width buttons (Use Suggested Block / Choose Another / Cancel); capped `DialogContent` width (`max-w-[calc(100vw-2rem)] overflow-hidden`) and added `break-words` to the description so text/buttons stay inside the box.
+- **Env restore (this container)**: recreated `/app/backend/.env` (Atlas `cluster0.vmgql1i.mongodb.net` · `app_db` · user `sakshamsinghal_db_user`, per user-supplied creds; fresh JWT_SECRET + FERNET_KEY) and `/app/frontend/.env` (`REACT_APP_BACKEND_URL` = preview URL). Backend was crash-looping (KeyError JWT_SECRET). Installed missing `tzlocal` (added to requirements) so the daily scheduler starts. Login verified `admin@ticketing.com / Admin@123`.
+
+
 ## Session Aug 16 2026 (rev-5) — ProfiX dashboard + filters-respect-Enable + Floor Layout + Workstation form (ALL TESTED ✅)
 Verified by testing agents (backend + frontend), all PASS:
 - **Recent Updates by update-date** (`dashboard.py`): `/dashboard/recent?kind=updated` now windows on `updated_on` (created_on for `new`), so a request created earlier but updated in-window (e.g. TKT-1120: created Jul-29, updated Aug-16) appears.
