@@ -12990,7 +12990,10 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Employees permission catalog: upload_history, permission_set, filter_permission_set under manage.employees"
+    - "GET /api/permissions/schema/v3 exposes the 3 new employee function keys"
+    - "Permission set #165 has the 3 new toggles enabled/visible"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -13236,4 +13239,18 @@ agent_communication:
         All 8 verification items PASS. The Approval Configuration modal UI changes (rev-6) are working exactly as specified. All critical bug fixes for TimePickerOrange (hour/minute selection, keyboard navigation) are verified and working correctly. No blocking issues found.
         
         Screenshots saved in .screenshots/ directory for visual verification.
+
+
+    - agent: "main"
+      message: |
+        BACKEND test needed (permissions catalog for Employees page). Creds: admin@ticketing.com / Admin@123 (Super Admin). MongoDB = Atlas app_db.
+        1) GET /api/permissions/schema/v3 → in the "manage" module, "employees" page, the functions list MUST now include these 3 NEW keys:
+           - "upload_history" (label "Upload History", NOT category filter)
+           - "permission_set" (label "Permission Set (Add/Edit/View)", NOT category filter)
+           - "filter_permission_set" (label "Permission Set", category == "filter")
+           Also confirm the existing keys (create, edit, import, search, filter_role, filter_status, filter_team) are still present.
+        2) GET the permission set with numeric_id 165 (name "Workspace Manager - HR Manager"): its modules.manage.pages.employees.functions must contain upload_history / permission_set / filter_permission_set each with enabled=true and visible=true.
+           (Use GET /api/permissions/v3/sets or the single-set GET endpoint; find id = pset-55a32ec3-d082-4057-b763-656d2bc112ec.)
+        3) Regression: GET /api/permissions/schema/v3 still returns all other modules/pages without error (200).
+        Do NOT modify or delete any permission sets. Read-only verification only.
 

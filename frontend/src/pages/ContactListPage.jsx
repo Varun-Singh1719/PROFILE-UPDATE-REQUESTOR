@@ -274,6 +274,9 @@ function PasswordField({ contactId, testIdPrefix = "contact", mode = "view" }) {
 }
 
 function EmployeeDetailModal({ contact, open, onClose }) {
+  const { fn, isSuperAdmin } = useEffectivePage("manage", "employees");
+  // Permission Set (View) control — gates the Permission Sets section in the view modal.
+  const psetVisible = isSuperAdmin ? true : fn("permission_set_view").isVisible;
   if (!contact) return null;
   const isActive = contact.status === "Active";
   return (
@@ -357,6 +360,7 @@ function EmployeeDetailModal({ contact, open, onClose }) {
           </div>
 
           {/* Permission sets */}
+          {psetVisible && (
           <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-3">
             <div className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 flex items-center gap-1 mb-1.5">
               <ShieldCheck sx={{ fontSize: 12 }} className="text-gray-500"/>
@@ -386,6 +390,7 @@ function EmployeeDetailModal({ contact, open, onClose }) {
               </div>
             )}
           </div>
+          )}
 
           {/* Password */}
           <PasswordField contactId={contact.id} testIdPrefix="detail" mode="view" />
@@ -1030,6 +1035,12 @@ export default function ContactListPage() {
   // (Manage → Employees → Filters → "Team"). Super Admin / permissive
   // users always see it via isVisible=true.
   const permTeamFilter = permFn("filter_team");
+  // New granular controls (Manage → Employees):
+  const permUploadHistory = permFn("upload_history");             // Upload History button
+  const permPsetAdd       = permFn("permission_set_add");         // Permission Set field in ADD form
+  const permPsetEdit      = permFn("permission_set_edit");        // Permission Set field in EDIT form
+  const permPsetView      = permFn("permission_set_view");        // Permission Set in VIEW modal + list column
+  const permPsetFilter    = permFn("filter_permission_set");      // Permission Set filter in the toolbar
 
   const [contacts, setContacts] = useState([]);
   const [total, setTotal] = useState(0);
@@ -1441,14 +1452,14 @@ export default function ContactListPage() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          {permImport.isVisible && (
+          {permUploadHistory.isVisible && (
             <div className="relative group">
               <button
                 type="button"
                 onClick={() => setHistoryOpen(true)}
                 data-testid="upload-history-btn"
                 aria-label="Upload History"
-                disabled={!permImport.canUse}
+                disabled={!permUploadHistory.canUse}
                 className="relative inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-100 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <History sx={{ fontSize: 20 }}/>
@@ -1754,6 +1765,7 @@ export default function ContactListPage() {
               </div>
 
               {/* Permission Sets */}
+              {(editing ? permPsetEdit : permPsetAdd).isVisible && (
               <div className="col-span-2 relative">
                 <label className="absolute -top-2 left-3 px-1.5 bg-white text-[11px] font-medium text-gray-500 z-10 pointer-events-none inline-flex items-center gap-1">
                   <ShieldCheck sx={{ fontSize: 12 }} className="text-gray-500"/> Permission Sets
@@ -1787,8 +1799,10 @@ export default function ContactListPage() {
                   hideLabelPrefix
                   fullWidth
                   searchInTrigger
+                  disabled={!(editing ? permPsetEdit : permPsetAdd).canUse}
                 />
               </div>
+              )}
             </div>
             {editing && (
               <PasswordField contactId={editing.id} testIdPrefix="edit" mode="edit" />
@@ -1862,6 +1876,7 @@ export default function ContactListPage() {
                 countUnitLabel="Selected"
               />
             )}
+            {permPsetFilter.isVisible && (
             <MultiSelectFilter
               label="Permission Set"
               value={psetFilter}
@@ -1896,6 +1911,7 @@ export default function ContactListPage() {
               countUnitLabel="Selected"
               align="right"
             />
+            )}
             {(q || empIds.length > 0 || emails.length > 0 || role.length > 0 || status.length > 0 || psetFilter.length > 0 || teamFilter.length > 0) && (
               <button
                 type="button"
@@ -1994,7 +2010,9 @@ export default function ContactListPage() {
                 <th className="px-4 py-3 text-left cursor-pointer hover:text-[#ec9324]" onClick={() => toggleSort("role")} data-testid="sort-role">
                   Role {sortBy === "role" && (sortDir === "asc" ? "▲" : "▼")}
                 </th>
-                <th className="px-4 py-3 text-left">Permission Sets</th>
+                {permPsetView.isVisible && (
+                  <th className="px-4 py-3 text-left">Permission Sets</th>
+                )}
                 <th className="px-4 py-3 text-left">Active</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
@@ -2035,12 +2053,14 @@ export default function ContactListPage() {
                   <td className="px-4 py-3">
                     <span className="inline-flex text-xs font-semibold rounded-full px-2 py-1 bg-[#ec9324]/10 text-[#ec9324]">{c.role}</span>
                   </td>
+                  {permPsetView.isVisible && (
                   <td className="px-4 py-3">
                     <PermissionSetsHoverList
                       sets={c.permission_sets || []}
                       testId={`row-psets-${c.email}`}
                     />
                   </td>
+                  )}
                   <td className="px-4 py-3">
                     <Switch
                       checked={c.status === "Active"}

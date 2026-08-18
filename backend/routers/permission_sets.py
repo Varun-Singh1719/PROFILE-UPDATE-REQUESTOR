@@ -72,7 +72,7 @@ def _serialize_pset(p: dict) -> dict:
 
 @api_router.get("/permission-sets")
 async def list_permission_sets(
-    user=Depends(require_v3_page_view("manage", "permissions")),
+    user=Depends(get_current_user),
     q: Optional[str] = None,
     created_by: Optional[str] = None,
     created_from: Optional[str] = None,
