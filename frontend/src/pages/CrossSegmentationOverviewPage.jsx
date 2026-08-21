@@ -111,6 +111,58 @@ function buildDummyMappings(leftNames, rightNames) {
   return out;
 }
 
+// ------------------------------------------------------------------
+// Level helpers (shared by the page + the mapping canvas).
+// Level numbering is USER-FACING: Level 1 = the root/name itself,
+// Level 2 = its direct children (the default view), Level 3 = grandchildren.
+// The backend `levels` payload only carries Level 2 downward.
+// ------------------------------------------------------------------
+
+// Available level options for a side, always Level 2 → max_level.
+// Returns [] when the segmentation has no Level-2 nodes at all.
+function levelOptions(levels) {
+  const max = Number(levels?.max_level || 1);
+  if (max < 2) return [];
+  const out = [];
+  for (let l = 2; l <= max; l += 1) out.push(l);
+  return out;
+}
+
+// Node items ({ name, path, l2 }) for the chosen level on a side.
+// Falls back to the flat Level-2 name list when the richer `levels`
+// payload is missing (older backend / safety).
+function levelItems(levels, level, fallbackL2Names) {
+  const byLevel = levels?.nodes || null;
+  if (byLevel) {
+    const arr = byLevel[String(level)] || [];
+    return arr.map((n) => ({ name: n.name, path: n.path || n.name, l2: n.l2 || n.name }));
+  }
+  return (fallbackL2Names || []).map((nm) => ({ name: nm, path: nm, l2: nm }));
+}
+
+// Project the Level-2 mappings down onto whatever levels are displayed:
+// a left item connects to a right item when the left item's Level-2 ancestor
+// is mapped to the right item's Level-2 ancestor. At Level 2 on both sides
+// this reduces to the original name-to-name mapping.
+function computeRibbons(leftItems, rightItems, mappings) {
+  const rb = [];
+  (leftItems || []).forEach((li) => {
+    const targets = (mappings || {})[li.l2] || [];
+    if (!targets.length) return;
+    const tset = new Set(targets);
+    (rightItems || []).forEach((ri) => {
+      if (tset.has(ri.l2)) {
+        rb.push({
+          srcId: `L::${li.path}`, tgtId: `R::${ri.path}`,
+          srcName: li.name, tgtName: ri.name,
+          srcL2: li.l2, tgtL2: ri.l2,
+        });
+      }
+    });
+  });
+  return rb;
+}
+
 // ============================================================
 export default function CrossSegmentationOverviewPage() {
   const meta = useOverviewMeta();
@@ -119,6 +171,9 @@ export default function CrossSegmentationOverviewPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [segContacts, setSegContacts] = useState({ counts: {}, contacts: {} });
+  // Selected display level per side (user-facing; 2 = direct children = default)
+  const [leftLevel, setLeftLevel] = useState(2);
+  const [rightLevel, setRightLevel] = useState(2);
 
   useEffect(() => {
     let alive = true;
@@ -167,23 +222,42 @@ export default function CrossSegmentationOverviewPage() {
     return () => { alive = false; };
   }, [clientName]);
 
-  const leftNames = data?.infollion?.level1 || [];
-  const rightNames = data?.client_level1 || [];
+  const leftNames = data?.infollion?.level1 || [];   // Infollion Level-2 names
+  const rightNames = data?.client_level1 || [];       // client Level-2 names
+
+  const infollionLevels = data?.infollion?.levels || null;
+  const clientLevels = data?.client_levels || null;
+
+  // Level dropdown options for each side (Level 2 → that side's max depth).
+  const leftLevelOpts = useMemo(() => levelOptions(infollionLevels), [infollionLevels]);
+  const rightLevelOpts = useMemo(() => levelOptions(clientLevels), [clientLevels]);
+
+  // Whenever the loaded segmentation changes, reset both sides to the default
+  // Level 2 (the direct-child view).
+  useEffect(() => {
+    setLeftLevel(2);
+    setRightLevel(2);
+  }, [infollionLevels, clientLevels]);
 
   const realMappings = data?.mappings || {};
   const hasReal = Object.keys(realMappings).some((k) => (realMappings[k] || []).length);
   const isDummy = !hasReal && (clientName || "").toLowerCase() === BCG_NAME.toLowerCase();
   const mappings = hasReal ? realMappings : (isDummy ? buildDummyMappings(leftNames, rightNames) : {});
 
-  const totalMappings = useMemo(() => {
-    let n = 0;
-    Object.entries(mappings || {}).forEach(([l, targets]) => {
-      (targets || []).forEach((r) => {
-        if (leftNames.includes(l) && rightNames.includes(r)) n += 1;
-      });
-    });
-    return n;
-  }, [mappings, leftNames, rightNames]);
+  // Node items for the currently-selected level on each side.
+  const leftItems = useMemo(
+    () => levelItems(infollionLevels, leftLevel, leftNames),
+    [infollionLevels, leftLevel, leftNames],
+  );
+  const rightItems = useMemo(
+    () => levelItems(clientLevels, rightLevel, rightNames),
+    [clientLevels, rightLevel, rightNames],
+  );
+
+  const totalMappings = useMemo(
+    () => computeRibbons(leftItems, rightItems, mappings).length,
+    [leftItems, rightItems, mappings],
+  );
 
   return (
     <Layout
@@ -198,19 +272,25 @@ export default function CrossSegmentationOverviewPage() {
         clients={clients}
         clientId={clientId}
         onSelectClient={setClientId}
-        infollionCount={leftNames.length}
-        clientCount={rightNames.length}
+        infollionCount={leftItems.length}
+        clientCount={rightItems.length}
         totalMappings={totalMappings}
         loading={loading}
+        leftLevel={leftLevel}
+        rightLevel={rightLevel}
+        leftLevelOpts={leftLevelOpts}
+        rightLevelOpts={rightLevelOpts}
+        onLeftLevel={setLeftLevel}
+        onRightLevel={setRightLevel}
       />
       <div className="flex-1 min-h-0 relative bg-white" data-testid="crm-overview-page">
         <MappingCanvas
-          key={clientId + ":" + (hasReal ? "real" : "dummy")}
+          key={clientId + ":" + (hasReal ? "real" : "dummy") + ":" + leftLevel + ":" + rightLevel}
           loading={loading}
           baseName={data?.infollion?.name || BASE_NAME}
           clientName={clientName}
-          leftNames={leftNames}
-          rightNames={rightNames}
+          leftItems={leftItems}
+          rightItems={rightItems}
           mappings={mappings}
           segContacts={segContacts}
           infollionExists={data?.infollion?.exists !== false}
@@ -225,7 +305,7 @@ export default function CrossSegmentationOverviewPage() {
 // ============================================================
 function MappingCanvas({
   loading, baseName, clientName,
-  leftNames, rightNames, mappings, segContacts, infollionExists,
+  leftItems, rightItems, mappings, segContacts, infollionExists,
 }) {
   const wrapRef = useRef(null);
   const svgRef = useRef(null);
@@ -238,19 +318,15 @@ function MappingCanvas({
   const [hoverId, setHoverId] = useState(null);
 
   // ----- nodes + ribbons -----
+  // Nodes are keyed by their unique path (names can repeat across parents at
+  // deeper levels). Ribbons are projected from the Level-2 mappings via each
+  // node's Level-2 ancestor (`l2`).
   const { leftNodes, rightNodes, ribbons } = useMemo(() => {
-    const ln = leftNames.map((name, i) => ({ id: `L::${name}`, name, side: "L", i }));
-    const rn = rightNames.map((name, i) => ({ id: `R::${name}`, name, side: "R", i }));
-    const rb = [];
-    Object.entries(mappings || {}).forEach(([lName, targets]) => {
-      (targets || []).forEach((rName) => {
-        if (leftNames.includes(lName) && rightNames.includes(rName)) {
-          rb.push({ srcId: `L::${lName}`, tgtId: `R::${rName}`, srcName: lName, tgtName: rName });
-        }
-      });
-    });
+    const ln = (leftItems || []).map((it, i) => ({ id: `L::${it.path}`, name: it.name, l2: it.l2, side: "L", i }));
+    const rn = (rightItems || []).map((it, i) => ({ id: `R::${it.path}`, name: it.name, l2: it.l2, side: "R", i }));
+    const rb = computeRibbons(leftItems, rightItems, mappings);
     return { leftNodes: ln, rightNodes: rn, ribbons: rb };
-  }, [leftNames, rightNames, mappings]);
+  }, [leftItems, rightItems, mappings]);
 
   // ----- geometry -----
   const geom = useMemo(() => {
@@ -455,7 +531,7 @@ function MappingCanvas({
               const hasLink = ribbons.some((r) => r.tgtId === n.id);
               const isFocus = focusId === n.id;
               const muted = activeId && relatedIds && !relatedIds.has(n.id);
-              const cnt = (segContacts?.counts || {})[n.name];
+              const cnt = (segContacts?.counts || {})[n.l2];
               const hasCnt = cnt != null;
               const nameX = linkedX + 14;
               // rough width estimate so the count pill sits AFTER the name
@@ -546,11 +622,16 @@ function SegmentModal({ node, ribbons, segContacts, onClose }) {
   const bySeg = segContacts?.contacts || {};
 
   const { contacts } = useMemo(() => {
+    // Client contacts are grouped by their Level-2 segment. For a right-side
+    // node we look up by its Level-2 ancestor (`l2`); at Level 2 this is the
+    // node itself. For a left-side node we gather the Level-2 segments its
+    // (projected) ribbons land on.
     if (!isLeft) {
-      return { contacts: bySeg[node.name] || [], linkedSegs: [node.name] };
+      const key = node.l2 || node.name;
+      return { contacts: bySeg[key] || [], linkedSegs: [key] };
     }
     const segs = Array.from(new Set(
-      ribbons.filter((r) => r.srcId === node.id).map((r) => r.tgtName)
+      ribbons.filter((r) => r.srcId === node.id).map((r) => r.tgtL2 || r.tgtName)
     ));
     const seen = new Set();
     const list = [];
@@ -648,9 +729,47 @@ function StatBlock({ label, value }) {
   );
 }
 
+// Small level chooser rendered next to each segmentation chip.
+// `options` is a list of user-facing level numbers (Level 2 → max depth).
+// When only one level exists it renders disabled (nothing else to pick).
+function LevelSelect({ value, options, onChange, accent, testid, ariaLabel }) {
+  const opts = options && options.length ? options : [2];
+  const disabled = opts.length <= 1;
+  return (
+    <div className="relative flex-shrink-0">
+      <select
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        disabled={disabled}
+        aria-label={ariaLabel}
+        data-testid={testid}
+        className={
+          "appearance-none cursor-pointer disabled:cursor-default " +
+          "text-[12px] font-semibold text-gray-700 " +
+          "bg-white border border-gray-200 rounded-full " +
+          "pl-2.5 pr-6 py-1 leading-tight " +
+          "hover:border-gray-300 focus:outline-none focus:ring-2 " +
+          "disabled:bg-gray-50 disabled:text-gray-500"
+        }
+        style={{ boxShadow: `inset 0 0 0 1px ${accent}22` }}
+        title={disabled ? "Only Level 2 exists in this segmentation" : "Choose level"}
+      >
+        {opts.map((l) => (
+          <option key={l} value={l}>{`Level ${l}`}</option>
+        ))}
+      </select>
+      <ChevronDown
+        sx={{ fontSize: 15 }}
+        className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400"
+      />
+    </div>
+  );
+}
+
 function SegmentationLinksBar({
   baseName, clientName, clients, clientId, onSelectClient,
   infollionCount, clientCount, totalMappings, loading,
+  leftLevel, rightLevel, leftLevelOpts, rightLevelOpts, onLeftLevel, onRightLevel,
 }) {
   return (
     <div
@@ -671,20 +790,28 @@ function SegmentationLinksBar({
       {/* divider */}
       <div className="hidden md:block w-px h-9 bg-gray-200 flex-shrink-0" />
 
-      {/* base → client chips */}
-      <div className="flex items-center gap-2 min-w-0 flex-1 sm:flex-initial">
+      {/* base → client chips (each followed by a Level chooser) */}
+      <div className="flex items-center gap-2 min-w-0 flex-1 sm:flex-initial flex-wrap">
         <span className="inline-flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-full bg-gray-50 border border-gray-200 min-w-0">
           <span className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ background: BASE_COLOR }}>
             {initials(baseName)}
           </span>
           <span className="text-[13px] font-semibold text-gray-900 truncate max-w-[100px] sm:max-w-none">{baseName}</span>
         </span>
+        <LevelSelect
+          value={leftLevel}
+          options={leftLevelOpts}
+          onChange={onLeftLevel}
+          accent={BASE_COLOR}
+          testid="crm-overview-left-level"
+          ariaLabel="Infollion Research level"
+        />
         <ChevronDown sx={{ fontSize: 18 }} className="text-gray-300 -rotate-90 flex-shrink-0" />
         <span className="inline-flex items-center gap-2 min-w-0">
           <span className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ background: CLIENT_COLOR }}>
             {initials(clientName)}
           </span>
-          <div className="w-[170px] sm:w-[240px]">
+          <div className="w-[150px] sm:w-[220px]">
             <SearchSelect
               options={(clients || []).map((c) => ({ value: c.id, label: c.name }))}
               value={clientId || ""}
@@ -697,6 +824,14 @@ function SegmentationLinksBar({
             />
           </div>
         </span>
+        <LevelSelect
+          value={rightLevel}
+          options={rightLevelOpts}
+          onChange={onRightLevel}
+          accent={CLIENT_COLOR}
+          testid="crm-overview-right-level"
+          ariaLabel="Client level"
+        />
       </div>
 
       {/* key counts — reflow to their own line on small screens */}

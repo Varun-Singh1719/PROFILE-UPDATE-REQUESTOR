@@ -263,6 +263,61 @@ def _level1_names(seg: Optional[dict]) -> List[str]:
     return uniq
 
 
+def _levels_struct(seg: Optional[dict]) -> dict:
+    """Describe a segmentation tree by USER-FACING level.
+
+    Level numbering matches the rest of the app:
+      • Level 1 = the tree root (the segmentation/client name itself)
+      • Level 2 = the root's direct children
+      • Level 3 = grandchildren, etc.
+
+    Only Level 2+ nodes are returned (the root / Level 1 is intentionally
+    omitted — the Overview only ever visualises Level 2 downward).
+
+    Returns:
+      {
+        "max_level": <int>,          # deepest user-facing level present (>=1)
+        "nodes": {
+          "2": [{ "name", "path", "l2" }, ...],
+          "3": [ ... ],
+          ...
+        }
+      }
+
+    `path`  — unique "A / B / C" trail (stable id; names may repeat across
+              different parents at deeper levels).
+    `l2`    — the node's Level-2 ancestor name. Used by the Overview to
+              PROJECT the Level-2 Infollion→client mappings down to whatever
+              level the user has chosen to display.
+    """
+    if not seg:
+        return {"max_level": 1, "nodes": {}}
+    tree = seg.get("tree") or {}
+    nodes_by_level: dict = {}
+    max_level = 1
+
+    def walk(node: dict, node_level: int, l2_ancestor, path):
+        nonlocal max_level
+        for ch in (node.get("children") or []):
+            nm = (ch or {}).get("name")
+            if not nm or not str(nm).strip():
+                continue
+            nm = str(nm).strip()
+            child_level = node_level + 1
+            cur_l2 = nm if child_level == 2 else l2_ancestor
+            cur_path = (path + " / " + nm) if path else nm
+            max_level = max(max_level, child_level)
+            nodes_by_level.setdefault(str(child_level), []).append({
+                "name": nm,
+                "path": cur_path,
+                "l2": cur_l2,
+            })
+            walk(ch, child_level, cur_l2, cur_path)
+
+    walk(tree, 1, None, "")
+    return {"max_level": max_level, "nodes": nodes_by_level}
+
+
 class SegmentationLinkUpdate(BaseModel):
     # { <infollion_level1_name>: [<client_level1_name>, ...] }
     mappings: dict = Field(default_factory=dict)
@@ -316,8 +371,10 @@ async def get_client_segmentation_link(client_id: str, user=Depends(get_current_
             "exists": bool(infollion),
             "name": INFOLLION_NAME,
             "level1": infollion_l1,
+            "levels": _levels_struct(infollion),
         },
         "client_level1": client_l1,
+        "client_levels": _levels_struct(client_seg),
         "client_has_segmentation": bool(client_seg) and len(client_l1) > 0,
         "mappings": mappings,
     }
