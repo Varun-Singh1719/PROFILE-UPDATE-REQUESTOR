@@ -28,7 +28,7 @@ import requests
 from typing import Optional
 
 # Backend URL from frontend/.env
-BACKEND_URL = "https://segmentation-levels.preview.emergentagent.com"
+BACKEND_URL = "https://contact-format-sync.preview.emergentagent.com"
 API_BASE = f"{BACKEND_URL}/api"
 
 # Test credentials from /app/memory/test_credentials.md

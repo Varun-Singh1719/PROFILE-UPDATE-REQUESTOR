@@ -463,9 +463,20 @@ function ClientCard({ row, onView, onEdit, onDelete }) {
         <span className="text-gray-900">{row.type}</span>
       </div>
 
-      {/* Key Account Manager — chips (matches Team Members chip styling) */}
+      {/* KAM (Key Account Manager) — abbreviated label with hover tooltip
+          (same UI/UX as the top-bar Notification bell tooltip). Chips match
+          the Team Members chip styling. */}
       <div className="mt-2 text-[12px]" data-testid={`client-kam-row-${row.display_id}`}>
-        <span className="text-gray-500 font-medium">Key Account Manager :</span>{" "}
+        <span
+          className="group relative inline-flex items-center align-middle cursor-default text-gray-500 font-medium"
+          data-testid={`client-kam-label-${row.display_id}`}
+        >
+          KAM
+          <span className="pointer-events-none absolute top-full left-0 mt-1.5 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+            Key Account Manager
+          </span>
+        </span>
+        <span className="text-gray-500 font-medium"> :</span>{" "}
         {(row.key_account_managers || []).length > 0 ? (
           <span className="inline-flex flex-wrap gap-1.5 align-middle mt-1">
             {(row.key_account_managers || []).map((m) => (
@@ -485,9 +496,9 @@ function ClientCard({ row, onView, onEdit, onDelete }) {
 
       {/* Metrics row — 3 placeholders, no icons */}
       <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-3 gap-1 text-center">
-        <MetricMini value={row.client_contact_count ?? 0} label="Contacts" />
-        <MetricMini value={row.project_count ?? 0}        label="Projects" />
-        <MetricMini value={row.serviced_count ?? 0}       label="Serviced" />
+        <MetricMini value={fmtMetric(row.client_contact_count)} label="Contacts" />
+        <MetricMini value={fmtMetric(row.project_count)}        label="Projects" />
+        <MetricMini value={fmtMetric(row.serviced_count)}       label="Serviced" />
       </div>
     </div>
   );
@@ -496,10 +507,24 @@ function ClientCard({ row, onView, onEdit, onDelete }) {
 // ============================================================
 // tiny helpers
 // ============================================================
+// Compact metric formatter — mirrors the Client Contacts card so the card
+// numbers use the same "12" / "1,450" / "—" formatting.
+function fmtMetric(v, opts = {}) {
+  if (v === null || v === undefined || v === "" || !Number.isFinite(Number(v))) return "—";
+  const n = Number(v);
+  if (opts.money) {
+    if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+    if (Math.abs(n) >= 1_000)     return `$${(n / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+    return `$${n.toLocaleString()}`;
+  }
+  return n.toLocaleString();
+}
+
 function MetricMini({ value, label }) {
+  // Number colour + format match the Client Contacts card (orange accent).
   return (
     <div className="flex flex-col items-center">
-      <div className="text-base font-bold text-gray-900 leading-none">{value}</div>
+      <div className="text-base font-bold text-[#ec9324] leading-none">{value}</div>
       <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mt-1">
         {label}
       </div>

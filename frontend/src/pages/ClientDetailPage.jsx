@@ -428,25 +428,28 @@ export default function ClientDetailPage() {
                   ) : (
                     <>
                       <div className="text-xl font-bold text-gray-900">{row.name}</div>
-                      <div className="text-[13px] text-gray-700 mt-1">
-                        <span className="text-gray-500 font-medium">Type :</span>{" "}
-                        <span>{row.type}</span>
-                      </div>
-                      <div className="text-[13px] text-gray-700 mt-1.5 flex items-start gap-1.5 flex-wrap" data-testid="client-detail-kam">
-                        <span className="text-gray-500 font-medium mt-0.5">Key Account Manager :</span>{" "}
-                        {(row.key_account_managers || []).length > 0 ? (
-                          (row.key_account_managers || []).map((m) => (
-                            <span
-                              key={m.id}
-                              className="inline-flex items-center h-6 px-2.5 rounded-full border-2 border-[#ec9324] bg-white text-[11px] font-semibold text-[#ec9324]"
-                              title={m.emp_id ? `${m.name} · ${m.emp_id}` : m.name}
-                            >
-                              {m.name}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-gray-400 mt-0.5">—</span>
-                        )}
+                      {/* Type (left) + Key Account Manager (right-aligned, parallel) on one row */}
+                      <div className="mt-1 flex items-start justify-between gap-4 flex-wrap">
+                        <div className="text-[13px] text-gray-700">
+                          <span className="text-gray-500 font-medium">Type :</span>{" "}
+                          <span>{row.type}</span>
+                        </div>
+                        <div className="text-[13px] text-gray-700 flex items-start gap-1.5 flex-wrap justify-end" data-testid="client-detail-kam">
+                          <span className="text-gray-500 font-medium mt-0.5">Key Account Manager :</span>{" "}
+                          {(row.key_account_managers || []).length > 0 ? (
+                            (row.key_account_managers || []).map((m) => (
+                              <span
+                                key={m.id}
+                                className="inline-flex items-center h-6 px-2.5 rounded-full border-2 border-[#ec9324] bg-white text-[11px] font-semibold text-[#ec9324]"
+                                title={m.emp_id ? `${m.name} · ${m.emp_id}` : m.name}
+                              >
+                                {m.name}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-gray-400 mt-0.5">—</span>
+                          )}
+                        </div>
                       </div>
                     </>
                   )}

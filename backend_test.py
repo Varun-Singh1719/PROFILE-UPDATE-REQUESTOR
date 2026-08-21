@@ -10,7 +10,7 @@ import sys
 from typing import Optional, List, Dict, Any
 
 # Backend URL from frontend/.env
-BASE_URL = "https://segmentation-levels.preview.emergentagent.com/api"
+BASE_URL = "https://contact-format-sync.preview.emergentagent.com/api"
 
 # Test credentials
 ADMIN_EMAIL = "admin@ticketing.com"
