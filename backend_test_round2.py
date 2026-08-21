@@ -23,7 +23,7 @@ from typing import Dict, Any, List, Optional
 import sys
 
 # Backend base URL
-BASE_URL = "https://emp-perm-filter.preview.emergentagent.com/api"
+BASE_URL = "https://segmentation-levels.preview.emergentagent.com/api"
 
 # Test credentials (from test_credentials.md)
 SUPER_ADMIN = {"email": "admin@ticketing.com", "password": "Admin@123"}
