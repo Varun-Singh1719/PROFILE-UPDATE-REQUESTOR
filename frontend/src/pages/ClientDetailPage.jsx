@@ -643,19 +643,16 @@ function TotalTillDateChips({ totals = null }) {
   };
   const scheme = "border-[#ec9324]/30 bg-[#ec9324]/5 text-[#ec9324] ring-[#ec9324]/10";
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3" data-testid="client-total-chips">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5" data-testid="client-total-chips">
       {items.map((i) => (
         <div
           key={i.key}
-          className={`rounded-xl border ring-1 ring-inset px-4 py-3 flex items-center justify-between gap-3 shadow-sm ${scheme}`}
+          className={`rounded-xl border ring-1 ring-inset px-3.5 py-2.5 flex items-center justify-between gap-2 shadow-sm ${scheme}`}
           data-testid={`client-total-chip-${i.key}`}
         >
           <div className="min-w-0">
             <div className="text-[10px] uppercase tracking-wider font-semibold opacity-90">
               {i.label}
-            </div>
-            <div className="text-[10px] uppercase tracking-wider opacity-60">
-              Total till date
             </div>
           </div>
           <div className="text-2xl font-bold tabular-nums">
