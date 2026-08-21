@@ -44,6 +44,7 @@ CLIENT_TYPES = [
 class ClientCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=180)
     type: str = Field(..., min_length=1)
+    key_account_manager_ids: List[str] = Field(default_factory=list)
 
     @field_validator("name")
     @classmethod
@@ -65,6 +66,7 @@ class ClientCreate(BaseModel):
 class ClientUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=180)
     type: Optional[str] = None
+    key_account_manager_ids: Optional[List[str]] = None
 
     @field_validator("name")
     @classmethod
@@ -110,7 +112,34 @@ def _with_placeholders(doc: dict) -> dict:
     doc.setdefault("client_contact_count", 0)
     doc.setdefault("project_count", 0)
     doc.setdefault("serviced_count", 0)
+    doc.setdefault("key_account_manager_ids", [])
     return doc
+
+
+async def _attach_kams(docs: List[dict]) -> List[dict]:
+    """Resolve each client's `key_account_manager_ids` into a display-ready
+    `key_account_managers` list of {id, name, emp_id} by batch-looking-up the
+    employee directory (the `contacts` collection). Keeps original id order.
+    """
+    if not docs:
+        return docs
+    ids: set = set()
+    for d in docs:
+        for i in (d.get("key_account_manager_ids") or []):
+            if i:
+                ids.add(i)
+    name_map: dict = {}
+    if ids:
+        async for e in db["contacts"].find(
+            {"id": {"$in": list(ids)}},
+            {"_id": 0, "id": 1, "name": 1, "emp_id": 1},
+        ):
+            name_map[e["id"]] = {"id": e["id"], "name": e.get("name"), "emp_id": e.get("emp_id")}
+    for d in docs:
+        d["key_account_managers"] = [
+            name_map[i] for i in (d.get("key_account_manager_ids") or []) if i in name_map
+        ]
+    return docs
 
 
 async def _next_display_id() -> int:
@@ -155,6 +184,7 @@ async def create_client(payload: ClientCreate, user=Depends(get_current_user)):
         "display_id": await _next_display_id(),
         "name": payload.name,
         "type": payload.type,
+        "key_account_manager_ids": payload.key_account_manager_ids or [],
         "client_contact_count": 0,
         "project_count": 0,
         "serviced_count": 0,
@@ -164,7 +194,9 @@ async def create_client(payload: ClientCreate, user=Depends(get_current_user)):
         "updated_on": now,
     }
     await db[COLL].insert_one(doc)
-    return _with_placeholders(_serialize(doc))
+    out = _with_placeholders(_serialize(doc))
+    await _attach_kams([out])
+    return out
 
 
 @api_router.get("/clients")
@@ -201,6 +233,7 @@ async def list_clients(
     rows: List[dict] = []
     async for d in cursor:
         rows.append(_with_placeholders(_serialize(d)))
+    await _attach_kams(rows)
     return {"rows": rows, "total": total, "page": page, "page_size": page_size}
 
 
@@ -209,7 +242,9 @@ async def get_client(client_id: str, user=Depends(get_current_user)):
     doc = await db[COLL].find_one({"id": client_id})
     if not doc:
         raise HTTPException(404, "Client not found")
-    return _with_placeholders(_serialize(doc))
+    out = _with_placeholders(_serialize(doc))
+    await _attach_kams([out])
+    return out
 
 
 @api_router.get("/clients/{client_id}/segmentation")
@@ -460,15 +495,21 @@ async def update_client(
         updates["name"] = payload.name
     if payload.type is not None:
         updates["type"] = payload.type
+    if payload.key_account_manager_ids is not None:
+        updates["key_account_manager_ids"] = payload.key_account_manager_ids
 
     if not updates:
-        return _with_placeholders(_serialize(existing))
+        out = _with_placeholders(_serialize(existing))
+        await _attach_kams([out])
+        return out
 
     updates["updated_by"] = _actor(user)
     updates["updated_on"] = now_iso()
     await db[COLL].update_one({"id": client_id}, {"$set": updates})
     doc = await db[COLL].find_one({"id": client_id})
-    return _with_placeholders(_serialize(doc))
+    out = _with_placeholders(_serialize(doc))
+    await _attach_kams([out])
+    return out
 
 
 @api_router.delete("/clients/{client_id}")

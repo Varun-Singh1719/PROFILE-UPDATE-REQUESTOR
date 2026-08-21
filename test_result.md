@@ -103,9 +103,227 @@
 #====================================================================================================
 
 user_problem_statement: |
-  User reported: Permission Set 165 ("Workspace Manager - HR Manager") is assigned to Arpita Bansal
-  and has the Workspace Manager → Bookings tab turned ON. But when Arpita logs in, the "Bookings"
-  item does not appear under the "Workspace Manager" group in the sidebar.
+  Two CRM enhancements:
+  (1) CRM > Client: add "Key Account Manager" field — a multi-select employee
+      dropdown that stores selections as chips (same UI/UX as Manage > Team >
+      Add New Team > Team Members). Added to Add / Edit / Card View / Detail View.
+  (2) CRM > Client Contact: add "Type" field — single-select dropdown with 3
+      options (Domain Specific, Domain Agnostic, Central Team). When "Domain
+      Specific" is chosen, Industry becomes a compulsory field. Added to Add /
+      Edit / Card View / Detail View.
+
+backend:
+  - task: "Client Key Account Manager (key_account_manager_ids) + resolved key_account_managers"
+    implemented: true
+    working: true
+    file: "backend/routers/clients.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Added key_account_manager_ids (List[str]) to ClientCreate/ClientUpdate.
+            POST/PATCH persist it; GET list/detail + POST/PATCH responses now include
+            a resolved `key_account_managers` array [{id,name,emp_id}] via _attach_kams
+            (batch lookup against the `contacts` employee directory). Manually verified
+            via curl: create with KAM returns resolved names; patch updates ids.
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ ALL TESTS PASSED (6/6) - Feature completely verified (Aug 21 2026)
+            
+            Comprehensive testing of Client Key Account Manager feature completed successfully.
+            Test credentials: admin@ticketing.com / Admin@123
+            
+            **TEST RESULTS:**
+            
+            1.0 ✅ GET /api/contacts - Retrieved 10 active employees for testing
+            
+            1.1 ✅ POST /api/clients with key_account_manager_ids:
+            - Created client with 2 employee IDs as key account managers
+            - Response includes both key_account_manager_ids (raw IDs) and key_account_managers (resolved objects)
+            - Resolved objects contain {id, name, emp_id} for each KAM
+            - Order of KAMs preserved (matches input order)
+            - All fields validated: ids match input, names present, emp_ids present
+            
+            1.2 ✅ GET /api/clients (list):
+            - List endpoint returns both key_account_manager_ids and key_account_managers fields
+            - Created client found in list with correct KAM data
+            
+            1.3 ✅ GET /api/clients/{id} (detail):
+            - Detail endpoint returns both key_account_manager_ids and key_account_managers fields
+            - All KAM data correctly resolved
+            
+            1.4 ✅ PATCH /api/clients/{id} with changed key_account_manager_ids:
+            - Successfully updated to empty list [] - both fields correctly set to []
+            - Successfully updated to different employee ID - correctly resolved new KAM
+            - Response reflects changes and re-resolves key_account_managers accordingly
+            
+            1.5 ✅ POST /api/clients without key_account_manager_ids:
+            - Creating client without KAM field defaults to []
+            - Both key_account_manager_ids and key_account_managers default to []
+            
+            **KEY FINDINGS:**
+            - All 6 numbered checks from review request PASSED
+            - key_account_manager_ids and key_account_managers always returned together
+            - Resolution maintains order of IDs
+            - Empty/missing KAMs handled correctly (defaults to [])
+            - PATCH updates work correctly (empty list, changed IDs)
+            - Batch lookup via _attach_kams working correctly
+            
+            NO ISSUES FOUND. Feature is complete and working as specified.
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ RE-VERIFICATION PASSED (6/6) - Feature still working correctly (Dec 2024)
+            
+            Re-tested Client Key Account Manager feature as requested. All tests passed.
+            Test credentials: admin@ticketing.com / Admin@123
+            
+            **TEST RESULTS:**
+            
+            1.0 ✅ GET /api/contacts - Retrieved 10 active employees
+            1.1 ✅ POST /api/clients with key_account_manager_ids - Both fields returned, order preserved
+            1.2 ✅ GET /api/clients (list) - Both fields present
+            1.3 ✅ GET /api/clients/{id} (detail) - Both fields present
+            1.4 ✅ PATCH /api/clients/{id} - Empty list and changed IDs work correctly
+            1.5 ✅ POST without key_account_manager_ids - Defaults to []
+            
+            NO ISSUES FOUND. Feature continues to work as specified.
+  - task: "Client Contact Type field + conditional Industry requirement"
+    implemented: true
+    working: true
+    file: "backend/routers/client_contacts.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Added `type` (Optional[str], validated to one of Domain Specific /
+            Domain Agnostic / Central Team, empty->None) to ClientContactBase and
+            ClientContactUpdate. Create + Update routes reject (HTTP 400) when the
+            effective type == "Domain Specific" and no industries selected (update
+            merges patch with stored doc). Manually verified: Domain Specific w/o
+            industry -> 400.
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ ALL TESTS PASSED (9/9) - Feature completely verified (Aug 21 2026)
+            
+            Comprehensive testing of Client Contact Type + conditional Industry requirement completed successfully.
+            Test credentials: admin@ticketing.com / Admin@123
+            
+            **TEST RESULTS:**
+            
+            2.0 ✅ Setup - Using country_id=1 for testing (field stored but not validated)
+            
+            2.1 ✅ POST /api/client-contacts with type="Domain Agnostic":
+            - Successfully created contact with type="Domain Agnostic"
+            - No industries required (as expected)
+            - Type field persisted correctly
+            
+            2.2 ✅ POST /api/client-contacts with type="Domain Specific" and NO industries:
+            - Correctly REJECTED with HTTP 400
+            - Error message mentions "Industry is required when Type is 'Domain Specific'"
+            - Validation working as specified
+            
+            2.3 ✅ POST /api/client-contacts with type="Domain Specific" WITH industries:
+            - Successfully created contact with type="Domain Specific" and industries=["Technology", "Finance"]
+            - Type field persisted correctly
+            - Industries array persisted correctly
+            
+            2.4 ✅ POST /api/client-contacts with invalid type="Foo":
+            - Correctly REJECTED with HTTP 422 (validation error)
+            - Invalid type values properly rejected
+            
+            2.5 ✅ PATCH /api/client-contacts/{id} setting type="Domain Specific" with NO industries stored:
+            - First cleared industries to []
+            - Then attempted to set type="Domain Specific"
+            - Correctly REJECTED with HTTP 400
+            - Error message mentions "Industry is required"
+            - Validation correctly merges patch with stored document
+            
+            2.5b ✅ PATCH /api/client-contacts/{id} setting type="Domain Specific" WITH industries stored:
+            - First set industries=["Healthcare", "Retail"]
+            - Then set type="Domain Specific" (without sending industries in patch)
+            - Successfully ACCEPTED (backend merges patch with stored doc)
+            - Type updated correctly
+            - Industries preserved from stored document
+            
+            2.6 ✅ GET /api/client-contacts (list):
+            - List endpoint returns type field for all contacts
+            - Both created test contacts found in list with correct type values
+            
+            2.7 ✅ GET /api/client-contacts/{id} (detail):
+            - Detail endpoint returns type field
+            - Type value correctly retrieved
+            
+            **KEY FINDINGS:**
+            - All 7 numbered checks from review request PASSED (plus 2 additional validation tests)
+            - Type field accepts ONLY: "Domain Specific", "Domain Agnostic", "Central Team" (or None/empty)
+            - Conditional validation working correctly: type="Domain Specific" requires at least one industry
+            - Validation works in both POST (create) and PATCH (update)
+            - PATCH correctly merges patch with stored document for validation
+            - Invalid type values rejected with 422
+            - GET endpoints (list and detail) return type field
+            
+            NO ISSUES FOUND. Feature is complete and working as specified.
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ RE-VERIFICATION PASSED (9/9) - Feature still working correctly (Dec 2024)
+            
+            Re-tested Client Contact Type + conditional Industry feature as requested. All tests passed.
+            Test credentials: admin@ticketing.com / Admin@123
+            
+            **TEST RESULTS:**
+            
+            2.1 ✅ POST with type="Domain Agnostic" - Success, no industries required
+            2.2 ✅ POST with type="Domain Specific" and NO industries - Correctly rejected with 400
+            2.3 ✅ POST with type="Domain Specific" WITH industries - Success
+            2.4 ✅ POST with invalid type="Foo" - Correctly rejected with 422
+            2.5 ✅ PATCH to type="Domain Specific" with NO industries stored - Correctly rejected with 400
+            2.5b ✅ PATCH to type="Domain Specific" WITH industries stored - Success (backend merges correctly)
+            2.6 ✅ GET list includes type field
+            2.7 ✅ GET detail includes type field
+            
+            NO ISSUES FOUND. Feature continues to work as specified.
+
+frontend:
+  - task: "Client KAM field UI (Add/Edit dialog, Card, Detail) using Team-Members MultiSelectFilter"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/ClientsPage.jsx, frontend/src/pages/ClientDetailPage.jsx, frontend/src/components/ui/MultiSelectFilter.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Add/Edit dialog + Detail edit use MultiSelectFilter (searchInTrigger,
+            chips) fed by GET /contacts active employees. Card + Detail read views
+            render resolved key_account_managers as orange chips. testIdPrefix:
+            client-kam / client-detail-kam.
+  - task: "Client Contact Type field UI (Add/Edit dialog, Card, Detail) + conditional Industry"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/ClientContactsPage.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Added single-select Type (SearchSelect, testId cc-type) to the contact
+            form. Industry label shows * and an inline error when Type=Domain
+            Specific and no industries; firstMissingContactField blocks save. Card
+            shows a Type meta row; Detail shows a Type chip (cc-detail-type).
 
 frontend:
   - task: "Ticket Edit action honours max_editable_status status-lock (UI hide)"

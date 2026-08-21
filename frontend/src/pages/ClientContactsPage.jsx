@@ -79,6 +79,7 @@ const EMPTY_FORM = {
   phone_isd: DEFAULT_ISD,
   client_name: "",
   designation: "",
+  type: "",
   base_location: "",
   city: "",
   country_id: null,
@@ -87,6 +88,14 @@ const EMPTY_FORM = {
   industries: [],
   previous_work_experience: [],
 };
+
+// Client-contact "Type" — single-select, three fixed options. When set to
+// "Domain Specific" the Industry field becomes mandatory (see validation).
+const CONTACT_TYPE_OPTIONS = [
+  { value: "Domain Specific", label: "Domain Specific" },
+  { value: "Domain Agnostic", label: "Domain Agnostic" },
+  { value: "Central Team", label: "Central Team" },
+];
 
 // If a legacy record stores phone as "+91 9999900000" (ISD baked into the
 // phone string), split it into { phone_isd, phone } on the fly so the edit
@@ -124,7 +133,12 @@ const REQUIRED_CC_FIELDS = [
 // Returns the label of the first missing required field, or null when valid.
 function firstMissingContactField(form) {
   const miss = REQUIRED_CC_FIELDS.find(([k]) => !String(form[k] || "").trim());
-  return miss ? miss[1] : null;
+  if (miss) return miss[1];
+  // Conditional: "Domain Specific" contacts must have at least one Industry.
+  if (form.type === "Domain Specific" && !(form.industries || []).length) {
+    return "Industry";
+  }
+  return null;
 }
 
 // -------- helpers --------
@@ -340,6 +354,7 @@ function ClientContactsList() {
       phone_isd,
       client_name: row.client_name || "",
       designation: row.designation || "",
+      type: row.type || "",
       city: (row.city != null || row.country_id != null) ? (row.city || "") : (row.base_location || ""),
       country_id: row.country_id ?? null,
       country_name: row.country_name || (row.country_id != null ? getCountryName(row.country_id) : ""),
@@ -622,6 +637,7 @@ function ContactCard({ row, onView, onEdit, onDelete }) {
       {/* Info meta table */}
       <div className="mt-3 text-[12px] text-gray-700 space-y-1">
         <MetaRow label="Client Name" value={row.client_name} />
+        {row.type && <MetaRow label="Type" value={row.type} />}
         {/* Designation + Location parallel; long designation wraps to a new
             line while Location keeps its place on the right. */}
         <div className="flex items-start gap-2">
@@ -1036,6 +1052,15 @@ function ContactFormDialog({
                 testId="cc-country"
               />
             </Field>
+            <Field label="Type">
+              <SearchSelect
+                options={CONTACT_TYPE_OPTIONS}
+                value={form.type || ""}
+                onChange={(v) => patch("type", v || "")}
+                placeholder="Select type…"
+                testId="cc-type"
+              />
+            </Field>
           </div>
 
           {/* Web handle */}
@@ -1052,10 +1077,12 @@ function ContactFormDialog({
             </div>
           </Field>
 
-          {/* Industry (L2) — same UX as Teams → Team Member */}
+          {/* Industry (L2) — same UX as Teams → Team Member. Becomes a
+              REQUIRED field when Type is "Domain Specific". */}
           <div className="relative">
             <label className="absolute -top-2 left-3 px-1.5 bg-white text-[11px] font-medium text-gray-500 z-10 pointer-events-none">
               Industry (Level 2 of {form.client_name || "chosen client"})
+              {form.type === "Domain Specific" && <span className="text-red-500"> *</span>}
             </label>
             <SearchSelect
               multiple
@@ -1070,6 +1097,11 @@ function ContactFormDialog({
               testId="cc-industries"
               disabled={!form.client_name}
             />
+            {form.type === "Domain Specific" && (form.industries || []).length === 0 && (
+              <div className="mt-1 text-[11px] text-red-500">
+                {'Industry is required for "Domain Specific" contacts.'}
+              </div>
+            )}
           </div>
 
           {/* Previous work experience — repeatable */}
@@ -1249,6 +1281,7 @@ function ClientContactDetail({ contactId }) {
       phone_isd,
       client_name: row.client_name || "",
       designation: row.designation || "",
+      type: row.type || "",
       city: (row.city != null || row.country_id != null) ? (row.city || "") : (row.base_location || ""),
       country_id: row.country_id ?? null,
       country_name: row.country_name || (row.country_id != null ? getCountryName(row.country_id) : ""),
@@ -1328,6 +1361,16 @@ function ClientContactDetail({ contactId }) {
                   <HoverTip label="Client">
                     <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/30 font-medium">
                       {row.client_name}
+                    </span>
+                  </HoverTip>
+                )}
+                {row.type && (
+                  <HoverTip label="Type">
+                    <span
+                      className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200 font-medium"
+                      data-testid="cc-detail-type"
+                    >
+                      {row.type}
                     </span>
                   </HoverTip>
                 )}

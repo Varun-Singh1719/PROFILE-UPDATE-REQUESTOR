@@ -113,6 +113,20 @@ class WorkExperience(BaseModel):
     end_month_year: Optional[str] = Field(None, max_length=20)     # e.g. "Aug 2026" or "Present"
 
 
+CONTACT_TYPES = ["Domain Specific", "Domain Agnostic", "Central Team"]
+
+
+def _clean_contact_type(v):
+    if v is None:
+        return None
+    v = str(v).strip()
+    if v == "":
+        return None
+    if v not in CONTACT_TYPES:
+        raise ValueError(f"Type must be one of {CONTACT_TYPES}")
+    return v
+
+
 class ClientContactBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=160)
     email: Optional[str] = Field(None, max_length=200)
@@ -120,6 +134,7 @@ class ClientContactBase(BaseModel):
     phone_isd: Optional[str] = Field(None, max_length=8)
     client_name: Optional[str] = Field(None, max_length=200)
     designation: Optional[str] = Field(None, max_length=200)
+    type: Optional[str] = Field(None, max_length=40)   # Domain Specific | Domain Agnostic | Central Team
     base_location: Optional[str] = Field(None, max_length=160)
     city: Optional[str] = Field(None, max_length=120)
     country_id: Optional[int] = None            # preserved from Country List (id) for future reference
@@ -144,6 +159,11 @@ class ClientContactBase(BaseModel):
             raise ValueError("Name is required")
         return v
 
+    @field_validator("type")
+    @classmethod
+    def _validate_type(cls, v):
+        return _clean_contact_type(v)
+
 
 class ClientContactCreate(ClientContactBase):
     pass
@@ -156,6 +176,7 @@ class ClientContactUpdate(BaseModel):
     phone_isd: Optional[str] = Field(None, max_length=8)
     client_name: Optional[str] = Field(None, max_length=200)
     designation: Optional[str] = Field(None, max_length=200)
+    type: Optional[str] = Field(None, max_length=40)
     base_location: Optional[str] = Field(None, max_length=160)
     city: Optional[str] = Field(None, max_length=120)
     country_id: Optional[int] = None
@@ -167,6 +188,11 @@ class ClientContactUpdate(BaseModel):
     activity_by_month: Optional[Dict[str, Dict[str, int]]] = None
     last_project_receiving_date: Optional[str] = Field(None, max_length=32)
     last_call_date: Optional[str] = Field(None, max_length=32)
+
+    @field_validator("type")
+    @classmethod
+    def _validate_type(cls, v):
+        return _clean_contact_type(v)
 
 
 # ---------- helpers ----------
@@ -228,6 +254,10 @@ async def create_client_contact(
                     "duplicates": dups,
                 },
             )
+    # Conditional requirement: "Domain Specific" contacts must have at least
+    # one Industry selected.
+    if payload.type == "Domain Specific" and not (payload.industries or []):
+        raise HTTPException(400, "Industry is required when Type is 'Domain Specific'")
     display_id = await _next_display_id()
     doc = {
         "id": str(uuid.uuid4()),
@@ -325,6 +355,13 @@ async def update_client_contact(
             )
     if not updates:
         return _serialize(existing)
+    # Conditional requirement: if the resulting record is "Domain Specific", it
+    # must have at least one Industry. Merge patch with the stored doc so a
+    # partial update (e.g. only changing `type`) is validated correctly.
+    eff_type = updates.get("type", existing.get("type"))
+    eff_industries = updates.get("industries", existing.get("industries")) or []
+    if eff_type == "Domain Specific" and not eff_industries:
+        raise HTTPException(400, "Industry is required when Type is 'Domain Specific'")
     updates["updated_by"] = _actor(user)
     updates["updated_on"] = now_iso()
     await db[COLL].update_one({"id": contact_id}, {"$set": updates})

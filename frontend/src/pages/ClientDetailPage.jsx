@@ -16,6 +16,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import SearchSelect from "../components/SearchSelect";
+import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "../components/ui/dialog";
@@ -97,9 +98,10 @@ export default function ClientDetailPage() {
   const [loading, setLoading] = useState(true);
 
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: "", type: "" });
+  const [form, setForm] = useState({ name: "", type: "", key_account_manager_ids: [] });
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState("");
+  const [employees, setEmployees] = useState([]);   // employee directory for KAM dropdown
 
   const [filter, setFilter] = useState(getLast6MonthsRange);
 
@@ -168,7 +170,11 @@ export default function ClientDetailPage() {
     try {
       const r = await api.get(`/clients/${id}`);
       setRow(r.data);
-      setForm({ name: r.data.name || "", type: r.data.type || "" });
+      setForm({
+        name: r.data.name || "",
+        type: r.data.type || "",
+        key_account_manager_ids: r.data.key_account_manager_ids || [],
+      });
       // segmentation lookup
       try {
         const s = await api.get(`/clients/${id}/segmentation`);
@@ -182,13 +188,39 @@ export default function ClientDetailPage() {
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
 
+  // Employee directory → Key Account Manager options (same source/UX as
+  // Manage → Team → Team Members).
+  useEffect(() => {
+    api.get("/contacts")
+      .then((r) => setEmployees(r.data || []))
+      .catch(() => setEmployees([]));
+  }, []);
+
+  const kamOptions = useMemo(
+    () =>
+      (employees || [])
+        .filter((e) => e.status === "Active")
+        .map((e) => ({
+          value: e.id,
+          label: e.name,
+          meta: e.emp_id || "",
+          searchText: `${e.name} ${e.emp_id || ""}`,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [employees]
+  );
+
   const handleSave = async () => {
     setSaveErr("");
     if (!form.name.trim()) { setSaveErr("Name is required"); return; }
     if (!form.type)         { setSaveErr("Type is required"); return; }
     setSaving(true);
     try {
-      await api.patch(`/clients/${id}`, { name: form.name.trim(), type: form.type });
+      await api.patch(`/clients/${id}`, {
+        name: form.name.trim(),
+        type: form.type,
+        key_account_manager_ids: form.key_account_manager_ids || [],
+      });
       notify.success("Client updated");
       setEditing(false);
       load();
@@ -234,7 +266,7 @@ export default function ClientDetailPage() {
     <div className="flex items-center gap-2">
       <Button
         variant="outline"
-        onClick={() => { setEditing(false); setSaveErr(""); setForm({ name: row?.name || "", type: row?.type || "" }); }}
+        onClick={() => { setEditing(false); setSaveErr(""); setForm({ name: row?.name || "", type: row?.type || "", key_account_manager_ids: row?.key_account_manager_ids || [] }); }}
         disabled={saving}
         className="h-9"
       >
@@ -375,6 +407,23 @@ export default function ClientDetailPage() {
                           />
                         </div>
                       </div>
+                      <div className="md:col-span-2">
+                        <Label className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Key Account Manager</Label>
+                        <div className="mt-1">
+                          <MultiSelectFilter
+                            label="Key Account Manager"
+                            options={kamOptions}
+                            value={form.key_account_manager_ids || []}
+                            onChange={(v) => setForm(f => ({ ...f, key_account_manager_ids: v }))}
+                            placeholder="Select key account manager(s)…"
+                            testIdPrefix="client-detail-kam"
+                            hideLabelPrefix
+                            fullWidth
+                            searchInTrigger
+                            countUnitLabel="manager(s) selected"
+                          />
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     <>
@@ -382,6 +431,22 @@ export default function ClientDetailPage() {
                       <div className="text-[13px] text-gray-700 mt-1">
                         <span className="text-gray-500 font-medium">Type :</span>{" "}
                         <span>{row.type}</span>
+                      </div>
+                      <div className="text-[13px] text-gray-700 mt-1.5 flex items-start gap-1.5 flex-wrap" data-testid="client-detail-kam">
+                        <span className="text-gray-500 font-medium mt-0.5">Key Account Manager :</span>{" "}
+                        {(row.key_account_managers || []).length > 0 ? (
+                          (row.key_account_managers || []).map((m) => (
+                            <span
+                              key={m.id}
+                              className="inline-flex items-center h-6 px-2.5 rounded-full border-2 border-[#ec9324] bg-white text-[11px] font-semibold text-[#ec9324]"
+                              title={m.emp_id ? `${m.name} · ${m.emp_id}` : m.name}
+                            >
+                              {m.name}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-gray-400 mt-0.5">—</span>
+                        )}
                       </div>
                     </>
                   )}

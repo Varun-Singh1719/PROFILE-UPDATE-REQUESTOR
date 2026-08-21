@@ -33,6 +33,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { FloatingField } from "../components/FloatingField";
 import SearchSelect from "../components/SearchSelect";
+import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import Plus from "@mui/icons-material/AddOutlined";
 import Search from "@mui/icons-material/SearchOutlined";
 import Pencil from "@mui/icons-material/EditOutlined";
@@ -58,7 +59,7 @@ const TYPE_ACCENTS = {
   "Corporations and Companies":     { bg: "bg-violet-50",  text: "text-violet-700",  border: "border-violet-200" },
 };
 
-const EMPTY_FORM = { name: "", type: "" };
+const EMPTY_FORM = { name: "", type: "", key_account_manager_ids: [] };
 
 // ============================================================
 export default function ClientsPage() {
@@ -77,6 +78,29 @@ export default function ClientsPage() {
   const [form, setForm]             = useState(EMPTY_FORM);
   const [saving, setSaving]         = useState(false);
   const [formErr, setFormErr]       = useState("");
+  const [employees, setEmployees]   = useState([]);   // employee directory for KAM dropdown
+
+  // Employee directory → Key Account Manager options (same source/UX as
+  // Manage → Team → Team Members). Active employees only, sorted by name.
+  useEffect(() => {
+    api.get("/contacts")
+      .then((r) => setEmployees(r.data || []))
+      .catch(() => setEmployees([]));
+  }, []);
+
+  const kamOptions = useMemo(
+    () =>
+      (employees || [])
+        .filter((e) => e.status === "Active")
+        .map((e) => ({
+          value: e.id,
+          label: e.name,
+          meta: e.emp_id || "",
+          searchText: `${e.name} ${e.emp_id || ""}`,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [employees]
+  );
 
   // ---- Fetch list ----
   const load = async () => {
@@ -111,7 +135,11 @@ export default function ClientsPage() {
   };
   const openEdit = (row) => {
     setEditing(row);
-    setForm({ name: row.name || "", type: row.type || "" });
+    setForm({
+      name: row.name || "",
+      type: row.type || "",
+      key_account_manager_ids: row.key_account_manager_ids || [],
+    });
     setFormErr("");
     setDialogOpen(true);
   };
@@ -131,12 +159,14 @@ export default function ClientsPage() {
         await api.patch(`/clients/${editing.id}`, {
           name: form.name.trim(),
           type: form.type,
+          key_account_manager_ids: form.key_account_manager_ids || [],
         });
         notify.success("Client updated");
       } else {
         await api.post("/clients", {
           name: form.name.trim(),
           type: form.type,
+          key_account_manager_ids: form.key_account_manager_ids || [],
         });
         notify.success("Client created");
       }
@@ -314,6 +344,26 @@ export default function ClientsPage() {
                 />
               </FloatingField>
 
+              {/* Key Account Manager — multi-select employee picker with chips.
+                  Same UX as Manage → Team → Add New Team → Team Members. */}
+              <div className="relative">
+                <label className="absolute -top-2 left-3 px-1.5 bg-white text-[11px] font-medium text-gray-500 z-10 pointer-events-none">
+                  Key Account Manager
+                </label>
+                <MultiSelectFilter
+                  label="Key Account Manager"
+                  options={kamOptions}
+                  value={form.key_account_manager_ids || []}
+                  onChange={(v) => setForm((f) => ({ ...f, key_account_manager_ids: v }))}
+                  placeholder="Select key account manager(s)…"
+                  testIdPrefix="client-kam"
+                  hideLabelPrefix
+                  fullWidth
+                  searchInTrigger
+                  countUnitLabel="manager(s) selected"
+                />
+              </div>
+
               {editing && (
                 <div className="text-[11px] text-gray-500 border border-gray-100 rounded-md px-3 py-2 bg-gray-50">
                   <div>
@@ -411,6 +461,26 @@ function ClientCard({ row, onView, onEdit, onDelete }) {
       <div className="mt-3 text-[12px] text-gray-700">
         <span className="text-gray-500 font-medium">Type :</span>{" "}
         <span className="text-gray-900">{row.type}</span>
+      </div>
+
+      {/* Key Account Manager — chips (matches Team Members chip styling) */}
+      <div className="mt-2 text-[12px]" data-testid={`client-kam-row-${row.display_id}`}>
+        <span className="text-gray-500 font-medium">Key Account Manager :</span>{" "}
+        {(row.key_account_managers || []).length > 0 ? (
+          <span className="inline-flex flex-wrap gap-1.5 align-middle mt-1">
+            {(row.key_account_managers || []).map((m) => (
+              <span
+                key={m.id}
+                className="inline-flex items-center h-6 px-2.5 rounded-full border-2 border-[#ec9324] bg-white text-[11px] font-semibold text-[#ec9324]"
+                title={m.emp_id ? `${m.name} · ${m.emp_id}` : m.name}
+              >
+                {m.name}
+              </span>
+            ))}
+          </span>
+        ) : (
+          <span className="text-gray-400">—</span>
+        )}
       </div>
 
       {/* Metrics row — 3 placeholders, no icons */}
