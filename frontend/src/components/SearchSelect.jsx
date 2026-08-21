@@ -43,6 +43,7 @@ export default function SearchSelect({
   disabled = false,
   loading = false,
   className = "",
+  textClass = "text-sm",
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -184,7 +185,7 @@ export default function SearchSelect({
           ))}
           <div className="relative flex-1 min-w-[60px] flex items-center">
             {!multiple && singleLabel && query === "" && (
-              <span className="pointer-events-none absolute inset-0 flex items-center truncate text-sm text-gray-900">
+              <span className={"pointer-events-none absolute inset-0 flex items-center truncate text-gray-900 " + textClass}>
                 {singleLabel}
               </span>
             )}
@@ -220,7 +221,7 @@ export default function SearchSelect({
                 }
               }}
               placeholder={(multiple ? selectedOpts.length === 0 : !singleLabel) ? placeholder : ""}
-              className="w-full bg-transparent outline-none text-sm text-gray-900 placeholder-gray-400 py-0.5"
+              className={"w-full bg-transparent outline-none text-gray-900 placeholder-gray-400 py-0.5 " + textClass}
               data-testid={testId ? `${testId}-input` : undefined}
             />
           </div>

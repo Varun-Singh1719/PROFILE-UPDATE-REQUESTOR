@@ -811,7 +811,10 @@ function SegmentationLinksBar({
           <span className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ background: CLIENT_COLOR }}>
             {initials(clientName)}
           </span>
-          <div className="w-[150px] sm:w-[220px]">
+          <div
+            className="flex-shrink-0"
+            style={{ width: Math.min(360, Math.max(180, (clientName || "").length * 8 + 72)) }}
+          >
             <SearchSelect
               options={(clients || []).map((c) => ({ value: c.id, label: c.name }))}
               value={clientId || ""}
@@ -820,6 +823,7 @@ function SegmentationLinksBar({
               size="sm"
               allowClear={false}
               loading={loading && (clients || []).length === 0}
+              textClass="text-[13px] font-semibold"
               testId="crm-overview-client-select"
             />
           </div>

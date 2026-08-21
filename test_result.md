@@ -13254,3 +13254,172 @@ agent_communication:
         3) Regression: GET /api/permissions/schema/v3 still returns all other modules/pages without error (200).
         Do NOT modify or delete any permission sets. Read-only verification only.
 
+
+user_problem_statement: |
+  CRM → Overview (Cross Segmentation) page UI fix verification (Aug 21 2026):
+  Two visual bugs were reported and fixed on the summary bar at /crm/overview:
+  1. Font parity: "Infollion Research" and the selected client name (e.g., "Boston Consulting Group") 
+     were rendered in different font weights/sizes. They should now MATCH: both 13px, semibold, dark gray.
+  2. Client name truncation: "Boston Consulting Group" was being cut off/truncated inside its box. 
+     The client selector box width now auto-adjusts to the client name, so the full name should be 
+     visible with no ellipsis.
+
+frontend:
+  - task: "CRM Overview - Font parity and client name truncation fix"
+    implemented: true
+    working: true
+    file: "frontend/src/pages/CrossSegmentationOverviewPage.jsx, frontend/src/components/SearchSelect.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            BUG REPORT: On /crm/overview summary bar, two visual issues:
+            1. "Infollion Research" label and client name "Boston Consulting Group" had different 
+               font weight/size (should match: 13px, semibold, dark gray).
+            2. Client name was truncated/cut off at the end inside its box.
+            
+            FIX APPLIED:
+            1. CrossSegmentationOverviewPage.jsx line 799: "Infollion Research" uses text-[13px] font-semibold text-gray-900
+            2. CrossSegmentationOverviewPage.jsx line 826: SearchSelect textClass prop set to "text-[13px] font-semibold"
+            3. CrossSegmentationOverviewPage.jsx line 816: Client selector box width now auto-adjusts:
+               width: Math.min(360, Math.max(180, (clientName || "").length * 8 + 72))
+            4. SearchSelect.jsx line 188: Selected label text uses the textClass prop for consistent styling
+            
+            Both labels now use identical font styling, and the client box grows/shrinks to fit the name.
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ ALL TESTS PASSED (7/7) - UI Fix Completely Verified (Aug 21 2026)
+            
+            Comprehensive testing of CRM Overview page UI fixes completed.
+            Test credentials: admin@ticketing.com / Admin@123
+            App URL: https://segmentation-levels.preview.emergentagent.com/crm/overview
+            
+            **TEST RESULTS:**
+            
+            ✅ TEST (a): Font Parity - PASS
+            - Infollion Research: 13px, font-weight 600 (semibold)
+            - Boston Consulting Group: 13px, font-weight 600 (semibold)
+            - Both use identical font size and weight
+            - Visual verification: Both labels appear in the same font family, size, and weight
+            
+            ✅ TEST (b): No Truncation - PASS
+            - Client name: "Boston Consulting Group" (23 characters)
+            - Scroll width: 206px, Client width: 206px
+            - Overflow: False, Ellipsis: False
+            - Full name is visible with no truncation or cut-off
+            
+            ✅ TEST (b): Auto-Adjust Width - PASS
+            - SHORT name test: "EY" (2 chars)
+              * Parent width: 180px
+              * No overflow, fully visible
+            - LONG name test: "Boston Consulting Group" (23 chars)
+              * Parent width: 256px
+              * No overflow, fully visible
+            - Width comparison: short=180px, long=256px, difference=76px
+            - Box width correctly auto-adjusts based on client name length
+            - Both short and long names are fully visible without truncation
+            
+            ✅ TEST (c): Regression - Level Dropdowns - PASS
+            - Infollion level dropdown: defaults to Level 2 ✓
+            - Client level dropdown: defaults to Level 2 ✓
+            - Both dropdowns functional and working correctly
+            
+            ✅ TEST (c): Regression - Visualization - PASS
+            - SVG visualization (data-testid="crm-overview-svg"): visible ✓
+            - Ribbon count: 32 ribbons rendered
+            - Visualization renders correctly with no regressions
+            
+            **KEY FINDINGS:**
+            
+            1. FONT PARITY FIXED: Both "Infollion Research" and client name now use identical styling:
+               - Font size: 13px (computed)
+               - Font weight: 600 (semibold)
+               - Color: rgb(17, 24, 39) (dark gray)
+               - Font family: Same (Inter, system-ui, sans-serif)
+            
+            2. TRUNCATION FIXED: Client name "Boston Consulting Group" is fully visible:
+               - No text overflow (scrollWidth === clientWidth)
+               - No ellipsis character present
+               - Full 23-character name displays without cut-off
+            
+            3. AUTO-ADJUST WIDTH WORKING: Client selector box dynamically adjusts:
+               - Short name "EY": 180px width (minimum threshold)
+               - Long name "Boston Consulting Group": 256px width
+               - Width calculation: Math.min(360, Math.max(180, nameLength * 8 + 72))
+               - Both names fully visible, no truncation at any width
+            
+            4. NO REGRESSIONS: All existing functionality preserved:
+               - Level dropdowns work correctly (both default to Level 2)
+               - SVG ribbon visualization renders (32 ribbons visible)
+               - Client selector dropdown opens and allows selection
+               - Page loads and navigates correctly
+            
+            **IMPLEMENTATION VERIFIED:**
+            - CrossSegmentationOverviewPage.jsx line 799: Infollion text uses text-[13px] font-semibold text-gray-900
+            - CrossSegmentationOverviewPage.jsx line 826: SearchSelect textClass="text-[13px] font-semibold"
+            - CrossSegmentationOverviewPage.jsx line 816: Dynamic width calculation working correctly
+            - SearchSelect.jsx line 188: Selected label applies textClass prop correctly
+            
+            **SCREENSHOTS:**
+            - overview-loaded.png: Initial page load with summary bar visible
+            - client-selector-closeup.png: Close-up of client selector showing full name
+            - short-name.png: "EY" selected (180px width)
+            - long-name.png: "Boston Consulting Group" selected (256px width)
+            - final-state.png: Final state with visualization rendered
+            
+            NO ISSUES FOUND. Both UI bugs are completely fixed and working as specified.
+
+backend: []
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: true
+
+test_plan:
+  current_focus:
+    - "CRM Overview - Font parity and client name truncation fix"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    - agent: "main"
+      message: |
+        Fixed two visual bugs on CRM → Overview (/crm/overview) summary bar:
+        1. Font parity: "Infollion Research" and client name now both use text-[13px] font-semibold text-gray-900
+        2. Client name truncation: Client selector box width now auto-adjusts based on name length
+        
+        Please verify:
+        - Login as admin@ticketing.com / Admin@123
+        - Navigate to /crm/overview
+        - Check that "Infollion Research" and "Boston Consulting Group" have matching font size/weight
+        - Check that "Boston Consulting Group" is fully visible (no truncation/ellipsis)
+        - Test with different client names (short like "EY", long like "Boston Consulting Group")
+        - Verify box width adjusts and names are never truncated
+        - Regression: Level dropdowns and visualization still work
+    - agent: "testing"
+      message: |
+        ✅ ALL TESTS PASSED (7/7) - UI Fix Completely Verified (Aug 21 2026)
+        
+        Comprehensive verification completed. Both UI bugs are fixed:
+        
+        (a) Font parity: ✅ PASS
+        - Both "Infollion Research" and "Boston Consulting Group" use 13px, font-weight 600 (semibold)
+        
+        (b) No truncation + Auto-adjust width: ✅ PASS
+        - "Boston Consulting Group" fully visible (no overflow, no ellipsis)
+        - Box width auto-adjusts: short name "EY" = 180px, long name "BCG" = 256px
+        - Both names fully visible at all widths
+        
+        (c) Regression: ✅ PASS
+        - Level dropdowns work (both default to Level 2)
+        - SVG visualization renders (32 ribbons visible)
+        
+        Screenshots attached. No issues found. Fix is production-ready.
+
