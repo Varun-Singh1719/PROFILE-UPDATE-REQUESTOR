@@ -576,7 +576,7 @@ function ClientContactsList() {
 }
 
 // ================================================================ Card
-function ContactCard({ row, onView, onEdit, onDelete }) {
+function ContactCard({ row, onView }) {
   const initials = (row.name || "?").trim().split(/\s+/)
     .map((s) => s[0]).join("").slice(0, 2).toUpperCase();
   const fullPhone = (() => {
@@ -637,7 +637,7 @@ function ContactCard({ row, onView, onEdit, onDelete }) {
       {/* Info meta table */}
       <div className="mt-3 text-[12px] text-gray-700 space-y-1">
         <MetaRow label="Client Name" value={row.client_name} />
-        {row.type && <MetaRow label="Type" value={row.type} />}
+        <MetaRow label="Type" value={row.type || "—"} />
         {/* Designation + Location parallel; long designation wraps to a new
             line while Location keeps its place on the right. */}
         <div className="flex items-start gap-2">
@@ -659,22 +659,6 @@ function ContactCard({ row, onView, onEdit, onDelete }) {
         <MetricMini value={fmtMetric(row.totals_till_date?.serviced)}                  label="Serviced" />
         <MetricMini value={fmtMetric(row.totals_till_date?.calls)}                     label="Calls" />
         <MetricMini value={fmtMetric(row.totals_till_date?.revenue, { money: true })}  label="Revenue" />
-      </div>
-
-      {/* Bottom action bar — Edit + Delete at the right corner (View removed) */}
-      <div className="mt-2 pt-2 border-t border-gray-100 flex items-center">
-        <div className="flex-1" />
-        <ActionIcon label="Edit" onClick={onEdit} testId={`client-contact-edit-${row.display_id}`}>
-          <Pencil sx={{ fontSize: 16 }} />
-        </ActionIcon>
-        <ActionIcon
-          label="Delete"
-          tone="danger"
-          onClick={onDelete}
-          testId={`client-contact-delete-${row.display_id}`}
-        >
-          <Trash sx={{ fontSize: 16 }} />
-        </ActionIcon>
       </div>
     </div>
   );
