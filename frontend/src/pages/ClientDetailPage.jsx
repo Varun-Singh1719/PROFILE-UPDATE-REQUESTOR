@@ -12,6 +12,7 @@ import api, { formatApiError } from "../lib/api";
 import notify from "../lib/notify";
 import { confirm as confirmDialog } from "../lib/dialog";
 import LinkSegmentationTab from "../components/LinkSegmentationTab";
+import ClientWorkexContacts from "../components/ClientWorkexContacts";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -310,6 +311,7 @@ export default function ClientDetailPage() {
             <div className="flex items-center gap-1" role="tablist">
               {[
                 { key: "overview", label: "Overview" },
+                { key: "contacts", label: "Client Contacts" },
                 { key: "link", label: "Link Segmentation" },
               ].map((t) => {
                 const active = activeTab === t.key;
@@ -374,6 +376,8 @@ export default function ClientDetailPage() {
             onSavingChange={onLinkSavingChange}
             onAddSegmentation={goSegmentationAdd}
           />
+        ) : activeTab === "contacts" ? (
+          <ClientWorkexContacts clientId={id} clientName={row.name} />
         ) : (
           <div className="grid grid-cols-1 gap-4">
             {/* ============ OVERVIEW CARD ============ */}

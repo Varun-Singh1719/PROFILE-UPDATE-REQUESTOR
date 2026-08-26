@@ -247,6 +247,76 @@ async def get_client(client_id: str, user=Depends(get_current_user)):
     return out
 
 
+# ---------- Client Contacts by work-experience (Current vs Ex) ----------
+_CC_FIELDS = [
+    "id", "display_id", "name", "email", "phone", "phone_isd", "client_name",
+    "designation", "type", "base_location", "city", "country_name",
+    "totals_till_date", "linkedin_url",
+]
+
+
+def _contact_public(doc: dict, client_name: str, ex: bool = False) -> dict:
+    """Trim a client_contact doc for the client-detail contacts tab. For the
+    `ex` case, also attach the matching previous_work_experience entry so the
+    UI can show the role/tenure this person held at *this* client."""
+    if not doc:
+        return doc
+    out = {k: doc.get(k) for k in _CC_FIELDS}
+    if ex:
+        target = (client_name or "").strip().lower()
+        match = None
+        for w in (doc.get("previous_work_experience") or []):
+            if (w.get("company_name") or "").strip().lower() == target:
+                match = w
+                break
+        out["ex_experience"] = match          # {company_name, designation, start_month_year, end_month_year}
+        out["current_client"] = doc.get("client_name")   # where they work now
+    return out
+
+
+@api_router.get("/clients/{client_id}/contacts")
+async def get_client_contacts_by_workex(client_id: str, user=Depends(get_current_user)):
+    """Client contacts that have this client mapped in their work experience.
+
+    Response:
+      {
+        client_id, client_name,
+        current: [...],   # currently working at this client (client_name matches)
+        ex:      [...],   # worked here previously (in previous_work_experience)
+        current_count, ex_count
+      }
+    """
+    client = await db[COLL].find_one({"id": client_id})
+    if not client:
+        raise HTTPException(404, "Client not found")
+    name = (client.get("name") or "").strip()
+    if not name:
+        return {"client_id": client_id, "client_name": name,
+                "current": [], "ex": [], "current_count": 0, "ex_count": 0}
+
+    exact_ci = {"$regex": f"^{_esc(name)}$", "$options": "i"}
+    cc = db["client_contacts"]
+
+    current, ex = [], []
+    async for d in cc.find({"client_name": exact_ci}).sort("name", 1):
+        current.append(_contact_public(d, name))
+    # Worked here before but not currently (avoids double-listing rejoiners).
+    async for d in cc.find({
+        "previous_work_experience.company_name": exact_ci,
+        "client_name": {"$not": exact_ci},
+    }).sort("name", 1):
+        ex.append(_contact_public(d, name, ex=True))
+
+    return {
+        "client_id": client_id,
+        "client_name": name,
+        "current": current,
+        "ex": ex,
+        "current_count": len(current),
+        "ex_count": len(ex),
+    }
+
+
 @api_router.get("/clients/{client_id}/segmentation")
 async def get_client_segmentation(client_id: str, user=Depends(get_current_user)):
     """Return the segmentation whose name matches this client's name.
