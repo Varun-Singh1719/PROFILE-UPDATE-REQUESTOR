@@ -211,6 +211,49 @@ def _serialize(doc: dict) -> dict:
     return {k: v for k, v in doc.items() if k != "_id"}
 
 
+def _mysql_contact_to_row(r: dict) -> dict:
+    """Map an external MySQL client_contacts row (joined with clients) into the
+    response shape the frontend already expects. Fields not present in MySQL
+    are returned blank/empty (read-only external source)."""
+    if not r:
+        return r
+    return {
+        "id": str(r.get("id")),
+        "display_id": r.get("id"),
+        "name": r.get("name") or "",
+        "email": r.get("email") or "",
+        "phone": r.get("mobile") or "",
+        "phone_isd": "",
+        "client_name": r.get("client_name") or "",
+        "designation": r.get("designation") or "",
+        "type": "",
+        "base_location": "",
+        "city": "",
+        "country_id": None,
+        "country_name": "",
+        "industries": [],
+        "previous_work_experience": [],
+        "linkedin_url": "",
+        "totals_till_date": {},
+        "activity_by_month": {},
+        "last_project_receiving_date": None,
+        "last_call_date": None,
+        "status": "Active",
+        "salutation": r.get("salutation") or "",
+        "is_compliance_officer": bool(r.get("is_compliance_officer")),
+        "created_on": r.get("created_at"),
+        "updated_on": r.get("updated_at"),
+        "created_by": None,
+    }
+
+
+_CC_SELECT = (
+    "cc.id, cc.salutation, cc.name, cc.email, cc.mobile, cc.designation, "
+    "cc.fkClient, cc.is_compliance_officer, cc.created_at, cc.updated_at, "
+    "c.name AS client_name"
+)
+
+
 async def _next_display_id() -> int:
     """Return the next 1-based auto-incrementing numeric display id.
 
@@ -293,39 +336,50 @@ async def list_client_contacts(
     page_size: int = Query(50, ge=1, le=200),
     user=Depends(get_current_user),
 ):
-    query: dict = {}
+    # Read live from the external MySQL CRM database (read-only).
+    from mysql_db import mysql_query, mysql_query_one
+    where: list = []
+    params: list = []
     if client_name:
-        query["client_name"] = client_name
-    if search:
-        import re
-        rx = re.compile(re.escape(search.strip()), re.IGNORECASE)
-        query["$or"] = [
-            {"name": rx},
-            {"email": rx},
-            {"phone": rx},
-            {"client_name": rx},
-            {"designation": rx},
-            {"base_location": rx},
-        ]
-    total = await db[COLL].count_documents(query)
-    skip = (page - 1) * page_size
-    cursor = db[COLL].find(query).sort("created_on", -1).skip(skip).limit(page_size)
-    rows = [_serialize(d) async for d in cursor]
-    # POC Status: central engine annotates every row inline
-    from routers.poc_status import annotate_status as _poc_annotate
-    await _poc_annotate(rows)
+        where.append("c.name = %s")
+        params.append(client_name)
+    if search and search.strip():
+        s = f"%{search.strip()}%"
+        where.append(
+            "(cc.name LIKE %s OR cc.email LIKE %s OR cc.mobile LIKE %s "
+            "OR cc.designation LIKE %s OR c.name LIKE %s)"
+        )
+        params.extend([s, s, s, s, s])
+    where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+
+    cnt = await mysql_query_one(
+        f"SELECT COUNT(*) AS c FROM client_contacts cc "
+        f"LEFT JOIN clients c ON c.id = cc.fkClient {where_sql}",
+        params,
+    )
+    total = int((cnt or {}).get("c") or 0)
+    offset = (page - 1) * page_size
+    data = await mysql_query(
+        f"SELECT {_CC_SELECT} FROM client_contacts cc "
+        f"LEFT JOIN clients c ON c.id = cc.fkClient {where_sql} "
+        f"ORDER BY cc.id DESC LIMIT %s OFFSET %s",
+        params + [page_size, offset],
+    )
+    rows = [_mysql_contact_to_row(r) for r in data]
     return {"rows": rows, "total": total, "page": page, "page_size": page_size}
 
 
 @api_router.get("/client-contacts/{contact_id}")
 async def get_client_contact(contact_id: str, user=Depends(get_current_user)):
-    doc = await db[COLL].find_one({"id": contact_id})
-    if not doc:
+    from mysql_db import mysql_query_one
+    r = await mysql_query_one(
+        f"SELECT {_CC_SELECT} FROM client_contacts cc "
+        f"LEFT JOIN clients c ON c.id = cc.fkClient WHERE cc.id = %s",
+        [contact_id],
+    )
+    if not r:
         raise HTTPException(404, "Client contact not found")
-    row = _serialize(doc)
-    from routers.poc_status import annotate_status as _poc_annotate
-    await _poc_annotate([row])
-    return row
+    return _mysql_contact_to_row(r)
 
 
 @api_router.patch("/client-contacts/{contact_id}")

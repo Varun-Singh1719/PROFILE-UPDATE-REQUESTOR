@@ -262,8 +262,10 @@ export default function ClientDetailPage() {
     return leaves;
   }, [seg]);
 
-  // Top-bar action = Edit / Save / Cancel
-  const topBarActions = editing ? (
+  // Top-bar action = Edit / Save / Cancel.
+  // External MySQL CRM source is read-only — hide all edit actions.
+  const READ_ONLY = true;
+  const topBarActions = READ_ONLY ? null : editing ? (
     <div className="flex items-center gap-2">
       <Button
         variant="outline"
@@ -978,19 +980,6 @@ function POCStatusConfigBar({ clientId }) {
           <div className="text-base font-semibold text-gray-900" data-testid="poc-config-value">
             {loading ? "…" : `${valueDuration} ${valueUnitLabel}`}
           </div>
-          <button
-            type="button"
-            onClick={openEditor}
-            disabled={loading}
-            aria-label="Edit"
-            className="group relative inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-100 text-gray-600 disabled:opacity-50"
-            data-testid="poc-config-edit"
-          >
-            <Pencil sx={{ fontSize: 20 }} />
-            <span className="pointer-events-none absolute top-full mt-1.5 right-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
-              Edit
-            </span>
-          </button>
         </div>
       </div>
 
