@@ -63,6 +63,9 @@ import Loader2 from "@mui/icons-material/Autorenew";
 import CheckCircle2 from "@mui/icons-material/CheckCircleOutlineOutlined";
 import AlertTriangle from "@mui/icons-material/WarningAmberOutlined";
 import AlertOctagon from "@mui/icons-material/ReportGmailerrorredOutlined";
+import WorkOutline from "@mui/icons-material/WorkOutlineOutlined";
+import Payments from "@mui/icons-material/PaymentsOutlined";
+import InfoOutlined from "@mui/icons-material/InfoOutlined";
 import POCStatusChip from "../components/POCStatusChip";
 
 // -------- constants --------
@@ -152,6 +155,42 @@ function fmtDate(iso) {
     return iso;
   }
 }
+
+// ---- Month-Year parsing helpers (format emitted by MonthYearPicker: "MMM YYYY" | "Present" | "") ----
+const MONTH_ABBR = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+// Returns a Date (1st of the month) for a "MMM YYYY" string, or null.
+// "Present" / empty => null (caller treats as "now").
+function parseMonthYear(str) {
+  if (!str) return null;
+  const s = String(str).trim();
+  if (s.toLowerCase() === "present") return null;
+  const parts = s.split(/\s+/);
+  if (parts.length !== 2) return null;
+  const mi = MONTH_ABBR.indexOf(parts[0].toLowerCase().slice(0, 3));
+  const yr = /^\d{4}$/.test(parts[1]) ? Number(parts[1]) : NaN;
+  if (mi < 0 || Number.isNaN(yr)) return null;
+  return new Date(yr, mi, 1);
+}
+
+// Whole-month count between two dates (end exclusive-ish, min 1 when same month).
+function monthsBetween(start, end) {
+  if (!start || !end) return 0;
+  let m = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+  return m < 0 ? 0 : m;
+}
+
+// "3 yrs 9 mos" | "1 mo" | "1 month+" style duration label.
+function fmtDuration(months, plus = false) {
+  if (!months || months < 1) return plus ? "1 month+" : "—";
+  const y = Math.floor(months / 12);
+  const mo = months % 12;
+  const bits = [];
+  if (y) bits.push(`${y} yr${y > 1 ? "s" : ""}`);
+  if (mo) bits.push(`${mo} mo${mo > 1 ? "s" : ""}`);
+  return (bits.join(" ") || "—") + (plus ? "+" : "");
+}
+
 
 // Compact metric formatter for the card mini-tiles.
 //   fmtMetric(12)                -> "12"
@@ -1229,6 +1268,9 @@ function ClientContactDetail({ contactId }) {
   // Activity summary DateFilter (default = last 6 months, Between mode)
   const [activityFilter, setActivityFilter] = useState(getLast12MonthsRange());
 
+  // Detail-view tabs. Only "overview" has content; the rest are blank pages.
+  const [activeTab, setActiveTab] = useState("overview");
+
   const load = async () => {
     setLoading(true);
     try {
@@ -1318,7 +1360,8 @@ function ClientContactDetail({ contactId }) {
   return (
     <TooltipProvider delayDuration={150}>
       <Layout title="Client Contact">
-        <div className="px-6 pt-4 pb-8 space-y-4 w-full">          {/* Back link */}
+        <div className="px-6 pt-4 pb-8 space-y-4 w-full">
+          {/* Back link */}
           <button
             onClick={() => navigate("/crm/client-contacts")}
             className="text-xs text-gray-500 hover:text-[#ec9324] flex items-center gap-1"
@@ -1328,66 +1371,47 @@ function ClientContactDetail({ contactId }) {
 
           {/* Header card */}
           <div className="bg-white border border-gray-200 rounded-xl p-5 flex items-start gap-4 shadow-sm">
-            <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-[#ec9324] to-[#d97706] text-white flex items-center justify-center font-semibold flex-shrink-0 text-lg">
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#ec9324] to-[#d97706] text-white flex items-center justify-center font-semibold flex-shrink-0 text-lg">
               {initials}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl font-bold text-gray-900">{row.name}</h1>
+                {row.status && (
+                  <span
+                    className={`text-[11px] px-2 py-0.5 rounded-full font-medium border ${
+                      row.status === "Active"
+                        ? "bg-green-50 text-green-700 border-green-200"
+                        : "bg-gray-100 text-gray-600 border-gray-200"
+                    }`}
+                  >
+                    {row.status}
+                  </span>
+                )}
                 <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-gray-100 text-gray-500">
                   ID: {row.display_id}
                 </span>
-                {row.client_name && (
-                  <HoverTip label="Client">
-                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/30 font-medium">
-                      {row.client_name}
-                    </span>
-                  </HoverTip>
-                )}
-                {row.type && (
-                  <HoverTip label="Type">
-                    <span
-                      className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200 font-medium"
-                      data-testid="cc-detail-type"
-                    >
-                      {row.type}
-                    </span>
-                  </HoverTip>
-                )}
               </div>
-              <div className="mt-0.5">
-                <HoverTip label="Designation" align="start">
-                  <span className="text-sm text-gray-600">{row.designation || "—"}</span>
-                </HoverTip>
+              <div className="mt-0.5 text-sm text-gray-600">
+                {row.designation || "—"}
+                {row.client_name ? <span className="text-gray-400"> • </span> : null}
+                {row.client_name || ""}
               </div>
               <div className="flex items-center gap-4 text-[12px] text-gray-500 mt-2 flex-wrap">
                 {row.email && (
-                  <HoverTip label="Email">
-                    <span className="flex items-center gap-1">
-                      <Mail sx={{ fontSize: 14 }} /> {row.email}
-                    </span>
-                  </HoverTip>
+                  <span className="flex items-center gap-1">
+                    <Mail sx={{ fontSize: 14 }} /> {row.email}
+                  </span>
                 )}
                 {row.phone && (
-                  <HoverTip label="Phone No">
-                    <span className="flex items-center gap-1">
-                      <Phone sx={{ fontSize: 14 }} /> {row.phone_isd ? `${row.phone_isd} ` : ""}{row.phone}
-                    </span>
-                  </HoverTip>
+                  <span className="flex items-center gap-1">
+                    <Phone sx={{ fontSize: 14 }} /> {row.phone_isd ? `${row.phone_isd} ` : ""}{row.phone}
+                  </span>
                 )}
                 {(row.city || row.country_name || row.base_location) && (
-                  <HoverTip label="Location">
-                    <span className="flex items-center gap-1">
-                      <Place sx={{ fontSize: 14 }} /> {[row.city, row.country_name].filter(Boolean).join(", ") || row.base_location}
-                    </span>
-                  </HoverTip>
-                )}
-                {getRegionByCountryId(row.country_id) && (
-                  <HoverTip label="Region">
-                    <span className="flex items-center gap-1" data-testid="cc-region-value">
-                      <Public sx={{ fontSize: 14 }} /> {getRegionByCountryId(row.country_id)}
-                    </span>
-                  </HoverTip>
+                  <span className="flex items-center gap-1">
+                    <Place sx={{ fontSize: 14 }} /> {[row.city, row.country_name].filter(Boolean).join(", ") || row.base_location}
+                  </span>
                 )}
                 {row.linkedin_url && (
                   <a
@@ -1402,112 +1426,51 @@ function ClientContactDetail({ contactId }) {
               </div>
             </div>
 
-            {/* Right — Status (top corner) with Edit icon-button below it. */}
-            <div className="flex flex-col items-end gap-2 flex-shrink-0">
-              {row.poc_status && (
-                <HoverTip label="Status" side="bottom" align="end">
-                  <POCStatusChip status={row.poc_status} size="lg" />
-                </HoverTip>
-              )}
-              <button
-                type="button"
+            {/* Right — Edit Contact */}
+            <div className="flex-shrink-0">
+              <Button
+                variant="outline"
                 onClick={openEdit}
-                aria-label="Edit"
                 data-testid="cc-detail-edit"
-                className="group relative inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-100 text-gray-600"
+                className="h-9"
               >
-                <Pencil sx={{ fontSize: 20 }} />
-                <span className="pointer-events-none absolute top-full mt-1.5 right-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
-                  Edit
-                </span>
+                <Pencil sx={{ fontSize: 16 }} className="mr-1.5" /> Edit Contact
+              </Button>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="border-b border-gray-200 flex items-center gap-6 overflow-x-auto">
+            {[
+              { key: "overview", label: "Overview" },
+              { key: "employment", label: "Employment History" },
+              { key: "interactions", label: "Interactions" },
+              { key: "notes", label: "Notes" },
+              { key: "activity", label: "Activity Log" },
+            ].map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setActiveTab(t.key)}
+                data-testid={`cc-tab-${t.key}`}
+                className={`relative py-2.5 whitespace-nowrap text-sm font-medium transition-colors ${
+                  activeTab === t.key ? "text-[#ec9324]" : "text-gray-500 hover:text-gray-800"
+                }`}
+              >
+                {t.label}
+                {activeTab === t.key && (
+                  <span className="absolute left-0 right-0 -bottom-px h-0.5 bg-[#ec9324] rounded-full" />
+                )}
               </button>
-            </div>
+            ))}
           </div>
 
-          {/* Total-till-date chips — placeholder counts, wired later when the
-              calc pipeline lands. Sits between the name-bar and Industries.  */}
-          <TotalTillDateChips totals={row.totals_till_date} />
-
-          {/* Industries */}
-          {row.industries?.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-              <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-2">
-                Industries (Level 2)
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {row.industries.map((i) => (
-                  <span
-                    key={i}
-                    className="text-xs px-2.5 py-1 rounded-full bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/30 font-medium"
-                  >
-                    {i}
-                  </span>
-                ))}
-              </div>
-            </div>
+          {/* Tab content — only Overview has content; the rest are blank pages */}
+          {activeTab === "overview" ? (
+            <OverviewTab row={row} onAddEmployment={openEdit} />
+          ) : (
+            <div data-testid={`cc-tabpanel-${activeTab}`} className="min-h-[240px]" />
           )}
-
-          {/* Placeholder date fields (backend now supplies dummy values on
-              seeded rows; falls back to "—" when absent). */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-              <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
-                Last Project Receiving Date
-              </div>
-              <div className={`text-lg font-semibold mt-1 ${row.last_project_receiving_date ? "text-gray-900" : "text-gray-400"}`}>
-                {row.last_project_receiving_date ? fmtDate(row.last_project_receiving_date) : "—"}
-              </div>
-            </div>
-            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-              <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
-                Last Call Date
-              </div>
-              <div className={`text-lg font-semibold mt-1 ${row.last_call_date ? "text-gray-900" : "text-gray-400"}`}>
-                {row.last_call_date ? fmtDate(row.last_call_date) : "—"}
-              </div>
-            </div>
-          </div>
-
-          {/* Activity Summary */}
-          <ActivitySummary
-            filter={activityFilter}
-            onFilterChange={setActivityFilter}
-            data={row.activity_by_month}
-          />
-
-          {/* Previous work experience */}
-          {row.previous_work_experience?.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-              <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-3">
-                Previous Work Experience
-              </div>
-              <div className="space-y-3">
-                {row.previous_work_experience.map((w, i) => (
-                  <div key={i} className="flex gap-3 items-start">
-                    <div className="w-8 h-8 rounded-md bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0">
-                      <Business sx={{ fontSize: 16 }} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-semibold text-gray-900">
-                        {w.designation || "—"} · {w.company_name || "—"}
-                      </div>
-                      <div className="text-[11px] text-gray-500">
-                        {w.start_month_year || "—"} → {w.end_month_year || "Present"}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Audit footer */}
-          <div className="text-[11px] text-gray-500 flex items-center justify-between flex-wrap gap-2">
-            <span>Created {fmtDate(row.created_on)} · Updated {fmtDate(row.updated_on)}</span>
-            {row.created_by?.name && (
-              <span>Created by <b>{row.created_by.name}</b></span>
-            )}
-          </div>
         </div>
 
         <ContactFormDialog
@@ -1532,6 +1495,282 @@ function ClientContactDetail({ contactId }) {
     </TooltipProvider>
   );
 }
+
+// ================================================================ Overview Tab (detail view)
+// Overview tab content: Industries (top) → Employment History + Summary/Overlap
+// → Projects by Client + Calls by Client. Only tab with content; the rest are blank.
+function OverviewTab({ row, onAddEmployment }) {
+  const totals = row.totals_till_date || {};
+  const work = row.previous_work_experience || [];
+  const overlap = computeEmploymentOverlap(work);
+
+  // Placeholder sample rows (no backend breakdown yet) — mirror the design.
+  const projectsByClient = [
+    { client: "Boston Consulting Group (BCG)", count: 12, last: "15 Jul 2026" },
+    { client: "Bain & Company", count: 6, last: "20 Aug 2026" },
+  ];
+  const callsByClient = [
+    { client: "Boston Consulting Group (BCG)", count: 36, last: "12 Jul 2026" },
+    { client: "Bain & Company", count: 16, last: "22 Aug 2026" },
+  ];
+
+  return (
+    <div className="space-y-4" data-testid="cc-tabpanel-overview">
+      {/* Industries — placed above Employment History & Summary */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+        <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-2">
+          Industries (Level 2)
+        </div>
+        {row.industries?.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {row.industries.map((i) => (
+              <span
+                key={i}
+                className="text-xs px-2.5 py-1 rounded-full bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/30 font-medium"
+              >
+                {i}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div className="text-sm text-gray-400">—</div>
+        )}
+      </div>
+
+      {/* Employment History (left) + Summary/Overlap (right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Employment / Client Association History */}
+        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+          <SectionTitle>Employment / Client Association History</SectionTitle>
+          <div className="space-y-3 mt-3">
+            {work.length === 0 && (
+              <div className="text-[11px] text-gray-400 italic border border-dashed border-gray-200 rounded p-4 text-center">
+                No employment history added yet.
+              </div>
+            )}
+            {work.map((w, i) => (
+              <EmploymentCard key={i} w={w} row={row} idx={i} />
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={onAddEmployment}
+            data-testid="cc-add-employment"
+            className="mt-3 w-full border border-dashed border-gray-300 rounded-lg py-2.5 text-sm font-medium text-[#ec9324] hover:bg-[#ec9324]/5 flex items-center justify-center gap-1.5"
+          >
+            <Plus sx={{ fontSize: 16 }} /> Add New Employment / Client Association
+          </button>
+        </div>
+
+        {/* Summary + Employment Overlap */}
+        <div className="space-y-4">
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <SectionTitle>Summary</SectionTitle>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+              <SummaryCard icon={<WorkOutline sx={{ fontSize: 18 }} />} label="Projects" value={fmtMetric(totals.projects)} />
+              <SummaryCard icon={<CheckCircle2 sx={{ fontSize: 18 }} />} label="Serviced" value={fmtMetric(totals.serviced)} />
+              <SummaryCard icon={<PhoneCall sx={{ fontSize: 18 }} />} label="Calls" value={fmtMetric(totals.calls)} />
+              <SummaryCard icon={<Payments sx={{ fontSize: 18 }} />} label="Revenue" value={fmtMetric(totals.revenue, { money: true })} />
+            </div>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <SectionTitle>Employment Overlap</SectionTitle>
+            {overlap ? (
+              <div className="mt-3">
+                <div className="text-sm text-gray-700 mb-3">{overlap.rangeLabel}</div>
+                <div className="flex w-full h-2 rounded-full overflow-hidden bg-gray-100">
+                  {overlap.segs.map((s, i) => (
+                    <div
+                      key={i}
+                      className={i === 0 ? "bg-[#ec9324]" : "bg-blue-500"}
+                      style={{ width: `${s.pct}%` }}
+                    />
+                  ))}
+                </div>
+                <div className="flex justify-between mt-2">
+                  {overlap.segs.map((s, i) => (
+                    <div key={i} className={`text-center ${i === 0 ? "text-[#ec9324]" : "text-blue-600"}`}>
+                      <div className="text-[12px] font-semibold">{s.durationLabel}</div>
+                      <div className="text-[11px] text-gray-500">{s.company}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm text-gray-400 mt-3">—</div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Projects by Client (left) + Calls by Client (right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <ByClientTable
+          title="Projects by Client"
+          countHeader="Projects"
+          dateHeader="Last Project Date"
+          rows={projectsByClient}
+          testId="cc-projects-by-client"
+        />
+        <ByClientTable
+          title="Calls by Client"
+          countHeader="Calls"
+          dateHeader="Last Call Date"
+          rows={callsByClient}
+          testId="cc-calls-by-client"
+        />
+      </div>
+    </div>
+  );
+}
+
+function SectionTitle({ children }) {
+  return (
+    <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+      {children}
+      <InfoOutlined sx={{ fontSize: 14 }} className="text-gray-300" />
+    </div>
+  );
+}
+
+function SummaryCard({ icon, label, value }) {
+  return (
+    <div className="border border-gray-200 rounded-lg p-3 bg-gray-50/60">
+      <div className="w-8 h-8 rounded-md bg-white border border-gray-200 text-[#ec9324] flex items-center justify-center mb-2">
+        {icon}
+      </div>
+      <div className="text-[11px] text-gray-500">{label}</div>
+      <div className="text-lg font-bold text-gray-900 leading-tight">{value}</div>
+    </div>
+  );
+}
+
+function EmploymentCard({ w, row, idx }) {
+  const isCurrent = !w.end_month_year || String(w.end_month_year).trim().toLowerCase() === "present";
+  const start = parseMonthYear(w.start_month_year);
+  const end = parseMonthYear(w.end_month_year);
+  const months = monthsBetween(start, end || new Date());
+  const source = row.linkedin_url ? "LinkedIn" : "—";
+  return (
+    <div
+      className={`rounded-lg border p-3 ${isCurrent ? "border-[#ec9324]/40 bg-[#ec9324]/5" : "border-gray-200 bg-white"}`}
+      data-testid={`cc-employment-${idx}`}
+    >
+      <div className="flex items-start gap-3">
+        <div className={`w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 ${isCurrent ? "bg-[#ec9324] text-white" : "bg-gray-100 text-gray-500"}`}>
+          <Business sx={{ fontSize: 16 }} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className={`text-sm font-semibold ${isCurrent ? "text-[#ec9324]" : "text-gray-900"}`}>
+                {w.company_name || "—"}
+              </div>
+              <div className="text-[12px] text-gray-600">{w.designation || "—"}</div>
+            </div>
+            <div className="text-right flex-shrink-0">
+              {isCurrent && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 font-medium">
+                  Current
+                </span>
+              )}
+              <div className="text-[11px] text-gray-500 mt-0.5">
+                {w.start_month_year || "—"} – {isCurrent ? "Present" : (w.end_month_year || "—")}
+              </div>
+              {months > 0 && <div className="text-[11px] text-gray-400">{fmtDuration(months)}</div>}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-y-2 gap-x-3 mt-3 pt-3 border-t border-gray-100">
+            <MetaCell label="Primary Email" value={row.email} />
+            <MetaCell label="Primary Phone" value={row.phone ? `${row.phone_isd ? row.phone_isd + " " : ""}${row.phone}` : ""} />
+            <MetaCell label="Location" value={[row.city, row.country_name].filter(Boolean).join(", ") || row.base_location} />
+            <MetaCell label="Source" value={source} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MetaCell({ label, value }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[10px] uppercase tracking-wide text-gray-400">{label}</div>
+      <div className="text-[12px] text-gray-700 truncate">{value || "—"}</div>
+    </div>
+  );
+}
+
+function ByClientTable({ title, countHeader, dateHeader, rows, testId }) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm" data-testid={testId}>
+      <SectionTitle>{title}</SectionTitle>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+              <th className="text-left font-medium py-2">Client</th>
+              <th className="text-left font-medium py-2">{countHeader}</th>
+              <th className="text-left font-medium py-2">{dateHeader}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i} className="border-b border-gray-50 last:border-0">
+                <td className="py-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0">
+                      <Business sx={{ fontSize: 13 }} />
+                    </div>
+                    <span className="text-gray-800">{r.client}</span>
+                  </div>
+                </td>
+                <td className="py-2.5 text-gray-700">{r.count}</td>
+                <td className="py-2.5 text-gray-700">{r.last}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// Simplified two-segment employment-overlap visual derived from work history.
+function computeEmploymentOverlap(work) {
+  const parsed = (work || [])
+    .map((w) => {
+      const start = parseMonthYear(w.start_month_year);
+      const present = !w.end_month_year || String(w.end_month_year).trim().toLowerCase() === "present";
+      const end = present ? new Date() : parseMonthYear(w.end_month_year);
+      return start ? { company: w.company_name || "—", start, end: end || new Date(), present } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.start - b.start);
+
+  if (parsed.length === 0) return null;
+
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const fmt = (d) => `${MON[d.getMonth()]} ${d.getFullYear()}`;
+  const overallStart = parsed[0].start;
+  const overallEnd = parsed.reduce((mx, p) => (p.end > mx ? p.end : mx), parsed[0].end);
+  const totalMonths = Math.max(monthsBetween(overallStart, overallEnd), 1);
+
+  const chosen = parsed.slice(-2);
+  const sumMonths = chosen.reduce((s, p) => s + Math.max(monthsBetween(p.start, p.end), 1), 0) || 1;
+  const segs = chosen.map((p) => {
+    const m = Math.max(monthsBetween(p.start, p.end), 1);
+    return {
+      company: p.company,
+      durationLabel: p.present ? fmtDuration(m, true) : fmtDuration(m),
+      pct: Math.round((m / sumMonths) * 100),
+    };
+  });
+
+  return { rangeLabel: `${fmt(overallStart)} – Present (${fmtDuration(totalMonths)})`, segs };
+}
+
 
 // ================================================================ Activity Summary (pivot table)
 // Rows:    Projects / Serviced / Calls / Revenue
