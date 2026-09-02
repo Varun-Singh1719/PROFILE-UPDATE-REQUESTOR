@@ -12,8 +12,8 @@ import time
 import requests
 from datetime import datetime
 
-BASE_API = "https://contact-format-sync.preview.emergentagent.com/api"
-BASE_UI = "https://contact-format-sync.preview.emergentagent.com"
+BASE_API = "https://client-contact-ui.preview.emergentagent.com/api"
+BASE_UI = "https://client-contact-ui.preview.emergentagent.com"
 
 # Super Admin credentials
 SA_EMAIL = "admin@ticketing.com"

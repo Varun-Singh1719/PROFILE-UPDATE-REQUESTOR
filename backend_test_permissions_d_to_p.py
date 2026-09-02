@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://contact-format-sync.preview.emergentagent.com/api"
+BASE_URL = "https://client-contact-ui.preview.emergentagent.com/api"
 ADMIN_EMAIL = "admin@ticketing.com"
 ADMIN_PASSWORD = "Admin@123"
 

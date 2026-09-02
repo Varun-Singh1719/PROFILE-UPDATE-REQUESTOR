@@ -15,7 +15,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Optional, Tuple
 
 # Backend URL from environment
-BACKEND_URL = "https://contact-format-sync.preview.emergentagent.com/api"
+BACKEND_URL = "https://client-contact-ui.preview.emergentagent.com/api"
 
 # Super Admin credentials
 ADMIN_EMAIL = "admin@ticketing.com"

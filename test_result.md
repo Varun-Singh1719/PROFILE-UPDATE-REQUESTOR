@@ -2649,7 +2649,7 @@ dashboard_backend_qa_jul30_2026:
             5. ✅ Ready for production deployment
             
             **TEST ENVIRONMENT:**
-            - Backend: https://contact-format-sync.preview.emergentagent.com/api
+            - Backend: https://client-contact-ui.preview.emergentagent.com/api
             - MongoDB: Atlas cluster (cluster0.vmgql1i.mongodb.net, db: app_db)
             - Test User: admin@ticketing.com (Super Admin)
             - Impersonation: Aakash Malik (Admin, f38f44a6-a382-4034-beac-86e2a99a6677)
@@ -5964,7 +5964,7 @@ frontend:
             - "View Booking" button navigates to /workspace-manager/bookings but without ?bookingId= parameter in URL (navigation works but query param missing). This is a minor issue that doesn't affect the core bug fix verification.
             
             **CONSOLE ERRORS:**
-            - 401 errors detected for PDF loading (https://contact-format-sync.preview.emergentagent.com/api/floor-plans/pdf/...) - this is a backend PDF authentication issue, not related to the bug fixes
+            - 401 errors detected for PDF loading (https://client-contact-ui.preview.emergentagent.com/api/floor-plans/pdf/...) - this is a backend PDF authentication issue, not related to the bug fixes
             - No critical JavaScript errors detected
             
             Test date used: 2026-07-03 (date with existing workstation bookings)
@@ -10110,7 +10110,7 @@ frontend_permissions_qa_aug2026:
             
             Executed all 7 scenarios using correct ContactCreate schema (email with real TLD, emp_id, doj required).
             Test credentials: admin@ticketing.com / Admin@123
-            Test environment: https://contact-format-sync.preview.emergentagent.com
+            Test environment: https://client-contact-ui.preview.emergentagent.com
             
             **SCENARIO RESULTS:**
             
@@ -11493,7 +11493,7 @@ crm_segmentations_tree_bug_fixes_jul31_2026:
             
             Test Date: Jul 31 2026
             Test Credentials: admin@ticketing.com / Admin@123
-            Preview URL: https://contact-format-sync.preview.emergentagent.com
+            Preview URL: https://client-contact-ui.preview.emergentagent.com
             Test Segmentation: "QA Tree A" (created and deleted during test)
             
             **CRITICAL BUG FIXES VERIFIED:**
@@ -11618,7 +11618,7 @@ agent_communication:
         Playwright test suite against /crm/segmentations to confirm.
 
         Credentials: admin@ticketing.com / Admin@123
-        Preview: https://contact-format-sync.preview.emergentagent.com
+        Preview: https://client-contact-ui.preview.emergentagent.com
 
         Data-testids of interest:
           • segmentation-new-btn (top bar)
@@ -11757,7 +11757,7 @@ crm_segmentations_peer_child_chips_jul31_2026:
           comment: |
             ✅ COMPREHENSIVE E2E TESTING COMPLETE — ALL 13 SCENARIOS PASSED (A-M)
             
-            Test environment: https://contact-format-sync.preview.emergentagent.com
+            Test environment: https://client-contact-ui.preview.emergentagent.com
             Test credentials: admin@ticketing.com / Admin@123
             Test segmentation: "QA Peer Test" (created and deleted during test)
             
@@ -11904,7 +11904,7 @@ agent_communication:
              and looked like a bug).
           D. dx bumped 34→60 so the +Peer chip has room below each node.
 
-        Preview: https://contact-format-sync.preview.emergentagent.com
+        Preview: https://client-contact-ui.preview.emergentagent.com
         Login  : admin@ticketing.com / Admin@123
 
         Data-testids/selectors of interest:
@@ -12195,7 +12195,7 @@ agent_communication:
         on-canvas editing using SVG foreignObject + HTML input. Please
         verify.
 
-        Preview: https://contact-format-sync.preview.emergentagent.com
+        Preview: https://client-contact-ui.preview.emergentagent.com
         Login  : admin@ticketing.com / Admin@123
 
         Key selectors for tests:
@@ -13514,7 +13514,7 @@ frontend:
             
             Comprehensive testing of CRM Overview page UI fixes completed.
             Test credentials: admin@ticketing.com / Admin@123
-            App URL: https://contact-format-sync.preview.emergentagent.com/crm/overview
+            App URL: https://client-contact-ui.preview.emergentagent.com/crm/overview
             
             **TEST RESULTS:**
             

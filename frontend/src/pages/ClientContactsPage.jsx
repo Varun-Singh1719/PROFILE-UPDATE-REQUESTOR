@@ -988,7 +988,6 @@ function ContactFormDialog({
                 type="email"
                 value={form.email}
                 onChange={(e) => patch("email", e.target.value)}
-                placeholder="name@company.com"
               />
             </Field>
             <Field label="Phone No. *">
@@ -1020,7 +1019,6 @@ function ContactFormDialog({
               <Input
                 value={form.city}
                 onChange={(e) => patch("city", e.target.value)}
-                placeholder="e.g. Mumbai"
                 data-testid="cc-city"
               />
             </Field>
@@ -1120,7 +1118,6 @@ function ContactFormDialog({
                       <Input
                         value={w.company_name || ""}
                         onChange={(e) => setWork(i, "company_name", e.target.value)}
-                        placeholder="Company name"
                         data-testid={`cc-work-${i}-company`}
                       />
                     </Field>
@@ -1128,17 +1125,16 @@ function ContactFormDialog({
                       <Input
                         value={w.designation || ""}
                         onChange={(e) => setWork(i, "designation", e.target.value)}
-                        placeholder="Designation"
                       />
                     </Field>
-                    <Field label="Start Date (Month & Year)" labelBg="bg-gray-50">
+                    <Field label="Start Date" labelBg="bg-gray-50">
                       <MonthYearPicker
                         value={w.start_month_year || ""}
                         onChange={(v) => setWork(i, "start_month_year", v)}
                         testId={`cc-work-${i}-start`}
                       />
                     </Field>
-                    <Field label="End Date (Month & Year)" labelBg="bg-gray-50">
+                    <Field label="End Date" labelBg="bg-gray-50">
                       <div className="flex items-center gap-2">
                         <MonthYearPicker
                           value={w.end_month_year || ""}
