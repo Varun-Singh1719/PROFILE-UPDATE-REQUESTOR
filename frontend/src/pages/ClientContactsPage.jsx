@@ -310,6 +310,99 @@ export default function ClientContactsPage() {
   return <ClientContactsList />;
 }
 
+// ============================================================ Reusable modals
+// Popup detail view — renders the exact same Client Contact detail body inside a
+// dialog (used from the Client → Client Contacts tab, no page redirect).
+export function ClientContactDetailModal({ contactId, open, onClose }) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose?.(); }}>
+      <DialogContent
+        className="max-w-5xl max-h-[92vh] overflow-y-auto p-4 sm:p-6"
+        data-testid="cc-detail-modal"
+      >
+        <DialogHeader className="sr-only">
+          <DialogTitle>Client Contact</DialogTitle>
+        </DialogHeader>
+        {contactId && <ClientContactDetail contactId={contactId} inModal onClose={onClose} />}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Self-contained "Add Client Contact" dialog (loads its own segmentation options
+// and handles create + duplicate detection). `defaultClientName` pre-fills the
+// Client field — used when adding from within a specific Client's page.
+export function AddContactDialog({ open, onClose, defaultClientName = "", onSaved }) {
+  const [segments, setSegments] = useState([]);
+  const [form, setForm] = useState({ ...EMPTY_FORM, previous_work_experience: [] });
+  const [saving, setSaving] = useState(false);
+  const [dupState, setDupState] = useState(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setForm({ ...EMPTY_FORM, previous_work_experience: [], client_name: defaultClientName || "" });
+    setDupState(null);
+    api.get(`/segmentations`).then((r) => setSegments(r.data.rows || [])).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaultClientName]);
+
+  const l1Options = useMemo(() => {
+    const base = levelOneOptions(segments);
+    if (defaultClientName && !base.some((o) => o.value === defaultClientName)) {
+      return [{ value: defaultClientName, label: defaultClientName, sublabel: "" }, ...base];
+    }
+    return base;
+  }, [segments, defaultClientName]);
+  const l2Options = useMemo(() => levelTwoOptions(segments, form.client_name), [segments, form.client_name]);
+
+  const onSave = async (opts = {}) => {
+    const missing = firstMissingContactField(form);
+    if (missing) { notify.error(`${missing} is required`); return; }
+    setSaving(true);
+    const forceParam = opts.force ? "?force=true" : "";
+    try {
+      const payload = { ...form };
+      payload.base_location = [payload.city, payload.country_name].filter(Boolean).join(", ");
+      await api.post(`/client-contacts${forceParam}`, payload);
+      notify.success("Client contact created");
+      setDupState(null);
+      onClose?.();
+      onSaved?.();
+    } catch (e) {
+      const detail = e?.response?.data?.detail;
+      if (e?.response?.status === 409 && detail?.code === "DUPLICATE_CLIENT_CONTACT" && Array.isArray(detail.duplicates)) {
+        setDupState({ duplicates: detail.duplicates });
+        return;
+      }
+      notify.error(formatApiError(e, "Failed to save client contact"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <ContactFormDialog
+        open={open}
+        onOpenChange={(o) => { if (!o) { setDupState(null); onClose?.(); } }}
+        editing={null}
+        form={form}
+        setForm={setForm}
+        l1Options={l1Options}
+        l2Options={l2Options}
+        onSubmit={onSave}
+        saving={saving}
+      />
+      <DuplicateWarningDialog
+        state={dupState}
+        onClose={() => setDupState(null)}
+        onSaveAnyway={() => onSave({ force: true })}
+        saving={saving}
+      />
+    </>
+  );
+}
+
 // ================================================================ LIST
 function ClientContactsList() {
   const navigate = useNavigate();
@@ -1277,7 +1370,7 @@ function Field({ label, labelBg = "bg-white", children }) {
 }
 
 // ================================================================ DETAIL
-function ClientContactDetail({ contactId }) {
+function ClientContactDetail({ contactId, inModal = false, onClose }) {
   const navigate = useNavigate();
   const [row, setRow] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1385,27 +1478,30 @@ function ClientContactDetail({ contactId }) {
   };
 
   if (loading || !row) {
-    return (
-      <Layout title="Client Contact">
-        <div className="p-10 text-sm text-gray-500">Loading…</div>
-      </Layout>
-    );
+    const body = <div className="p-10 text-sm text-gray-500">Loading…</div>;
+    return inModal ? body : <Layout title="Client Contact">{body}</Layout>;
   }
 
   const initials = (row.name || "?").trim().split(/\s+/)
     .map((s) => s[0]).join("").slice(0, 2).toUpperCase();
 
+  const Shell = inModal
+    ? ({ children }) => <>{children}</>
+    : ({ children }) => <Layout title="Client Contact">{children}</Layout>;
+
   return (
     <TooltipProvider delayDuration={150}>
-      <Layout title="Client Contact">
-        <div className="px-6 pt-4 pb-8 space-y-4 w-full">
-          {/* Back link */}
-          <button
-            onClick={() => navigate("/crm/client-contacts")}
-            className="text-xs text-gray-500 hover:text-[#ec9324] flex items-center gap-1"
-          >
-            <BackArrow sx={{ fontSize: 14 }} /> Back to Client Contacts
-          </button>
+      <Shell>
+        <div className={inModal ? "px-1 pb-2 space-y-4 w-full" : "px-6 pt-4 pb-8 space-y-4 w-full"}>
+          {/* Back link (full-page view only) */}
+          {!inModal && (
+            <button
+              onClick={() => navigate("/crm/client-contacts")}
+              className="text-xs text-gray-500 hover:text-[#ec9324] flex items-center gap-1"
+            >
+              <BackArrow sx={{ fontSize: 14 }} /> Back to Client Contacts
+            </button>
+          )}
 
           {/* Header card */}
           <div className="bg-white border border-gray-200 rounded-xl p-5 flex items-start gap-4 shadow-sm">
@@ -1538,7 +1634,7 @@ function ClientContactDetail({ contactId }) {
           onSaveAnyway={() => onSave({ force: true })}
           saving={saving}
         />
-      </Layout>
+      </Shell>
     </TooltipProvider>
   );
 }
@@ -2140,7 +2236,7 @@ function DuplicateWarningDialog({ state, onClose, onSaveAnyway, saving }) {
 }
 
 // ================================================================ Bulk Upload Modal
-function BulkUploadModal({ open, onClose, onComplete }) {
+export function BulkUploadModal({ open, onClose, onComplete }) {
   const [file, setFile] = useState(null);
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);

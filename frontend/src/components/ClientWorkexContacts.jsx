@@ -1,6 +1,12 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import api, { formatApiError } from "../lib/api";
+import Plus from "@mui/icons-material/AddOutlined";
+import Upload from "@mui/icons-material/UploadFileOutlined";
+import {
+  ClientContactDetailModal,
+  AddContactDialog,
+  BulkUploadModal,
+} from "../pages/ClientContactsPage";
 
 /**
  * Client Detail → "Client Contacts" tab.
@@ -8,6 +14,8 @@ import api, { formatApiError } from "../lib/api";
  * experience, split into two sub-tabs:
  *   • Current — currently working at this client (client_name matches)
  *   • Ex      — worked here in the past (present in previous_work_experience)
+ *
+ * Clicking a contact opens the full detail view in a popup (no page redirect).
  */
 function initials(name) {
   return (name || "?")
@@ -44,14 +52,37 @@ function SubTab({ active, label, count, onClick, testId }) {
   );
 }
 
-function ContactMiniCard({ c, ex }) {
+function IconAction({ icon, tooltip, onClick, testId, primary = false }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid={testId}
+      aria-label={tooltip}
+      className={
+        "group relative inline-flex items-center justify-center w-9 h-9 rounded-lg border transition-colors " +
+        (primary
+          ? "bg-[#ec9324] border-[#ec9324] text-white hover:bg-[#d3811b]"
+          : "bg-white border-gray-300 text-gray-600 hover:border-[#ec9324] hover:text-[#ec9324]")
+      }
+    >
+      {icon}
+      <span className="pointer-events-none absolute top-full right-0 mt-1.5 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+        {tooltip}
+      </span>
+    </button>
+  );
+}
+
+function ContactMiniCard({ c, ex, onOpen }) {
   const exp = c.ex_experience || {};
   const location = [c.city, c.country_name].filter(Boolean).join(", ") || c.base_location || "";
   return (
-    <Link
-      to={`/crm/client-contacts/${c.id}`}
+    <button
+      type="button"
+      onClick={() => onOpen(c.id)}
       data-testid={`workex-contact-${c.display_id}`}
-      className="block bg-white border border-gray-200 rounded-xl shadow-sm p-4 hover:shadow-md hover:border-[#ec9324]/50 transition"
+      className="text-left w-full block bg-white border border-gray-200 rounded-xl shadow-sm p-4 hover:shadow-md hover:border-[#ec9324]/50 transition"
     >
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-3 min-w-0">
@@ -121,7 +152,7 @@ function ContactMiniCard({ c, ex }) {
           </span>
         </div>
       )}
-    </Link>
+    </button>
   );
 }
 
@@ -131,66 +162,84 @@ export default function ClientWorkexContacts({ clientId, clientName }) {
   const [err, setErr] = useState("");
   const [subTab, setSubTab] = useState("current");
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      setLoading(true);
-      setErr("");
-      try {
-        const r = await api.get(`/clients/${clientId}/contacts`);
-        if (alive) setData(r.data);
-      } catch (e) {
-        if (alive) setErr(formatApiError(e));
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
+  // Detail popup + create/bulk-upload dialogs
+  const [openContactId, setOpenContactId] = useState(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setErr("");
+    try {
+      const r = await api.get(`/clients/${clientId}/contacts`);
+      setData(r.data);
+    } catch (e) {
+      setErr(formatApiError(e));
+    } finally {
+      setLoading(false);
+    }
   }, [clientId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const list = useMemo(() => {
     if (!data) return [];
     return subTab === "current" ? data.current || [] : data.ex || [];
   }, [data, subTab]);
 
-  if (loading) {
-    return <div className="text-center py-16 text-sm text-gray-500">Loading contacts…</div>;
-  }
-  if (err) {
-    return <div className="text-center py-16 text-sm text-red-500">{err}</div>;
-  }
-
   const currentCount = data?.current_count ?? 0;
   const exCount = data?.ex_count ?? 0;
 
   return (
     <div>
-      {/* Sub-tabs: Current | Ex */}
-      <div className="flex items-center gap-2 mb-4" role="tablist">
-        <SubTab
-          active={subTab === "current"}
-          label="Current"
-          count={currentCount}
-          onClick={() => setSubTab("current")}
-          testId="workex-subtab-current"
-        />
-        <SubTab
-          active={subTab === "ex"}
-          label="Ex"
-          count={exCount}
-          onClick={() => setSubTab("ex")}
-          testId="workex-subtab-ex"
-        />
-        <span className="ml-2 text-[12px] text-gray-400">
-          {subTab === "current"
-            ? `People currently at ${clientName}`
-            : `People who previously worked at ${clientName}`}
-        </span>
+      {/* Sub-tabs + action buttons */}
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="flex items-center gap-2" role="tablist">
+          <SubTab
+            active={subTab === "current"}
+            label="Current"
+            count={currentCount}
+            onClick={() => setSubTab("current")}
+            testId="workex-subtab-current"
+          />
+          <SubTab
+            active={subTab === "ex"}
+            label="Ex"
+            count={exCount}
+            onClick={() => setSubTab("ex")}
+            testId="workex-subtab-ex"
+          />
+          <span className="ml-2 text-[12px] text-gray-400 hidden md:inline">
+            {subTab === "current"
+              ? `People currently at ${clientName}`
+              : `People who previously worked at ${clientName}`}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <IconAction
+            icon={<Plus sx={{ fontSize: 20 }} />}
+            tooltip="+ New Client Contact"
+            onClick={() => setAddOpen(true)}
+            testId="workex-add-contact-btn"
+            primary
+          />
+          <IconAction
+            icon={<Upload sx={{ fontSize: 18 }} />}
+            tooltip="Bulk Upload Client Contacts"
+            onClick={() => setBulkOpen(true)}
+            testId="workex-bulk-upload-btn"
+          />
+        </div>
       </div>
 
-      {list.length === 0 ? (
+      {loading ? (
+        <div className="text-center py-16 text-sm text-gray-500">Loading contacts…</div>
+      ) : err ? (
+        <div className="text-center py-16 text-sm text-red-500">{err}</div>
+      ) : list.length === 0 ? (
         <div className="text-center py-16 text-sm text-gray-400 border border-dashed border-gray-200 rounded-xl">
           {subTab === "current"
             ? `No client contacts are currently mapped to ${clientName}.`
@@ -199,10 +248,32 @@ export default function ClientWorkexContacts({ clientId, clientName }) {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="workex-contacts-grid">
           {list.map((c) => (
-            <ContactMiniCard key={c.id} c={c} ex={subTab === "ex"} />
+            <ContactMiniCard key={c.id} c={c} ex={subTab === "ex"} onOpen={setOpenContactId} />
           ))}
         </div>
       )}
+
+      {/* Detail popup (same detail view, no redirect) */}
+      <ClientContactDetailModal
+        contactId={openContactId}
+        open={!!openContactId}
+        onClose={() => setOpenContactId(null)}
+      />
+
+      {/* Add new client contact — Client field pre-filled with this client */}
+      <AddContactDialog
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        defaultClientName={clientName}
+        onSaved={load}
+      />
+
+      {/* Bulk upload client contacts */}
+      <BulkUploadModal
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        onComplete={load}
+      />
     </div>
   );
 }
