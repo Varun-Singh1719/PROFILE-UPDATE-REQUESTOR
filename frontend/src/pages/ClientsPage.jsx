@@ -35,6 +35,7 @@ import { FloatingField } from "../components/FloatingField";
 import SearchSelect from "../components/SearchSelect";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import Plus from "@mui/icons-material/AddOutlined";
+import Autorenew from "@mui/icons-material/Autorenew";
 import Search from "@mui/icons-material/SearchOutlined";
 import Pencil from "@mui/icons-material/EditOutlined";
 import Eye from "@mui/icons-material/VisibilityOutlined";
@@ -201,8 +202,43 @@ export default function ClientsPage() {
   // ---- pagination ----
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  // External MySQL CRM source is read-only — no create/edit/delete actions.
-  const topBarActions = null;
+  // Manual "Sync from MySQL" (background job on the server)
+  const [syncing, setSyncing] = useState(false);
+  const handleSyncFromMysql = async () => {
+    setSyncing(true);
+    try {
+      await api.post(`/crm-sync/run?scope=clients`);
+      notify.success("Sync started — new clients & metrics will refresh in a few minutes.");
+    } catch (e) {
+      notify.error(formatApiError(e, "Failed to start sync"));
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // Action button rendered in the global top bar (parallel to notification bell + user avatar)
+  const topBarActions = (
+    <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        onClick={handleSyncFromMysql}
+        disabled={syncing}
+        className="h-9"
+        data-testid="clients-sync-btn"
+      >
+        <Autorenew sx={{ fontSize: 16, marginRight: "4px" }} className={syncing ? "animate-spin" : ""} />
+        {syncing ? "Syncing…" : "Sync"}
+      </Button>
+      <Button
+        onClick={openCreate}
+        className="bg-[#ec9324] hover:bg-[#d3811b] text-white h-9"
+        data-testid="new-client-btn"
+      >
+        <Plus sx={{ fontSize: 18, marginRight: "4px" }} />
+        New Client
+      </Button>
+    </div>
+  );
 
   return (
     <Layout title="Clients" actions={topBarActions}>
@@ -269,6 +305,8 @@ export default function ClientsPage() {
                 key={row.id}
                 row={row}
                 onView={() => handleView(row)}
+                onEdit={() => openEdit(row)}
+                onDelete={() => handleDelete(row)}
               />
             ))}
           </div>
@@ -434,18 +472,16 @@ function ClientCard({ row, onView, onEdit, onDelete }) {
             ID: <span className="font-mono text-gray-700">{row.display_id}</span>
           </div>
         </div>
-        {onEdit && (
-          <button
-            type="button"
-            onClick={onEdit}
-            title="Edit"
-            aria-label="Edit"
-            data-testid={`client-edit-${row.display_id}`}
-            className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 hover:text-[#ec9324] hover:bg-orange-50 transition-colors flex-shrink-0"
-          >
-            <Pencil sx={{ fontSize: 16 }} />
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={onEdit}
+          title="Edit"
+          aria-label="Edit"
+          data-testid={`client-edit-${row.display_id}`}
+          className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 hover:text-[#ec9324] hover:bg-orange-50 transition-colors flex-shrink-0"
+        >
+          <Pencil sx={{ fontSize: 16 }} />
+        </button>
       </div>
 
       {/* Type — plain text row */}

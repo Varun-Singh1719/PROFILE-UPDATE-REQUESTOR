@@ -116,27 +116,6 @@ def _with_placeholders(doc: dict) -> dict:
     return doc
 
 
-def _mysql_client_to_row(r: dict) -> dict:
-    """Map an external MySQL `clients` row into the response shape the frontend
-    expects. Aggregates not available in MySQL are returned as 0/empty."""
-    if not r:
-        return r
-    return {
-        "id": str(r.get("id")),
-        "display_id": r.get("id"),
-        "name": r.get("name") or "",
-        "type": r.get("type") or "",
-        "key_account_manager_ids": [],
-        "key_account_managers": [],
-        "client_contact_count": int(r.get("client_contact_count") or 0),
-        "project_count": 0,
-        "serviced_count": 0,
-        "contract_valid_till": r.get("contract_valid_till"),
-        "created_on": r.get("created_at"),
-        "updated_on": r.get("updated_at"),
-    }
-
-
 async def _attach_kams(docs: List[dict]) -> List[dict]:
     """Resolve each client's `key_account_manager_ids` into a display-ready
     `key_account_managers` list of {id, name, emp_id} by batch-looking-up the
@@ -229,53 +208,43 @@ async def list_clients(
     page_size: int = Query(24, ge=1, le=200),
     user=Depends(get_current_user),
 ):
-    # Read live from the external MySQL CRM database (read-only).
-    from mysql_db import mysql_query, mysql_query_one
-    where: list = []
-    params: list = []
+    q: dict = {}
     if type:
-        where.append("c.type = %s")
-        params.append(type)
-    if search and search.strip():
-        s = f"%{search.strip()}%"
-        where.append("(c.name LIKE %s OR c.type LIKE %s)")
-        params.extend([s, s])
-    where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+        q["type"] = type
+    if search:
+        s = search.strip()
+        if s:
+            q["$or"] = [
+                {"name": {"$regex": _esc(s), "$options": "i"}},
+                {"type": {"$regex": _esc(s), "$options": "i"}},
+            ]
 
     sort_map = {
-        "newest":    "c.id DESC",
-        "oldest":    "c.id ASC",
-        "name_asc":  "c.name ASC",
-        "name_desc": "c.name DESC",
-        "id_asc":    "c.id ASC",
+        "newest":    [("created_on", -1)],
+        "oldest":    [("created_on", 1)],
+        "name_asc":  [("name", 1)],
+        "name_desc": [("name", -1)],
+        "id_asc":    [("display_id", 1)],
     }
-    order_by = sort_map.get(sort or "newest", "c.id DESC")
+    sort_spec = sort_map.get(sort or "newest", sort_map["newest"])
 
-    cnt = await mysql_query_one(f"SELECT COUNT(*) AS c FROM clients c {where_sql}", params)
-    total = int((cnt or {}).get("c") or 0)
-    offset = (page - 1) * page_size
-    data = await mysql_query(
-        "SELECT c.id, c.name, c.type, c.contract_valid_till, c.created_at, c.updated_at, "
-        "(SELECT COUNT(*) FROM client_contacts cc WHERE cc.fkClient = c.id) AS client_contact_count "
-        f"FROM clients c {where_sql} ORDER BY {order_by} LIMIT %s OFFSET %s",
-        params + [page_size, offset],
-    )
-    rows = [_mysql_client_to_row(r) for r in data]
+    total = await db[COLL].count_documents(q)
+    cursor = db[COLL].find(q).sort(sort_spec).skip((page - 1) * page_size).limit(page_size)
+    rows: List[dict] = []
+    async for d in cursor:
+        rows.append(_with_placeholders(_serialize(d)))
+    await _attach_kams(rows)
     return {"rows": rows, "total": total, "page": page, "page_size": page_size}
 
 
 @api_router.get("/clients/{client_id}")
 async def get_client(client_id: str, user=Depends(get_current_user)):
-    from mysql_db import mysql_query_one
-    r = await mysql_query_one(
-        "SELECT c.id, c.name, c.type, c.contract_valid_till, c.created_at, c.updated_at, "
-        "(SELECT COUNT(*) FROM client_contacts cc WHERE cc.fkClient = c.id) AS client_contact_count "
-        "FROM clients c WHERE c.id = %s",
-        [client_id],
-    )
-    if not r:
+    doc = await db[COLL].find_one({"id": client_id})
+    if not doc:
         raise HTTPException(404, "Client not found")
-    return _mysql_client_to_row(r)
+    out = _with_placeholders(_serialize(doc))
+    await _attach_kams([out])
+    return out
 
 
 # ---------- Client Contacts by work-experience (Current vs Ex) ----------
@@ -307,53 +276,44 @@ def _contact_public(doc: dict, client_name: str, ex: bool = False) -> dict:
 
 @api_router.get("/clients/{client_id}/contacts")
 async def get_client_contacts_by_workex(client_id: str, user=Depends(get_current_user)):
-    """Client contacts belonging to this client (read live from MySQL).
+    """Client contacts that have this client mapped in their work experience.
 
     Response:
-      { client_id, client_name, current: [...], ex: [], current_count, ex_count }
+      {
+        client_id, client_name,
+        current: [...],   # currently working at this client (client_name matches)
+        ex:      [...],   # worked here previously (in previous_work_experience)
+        current_count, ex_count
+      }
     """
-    from mysql_db import mysql_query, mysql_query_one
-    data = await mysql_query(
-        "SELECT cc.id, cc.salutation, cc.name, cc.email, cc.mobile, cc.designation, "
-        "cc.is_compliance_officer, c.name AS client_name "
-        "FROM client_contacts cc LEFT JOIN clients c ON c.id = cc.fkClient "
-        "WHERE cc.fkClient = %s ORDER BY cc.name ASC",
-        [client_id],
-    )
-    if data:
-        name = (data[0].get("client_name") or "").strip()
-    else:
-        client = await mysql_query_one("SELECT name FROM clients WHERE id = %s", [client_id])
-        if not client:
-            raise HTTPException(404, "Client not found")
-        name = (client.get("name") or "").strip()
+    client = await db[COLL].find_one({"id": client_id})
+    if not client:
+        raise HTTPException(404, "Client not found")
+    name = (client.get("name") or "").strip()
+    if not name:
+        return {"client_id": client_id, "client_name": name,
+                "current": [], "ex": [], "current_count": 0, "ex_count": 0}
 
-    current = [
-        {
-            "id": str(d.get("id")),
-            "display_id": d.get("id"),
-            "name": d.get("name") or "",
-            "email": d.get("email") or "",
-            "phone": d.get("mobile") or "",
-            "phone_isd": "",
-            "client_name": name,
-            "designation": d.get("designation") or "",
-            "type": "",
-            "base_location": "",
-            "city": "",
-            "country_name": "",
-            "totals_till_date": {},
-            "linkedin_url": "",
-        }
-        for d in data
-    ]
+    exact_ci = {"$regex": f"^{_esc(name)}$", "$options": "i"}
+    cc = db["client_contacts"]
+
+    current, ex = [], []
+    async for d in cc.find({"client_name": exact_ci}).sort("name", 1):
+        current.append(_contact_public(d, name))
+    # Worked here before but not currently (avoids double-listing rejoiners).
+    async for d in cc.find({
+        "previous_work_experience.company_name": exact_ci,
+        "client_name": {"$not": exact_ci},
+    }).sort("name", 1):
+        ex.append(_contact_public(d, name, ex=True))
+
     return {
         "client_id": client_id,
         "client_name": name,
         "current": current,
-        "ex": [],
+        "ex": ex,
         "current_count": len(current),
-        "ex_count": 0,
+        "ex_count": len(ex),
     }
 
 
@@ -366,8 +326,7 @@ async def get_client_segmentation(client_id: str, user=Depends(get_current_user)
     """
     client = await db[COLL].find_one({"id": client_id})
     if not client:
-        # Client lives in the external MySQL source (no Mongo segmentation).
-        return {"exists": False, "segmentation": None, "client_name": ""}
+        raise HTTPException(404, "Client not found")
     name = client.get("name") or ""
     seg = await db["segmentations"].find_one({
         "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}

@@ -337,6 +337,20 @@ function ClientContactsList() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
 
+  // Manual "Sync from MySQL" (runs in background on the server)
+  const [syncing, setSyncing] = useState(false);
+  const handleSyncFromMysql = async () => {
+    setSyncing(true);
+    try {
+      await api.post(`/crm-sync/run?scope=contacts`);
+      notify.success("Sync started — new records & metrics will refresh in a few minutes.");
+    } catch (e) {
+      notify.error(formatApiError(e, "Failed to start sync"));
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const l1Options = useMemo(() => levelOneOptions(segments), [segments]);
   const l2Options = useMemo(
     () => levelTwoOptions(segments, form.client_name),
@@ -470,6 +484,42 @@ function ClientContactsList() {
       <Layout
         title="Client Contacts"
         contentClassName="w-full px-4 pt-4 pb-3 flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden"
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={handleSyncFromMysql}
+              disabled={syncing}
+              className="h-9 border-gray-300 text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324]"
+              data-testid="cc-sync-btn"
+            >
+              <Loader2 sx={{ fontSize: 16 }} className={`mr-1.5 ${syncing ? "animate-spin" : ""}`} /> {syncing ? "Syncing…" : "Sync"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setHistoryOpen(true)}
+              className="h-9 border-gray-300 text-gray-700 hover:border-[#ec9324] hover:text-[#ec9324]"
+              data-testid="cc-upload-history-btn"
+            >
+              <History sx={{ fontSize: 16 }} className="mr-1.5" /> Upload History
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setBulkOpen(true)}
+              className="h-9 border-[#ec9324] text-[#ec9324] hover:bg-[#ec9324]/10"
+              data-testid="cc-open-bulk-upload-btn"
+            >
+              <Upload sx={{ fontSize: 16 }} className="mr-1.5" /> Upload Contacts
+            </Button>
+            <Button
+              onClick={openCreate}
+              className="bg-[#ec9324] hover:bg-[#d4811f] text-white h-9"
+              data-testid="client-contact-add-btn"
+            >
+              <Plus sx={{ fontSize: 16 }} className="mr-1.5" /> Client Contact
+            </Button>
+          </div>
+        }
       >
         {/* Toolbar */}
         <div className="shrink-0 -mx-4 px-4 pt-1 pb-3 bg-gray-50/95 backdrop-blur">
@@ -1244,6 +1294,21 @@ function ClientContactDetail({ contactId }) {
   // Detail-view tabs. Only "overview" has content; the rest are blank pages.
   const [activeTab, setActiveTab] = useState("overview");
 
+  // Per-contact "Sync from MySQL" — refreshes this contact's activity metrics.
+  const [syncingOne, setSyncingOne] = useState(false);
+  const handleSyncOne = async () => {
+    setSyncingOne(true);
+    try {
+      const r = await api.post(`/client-contacts/${contactId}/sync`);
+      setRow(r.data);
+      notify.success("Synced from MySQL");
+    } catch (e) {
+      notify.error(formatApiError(e, "Sync failed"));
+    } finally {
+      setSyncingOne(false);
+    }
+  };
+
   const load = async () => {
     setLoading(true);
     try {
@@ -1399,7 +1464,26 @@ function ClientContactDetail({ contactId }) {
               </div>
             </div>
 
-            {/* Right — Edit Contact hidden (external MySQL source is read-only) */}
+            {/* Right — Sync + Edit Contact */}
+            <div className="flex-shrink-0 flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={handleSyncOne}
+                disabled={syncingOne}
+                data-testid="cc-detail-sync"
+                className="h-9"
+              >
+                <Loader2 sx={{ fontSize: 16 }} className={`mr-1.5 ${syncingOne ? "animate-spin" : ""}`} /> {syncingOne ? "Syncing…" : "Sync"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={openEdit}
+                data-testid="cc-detail-edit"
+                className="h-9"
+              >
+                <Pencil sx={{ fontSize: 16 }} className="mr-1.5" /> Edit Contact
+              </Button>
+            </div>
           </div>
 
           {/* Tabs */}
@@ -1515,6 +1599,14 @@ function OverviewTab({ row, onAddEmployment }) {
               <EmploymentCard key={i} w={w} row={row} idx={i} />
             ))}
           </div>
+          <button
+            type="button"
+            onClick={onAddEmployment}
+            data-testid="cc-add-employment"
+            className="mt-3 w-full border border-dashed border-gray-300 rounded-lg py-2.5 text-sm font-medium text-[#ec9324] hover:bg-[#ec9324]/5 flex items-center justify-center gap-1.5"
+          >
+            <Plus sx={{ fontSize: 16 }} /> Add New Employment / Client Association
+          </button>
         </div>
 
         {/* Summary + Employment Overlap */}

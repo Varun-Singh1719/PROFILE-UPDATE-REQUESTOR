@@ -33,6 +33,7 @@ import Assignment from "@mui/icons-material/AssignmentOutlined";
 import PieChart from "@mui/icons-material/PieChartOutlineOutlined";
 import Timer from "@mui/icons-material/TimerOutlined";
 import Pencil from "@mui/icons-material/EditOutlined";
+import Autorenew from "@mui/icons-material/Autorenew";
 import Save from "@mui/icons-material/SaveOutlined";
 
 const CLIENT_TYPES = [
@@ -102,6 +103,21 @@ export default function ClientDetailPage() {
   const [form, setForm] = useState({ name: "", type: "", key_account_manager_ids: [] });
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState("");
+
+  // Per-client "Sync from MySQL" — refreshes this client's activity metrics.
+  const [syncingOne, setSyncingOne] = useState(false);
+  const handleSyncOne = async () => {
+    setSyncingOne(true);
+    try {
+      const r = await api.post(`/clients/${id}/sync`);
+      setRow(r.data);
+      notify.success("Synced from MySQL");
+    } catch (e) {
+      notify.error(formatApiError(e, "Sync failed"));
+    } finally {
+      setSyncingOne(false);
+    }
+  };
   const [employees, setEmployees] = useState([]);   // employee directory for KAM dropdown
 
   const [filter, setFilter] = useState(getLast6MonthsRange);
@@ -262,10 +278,8 @@ export default function ClientDetailPage() {
     return leaves;
   }, [seg]);
 
-  // Top-bar action = Edit / Save / Cancel.
-  // External MySQL CRM source is read-only — hide all edit actions.
-  const READ_ONLY = true;
-  const topBarActions = READ_ONLY ? null : editing ? (
+  // Top-bar action = Edit / Save / Cancel
+  const topBarActions = editing ? (
     <div className="flex items-center gap-2">
       <Button
         variant="outline"
@@ -285,14 +299,26 @@ export default function ClientDetailPage() {
       </Button>
     </div>
   ) : (
-    <Button
-      onClick={() => setEditing(true)}
-      className="bg-[#ec9324] hover:bg-[#d3811b] text-white h-9"
-      data-testid="client-detail-edit"
-    >
-      <Pencil sx={{ fontSize: 18, marginRight: "4px" }} />
-      Edit
-    </Button>
+    <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        onClick={handleSyncOne}
+        disabled={syncingOne}
+        className="h-9"
+        data-testid="client-detail-sync"
+      >
+        <Autorenew sx={{ fontSize: 16, marginRight: "4px" }} className={syncingOne ? "animate-spin" : ""} />
+        {syncingOne ? "Syncing…" : "Sync"}
+      </Button>
+      <Button
+        onClick={() => setEditing(true)}
+        className="bg-[#ec9324] hover:bg-[#d3811b] text-white h-9"
+        data-testid="client-detail-edit"
+      >
+        <Pencil sx={{ fontSize: 18, marginRight: "4px" }} />
+        Edit
+      </Button>
+    </div>
   );
 
   return (
@@ -980,6 +1006,19 @@ function POCStatusConfigBar({ clientId }) {
           <div className="text-base font-semibold text-gray-900" data-testid="poc-config-value">
             {loading ? "…" : `${valueDuration} ${valueUnitLabel}`}
           </div>
+          <button
+            type="button"
+            onClick={openEditor}
+            disabled={loading}
+            aria-label="Edit"
+            className="group relative inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-100 text-gray-600 disabled:opacity-50"
+            data-testid="poc-config-edit"
+          >
+            <Pencil sx={{ fontSize: 20 }} />
+            <span className="pointer-events-none absolute top-full mt-1.5 right-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+              Edit
+            </span>
+          </button>
         </div>
       </div>
 

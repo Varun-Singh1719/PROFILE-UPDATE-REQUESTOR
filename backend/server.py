@@ -54,6 +54,7 @@ from routers import crm_overview as _crm_overview  # noqa: F401
 from routers import poc_status as _poc_status  # noqa: F401
 from routers import client_contact_uploads as _client_contact_uploads  # noqa: F401  (must come BEFORE client_contacts so /client-contacts/sample-template etc. beat /client-contacts/{id})
 from routers import client_contacts as _client_contacts  # noqa: F401
+from routers import crm_sync_api as _crm_sync_api  # noqa: F401
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -392,6 +393,24 @@ async def startup():
             CronTrigger(hour=0, minute=15),
             id="no_action_sweep",
             replace_existing=True,
+        )
+        # CRM MySQL → MongoDB sync + metric refresh, every 2 hours.
+        import crm_sync as _crm_sync_mod
+        from apscheduler.triggers.interval import IntervalTrigger
+
+        async def _run_crm_sync():
+            try:
+                res = await _crm_sync_mod.run_full_sync("all")
+                logger.info(f"CRM sync (2h): {res}")
+            except Exception as _e:  # noqa: BLE001
+                logger.warning(f"CRM sync failed: {_e}")
+
+        _scheduler.add_job(
+            _run_crm_sync,
+            IntervalTrigger(hours=2),
+            id="crm_mysql_sync",
+            replace_existing=True,
+            next_run_time=None,   # first run scheduled 2h out; initial migration is manual/startup
         )
         _scheduler.start()
         logger.info("Scheduler started — daily 'No Action Taken' sweep at 00:15 IST")
