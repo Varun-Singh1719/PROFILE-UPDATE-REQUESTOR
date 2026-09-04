@@ -317,7 +317,7 @@ export function ClientContactDetailModal({ contactId, open, onClose }) {
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose?.(); }}>
       <DialogContent
-        className="max-w-5xl max-h-[92vh] overflow-y-auto p-4 sm:p-6"
+        className="w-[96vw] max-w-[1500px] max-h-[92vh] overflow-y-auto p-4 sm:p-6"
         data-testid="cc-detail-modal"
       >
         <DialogHeader className="sr-only">
@@ -1647,6 +1647,9 @@ function OverviewTab({ row, onAddEmployment }) {
   const work = row.previous_work_experience || [];
   const overlap = computeEmploymentOverlap(work);
 
+  // Activity Summary (bottom overview) DateFilter — default last 12 months.
+  const [actFilter, setActFilter] = useState(getLast12MonthsRange());
+
   // Placeholder sample rows (no backend breakdown yet) — mirror the design.
   const projectsByClient = [
     { client: "Boston Consulting Group (BCG)", count: 12, last: "15 Jul 2026" },
@@ -1764,6 +1767,13 @@ function OverviewTab({ row, onAddEmployment }) {
           testId="cc-calls-by-client"
         />
       </div>
+
+      {/* Activity Summary — bottom overview of numbers (Projects/Serviced/Calls/Revenue) */}
+      <ActivitySummary
+        filter={actFilter}
+        onFilterChange={setActFilter}
+        data={row.activity_by_month}
+      />
     </div>
   );
 }
