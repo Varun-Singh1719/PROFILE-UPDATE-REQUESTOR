@@ -452,3 +452,7 @@ Verified end-to-end on the InfraXcellence team (16 members): mid-plan click cent
 ## Sep 05 2026 — Status / Current-Former chips now = ProfiX StatusBadge style
 - `POCStatusChip` + `EmploymentRelationChip` re-styled to the exact ProfiX → All Requests → Status pill (`PROFIX_PILL_CLASS`: outlined, white bg, 2px border, FIXED `w-28 h-7`, text-xs semibold). Active = ProfiX Open green `#16a34a`; Dormant = ProfiX Closed red `#dc2626`; Current = green `#16a34a`; Former = blue `#2563eb`. All four states share one fixed size. `size` prop removed (ignored). Applies everywhere POCStatusChip is used (CC list cards, CC detail, Client → Client Contacts cards).
 - (follow-up) `EmploymentRelationChip` switched to a SOFT-FILLED pill per user reference (Current: `bg-green-50 border-green-200 text-green-700`; Former: `bg-blue-50 border-blue-200 text-blue-700`), still fixed `w-28 h-7`. POCStatusChip stays ProfiX-outlined.
+
+## Sep 05 2026 — One-time data fix: Client Contact Type by designation (NOT automated)
+- Direct DB update on `client_contacts` (Atlas app_db): VP Research → Domain Specific (293), Engagement Manager → Domain Specific (282), Analyst → Domain Agnostic (268), Compliance Head → Central Team (240). 1,083 records updated; all other designations left untouched. Each change recorded on the contact's Timeline as user "System (data migration)" (field Type — Added).
+- Note: "Domain Specific" requires ≥1 Industry at API level, so these contacts will need an Industry chosen the next time they are edited via the form.
