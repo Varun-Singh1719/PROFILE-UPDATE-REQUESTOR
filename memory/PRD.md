@@ -421,3 +421,9 @@ Verified end-to-end on the InfraXcellence team (16 members): mid-plan click cent
 
 ## Sep 05 2026 — Client Contact detail POP-UP keeps a constant size across tabs
 - `ClientContactDetailModal` (`ClientContactsPage.jsx`): `DialogContent` changed from `max-h-[92vh]` to fixed `h-[92vh] max-h-[92vh]` (width already fixed `w-[96vw] max-w-[1500px]`). The pop-up (opened from CRM → Client → Client Contacts) no longer shrinks on short/blank tabs (Employment History, Interactions, Notes, Timeline); content scrolls inside. Verified via Playwright: bounding box identical (1500×994 @1920×800) on all 5 tabs. Testing agent NOT deployed (user instruction).
+
+## Sep 05 2026 — Employment History tab: circular "+" → Add Previous Work Experience (standalone form)
+- `EmploymentHistoryTab` (`ClientContactsPage.jsx`) now receives `onSaved={setRow}` and renders a centred circular orange `+` (`cc-employment-add`, 40px, hover tooltip) below the last employment card.
+- Click opens NEW `AddWorkExDialog` (`cc-add-workex-dialog`) — ONLY the previous-work-experience form (Company Name*, Designation*, Start Date*, End Date* incl. "Present"; same notched `Field` + `MonthYearPicker` UI as the Edit form). Save → `PATCH /client-contacts/{id}?force=true` with `{previous_work_experience: existing + new}` → row refreshed in place; Timeline records "Employment History — Added". The full Edit Client Contact dialog is NOT opened.
+- Bug fix in shared `components/MonthYearPicker.jsx`: `parse()` now round-trips partial values ("Jun" / "2016"), so picking Month first then Year no longer drops the month (previously saved as "2016"). Also benefits the Edit Client Contact form.
+- Verified via Playwright (button centred; validation; Mar 2014 – Present saved; Timeline entry). Testing agent NOT deployed (user instruction).

@@ -1863,7 +1863,7 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
           {activeTab === "overview" ? (
             <OverviewTab row={row} />
           ) : activeTab === "employment" ? (
-            <EmploymentHistoryTab row={row} />
+            <EmploymentHistoryTab row={row} onSaved={setRow} />
           ) : activeTab === "timeline" ? (
             <TimelineTab row={row} />
           ) : (
@@ -2175,16 +2175,153 @@ function OverviewTab({ row }) {
   );
 }
 
-// Employment History tab — the full timeline (current + every past role).
-function EmploymentHistoryTab({ row }) {
+// Employment History tab — the full timeline (current + every past role) plus
+// a centred circular "+" below the last entry that opens ONLY the
+// "Add Previous Work Experience" form (not the full Edit Client Contact dialog).
+function EmploymentHistoryTab({ row, onSaved }) {
   const employment = useMemo(() => buildEmployment(row), [row]);
+  const [addOpen, setAddOpen] = useState(false);
   return (
     <div className="space-y-4" data-testid="cc-tabpanel-employment">
       <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
         <SectionTitle>Employment History</SectionTitle>
         <EmploymentTimeline items={employment} row={row} />
+        {/* Add previous work experience — circular, centred, below the last entry */}
+        <div className="flex justify-center mt-4">
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            title="Add previous work experience"
+            aria-label="Add previous work experience"
+            data-testid="cc-employment-add"
+            className="group relative w-10 h-10 rounded-full bg-[#ec9324] hover:bg-[#d3811b] text-white shadow-md hover:shadow-lg flex items-center justify-center transition-all focus:outline-none focus:ring-2 focus:ring-[#ec9324]/40 focus:ring-offset-2"
+          >
+            <Plus sx={{ fontSize: 22 }} />
+            <span className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-1.5 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+              Add previous work experience
+            </span>
+          </button>
+        </div>
       </div>
+
+      <AddWorkExDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        row={row}
+        onSaved={onSaved}
+      />
     </div>
+  );
+}
+
+// Standalone "Add Previous Work Experience" dialog — same four fields as the
+// work-experience rows inside the Edit Client Contact form, but it PATCHes
+// ONLY `previous_work_experience` (existing rows + the new one). The change
+// flows through the normal save path, so the Timeline records it as well.
+const EMPTY_WORKEX = { company_name: "", designation: "", start_month_year: "", end_month_year: "" };
+
+function AddWorkExDialog({ open, onOpenChange, row, onSaved }) {
+  const [w, setW] = useState(EMPTY_WORKEX);
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setW((prev) => ({ ...prev, [k]: v }));
+
+  // Reset the form every time the dialog opens.
+  useEffect(() => { if (open) setW(EMPTY_WORKEX); }, [open]);
+
+  const save = async () => {
+    const fullDate = (v) => /^[A-Za-z]{3} \d{4}$/.test((v || "").trim());
+    if (!(w.company_name || "").trim()) { notify.error("Company Name is required"); return; }
+    if (!(w.designation || "").trim()) { notify.error("Designation is required"); return; }
+    if (!fullDate(w.start_month_year)) { notify.error("Start Date needs both month and year"); return; }
+    if (!fullDate(w.end_month_year) && (w.end_month_year || "").trim().toLowerCase() !== "present") {
+      notify.error("End Date needs both month and year (or Present)"); return;
+    }
+    setSaving(true);
+    try {
+      const next = [
+        ...((row.previous_work_experience || []).map((x) => ({ ...x }))),
+        {
+          company_name: w.company_name.trim(),
+          designation: w.designation.trim(),
+          start_month_year: w.start_month_year,
+          end_month_year: w.end_month_year,
+        },
+      ];
+      // force=true: only the work-experience list changes here, so the
+      // email/phone duplicate check is irrelevant for this save.
+      const r = await api.patch(`/client-contacts/${row.id}?force=true`, { previous_work_experience: next });
+      onSaved?.(r.data);
+      notify.success("Work experience added");
+      onOpenChange(false);
+    } catch (e) {
+      notify.error(formatApiError(e, "Failed to add work experience"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!saving) onOpenChange(o); }}>
+      <DialogContent className="max-w-lg" data-testid="cc-add-workex-dialog">
+        <DialogHeader>
+          <DialogTitle>Add Previous Work Experience</DialogTitle>
+          <DialogDescription>
+            Adds a past role to {row?.name || "this contact"}&apos;s employment history.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 mt-1">
+          <div className="grid grid-cols-2 gap-x-2 gap-y-4">
+            <Field label="Company Name *" labelBg="bg-gray-50">
+              <Input
+                value={w.company_name}
+                onChange={(e) => set("company_name", e.target.value)}
+                placeholder="e.g. Acme Corp"
+                data-testid="cc-add-workex-company"
+                autoFocus
+              />
+            </Field>
+            <Field label="Designation *" labelBg="bg-gray-50">
+              <Input
+                value={w.designation}
+                onChange={(e) => set("designation", e.target.value)}
+                placeholder="e.g. Manager"
+                data-testid="cc-add-workex-designation"
+              />
+            </Field>
+            <Field label="Start Date *" labelBg="bg-gray-50">
+              <MonthYearPicker
+                value={w.start_month_year}
+                onChange={(v) => set("start_month_year", v)}
+                testId="cc-add-workex-start"
+              />
+            </Field>
+            <Field label="End Date *" labelBg="bg-gray-50">
+              <MonthYearPicker
+                value={w.end_month_year}
+                onChange={(v) => set("end_month_year", v)}
+                allowPresent
+                testId="cc-add-workex-end"
+              />
+            </Field>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+            Cancel
+          </Button>
+          <Button
+            onClick={save}
+            disabled={saving}
+            data-testid="cc-add-workex-submit"
+            className="bg-[#ec9324] hover:bg-[#d4811f] text-white"
+          >
+            {saving ? "Saving…" : "Add work experience"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

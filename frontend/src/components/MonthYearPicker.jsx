@@ -42,6 +42,13 @@ function parse(value) {
     const m = MONTHS.find((mm) => mm.toLowerCase() === parts[0].toLowerCase().slice(0, 3));
     return { month: m || "", year: /^\d{4}$/.test(parts[1]) ? parts[1] : "", present: false };
   }
+  // Partial (draft) selection — "Jun" (month only) or "2016" (year only).
+  // Must round-trip, otherwise picking Month first and Year second loses the month.
+  if (parts.length === 1) {
+    if (/^\d{4}$/.test(parts[0])) return { month: "", year: parts[0], present: false };
+    const m = MONTHS.find((mm) => mm.toLowerCase() === parts[0].toLowerCase().slice(0, 3));
+    if (m) return { month: m, year: "", present: false };
+  }
   return { month: "", year: "", present: false };
 }
 
