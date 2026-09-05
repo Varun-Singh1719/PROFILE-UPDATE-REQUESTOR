@@ -354,6 +354,15 @@ export function ClientContactDetailModal({ contactId, open, onClose, navItems = 
         {contactId && (
           <ClientContactDetail contactId={contactId} inModal onClose={onClose} swipeNav={swipeNav} relation={relation} />
         )}
+        {/* Close (X) — ORIGINAL corner position; UI/UX identical to the Edit button
+            (gray → orange + light-orange bg on hover, native "Close" tooltip). */}
+        <CardStyleIconButton
+          icon={<CloseIcon sx={{ fontSize: 16 }} />}
+          tooltip="Close"
+          onClick={onClose}
+          testId="cc-detail-close"
+          className="absolute right-4 top-4 z-30"
+        />
       </DialogContent>
     </Dialog>
   );
@@ -1841,9 +1850,7 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
             </div>
 
             {/* Right column (top → bottom): POC Status chip → Current / Former chip
-                → Sync + Edit round icon buttons (same UI/UX as the Notification Bell).
-                In the pop-up the Close (X) button sits at the far right of the
-                button row with the identical style + "Close" tooltip. */}
+                → Sync + Edit icon buttons (same UI/UX as the Client card Edit button). */}
             <div className="flex-shrink-0 flex flex-col items-end gap-1.5" data-testid="cc-detail-right-column">
               {row.poc_status && (
                 <div data-testid="cc-detail-status">
@@ -1856,27 +1863,19 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
                 </div>
               )}
               <div className="flex items-center gap-1 mt-0.5">
-                <BellStyleIconButton
-                  icon={<Loader2 sx={{ fontSize: 20 }} className={syncingOne ? "animate-spin" : ""} />}
+                <CardStyleIconButton
+                  icon={<Loader2 sx={{ fontSize: 16 }} className={syncingOne ? "animate-spin" : ""} />}
                   tooltip={syncingOne ? "Syncing…" : "Sync"}
                   onClick={handleSyncOne}
                   disabled={syncingOne}
                   testId="cc-detail-sync"
                 />
-                <BellStyleIconButton
-                  icon={<Pencil sx={{ fontSize: 20 }} />}
+                <CardStyleIconButton
+                  icon={<Pencil sx={{ fontSize: 16 }} />}
                   tooltip="Edit"
                   onClick={openEdit}
                   testId="cc-detail-edit"
                 />
-                {inModal && (
-                  <BellStyleIconButton
-                    icon={<CloseIcon sx={{ fontSize: 20 }} />}
-                    tooltip="Close"
-                    onClick={() => onClose?.()}
-                    testId="cc-detail-close"
-                  />
-                )}
               </div>
             </div>
           </div>
@@ -1950,23 +1949,21 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
   );
 }
 
-// Round icon button — EXACT same UI/UX as the top-bar Notification Bell trigger
-// (w-9 h-9 rounded-full, hover:bg-gray-100, gray-600 icon, dark tooltip that
-// appears below on hover). Used for Sync / Edit / Close in the detail view.
-function BellStyleIconButton({ icon, tooltip, onClick, disabled = false, testId, className = "" }) {
+// Icon button — EXACT same UI/UX as the Edit (pencil) button on the Client
+// card view (ClientsPage): w-7 h-7 rounded-md, gray icon that turns orange with
+// a light-orange background on hover, native "title" tooltip.
+function CardStyleIconButton({ icon, tooltip, onClick, disabled = false, testId, className = "" }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
+      title={tooltip}
       aria-label={tooltip}
       data-testid={testId}
-      className={`group relative inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-100 text-gray-600 disabled:opacity-60 disabled:hover:bg-transparent ${className}`}
+      className={`w-7 h-7 rounded-md flex items-center justify-center text-gray-500 hover:text-[#ec9324] hover:bg-orange-50 transition-colors flex-shrink-0 disabled:opacity-60 disabled:hover:bg-transparent disabled:hover:text-gray-500 ${className}`}
     >
       {icon}
-      <span className="pointer-events-none absolute top-full mt-1.5 right-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
-        {tooltip}
-      </span>
     </button>
   );
 }

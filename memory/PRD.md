@@ -456,3 +456,8 @@ Verified end-to-end on the InfraXcellence team (16 members): mid-plan click cent
 ## Sep 05 2026 — One-time data fix: Client Contact Type by designation (NOT automated)
 - Direct DB update on `client_contacts` (Atlas app_db): VP Research → Domain Specific (293), Engagement Manager → Domain Specific (282), Analyst → Domain Agnostic (268), Compliance Head → Central Team (240). 1,083 records updated; all other designations left untouched. Each change recorded on the contact's Timeline as user "System (data migration)" (field Type — Added).
 - Note: "Domain Specific" requires ≥1 Industry at API level, so these contacts will need an Industry chosen the next time they are edited via the form.
+
+## Sep 05 2026 — CORRECTION: detail-view icon buttons = Client card Edit button; X back to corner
+- `BellStyleIconButton` REMOVED (wrong reference). New `CardStyleIconButton` = exact ClientsPage card Edit button (`w-7 h-7 rounded-md text-gray-500 hover:text-[#ec9324] hover:bg-orange-50 transition-colors`, native `title` tooltip). Used for Sync ("Sync"/"Syncing…"), Edit ("Edit") in `ClientContactDetail`, and Close ("Close").
+- Close (X) moved BACK to its original position (absolute `right-4 top-4` inside `DialogContent` of `ClientContactDetailModal`), only re-styled to the card-button look; default Radix X still suppressed via `hideClose`.
+- LESSON: when the user says "same as <button>", match that exact element's classes; never relocate elements unless asked.
