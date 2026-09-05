@@ -19,10 +19,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import useTrackpadSwipeNav from "../hooks/useTrackpadSwipeNav";
-import {
-  saveClientContactNavContext,
-  loadClientContactNavContext,
-} from "../lib/clientContactNavContext";
 import Layout from "../components/Layout";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -320,17 +316,27 @@ export default function ClientContactsPage() {
 // ============================================================ Reusable modals
 // Popup detail view — renders the exact same Client Contact detail body inside a
 // dialog (used from the Client → Client Contacts tab, no page redirect).
-export function ClientContactDetailModal({ contactId, open, onClose }) {
+export function ClientContactDetailModal({ contactId, open, onClose, navIds = null, onNavigate = null }) {
+  // The dialog body is the scroll container; the swipe listener attaches to it
+  // and it is scrolled back to the top when the contact changes.
+  const [scrollEl, setScrollEl] = useState(null);
+  const swipeNav = useMemo(
+    () => (Array.isArray(navIds) && typeof onNavigate === "function" ? { ids: navIds, onNavigate, scrollEl } : null),
+    [navIds, onNavigate, scrollEl]
+  );
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose?.(); }}>
       <DialogContent
+        ref={setScrollEl}
         className="w-[96vw] max-w-[1500px] max-h-[92vh] overflow-y-auto p-4 sm:p-6"
         data-testid="cc-detail-modal"
       >
         <DialogHeader className="sr-only">
           <DialogTitle>Client Contact</DialogTitle>
         </DialogHeader>
-        {contactId && <ClientContactDetail contactId={contactId} inModal onClose={onClose} />}
+        {contactId && (
+          <ClientContactDetail contactId={contactId} inModal onClose={onClose} swipeNav={swipeNav} />
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -492,19 +498,6 @@ function ClientContactsList() {
   // Client-side sort (backend returns newest-first by default).
   const displayed = useMemo(() => sortRows(rows, sortKey), [rows, sortKey]);
 
-  // Remember the on-screen order + active filters so the detail view can
-  // swipe prev/next in exactly this order (see useTrackpadSwipeNav).
-  const openDetail = (row) => {
-    saveClientContactNavContext({
-      ids: displayed.map((r) => r.id),
-      pageStart: page,
-      pageEnd: page,
-      pageSize,
-      total,
-      params: { search, clientFilter, sortKey },
-    });
-    navigate(`/crm/client-contacts/${row.id}`);
-  };
 
   const openCreate = () => {
     setEditing(null);
@@ -696,7 +689,7 @@ function ClientContactsList() {
                   <ContactCard
                     key={r.id}
                     row={r}
-                    onView={() => openDetail(r)}
+                    onView={() => navigate(`/crm/client-contacts/${r.id}`)}
                     onEdit={() => openEdit(r)}
                     onDelete={() => onDelete(r)}
                   />
@@ -1391,7 +1384,7 @@ function Field({ label, labelBg = "bg-white", children }) {
 }
 
 // ================================================================ DETAIL
-function ClientContactDetail({ contactId, inModal = false, onClose }) {
+function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = null }) {
   const navigate = useNavigate();
   const [row, setRow] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1452,32 +1445,24 @@ function ClientContactDetail({ contactId, inModal = false, onClose }) {
   }, [contactId]);
 
   // ------------------------------------------------------------------
-  // Trackpad swipe navigation between contacts (full-page view only).
-  // Order comes from the list the user came from (sessionStorage ctx);
-  // when the loaded ids run out we transparently fetch the adjacent list
-  // page with the same search / client filter / sort.
+  // Trackpad swipe navigation between contacts — POP-UP detail view opened
+  // from CRM → Client → Client Contacts tab. The parent passes `swipeNav`:
+  //   { ids: string[] (order of the list the user is looking at),
+  //     onNavigate(id), scrollEl (the dialog's scroll container) }
+  // Swipe left → next, swipe right → previous. No wrap-around.
   // ------------------------------------------------------------------
-  const [navCtx, setNavCtx] = useState(() => (inModal ? null : loadClientContactNavContext()));
-  const navCtxRef = useRef(navCtx);
-  navCtxRef.current = navCtx;
-  const extendingRef = useRef({ next: null, prev: null });
+  const navIds = Array.isArray(swipeNav?.ids) ? swipeNav.ids : null;
   const busyRef = useRef(false);
   const [slide, setSlide] = useState({ phase: "idle", dir: "next" });
-  const [hint, setHint] = useState(null); // { kind: 'intro'|'moved'|'edge', dir?, until }
+  const [hint, setHint] = useState(null); // { kind: 'intro'|'moved'|'edge', dir? }
   const hintTimerRef = useRef(null);
 
-  // The id we are *showing*. `row.id` updates in the same render as the slide
-  // (react-router commits the URL param a frame later in a low-priority
-  // transition), so derive position/neighbours from it to stay in lock-step.
+  // The id we are *showing* (row.id flips in the same render as the slide).
   const curId = row?.id || contactId;
-  const swipeEnabled = !inModal && !!navCtx && navCtx.ids.includes(curId);
-  const navIdx = swipeEnabled ? navCtx.ids.indexOf(curId) : -1;
-  const navPos = swipeEnabled ? (navCtx.pageStart - 1) * navCtx.pageSize + navIdx + 1 : 0;
-  const navTotal = swipeEnabled ? Math.max(navCtx.total || 0, navCtx.ids.length) : 0;
-  const hasMore = (ctx, dir) =>
-    dir === "next"
-      ? ctx.pageEnd * ctx.pageSize < (ctx.total || 0)
-      : ctx.pageStart > 1;
+  const swipeEnabled = !!navIds && navIds.length > 0 && navIds.includes(curId) && typeof swipeNav?.onNavigate === "function";
+  const navIdx = swipeEnabled ? navIds.indexOf(curId) : -1;
+  const navPos = swipeEnabled ? navIdx + 1 : 0;
+  const navTotal = swipeEnabled ? navIds.length : 0;
 
   const showHint = useCallback((kind, dir, ms) => {
     if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
@@ -1485,7 +1470,7 @@ function ClientContactDetail({ contactId, inModal = false, onClose }) {
     hintTimerRef.current = setTimeout(() => setHint(null), ms);
   }, []);
 
-  // Discoverability cue: show once when the page opens with swipe context.
+  // Discoverability cue: show once when the pop-up opens with swipe context.
   useEffect(() => {
     if (!swipeEnabled) return undefined;
     const t = setTimeout(() => showHint("intro", null, 4200), 400);
@@ -1508,71 +1493,14 @@ function ClientContactDetail({ contactId, inModal = false, onClose }) {
     };
   }, [swipeEnabled]);
 
-  // Fetch the adjacent list page (same filters + sort) and splice its ids
-  // into the context. Deduped per direction; persisted to sessionStorage.
-  const extendCtx = useCallback((dir) => {
-    const ctx = navCtxRef.current;
-    if (!ctx || !hasMore(ctx, dir)) return Promise.resolve(null);
-    if (extendingRef.current[dir]) return extendingRef.current[dir];
-    const p = (async () => {
-      const page = dir === "next" ? ctx.pageEnd + 1 : ctx.pageStart - 1;
-      const params = new URLSearchParams();
-      if (ctx.params?.search) params.set("search", ctx.params.search);
-      if (ctx.params?.clientFilter) params.set("client_name", ctx.params.clientFilter);
-      params.set("page", String(page));
-      params.set("page_size", String(ctx.pageSize));
-      const res = await api.get(`/client-contacts?${params.toString()}`, { silent: true });
-      const rows = sortRows(res.data.rows || [], ctx.params?.sortKey);
-      const known = new Set(ctx.ids);
-      const fresh = rows.map((r) => r.id).filter((id) => !known.has(id));
-      const next = {
-        ...ctx,
-        ids: dir === "next" ? [...ctx.ids, ...fresh] : [...fresh, ...ctx.ids],
-        pageStart: dir === "prev" ? page : ctx.pageStart,
-        pageEnd: dir === "next" ? page : ctx.pageEnd,
-        total: typeof res.data.total === "number" ? res.data.total : ctx.total,
-      };
-      navCtxRef.current = next;
-      setNavCtx(next);
-      saveClientContactNavContext(next);
-      return next;
-    })()
-      .catch(() => null)
-      .finally(() => { extendingRef.current[dir] = null; });
-    extendingRef.current[dir] = p;
-    return p;
-  }, []);
-
-  // Prefetch the neighbouring page as soon as we get near an edge so the
-  // swipe across a page boundary feels instant.
-  useEffect(() => {
-    if (!swipeEnabled) return;
-    if (navIdx >= navCtx.ids.length - 2 && hasMore(navCtx, "next")) extendCtx("next");
-    if (navIdx <= 1 && hasMore(navCtx, "prev")) extendCtx("prev");
-    /* eslint-disable-next-line */
-  }, [swipeEnabled, navIdx, navCtx]);
-
-  const neighbourId = async (dir) => {
-    let ctx = navCtxRef.current;
-    if (!ctx) return null;
-    let i = ctx.ids.indexOf(curId);
-    if (i < 0) return null;
-    let id = dir === "next" ? ctx.ids[i + 1] : ctx.ids[i - 1];
-    if (id) return id;
-    const ext = await extendCtx(dir);
-    if (!ext) return null;
-    ctx = ext;
-    i = ctx.ids.indexOf(curId);
-    return dir === "next" ? ctx.ids[i + 1] : ctx.ids[i - 1];
-  };
-
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   const goToNeighbour = useCallback(async (dir) => {
     if (busyRef.current || !swipeEnabled) return;
     busyRef.current = true;
     try {
-      const targetId = await neighbourId(dir);
+      const i = navIds.indexOf(curId);
+      const targetId = dir === "next" ? navIds[i + 1] : navIds[i - 1];
       if (!targetId) {
         // Boundary: subtle bump, no wrap-around.
         setSlide({ phase: "bump", dir });
@@ -1581,7 +1509,8 @@ function ClientContactDetail({ contactId, inModal = false, onClose }) {
         setSlide({ phase: "idle", dir });
         return;
       }
-      // 1) slide the current profile out while the next one loads
+      // 1) slide the current profile out while the next one loads (silently —
+      //    no global "Loading…" overlay, no flicker)
       setSlide({ phase: "out", dir });
       const [data] = await Promise.all([
         api.get(`/client-contacts/${targetId}`, { silent: true }).then((r) => r.data).catch(() => null),
@@ -1592,12 +1521,14 @@ function ClientContactDetail({ contactId, inModal = false, onClose }) {
         setSlide({ phase: "idle", dir });
         return;
       }
-      // 2) swap content (invisible) and reposition on the opposite side
-      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      // 2) swap content while invisible, reposition on the opposite side,
+      //    scroll the pop-up back to the top
+      const scroller = swipeNav?.scrollEl || null;
+      if (scroller && typeof scroller.scrollTo === "function") scroller.scrollTo({ top: 0, left: 0, behavior: "auto" });
       prefetchedRef.current = { id: targetId, data };
       setRow(data);
       setSlide({ phase: "enter", dir });
-      navigate(`/crm/client-contacts/${targetId}`);
+      swipeNav.onNavigate(targetId);
       // 3) slide the new profile in
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       setSlide({ phase: "in", dir });
@@ -1608,7 +1539,7 @@ function ClientContactDetail({ contactId, inModal = false, onClose }) {
       busyRef.current = false;
     }
     /* eslint-disable-next-line */
-  }, [swipeEnabled, curId, navigate, showHint]);
+  }, [swipeEnabled, curId, navIds, swipeNav, showHint]);
 
   const SLIDE_PX = 56;
   const slideStyle = (() => {
@@ -1662,6 +1593,8 @@ function ClientContactDetail({ contactId, inModal = false, onClose }) {
     isBusy: () => busyRef.current,
     threshold: 70,
     idleMs: 350,
+    // Listen on the pop-up's own scroll container (falls back to document).
+    target: swipeNav?.scrollEl || null,
   });
 
   const onSave = async (opts = {}) => {
@@ -1713,22 +1646,24 @@ function ClientContactDetail({ contactId, inModal = false, onClose }) {
         <div className={inModal ? "px-1 pb-2 space-y-4 w-full" : "px-6 pt-4 pb-8 space-y-4 w-full"}>
           {/* Back link (full-page view only) */}
           {!inModal && (
-            <div className="flex items-center justify-between gap-3">
-              <button
-                onClick={() => navigate("/crm/client-contacts")}
-                className="text-xs text-gray-500 hover:text-[#ec9324] flex items-center gap-1"
+            <button
+              onClick={() => navigate("/crm/client-contacts")}
+              className="text-xs text-gray-500 hover:text-[#ec9324] flex items-center gap-1"
+            >
+              <BackArrow sx={{ fontSize: 14 }} /> Back to Client Contacts
+            </button>
+          )}
+
+          {/* Pop-up: tiny position counter (top-right, next to the dialog close) */}
+          {swipeEnabled && (
+            <div className="flex justify-end -mb-2 pr-8">
+              <span
+                className="text-[11px] text-gray-400 tabular-nums select-none"
+                data-testid="cc-swipe-position"
+                title="Swipe horizontally on your trackpad to move between contacts"
               >
-                <BackArrow sx={{ fontSize: 14 }} /> Back to Client Contacts
-              </button>
-              {swipeEnabled && (
-                <span
-                  className="text-[11px] text-gray-400 tabular-nums select-none"
-                  data-testid="cc-swipe-position"
-                  title="Swipe horizontally on your trackpad to move between contacts"
-                >
-                  {navPos} of {navTotal}
-                </span>
-              )}
+                {navPos} of {navTotal}
+              </span>
             </div>
           )}
 
@@ -1851,12 +1786,13 @@ function ClientContactDetail({ contactId, inModal = false, onClose }) {
             <div data-testid={`cc-tabpanel-${activeTab}`} className="min-h-[240px]" />
           )}
           </div>{/* /sliding container */}
-        </div>
 
-        {/* Unobtrusive swipe cue (auto-hides) */}
-        {swipeEnabled && (
-          <SwipeHint hint={hint} pos={navPos} total={navTotal} />
-        )}
+          {/* Unobtrusive swipe cue (auto-hides). Sticky to the bottom of the
+              pop-up's scroll area so it stays visible while scrolling. */}
+          {swipeEnabled && (
+            <SwipeHint hint={hint} pos={navPos} total={navTotal} />
+          )}
+        </div>
 
         <ContactFormDialog
           open={dialogOpen}
@@ -1925,16 +1861,20 @@ function SwipeHint({ hint, pos, total }) {
       aria-live="polite"
       data-testid="cc-swipe-hint"
       data-visible={visible ? "1" : "0"}
-      className={`pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 z-40 transition-all duration-300 ${
-        visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
-      }`}
+      className="sticky bottom-2 z-40 flex justify-center pointer-events-none h-0 -mt-2"
     >
       <div
-        className={`px-3 py-1.5 rounded-full text-[11px] font-medium text-white shadow-lg backdrop-blur ${
-          hint?.kind === "edge" ? "bg-gray-800/90 animate-[ccShake_.35s_ease-in-out]" : "bg-gray-900/85"
+        className={`-translate-y-full transition-all duration-300 ${
+          visible ? "opacity-100" : "opacity-0 translate-y-[-80%]"
         }`}
       >
-        {body}
+        <div
+          className={`px-3 py-1.5 rounded-full text-[11px] font-medium text-white shadow-lg backdrop-blur ${
+            hint?.kind === "edge" ? "bg-gray-800/90 animate-[ccShake_.35s_ease-in-out]" : "bg-gray-900/85"
+          }`}
+        >
+          {body}
+        </div>
       </div>
     </div>
   );

@@ -83,13 +83,17 @@ export function useTrackpadSwipeNav({
       return { dx: e.deltaX * k, dy: e.deltaY * k };
     };
 
+    // The dialog we live in (when the listener is attached inside a pop-up).
+    const ownDialog =
+      el !== document && typeof el.closest === "function" ? el.closest("[role='dialog']") : null;
+
     const onWheel = (e) => {
-      // Never interfere with wheel events inside dialogs / popups / inputs
-      // that are rendered on top of the page (e.g. the Edit Contact form).
+      // Never interfere with wheel events inside OTHER dialogs / popups
+      // (e.g. the Edit Contact form stacked on top of the detail pop-up).
       if (e.target && typeof e.target.closest === "function") {
-        if (e.target.closest("[role='dialog'], [data-radix-popper-content-wrapper], [data-swipe-ignore]")) {
-          return;
-        }
+        const dlg = e.target.closest("[role='dialog']");
+        if (dlg && dlg !== ownDialog) return;
+        if (e.target.closest("[data-radix-popper-content-wrapper], [data-swipe-ignore]")) return;
       }
 
       const { dx, dy } = normalize(e);

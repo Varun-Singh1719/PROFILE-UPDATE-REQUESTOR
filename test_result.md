@@ -13643,20 +13643,21 @@ agent_communication:
 
 
 #====================================================================================================
-# Session Sep 05 2026 — CRM → Client Contact Detail: trackpad swipe navigation
+# Session Sep 05 2026 — CRM → Client → Client Contacts tab → Client Contact detail POP-UP: trackpad swipe navigation
 #====================================================================================================
 user_problem_statement: |
-  CRM > Client > Client Contact > Detail View: navigate between Client Contacts with a horizontal
+  CRM > Client > Client Contact > Client Contact Detail View (the pop-up opened from the Client
+  detail page's "Client Contacts" tab): navigate between Client Contacts with a horizontal
   trackpad swipe (left = next, right = previous), one navigation per gesture, smooth slide
-  transition, vertical scrolling untouched, list order/filters/sort/page context preserved,
-  hard stop at first/last, all existing detail features unchanged, subtle "Swipe to navigate" cue.
+  transition, vertical scrolling untouched, list order/sub-tab context preserved, hard stop at
+  first/last, all existing detail features unchanged, subtle "Swipe to navigate" cue.
   Env restored: backend/.env (Atlas cluster0.vmgql1i / app_db, user-supplied creds) + frontend/.env.
 
 frontend:
-  - task: "Client Contact Detail — horizontal trackpad swipe navigation"
+  - task: "Client detail → Client Contacts tab → contact detail pop-up: horizontal trackpad swipe navigation"
     implemented: true
     working: true
-    file: "frontend/src/pages/ClientContactsPage.jsx, frontend/src/hooks/useTrackpadSwipeNav.js, frontend/src/lib/clientContactNavContext.js"
+    file: "frontend/src/components/ClientWorkexContacts.jsx, frontend/src/pages/ClientContactsPage.jsx (ClientContactDetailModal + ClientContactDetail), frontend/src/hooks/useTrackpadSwipeNav.js"
     stuck_count: 0
     priority: "high"
     needs_retesting: false
@@ -13664,18 +13665,17 @@ frontend:
         - working: true
           agent: "main"
           comment: |
-            List saves the on-screen order + {search, clientFilter, sortKey, page, pageSize, total}
-            to sessionStorage when a card is opened. Detail view: wheel listener (document,
-            passive:false) accumulates deltaX only for clearly-horizontal events (|dx|>1.5|dy|),
-            fires once at 70px, locks until 350ms idle + transition done; vertical/diagonal
-            ignored; overscroll-behavior-x:none while active. Slide out/in (~220/260ms) with
-            silent prefetch (no global overlay), URL updated via navigate(). Cross-page: fetches
-            adjacent list page (same filters, client-side sort) when reaching loaded edge.
-            Boundary = bump + "First/Last contact in this list", no wrap. Disabled in modal,
-            when edit dialog open, or when opened via deep link without list context.
-            Also fixed pre-existing bug: inline `Shell` component type in ClientContactDetail
-            remounted <Layout> on every render (re-firing Sidebar/NotificationBell fetches).
-            Verified via Playwright screenshots (no testing agent, per user): next/prev, inertia
-            tail ignored, vertical + diagonal scroll unaffected, boundary stop, 12→13 cross-page,
-            sorted (name_asc) + client-filtered order respected, edit dialog blocks swipe & is
-            prefilled with current contact, refresh keeps context, deep link shows no swipe UI.
+            ClientWorkexContacts passes navIds (ids of the ACTIVE Current/Ex sub-tab list, on-screen
+            order) + onNavigate=setOpenContactId to ClientContactDetailModal, which forwards
+            swipeNav={ids,onNavigate,scrollEl(DialogContent)} to ClientContactDetail. Wheel listener
+            on the dialog's scroll container (passive:false): accumulates deltaX only for clearly
+            horizontal events (|dx|>1.5|dy|), fires once at 70px, locks until 350ms idle + transition
+            done; vertical/diagonal untouched; overscroll-behavior-x:none while active. Slide out/in
+            (~220/260ms), silent prefetch (no global overlay), pop-up scrolled to top, tab kept.
+            Boundary = bump + "First/Last contact in this list", no wrap. Disabled while Edit dialog
+            open. Cue: "n of N" counter top-right of pop-up + sticky auto-hiding pill.
+            Standalone /crm/client-contacts page behaviour unchanged (no swipe there).
+            Also fixed pre-existing bug: inline `Shell` component type remounted <Layout> each render.
+            Verified via Playwright screenshots (no testing agent, per user) on A T Kearney (3 current
+            contacts): next/prev, inertia ignored, vertical+diagonal unaffected, both boundaries,
+            edit prefilled with current, swipe ignored while edit open, close returns to client page.
