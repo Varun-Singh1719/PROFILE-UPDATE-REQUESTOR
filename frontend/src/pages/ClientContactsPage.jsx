@@ -72,6 +72,8 @@ import Payments from "@mui/icons-material/PaymentsOutlined";
 import InfoOutlined from "@mui/icons-material/InfoOutlined";
 import POCStatusChip from "../components/POCStatusChip";
 import EmploymentRelationChip from "../components/EmploymentRelationChip";
+import { Textarea } from "../components/ui/textarea";
+import NotesIcon from "@mui/icons-material/StickyNote2Outlined";
 import CloseIcon from "@mui/icons-material/Close";
 
 // -------- constants --------
@@ -1917,6 +1919,8 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
             <EmploymentHistoryTab row={row} onSaved={setRow} />
           ) : activeTab === "timeline" ? (
             <TimelineTab row={row} />
+          ) : activeTab === "notes" ? (
+            <NotesTab row={row} />
           ) : (
             <div data-testid={`cc-tabpanel-${activeTab}`} className="min-h-[240px]" />
           )}
@@ -2414,6 +2418,272 @@ function AddWorkExDialog({ open, onOpenChange, row, onSaved }) {
   );
 }
 
+// ================================================================ Notes
+// Free-text notes (max 1000 chars) on a Client Contact. Add / Edit / Delete go
+// through /client-contacts/{id}/notes and are mirrored on the Timeline.
+const NOTE_MAX = 1000;
+
+function NotesTab({ row }) {
+  const [notes, setNotes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [editor, setEditor] = useState(null);       // null | { mode: "add" } | { mode: "edit", note }
+  const [confirmDel, setConfirmDel] = useState(null); // note | null
+  const [deleting, setDeleting] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await api.get(`/client-contacts/${row.id}/notes`, { silent: true });
+      setNotes(r.data?.rows || []);
+    } catch (e) {
+      setError(formatApiError(e, "Failed to load notes"));
+    } finally {
+      setLoading(false);
+    }
+  }, [row.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const onSaved = (saved, mode) => {
+    setNotes((prev) => (mode === "add" ? [saved, ...prev] : prev.map((n) => (n.id === saved.id ? saved : n))));
+    setEditor(null);
+    notify.success(mode === "add" ? "Note added" : "Note updated");
+  };
+
+  const doDelete = async () => {
+    if (!confirmDel) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/client-contacts/${row.id}/notes/${confirmDel.id}`);
+      setNotes((prev) => prev.filter((n) => n.id !== confirmDel.id));
+      setConfirmDel(null);
+      notify.success("Note deleted");
+    } catch (e) {
+      notify.error(formatApiError(e, "Failed to delete note"));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4" data-testid="cc-tabpanel-notes">
+      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <SectionTitle>Notes</SectionTitle>
+            <div className="text-[11px] text-gray-500 mt-0.5">
+              {notes.length ? `${notes.length} note${notes.length === 1 ? "" : "s"}` : "Internal notes about this contact"}
+            </div>
+          </div>
+          <Button
+            type="button"
+            onClick={() => setEditor({ mode: "add" })}
+            className="bg-[#ec9324] hover:bg-[#d3811b] text-white h-8 px-3 text-xs gap-1 shadow-sm"
+            data-testid="cc-notes-add"
+          >
+            <Plus sx={{ fontSize: 16 }} /> Add Note
+          </Button>
+        </div>
+
+        {error && <div className="mt-3 text-[12px] text-red-600 border border-red-200 bg-red-50 rounded p-3">{error}</div>}
+        {!error && loading && notes.length === 0 && <div className="mt-3 text-[12px] text-gray-400 italic">Loading…</div>}
+
+        {!error && !loading && notes.length === 0 && (
+          <button
+            type="button"
+            onClick={() => setEditor({ mode: "add" })}
+            className="mt-4 w-full border-2 border-dashed border-gray-200 hover:border-[#ec9324]/60 hover:bg-orange-50/40 rounded-xl py-10 flex flex-col items-center gap-2 text-gray-400 hover:text-[#ec9324] transition-colors"
+            data-testid="cc-notes-empty"
+          >
+            <NotesIcon sx={{ fontSize: 30 }} />
+            <span className="text-[12px] font-medium">No notes yet — click to add the first one</span>
+          </button>
+        )}
+
+        {notes.length > 0 && (
+          <ul className="mt-4 space-y-3">
+            {notes.map((n) => (
+              <NoteCard
+                key={n.id}
+                note={n}
+                onEdit={() => setEditor({ mode: "edit", note: n })}
+                onDelete={() => setConfirmDel(n)}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Add / Edit pop-up */}
+      <NoteEditorDialog
+        open={!!editor}
+        mode={editor?.mode || "add"}
+        note={editor?.note || null}
+        contactId={row.id}
+        onClose={() => setEditor(null)}
+        onSaved={onSaved}
+      />
+
+      {/* Delete confirmation */}
+      <Dialog open={!!confirmDel} onOpenChange={(o) => { if (!o && !deleting) setConfirmDel(null); }}>
+        <DialogContent className="max-w-md" data-testid="cc-note-delete-dialog">
+          <DialogHeader>
+            <DialogTitle>Delete this note?</DialogTitle>
+            <DialogDescription>This removes the note from the contact. The deletion is recorded on the Timeline.</DialogDescription>
+          </DialogHeader>
+          {confirmDel && (
+            <div className="text-[12px] text-gray-700 bg-gray-50 border border-gray-200 rounded-lg p-3 whitespace-pre-wrap max-h-40 overflow-y-auto">
+              {confirmDel.text}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDel(null)} disabled={deleting}>Cancel</Button>
+            <Button onClick={doDelete} disabled={deleting} className="bg-red-600 hover:bg-red-700 text-white" data-testid="cc-note-delete-confirm">
+              {deleting ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function NoteCard({ note, onEdit, onDelete }) {
+  const author = note.created_by || {};
+  const name = author.name || author.email || "Unknown user";
+  const initials = name.trim().split(/\s+/).map((x) => x[0]).join("").slice(0, 2).toUpperCase() || "?";
+  const edited = !!note.updated_at;
+  return (
+    <li
+      className="group relative rounded-xl border border-gray-200 bg-white hover:border-[#ec9324]/50 hover:shadow-md transition-all p-4"
+      data-testid={`cc-note-${note.id}`}
+    >
+      <div className="flex items-start gap-3">
+        <div className="w-9 h-9 rounded-full bg-[#ec9324] text-white text-[12px] font-semibold flex items-center justify-center flex-shrink-0 shadow-sm" title={name}>
+          {initials}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[13px] font-semibold text-gray-900" data-testid="cc-note-author">{name}</span>
+            {author.emp_id ? <span className="text-[11px] text-gray-400">· {author.emp_id}</span> : null}
+            <span className="text-[11px] text-gray-500 flex items-center gap-1" data-testid="cc-note-date">
+              <History sx={{ fontSize: 12 }} className="text-gray-400" /> {fmtTimelineStamp(note.created_at)}
+            </span>
+            {edited && (
+              <span
+                className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200"
+                title={`Edited by ${note.updated_by?.name || "—"} · ${fmtTimelineStamp(note.updated_at)}`}
+                data-testid="cc-note-edited"
+              >
+                edited
+              </span>
+            )}
+          </div>
+          <p className="mt-1.5 text-[13px] text-gray-800 leading-relaxed whitespace-pre-wrap break-words" data-testid="cc-note-text">
+            {note.text}
+          </p>
+        </div>
+        {/* Edit / Delete — same UI/UX as the Client card Edit button */}
+        <div className="flex items-center gap-0.5 flex-shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
+          <CardStyleIconButton icon={<Pencil sx={{ fontSize: 16 }} />} tooltip="Edit" onClick={onEdit} testId={`cc-note-edit-${note.id}`} />
+          <button
+            type="button"
+            onClick={onDelete}
+            title="Delete"
+            aria-label="Delete"
+            data-testid={`cc-note-delete-${note.id}`}
+            className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors flex-shrink-0"
+          >
+            <Trash sx={{ fontSize: 16 }} />
+          </button>
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function NoteEditorDialog({ open, mode, note, contactId, onClose, onSaved }) {
+  const [text, setText] = useState("");
+  const [saving, setSaving] = useState(false);
+  const isEdit = mode === "edit";
+
+  useEffect(() => {
+    if (open) setText(isEdit ? (note?.text || "") : "");
+  }, [open, isEdit, note]);
+
+  const trimmed = text.trim();
+  const remaining = NOTE_MAX - text.length;
+  const unchanged = isEdit && trimmed === (note?.text || "");
+  const canSubmit = trimmed.length > 0 && text.length <= NOTE_MAX && !unchanged && !saving;
+
+  const submit = async () => {
+    if (!canSubmit) return;
+    setSaving(true);
+    try {
+      const r = isEdit
+        ? await api.patch(`/client-contacts/${contactId}/notes/${note.id}`, { text: trimmed })
+        : await api.post(`/client-contacts/${contactId}/notes`, { text: trimmed });
+      onSaved(r.data, mode);
+    } catch (e) {
+      notify.error(formatApiError(e, "Failed to save note"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onKeyDown = (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); submit(); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o && !saving) onClose(); }}>
+      <DialogContent className="max-w-2xl" data-testid="cc-note-dialog">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? "Edit Note" : "Add Note"}</DialogTitle>
+          <DialogDescription className="sr-only">{isEdit ? "Edit an existing note" : "Add a note to this client contact"}</DialogDescription>
+        </DialogHeader>
+
+        <div>
+          <Textarea
+            value={text}
+            onChange={(e) => setText(e.target.value.slice(0, NOTE_MAX))}
+            onKeyDown={onKeyDown}
+            maxLength={NOTE_MAX}
+            rows={7}
+            autoFocus
+            placeholder="Write your note…"
+            className="resize-y min-h-[160px] text-[13px] leading-relaxed focus-visible:ring-[#ec9324]/40"
+            data-testid="cc-note-text-input"
+          />
+          <div className="mt-1.5 flex items-center justify-between text-[11px]">
+            <span className="text-gray-400">Ctrl / ⌘ + Enter to submit</span>
+            <span
+              className={remaining <= 50 ? (remaining <= 0 ? "text-red-600 font-semibold" : "text-[#ec9324] font-medium") : "text-gray-500"}
+              data-testid="cc-note-counter"
+            >
+              {text.length} / {NOTE_MAX}
+            </span>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving} data-testid="cc-note-cancel">Cancel</Button>
+          <Button
+            onClick={submit}
+            disabled={!canSubmit}
+            className="bg-[#ec9324] hover:bg-[#d3811b] text-white"
+            data-testid="cc-note-submit"
+          >
+            {saving ? "Saving…" : isEdit ? "Save changes" : "Submit"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ================================================================ Timeline (read-only audit history)
 // Every profile change is recorded server-side (routers/client_contact_timeline.py)
 // as ONE immutable entry per field, grouped into "batches" — one batch per Save
@@ -2570,7 +2840,7 @@ function TimelineBatch({ batch, idx }) {
         {/* Batch header — Who · When */}
         <div className="flex items-center justify-between gap-2 flex-wrap px-3 py-2 border-b border-gray-100 bg-gray-50/60 rounded-t-lg">
           <div className="text-[12px] text-gray-700 min-w-0">
-            <span className="text-gray-500">{isCreate ? "Created by" : "Updated by"}</span>{" "}
+            <span className="text-gray-500">{isCreate ? "Created by" : batch.event === "note" ? "Note by" : "Updated by"}</span>{" "}
             <span className="font-semibold text-gray-900" data-testid="cc-timeline-user">{name}</span>
             {user.emp_id ? <span className="text-gray-400"> · {user.emp_id}</span> : null}
           </div>

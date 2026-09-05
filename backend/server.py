@@ -54,6 +54,7 @@ from routers import crm_overview as _crm_overview  # noqa: F401
 from routers import poc_status as _poc_status  # noqa: F401
 from routers import client_contact_uploads as _client_contact_uploads  # noqa: F401  (must come BEFORE client_contacts so /client-contacts/sample-template etc. beat /client-contacts/{id})
 from routers import client_contact_timeline as _client_contact_timeline  # noqa: F401  (read-only /client-contacts/{id}/timeline)
+from routers import client_contact_notes as _client_contact_notes  # noqa: F401  (/client-contacts/{id}/notes)
 from routers import client_contacts as _client_contacts  # noqa: F401
 from routers import crm_sync_api as _crm_sync_api  # noqa: F401
 

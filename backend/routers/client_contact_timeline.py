@@ -50,6 +50,7 @@ FIELD_LABELS: Dict[str, str] = {
     "linkedin_url": "Web Handle",
     "industries": "Industry",
     "previous_work_experience": "Employment History",
+    "note": "Note",
 }
 
 # Fields that are NOT profile edits (system / derived / sync metrics) and must
@@ -275,6 +276,36 @@ async def record_contact_changes(
             "previous_value": c["previous_value"],
             "new_value": c["new_value"],
         })
+    await db[TL_COLL].insert_many(docs)
+    return [{k: v for k, v in d.items() if k != "_id"} for d in docs]
+
+
+async def record_entries(
+    contact_id: str,
+    user: Optional[dict],
+    changes: List[dict],
+    event: str = "updated",
+) -> List[dict]:
+    """Persist pre-computed changes (e.g. Notes added / edited / deleted) as one
+    immutable batch. `changes` items: {field, action, previous_value, new_value}."""
+    if not changes:
+        return []
+    batch_id = str(uuid.uuid4())
+    at = now_iso()
+    actor = _actor(user)
+    docs = [{
+        "id": str(uuid.uuid4()),
+        "contact_id": contact_id,
+        "batch_id": batch_id,
+        "at": at,
+        "user": actor,
+        "event": event,
+        "field": c["field"],
+        "field_label": _label(c["field"]),
+        "action": c["action"],
+        "previous_value": c.get("previous_value"),
+        "new_value": c.get("new_value"),
+    } for c in changes]
     await db[TL_COLL].insert_many(docs)
     return [{k: v for k, v in d.items() if k != "_id"} for d in docs]
 
