@@ -192,9 +192,10 @@ export default function ClientWorkexContacts({ clientId, clientName }) {
   const currentCount = data?.current_count ?? 0;
   const exCount = data?.ex_count ?? 0;
 
-  // Order used by the detail pop-up's trackpad swipe navigation: exactly the
-  // cards of the ACTIVE sub-tab (Current / Ex), in the order shown on screen.
-  const navIds = useMemo(() => list.map((c) => c.id), [list]);
+  // Order used by the detail pop-up's trackpad swipe / arrow-key navigation:
+  // exactly the cards of the ACTIVE sub-tab (Current / Ex), in the order
+  // shown on screen. Names feed the faint "peek" chips at the pop-up edges.
+  const navItems = useMemo(() => list.map((c) => ({ id: c.id, name: c.name })), [list]);
 
   return (
     <div>
@@ -258,13 +259,13 @@ export default function ClientWorkexContacts({ clientId, clientName }) {
       )}
 
       {/* Detail popup (same detail view, no redirect). Horizontal trackpad
-          swipe inside the popup moves to the next / previous contact of the
-          list currently shown (Current or Ex sub-tab). */}
+          swipe or ← / → keys inside the popup move to the previous / next
+          contact of the list currently shown (Current or Ex sub-tab). */}
       <ClientContactDetailModal
         contactId={openContactId}
         open={!!openContactId}
         onClose={() => setOpenContactId(null)}
-        navIds={navIds}
+        navItems={navItems}
         onNavigate={setOpenContactId}
       />
 

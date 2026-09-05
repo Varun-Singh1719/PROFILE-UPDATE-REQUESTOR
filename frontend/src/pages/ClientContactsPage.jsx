@@ -316,14 +316,19 @@ export default function ClientContactsPage() {
 // ============================================================ Reusable modals
 // Popup detail view — renders the exact same Client Contact detail body inside a
 // dialog (used from the Client → Client Contacts tab, no page redirect).
-export function ClientContactDetailModal({ contactId, open, onClose, navIds = null, onNavigate = null }) {
+export function ClientContactDetailModal({ contactId, open, onClose, navItems = null, navIds = null, onNavigate = null }) {
   // The dialog body is the scroll container; the swipe listener attaches to it
   // and it is scrolled back to the top when the contact changes.
   const [scrollEl, setScrollEl] = useState(null);
-  const swipeNav = useMemo(
-    () => (Array.isArray(navIds) && typeof onNavigate === "function" ? { ids: navIds, onNavigate, scrollEl } : null),
-    [navIds, onNavigate, scrollEl]
-  );
+  const swipeNav = useMemo(() => {
+    if (typeof onNavigate !== "function") return null;
+    // Accept either [{id, name}] (preferred — names feed the peek chips) or bare ids.
+    const items = Array.isArray(navItems)
+      ? navItems.filter((it) => it && it.id)
+      : Array.isArray(navIds) ? navIds.map((id) => ({ id, name: "" })) : null;
+    if (!items) return null;
+    return { ids: items.map((it) => it.id), items, onNavigate, scrollEl };
+  }, [navItems, navIds, onNavigate, scrollEl]);
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose?.(); }}>
       <DialogContent
@@ -1463,6 +1468,10 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
   const navIdx = swipeEnabled ? navIds.indexOf(curId) : -1;
   const navPos = swipeEnabled ? navIdx + 1 : 0;
   const navTotal = swipeEnabled ? navIds.length : 0;
+  // Neighbouring contacts (for the faint "peek" chips at the pop-up edges).
+  const navItems = Array.isArray(swipeNav?.items) ? swipeNav.items : null;
+  const prevItem = swipeEnabled && navIdx > 0 ? (navItems ? navItems[navIdx - 1] : { id: navIds[navIdx - 1], name: "" }) : null;
+  const nextItem = swipeEnabled && navIdx < navIds.length - 1 ? (navItems ? navItems[navIdx + 1] : { id: navIds[navIdx + 1], name: "" }) : null;
 
   const showHint = useCallback((kind, dir, ms) => {
     if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
@@ -1495,6 +1504,26 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  // Prefetch the immediate neighbours (prev / next) as soon as a profile is
+  // shown so a swipe / arrow key feels instant even on a slow DB round-trip.
+  // Entries are consumed (deleted) when used so a later revisit re-fetches
+  // fresh data (e.g. after an edit).
+  const neighbourCacheRef = useRef(new Map());
+  useEffect(() => {
+    if (!swipeEnabled) return undefined;
+    const cache = neighbourCacheRef.current;
+    cache.delete(curId);
+    [prevItem?.id, nextItem?.id].filter(Boolean).forEach((id) => {
+      if (cache.has(id)) return;
+      cache.set(id, api.get(`/client-contacts/${id}`, { silent: true })
+        .then((r) => r.data)
+        .catch(() => null)
+        .then((d) => { if (!d) cache.delete(id); return d; }));
+    });
+    return undefined;
+    /* eslint-disable-next-line */
+  }, [swipeEnabled, curId]);
+
   const goToNeighbour = useCallback(async (dir) => {
     if (busyRef.current || !swipeEnabled) return;
     busyRef.current = true;
@@ -1512,10 +1541,17 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
       // 1) slide the current profile out while the next one loads (silently —
       //    no global "Loading…" overlay, no flicker)
       setSlide({ phase: "out", dir });
-      const [data] = await Promise.all([
-        api.get(`/client-contacts/${targetId}`, { silent: true }).then((r) => r.data).catch(() => null),
-        sleep(220),
-      ]);
+      const fetchTarget = async () => {
+        const cache = neighbourCacheRef.current;
+        const pending = cache.get(targetId);
+        if (pending) {
+          cache.delete(targetId);
+          const d = await pending;
+          if (d) return d;
+        }
+        return api.get(`/client-contacts/${targetId}`, { silent: true }).then((r) => r.data).catch(() => null);
+      };
+      const [data] = await Promise.all([fetchTarget(), sleep(220)]);
       if (!data) {
         notify.error("Could not load the next client contact");
         setSlide({ phase: "idle", dir });
@@ -1597,6 +1633,30 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
     target: swipeNav?.scrollEl || null,
   });
 
+  // Keyboard: ← previous / → next — same behaviour as the swipe. Ignored while
+  // typing in a field, while the Edit form (another dialog) is open, or with
+  // modifier keys held (so browser/OS shortcuts keep working).
+  const keysEnabled = swipeEnabled && !dialogOpen && !dupState;
+  useEffect(() => {
+    if (!keysEnabled) return undefined;
+    const ownDialog = swipeNav?.scrollEl?.closest?.("[role='dialog']") || null;
+    const onKey = (e) => {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      if (e.defaultPrevented || e.repeat) return;
+      const t = e.target;
+      if (t && typeof t.closest === "function") {
+        if (t.closest("input, textarea, select, [contenteditable=''], [contenteditable='true'], [role='combobox'], [role='listbox']")) return;
+        const dlg = t.closest("[role='dialog']");
+        if (dlg && ownDialog && dlg !== ownDialog) return;
+      }
+      e.preventDefault();
+      goToNeighbour(e.key === "ArrowRight" ? "next" : "prev");
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [keysEnabled, goToNeighbour, swipeNav]);
+
   const onSave = async (opts = {}) => {
     const missing = firstMissingContactField(form);
     if (missing) { notify.error(`${missing} is required`); return; }
@@ -1665,6 +1725,16 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
                 {navPos} of {navTotal}
               </span>
             </div>
+          )}
+
+          {/* Pop-up: faint prev / next "peek" chips pinned to the edges */}
+          {swipeEnabled && (
+            <PeekNeighbours
+              prev={prevItem}
+              next={nextItem}
+              slide={slide}
+              onGo={goToNeighbour}
+            />
           )}
 
           {/* Sliding container — everything below animates when swiping */}
@@ -1823,6 +1893,50 @@ function DetailShell({ inModal, children }) {
   return <Layout title="Client Contact">{children}</Layout>;
 }
 
+// ================================================================ Peek neighbours
+// Faint prev / next contact names pinned to the left / right edges of the
+// pop-up (sticky at mid-height so they stay put while the body scrolls).
+// They brighten while a swipe in that direction is in flight, and are
+// clickable as a mouse fallback.
+function PeekChip({ item, side, active, onClick }) {
+  if (!item) return null;
+  const isLeft = side === "prev";
+  const name = (item.name || "").trim() || "Previous";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={`${isLeft ? "Previous" : "Next"}: ${name}`}
+      data-testid={`cc-peek-${side}`}
+      className={`pointer-events-auto absolute top-0 -translate-y-1/2 ${
+        isLeft ? "left-0 -translate-x-2 rounded-r-full pl-1.5 pr-3" : "right-0 translate-x-2 rounded-l-full pr-1.5 pl-3"
+      } flex items-center gap-1 h-7 max-w-[180px] bg-white/85 backdrop-blur border border-gray-200 shadow-sm text-[11px] font-medium text-gray-500 transition-all duration-200 hover:text-[#ec9324] hover:border-[#ec9324]/50 hover:opacity-100 ${
+        active ? "opacity-100 text-[#ec9324] border-[#ec9324]/50" : "opacity-45"
+      }`}
+    >
+      {isLeft && <ChevronLeftIcon sx={{ fontSize: 15 }} />}
+      <span className="truncate">{name}</span>
+      {!isLeft && <ChevronRightIcon sx={{ fontSize: 15 }} />}
+    </button>
+  );
+}
+
+function PeekNeighbours({ prev, next, slide, onGo }) {
+  const moving = slide?.phase === "out" || slide?.phase === "enter" || slide?.phase === "in" || slide?.phase === "bump";
+  return (
+    <div
+      className="sticky top-[45%] z-30 h-0 -mt-4 pointer-events-none"
+      data-testid="cc-peek-neighbours"
+      aria-hidden="true"
+    >
+      <div className="relative w-full h-0">
+        <PeekChip item={prev} side="prev" active={moving && slide.dir === "prev"} onClick={() => onGo("prev")} />
+        <PeekChip item={next} side="next" active={moving && slide.dir === "next"} onClick={() => onGo("next")} />
+      </div>
+    </div>
+  );
+}
+
 // ================================================================ Swipe hint
 // Small floating pill that tells the user they can swipe horizontally on the
 // trackpad to move between contacts. Auto-hides; re-appears briefly after each
@@ -1850,7 +1964,10 @@ function SwipeHint({ hint, pos, total }) {
     body = (
       <span className="flex items-center gap-1.5">
         <ChevronLeftIcon sx={{ fontSize: 15 }} />
-        Swipe to navigate
+        Swipe or use
+        <kbd className="px-1 py-px rounded bg-white/15 text-[10px] font-mono leading-none">←</kbd>
+        <kbd className="px-1 py-px rounded bg-white/15 text-[10px] font-mono leading-none">→</kbd>
+        to navigate
         <ChevronRightIcon sx={{ fontSize: 15 }} />
         <span className="text-white/60 tabular-nums">· {pos} of {total}</span>
       </span>

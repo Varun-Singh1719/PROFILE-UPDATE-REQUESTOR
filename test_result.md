@@ -13679,3 +13679,24 @@ frontend:
             Verified via Playwright screenshots (no testing agent, per user) on A T Kearney (3 current
             contacts): next/prev, inertia ignored, vertical+diagonal unaffected, both boundaries,
             edit prefilled with current, swipe ignored while edit open, close returns to client page.
+  - task: "Pop-up: ← / → keyboard navigation + faint prev/next peek chips + neighbour prefetch"
+    implemented: true
+    working: true
+    file: "frontend/src/pages/ClientContactsPage.jsx, frontend/src/components/ClientWorkexContacts.jsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: |
+            ClientWorkexContacts now passes navItems [{id,name}] (modal still accepts bare navIds).
+            Keyboard: document keydown ArrowLeft→prev / ArrowRight→next via the same goToNeighbour;
+            ignored with modifiers, key repeat, when typing in input/textarea/select/combobox, or
+            when another dialog (Edit form) is open. PeekNeighbours: sticky (top 45%) chips at the
+            pop-up's left/right edges showing prev/next names at ~45% opacity, brighten while a
+            move in that direction is in flight, clickable (data-testid cc-peek-prev / cc-peek-next).
+            Intro hint now reads "Swipe or use ← → to navigate". Neighbour prefetch cache (prev+next
+            fetched silently on arrival, consumed on use) makes moves ~230ms regardless of Atlas
+            latency. Verified via Playwright: keys next/prev, both boundaries, rapid double press =
+            one move, arrows inside Edit input do nothing, peek click navigates, scroll resets.
