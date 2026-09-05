@@ -436,3 +436,8 @@ Verified end-to-end on the InfraXcellence team (16 members): mid-plan click cent
 ## Sep 05 2026 — Geography (auto from Country) shown in top bar + employment cards
 - `ClientContactDetail` name bar: after Location, a globe (`Public`) + region label derived via `getRegionByCountryId(row.country_id)` (`cc-detail-geography`); hidden when no country.
 - `EmploymentCard`: meta grid now 4 cols — Primary Email · Primary Phone · Location · **Geography** (current role → contact's country; past role → that row's `country_id`). Never stored; always derived from Country at render time.
+
+## Sep 05 2026 — Client Detail → Client Contacts tab layout
+- `ClientDetailPage.jsx` now owns the Client Contacts sub-tab state (`ccSubTab`, `ccCounts`, `ccRef`). Tab row right side (all tabs): per-tab controls + right-aligned "← Back to Clients" (`client-back-link`); the old top-left back link is gone (only shown while loading / not found). Contacts tab: **Current / Former** chips (`workex-subtabs`; "Ex" renamed to "Former", test-ids unchanged) sit next to Back. Link tab: Save/Cancel then Back.
+- Top bar (`Layout actions`, before the bell): on the Contacts tab shows the orange "+" (`workex-add-contact-btn`) and Bulk Upload (`workex-bulk-upload-btn`) icon buttons, wired via `ccRef.openAdd()/openBulk()`.
+- `ClientWorkexContacts.jsx` → `forwardRef`; props `subTab`, `onCountsChange`; exposes `openAdd/openBulk/reload`; exports `SubTab`, `IconAction`. Removed its in-body header row incl. the "People currently at <client>" helper text.

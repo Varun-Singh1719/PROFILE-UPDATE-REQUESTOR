@@ -5,14 +5,15 @@
  * Segment section (redirects to Segmentations tab), Activity Summary
  * pivot table (L2 rows × Month columns × 5 metric sub-columns).
  */
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import api, { formatApiError } from "../lib/api";
 import notify from "../lib/notify";
 import { confirm as confirmDialog } from "../lib/dialog";
 import LinkSegmentationTab from "../components/LinkSegmentationTab";
-import ClientWorkexContacts from "../components/ClientWorkexContacts";
+import ClientWorkexContacts, { SubTab as CcSubTab, IconAction as CcIconAction } from "../components/ClientWorkexContacts";
+import UploadFile from "@mui/icons-material/UploadFileOutlined";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -125,6 +126,12 @@ export default function ClientDetailPage() {
   // ---- Tabs (Overview | Link Segmentation) ----
   const [activeTab, setActiveTab] = useState("overview");
   const linkTabRef = useRef(null);
+  // Client Contacts tab — sub-tab (Current / Former) + counts are owned here so
+  // the chips can sit in the tab row and the +/Upload buttons in the top bar.
+  const ccRef = useRef(null);
+  const [ccSubTab, setCcSubTab] = useState("current");
+  const [ccCounts, setCcCounts] = useState({ current: 0, ex: 0 });
+  const onCcCounts = useCallback((c) => setCcCounts(c), []);
   const linkDirtyRef = useRef(false);
   const [linkDirty, setLinkDirty] = useState(false);
   const [linkSaving, setLinkSaving] = useState(false);
@@ -321,21 +328,50 @@ export default function ClientDetailPage() {
     </div>
   );
 
+  // Client Contacts tab → "+ New Client Contact" & "Bulk Upload" live in the
+  // top bar (next to the notification bell), not inside the tab body.
+  const contactsTopBarActions = (
+    <div className="flex items-center gap-2" data-testid="client-contacts-topbar-actions">
+      <CcIconAction
+        icon={<Plus sx={{ fontSize: 20 }} />}
+        tooltip="+ New Client Contact"
+        onClick={() => ccRef.current?.openAdd?.()}
+        testId="workex-add-contact-btn"
+        primary
+      />
+      <CcIconAction
+        icon={<UploadFile sx={{ fontSize: 18 }} />}
+        tooltip="Bulk Upload Client Contacts"
+        onClick={() => ccRef.current?.openBulk?.()}
+        testId="workex-bulk-upload-btn"
+      />
+    </div>
+  );
+
+  const backLink = (
+    <button
+      onClick={() => guardedNavigate("/crm/clients")}
+      className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-[#ec9324] whitespace-nowrap"
+      data-testid="client-back-link"
+    >
+      <ArrowBack sx={{ fontSize: 16 }} />
+      Back to Clients
+    </button>
+  );
+
   return (
-    <Layout title={row ? row.name : "Client"} actions={activeTab === "overview" ? topBarActions : null}>
+    <Layout
+      title={row ? row.name : "Client"}
+      actions={activeTab === "overview" ? topBarActions : activeTab === "contacts" && row ? contactsTopBarActions : null}
+    >
       <div className="px-6 py-2.5">
-        {/* Back link */}
-        <button
-          onClick={() => guardedNavigate("/crm/clients")}
-          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-[#ec9324] mb-1.5"
-        >
-          <ArrowBack sx={{ fontSize: 16 }} />
-          Back to Clients
-        </button>
+        {/* Back link is shown right-aligned in the tab row below (falls back
+            to a plain link while loading / when the client is missing). */}
+        {(loading || !row) && <div className="mb-1.5">{backLink}</div>}
 
         {/* ============ TABS ============ */}
         {!loading && row && (
-          <div className="flex items-center justify-between border-b border-gray-200 mb-3">
+          <div className="flex items-center justify-between gap-3 border-b border-gray-200 mb-3">
             <div className="flex items-center gap-1" role="tablist">
               {[
                 { key: "overview", label: "Overview" },
@@ -366,28 +402,51 @@ export default function ClientDetailPage() {
               })}
             </div>
 
-            {/* Save / Cancel parallel to the tab name (Link Segmentation tab only) */}
-            {activeTab === "link" && (
-              <div className="flex items-center gap-2 pb-1.5">
-                <Button
-                  variant="outline"
-                  onClick={() => linkTabRef.current?.cancel?.()}
-                  disabled={!linkDirty || linkSaving}
-                  className="h-8"
-                  data-testid="link-seg-cancel"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() => linkTabRef.current?.save?.()}
-                  disabled={!linkDirty || linkSaving}
-                  className="bg-[#ec9324] hover:bg-[#d3811b] text-white h-8"
-                  data-testid="link-seg-save"
-                >
-                  {linkSaving ? "Saving…" : "Save"}
-                </Button>
-              </div>
-            )}
+            {/* Right side of the tab row: per-tab controls + "Back to Clients" */}
+            <div className="flex items-center gap-2 pb-1.5 flex-shrink-0">
+              {/* Link Segmentation: Save / Cancel */}
+              {activeTab === "link" && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => linkTabRef.current?.cancel?.()}
+                    disabled={!linkDirty || linkSaving}
+                    className="h-8"
+                    data-testid="link-seg-cancel"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => linkTabRef.current?.save?.()}
+                    disabled={!linkDirty || linkSaving}
+                    className="bg-[#ec9324] hover:bg-[#d3811b] text-white h-8"
+                    data-testid="link-seg-save"
+                  >
+                    {linkSaving ? "Saving…" : "Save"}
+                  </Button>
+                </>
+              )}
+              {/* Client Contacts: Current / Former chips */}
+              {activeTab === "contacts" && (
+                <div className="flex items-center gap-2" role="tablist" data-testid="workex-subtabs">
+                  <CcSubTab
+                    active={ccSubTab === "current"}
+                    label="Current"
+                    count={ccCounts.current}
+                    onClick={() => setCcSubTab("current")}
+                    testId="workex-subtab-current"
+                  />
+                  <CcSubTab
+                    active={ccSubTab === "ex"}
+                    label="Former"
+                    count={ccCounts.ex}
+                    onClick={() => setCcSubTab("ex")}
+                    testId="workex-subtab-ex"
+                  />
+                </div>
+              )}
+              <span className="ml-2">{backLink}</span>
+            </div>
           </div>
         )}
 
@@ -405,7 +464,13 @@ export default function ClientDetailPage() {
             onAddSegmentation={goSegmentationAdd}
           />
         ) : activeTab === "contacts" ? (
-          <ClientWorkexContacts clientId={id} clientName={row.name} />
+          <ClientWorkexContacts
+            ref={ccRef}
+            clientId={id}
+            clientName={row.name}
+            subTab={ccSubTab}
+            onCountsChange={onCcCounts}
+          />
         ) : (
           <div className="grid grid-cols-1 gap-4">
             {/* ============ OVERVIEW CARD ============ */}

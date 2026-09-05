@@ -1,7 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import api, { formatApiError } from "../lib/api";
-import Plus from "@mui/icons-material/AddOutlined";
-import Upload from "@mui/icons-material/UploadFileOutlined";
 import {
   ClientContactDetailModal,
   AddContactDialog,
@@ -13,7 +11,15 @@ import {
  * Lists every client contact that has THIS client mapped in their work
  * experience, split into two sub-tabs:
  *   • Current — currently working at this client (client_name matches)
- *   • Ex      — worked here in the past (present in previous_work_experience)
+ *   • Former  — worked here in the past (present in previous_work_experience)
+ *
+ * The sub-tab chips (Current / Former), the "+ New Client Contact" and the
+ * "Bulk Upload" buttons are rendered by the PARENT (ClientDetailPage: chips in
+ * the tab row next to "Back to Clients", buttons in the top bar next to the
+ * notification bell). This component therefore:
+ *   • receives `subTab` from the parent ("current" | "ex")
+ *   • reports counts via `onCountsChange({ current, ex })`
+ *   • exposes `openAdd()` / `openBulk()` through its ref.
  *
  * Clicking a contact opens the full detail view in a popup (no page redirect).
  */
@@ -27,7 +33,7 @@ function initials(name) {
     .toUpperCase();
 }
 
-function SubTab({ active, label, count, onClick, testId }) {
+export function SubTab({ active, label, count, onClick, testId }) {
   return (
     <button
       onClick={onClick}
@@ -52,7 +58,7 @@ function SubTab({ active, label, count, onClick, testId }) {
   );
 }
 
-function IconAction({ icon, tooltip, onClick, testId, primary = false }) {
+export function IconAction({ icon, tooltip, onClick, testId, primary = false }) {
   return (
     <button
       type="button"
@@ -183,16 +189,23 @@ function ContactMiniCard({ c, ex, onOpen }) {
   );
 }
 
-export default function ClientWorkexContacts({ clientId, clientName }) {
+const ClientWorkexContacts = forwardRef(function ClientWorkexContacts(
+  { clientId, clientName, subTab = "current", onCountsChange },
+  ref,
+) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [subTab, setSubTab] = useState("current");
 
-  // Detail popup + create/bulk-upload dialogs
+  // Detail popup + create/bulk-upload dialogs (opened from the parent's top bar)
   const [openContactId, setOpenContactId] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  useImperativeHandle(ref, () => ({
+    openAdd: () => setAddOpen(true),
+    openBulk: () => setBulkOpen(true),
+    reload: () => load(),
+  }));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -218,55 +231,17 @@ export default function ClientWorkexContacts({ clientId, clientName }) {
 
   const currentCount = data?.current_count ?? 0;
   const exCount = data?.ex_count ?? 0;
+  useEffect(() => {
+    if (data) onCountsChange?.({ current: currentCount, ex: exCount });
+  }, [data, currentCount, exCount, onCountsChange]);
 
   // Order used by the detail pop-up's trackpad swipe / arrow-key navigation:
-  // exactly the cards of the ACTIVE sub-tab (Current / Ex), in the order
+  // exactly the cards of the ACTIVE sub-tab (Current / Former), in the order
   // shown on screen. Names feed the faint "peek" chips at the pop-up edges.
   const navItems = useMemo(() => list.map((c) => ({ id: c.id, name: c.name })), [list]);
 
   return (
     <div>
-      {/* Sub-tabs + action buttons */}
-      <div className="flex items-center justify-between gap-2 mb-4">
-        <div className="flex items-center gap-2" role="tablist">
-          <SubTab
-            active={subTab === "current"}
-            label="Current"
-            count={currentCount}
-            onClick={() => setSubTab("current")}
-            testId="workex-subtab-current"
-          />
-          <SubTab
-            active={subTab === "ex"}
-            label="Ex"
-            count={exCount}
-            onClick={() => setSubTab("ex")}
-            testId="workex-subtab-ex"
-          />
-          <span className="ml-2 text-[12px] text-gray-400 hidden md:inline">
-            {subTab === "current"
-              ? `People currently at ${clientName}`
-              : `People who previously worked at ${clientName}`}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <IconAction
-            icon={<Plus sx={{ fontSize: 20 }} />}
-            tooltip="+ New Client Contact"
-            onClick={() => setAddOpen(true)}
-            testId="workex-add-contact-btn"
-            primary
-          />
-          <IconAction
-            icon={<Upload sx={{ fontSize: 18 }} />}
-            tooltip="Bulk Upload Client Contacts"
-            onClick={() => setBulkOpen(true)}
-            testId="workex-bulk-upload-btn"
-          />
-        </div>
-      </div>
-
       {loading ? (
         <div className="text-center py-16 text-sm text-gray-500">Loading contacts…</div>
       ) : err ? (
@@ -312,4 +287,6 @@ export default function ClientWorkexContacts({ clientId, clientName }) {
       />
     </div>
   );
-}
+});
+
+export default ClientWorkexContacts;
