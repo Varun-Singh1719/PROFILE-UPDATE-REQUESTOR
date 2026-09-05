@@ -333,7 +333,7 @@ export function ClientContactDetailModal({ contactId, open, onClose, navItems = 
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose?.(); }}>
       <DialogContent
         ref={setScrollEl}
-        className="w-[96vw] max-w-[1500px] max-h-[92vh] overflow-y-auto p-4 sm:p-6"
+        className="w-[96vw] max-w-[1500px] max-h-[92vh] overflow-y-auto px-4 sm:px-6 pb-4 sm:pb-6 pt-0"
         data-testid="cc-detail-modal"
       >
         <DialogHeader className="sr-only">
@@ -1703,7 +1703,7 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
   return (
     <TooltipProvider delayDuration={150}>
       <Shell inModal={inModal}>
-        <div className={inModal ? "px-1 pb-2 space-y-4 w-full" : "px-6 pt-4 pb-8 space-y-4 w-full"}>
+        <div className={inModal ? "px-1 pb-2 space-y-4 w-full [&>*:first-child]:!mt-0" : "px-6 pt-4 pb-8 space-y-4 w-full"}>
           {/* Back link (full-page view only) */}
           {!inModal && (
             <button
@@ -1712,19 +1712,6 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
             >
               <BackArrow sx={{ fontSize: 14 }} /> Back to Client Contacts
             </button>
-          )}
-
-          {/* Pop-up: tiny position counter (top-right, next to the dialog close) */}
-          {swipeEnabled && (
-            <div className="flex justify-end -mb-2 pr-8">
-              <span
-                className="text-[11px] text-gray-400 tabular-nums select-none"
-                data-testid="cc-swipe-position"
-                title="Swipe horizontally on your trackpad to move between contacts"
-              >
-                {navPos} of {navTotal}
-              </span>
-            </div>
           )}
 
           {/* Pop-up: faint prev / next "peek" chips pinned to the edges */}
@@ -1744,6 +1731,25 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
             data-testid="cc-detail-slide"
             data-slide-phase={slide.phase}
           >
+          {/* Sticky header (profile card + tabs): stays pinned while the content
+              below scrolls. In the pop-up it sticks to the dialog's scroll area;
+              on the full page it sits right under the 56px top bar. */}
+          <div
+            className={`sticky z-20 !mt-0 space-y-4 pb-2 ${inModal ? "top-0 pt-3 sm:pt-4 bg-white" : "top-14 pt-4 bg-background"}`}
+            data-testid="cc-detail-sticky-header"
+          >
+          {/* Pop-up: tiny position counter (top-right, next to the dialog close) */}
+          {swipeEnabled && (
+            <div className="flex justify-end !mt-0 -mb-2 pr-8 h-4">
+              <span
+                className="text-[11px] text-gray-400 tabular-nums select-none"
+                data-testid="cc-swipe-position"
+                title="Swipe horizontally on your trackpad to move between contacts"
+              >
+                {navPos} of {navTotal}
+              </span>
+            </div>
+          )}
           {/* Header card */}
           <div className="bg-white border border-gray-200 rounded-xl p-5 flex items-start gap-4 shadow-sm">
             <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#ec9324] to-[#d97706] text-white flex items-center justify-center font-semibold flex-shrink-0 text-lg">
@@ -1752,17 +1758,6 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl font-bold text-gray-900">{row.name}</h1>
-                {row.status && (
-                  <span
-                    className={`text-[11px] px-2 py-0.5 rounded-full font-medium border ${
-                      row.status === "Active"
-                        ? "bg-green-50 text-green-700 border-green-200"
-                        : "bg-gray-100 text-gray-600 border-gray-200"
-                    }`}
-                  >
-                    {row.status}
-                  </span>
-                )}
                 <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-gray-100 text-gray-500">
                   ID: {row.display_id}
                 </span>
@@ -1801,30 +1796,40 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
               </div>
             </div>
 
-            {/* Right — Sync + Edit Contact */}
+            {/* Right — Active / Dormant status (parallel to the name) + icon-only
+                Sync / Edit buttons (same UI + hover tooltip as the Client card Edit). */}
             <div className="flex-shrink-0 flex items-center gap-2">
-              <Button
-                variant="outline"
+              {row.poc_status && (
+                <div data-testid="cc-detail-status" className="mr-1">
+                  <POCStatusChip status={row.poc_status} />
+                </div>
+              )}
+              <button
+                type="button"
                 onClick={handleSyncOne}
                 disabled={syncingOne}
+                title={syncingOne ? "Syncing…" : "Sync"}
+                aria-label="Sync"
                 data-testid="cc-detail-sync"
-                className="h-9"
+                className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 hover:text-[#ec9324] hover:bg-orange-50 transition-colors flex-shrink-0 disabled:opacity-60"
               >
-                <Loader2 sx={{ fontSize: 16 }} className={`mr-1.5 ${syncingOne ? "animate-spin" : ""}`} /> {syncingOne ? "Syncing…" : "Sync"}
-              </Button>
-              <Button
-                variant="outline"
+                <Loader2 sx={{ fontSize: 16 }} className={syncingOne ? "animate-spin" : ""} />
+              </button>
+              <button
+                type="button"
                 onClick={openEdit}
+                title="Edit Contact"
+                aria-label="Edit Contact"
                 data-testid="cc-detail-edit"
-                className="h-9"
+                className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 hover:text-[#ec9324] hover:bg-orange-50 transition-colors flex-shrink-0"
               >
-                <Pencil sx={{ fontSize: 16 }} className="mr-1.5" /> Edit Contact
-              </Button>
+                <Pencil sx={{ fontSize: 16 }} />
+              </button>
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className="border-b border-gray-200 flex items-center gap-6 overflow-x-auto">
+          {/* Tabs (no overflow scroller — it only produced a stray scrollbar) */}
+          <div className="border-b border-gray-200 flex items-center gap-6 flex-wrap">
             {[
               { key: "overview", label: "Overview" },
               { key: "employment", label: "Employment History" },
@@ -1848,10 +1853,13 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
               </button>
             ))}
           </div>
+          </div>{/* /sticky header */}
 
-          {/* Tab content — only Overview has content; the rest are blank pages */}
+          {/* Tab content */}
           {activeTab === "overview" ? (
-            <OverviewTab row={row} onAddEmployment={openEdit} />
+            <OverviewTab row={row} />
+          ) : activeTab === "employment" ? (
+            <EmploymentHistoryTab row={row} />
           ) : (
             <div data-testid={`cc-tabpanel-${activeTab}`} className="min-h-[240px]" />
           )}
@@ -2000,23 +2008,62 @@ function SwipeHint({ hint, pos, total }) {
 // ================================================================ Overview Tab (detail view)
 // Overview tab content: Industries (top) → Employment History + Summary/Overlap
 // → Projects by Client + Calls by Client. Only tab with content; the rest are blank.
-function OverviewTab({ row, onAddEmployment }) {
+// Build the contact's employment timeline: CURRENT employer (client_name +
+// designation on the contact itself — the edit form captures the current
+// details on the contact and only PAST roles in previous_work_experience),
+// followed by past roles, most recent first. The current role's start is the
+// end of the most recent past role (no separate field exists for it).
+function buildEmployment(row) {
+  const past = (row.previous_work_experience || [])
+    .map((w, i) => ({ ...w, _i: i, _start: parseMonthYear(w.start_month_year), _end: parseMonthYear(w.end_month_year) }))
+    .sort((a, b) => {
+      const ea = a._end || a._start || 0, eb = b._end || b._start || 0;
+      if (eb - ea !== 0) return eb - ea;
+      return (b._start || 0) - (a._start || 0);
+    });
+  const list = [];
+  if (row.client_name) {
+    const latestEnd = past.find((w) => w.end_month_year && String(w.end_month_year).toLowerCase() !== "present");
+    list.push({
+      company_name: row.client_name,
+      designation: row.designation || "",
+      start_month_year: latestEnd ? latestEnd.end_month_year : "",
+      end_month_year: "Present",
+      current: true,
+    });
+  }
+  past.forEach((w) => list.push({ ...w, current: false }));
+  return list;
+}
+
+function OverviewTab({ row }) {
   const totals = row.totals_till_date || {};
-  const work = row.previous_work_experience || [];
-  const overlap = computeEmploymentOverlap(work);
+  const employment = useMemo(() => buildEmployment(row), [row]);
+  const overlap = computeEmploymentOverlap(employment);
 
   // Activity Summary (bottom overview) DateFilter — default last 12 months.
   const [actFilter, setActFilter] = useState(getLast12MonthsRange());
 
-  // Placeholder sample rows (no backend breakdown yet) — mirror the design.
-  const projectsByClient = [
-    { client: "Boston Consulting Group (BCG)", count: 12, last: "15 Jul 2026" },
-    { client: "Bain & Company", count: 6, last: "20 Aug 2026" },
-  ];
-  const callsByClient = [
-    { client: "Boston Consulting Group (BCG)", count: 36, last: "12 Jul 2026" },
-    { client: "Bain & Company", count: 16, last: "22 Aug 2026" },
-  ];
+  // Projects / Calls by Client Contact — auto-populated from the contact's
+  // employers (current + past) using the MySQL mirror.
+  const [byClient, setByClient] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    setByClient(null);
+    api.get(`/client-contacts/${row.id}/by-client`, { silent: true })
+      .then((r) => { if (alive) setByClient(r.data?.rows || []); })
+      .catch(() => { if (alive) setByClient([]); });
+    return () => { alive = false; };
+  }, [row.id, row.client_name, row.previous_work_experience]);
+
+  const projectsRows = (byClient || []).map((r) => ({
+    client: r.client, current: r.current, unlisted: r.unlisted,
+    count: r.projects, last: r.last_project_date ? fmtDate(r.last_project_date) : "—",
+  }));
+  const callsRows = (byClient || []).map((r) => ({
+    client: r.client, current: r.current, unlisted: r.unlisted,
+    count: r.calls, last: r.last_call_date ? fmtDate(r.last_call_date) : "—",
+  }));
 
   return (
     <div className="space-y-4" data-testid="cc-tabpanel-overview">
@@ -2043,27 +2090,10 @@ function OverviewTab({ row, onAddEmployment }) {
 
       {/* Employment History (left) + Summary/Overlap (right) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Employment / Client Association History */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-          <SectionTitle>Employment / Client Association History</SectionTitle>
-          <div className="space-y-3 mt-3">
-            {work.length === 0 && (
-              <div className="text-[11px] text-gray-400 italic border border-dashed border-gray-200 rounded p-4 text-center">
-                No employment history added yet.
-              </div>
-            )}
-            {work.map((w, i) => (
-              <EmploymentCard key={i} w={w} row={row} idx={i} />
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={onAddEmployment}
-            data-testid="cc-add-employment"
-            className="mt-3 w-full border border-dashed border-gray-300 rounded-lg py-2.5 text-sm font-medium text-[#ec9324] hover:bg-[#ec9324]/5 flex items-center justify-center gap-1.5"
-          >
-            <Plus sx={{ fontSize: 16 }} /> Add New Employment / Client Association
-          </button>
+        {/* Employment History — current on top, then the one previous to it */}
+        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm" data-testid="cc-employment-box">
+          <SectionTitle>Employment History</SectionTitle>
+          <EmploymentTimeline items={employment.slice(0, 2)} row={row} />
         </div>
 
         {/* Summary + Employment Overlap */}
@@ -2078,25 +2108,26 @@ function OverviewTab({ row, onAddEmployment }) {
             </div>
           </div>
 
-          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm" data-testid="cc-employment-overlap">
             <SectionTitle>Employment Overlap</SectionTitle>
             {overlap ? (
               <div className="mt-3">
                 <div className="text-sm text-gray-700 mb-3">{overlap.rangeLabel}</div>
-                <div className="flex w-full h-2 rounded-full overflow-hidden bg-gray-100">
+                <div className="flex w-full h-2 rounded-full overflow-hidden bg-gray-100 gap-px">
                   {overlap.segs.map((s, i) => (
                     <div
                       key={i}
-                      className={i === 0 ? "bg-[#ec9324]" : "bg-blue-500"}
-                      style={{ width: `${s.pct}%` }}
+                      className={s.current ? "bg-[#ec9324]" : "bg-blue-500"}
+                      style={{ width: `${s.pct}%`, opacity: s.current ? 1 : Math.max(0.45, 1 - i * 0.15) }}
+                      title={`${s.company}: ${s.durationLabel}`}
                     />
                   ))}
                 </div>
-                <div className="flex justify-between mt-2">
+                <div className="flex justify-between gap-2 mt-2 flex-wrap">
                   {overlap.segs.map((s, i) => (
-                    <div key={i} className={`text-center ${i === 0 ? "text-[#ec9324]" : "text-blue-600"}`}>
+                    <div key={i} className={`text-center min-w-0 ${s.current ? "text-[#ec9324]" : "text-blue-600"}`} data-testid={`cc-overlap-seg-${i}`}>
                       <div className="text-[12px] font-semibold">{s.durationLabel}</div>
-                      <div className="text-[11px] text-gray-500">{s.company}</div>
+                      <div className="text-[11px] text-gray-500 truncate">{s.company}</div>
                     </div>
                   ))}
                 </div>
@@ -2108,20 +2139,22 @@ function OverviewTab({ row, onAddEmployment }) {
         </div>
       </div>
 
-      {/* Projects by Client (left) + Calls by Client (right) */}
+      {/* Projects by Client Contact (left) + Calls by Client Contact (right) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ByClientTable
-          title="Projects by Client"
+          title="Projects by Client Contact"
           countHeader="Projects"
           dateHeader="Last Project Date"
-          rows={projectsByClient}
+          rows={projectsRows}
+          loading={byClient === null}
           testId="cc-projects-by-client"
         />
         <ByClientTable
-          title="Calls by Client"
+          title="Calls by Client Contact"
           countHeader="Calls"
           dateHeader="Last Call Date"
-          rows={callsByClient}
+          rows={callsRows}
+          loading={byClient === null}
           testId="cc-calls-by-client"
         />
       </div>
@@ -2132,6 +2165,38 @@ function OverviewTab({ row, onAddEmployment }) {
         onFilterChange={setActFilter}
         data={row.activity_by_month}
       />
+    </div>
+  );
+}
+
+// Employment History tab — the full timeline (current + every past role).
+function EmploymentHistoryTab({ row }) {
+  const employment = useMemo(() => buildEmployment(row), [row]);
+  return (
+    <div className="space-y-4" data-testid="cc-tabpanel-employment">
+      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+        <SectionTitle>Employment History</SectionTitle>
+        <EmploymentTimeline items={employment} row={row} />
+      </div>
+    </div>
+  );
+}
+
+// Vertical timeline of EmploymentCards (current = orange, past = blue).
+function EmploymentTimeline({ items, row }) {
+  if (!items.length) {
+    return (
+      <div className="mt-3 text-[11px] text-gray-400 italic border border-dashed border-gray-200 rounded p-4 text-center">
+        No employment history added yet.
+      </div>
+    );
+  }
+  return (
+    <div className="relative mt-3 space-y-3">
+      {items.length > 1 && <div className="absolute left-[19px] top-6 bottom-6 w-px bg-blue-200" aria-hidden="true" />}
+      {items.map((w, i) => (
+        <EmploymentCard key={`${w.company_name}-${i}`} w={w} row={row} idx={i} />
+      ))}
     </div>
   );
 }
@@ -2158,24 +2223,28 @@ function SummaryCard({ icon, label, value }) {
 }
 
 function EmploymentCard({ w, row, idx }) {
-  const isCurrent = !w.end_month_year || String(w.end_month_year).trim().toLowerCase() === "present";
+  const isCurrent = w.current === true || !w.end_month_year || String(w.end_month_year).trim().toLowerCase() === "present";
   const start = parseMonthYear(w.start_month_year);
-  const end = parseMonthYear(w.end_month_year);
-  const months = monthsBetween(start, end || new Date());
-  const source = row.linkedin_url ? "LinkedIn" : "—";
+  const end = isCurrent ? new Date() : parseMonthYear(w.end_month_year);
+  const months = start ? monthsBetween(start, end || new Date()) : 0;
   return (
     <div
-      className={`rounded-lg border p-3 ${isCurrent ? "border-[#ec9324]/40 bg-[#ec9324]/5" : "border-gray-200 bg-white"}`}
+      className={`relative rounded-lg border p-3 bg-white ${isCurrent ? "border-[#ec9324]/40" : "border-gray-200"}`}
       data-testid={`cc-employment-${idx}`}
+      data-current={isCurrent ? "1" : "0"}
     >
       <div className="flex items-start gap-3">
-        <div className={`w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 ${isCurrent ? "bg-[#ec9324] text-white" : "bg-gray-100 text-gray-500"}`}>
-          <Business sx={{ fontSize: 16 }} />
+        {/* Industry / company icon — orange for the current employer, blue for past */}
+        <div
+          className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 text-white shadow-sm ${isCurrent ? "bg-[#ec9324]" : "bg-blue-500"}`}
+          data-testid={`cc-employment-icon-${idx}`}
+        >
+          <Business sx={{ fontSize: 18 }} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <div className={`text-sm font-semibold ${isCurrent ? "text-[#ec9324]" : "text-gray-900"}`}>
+              <div className={`text-sm font-semibold ${isCurrent ? "text-[#ec9324]" : "text-blue-600"}`}>
                 {w.company_name || "—"}
               </div>
               <div className="text-[12px] text-gray-600">{w.designation || "—"}</div>
@@ -2189,14 +2258,13 @@ function EmploymentCard({ w, row, idx }) {
               <div className="text-[11px] text-gray-500 mt-0.5">
                 {w.start_month_year || "—"} – {isCurrent ? "Present" : (w.end_month_year || "—")}
               </div>
-              {months > 0 && <div className="text-[11px] text-gray-400">{fmtDuration(months)}</div>}
+              {months > 0 && <div className="text-[11px] text-gray-400">{isCurrent ? fmtDuration(months, true) : fmtDuration(months)}</div>}
             </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-y-2 gap-x-3 mt-3 pt-3 border-t border-gray-100">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-2 gap-x-3 mt-3 pt-3 border-t border-gray-100">
             <MetaCell label="Primary Email" value={row.email} />
             <MetaCell label="Primary Phone" value={row.phone ? `${row.phone_isd ? row.phone_isd + " " : ""}${row.phone}` : ""} />
             <MetaCell label="Location" value={[row.city, row.country_name].filter(Boolean).join(", ") || row.base_location} />
-            <MetaCell label="Source" value={source} />
           </div>
         </div>
       </div>
@@ -2213,11 +2281,11 @@ function MetaCell({ label, value }) {
   );
 }
 
-function ByClientTable({ title, countHeader, dateHeader, rows, testId }) {
+function ByClientTable({ title, countHeader, dateHeader, rows, loading = false, testId }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm" data-testid={testId}>
       <SectionTitle>{title}</SectionTitle>
-      <div className="mt-3 overflow-x-auto">
+      <div className="mt-3">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
@@ -2227,17 +2295,28 @@ function ByClientTable({ title, countHeader, dateHeader, rows, testId }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, i) => (
-              <tr key={i} className="border-b border-gray-50 last:border-0">
+            {loading && (
+              <tr><td colSpan={3} className="py-3 text-[12px] text-gray-400 italic">Loading…</td></tr>
+            )}
+            {!loading && rows.length === 0 && (
+              <tr><td colSpan={3} className="py-3 text-[12px] text-gray-400 italic">No employer on record.</td></tr>
+            )}
+            {!loading && rows.map((r, i) => (
+              <tr key={i} className="border-b border-gray-50 last:border-0" data-testid={`${testId}-row-${i}`}>
                 <td className="py-2.5">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0">
+                    {/* Same colour code as Employment History: current = orange, past = blue */}
+                    <div
+                      className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 text-white ${
+                        r.current ? "bg-[#ec9324]" : r.unlisted ? "bg-gray-300" : "bg-blue-500"
+                      }`}
+                    >
                       <Business sx={{ fontSize: 13 }} />
                     </div>
-                    <span className="text-gray-800">{r.client}</span>
+                    <span className={`truncate ${r.current ? "text-[#ec9324] font-medium" : "text-gray-800"}`}>{r.client}</span>
                   </div>
                 </td>
-                <td className="py-2.5 text-gray-700">{r.count}</td>
+                <td className="py-2.5 text-gray-700 tabular-nums">{r.count}</td>
                 <td className="py-2.5 text-gray-700">{r.last}</td>
               </tr>
             ))}
@@ -2248,14 +2327,16 @@ function ByClientTable({ title, countHeader, dateHeader, rows, testId }) {
   );
 }
 
-// Simplified two-segment employment-overlap visual derived from work history.
+// Employment-overlap visual: ONE segment per role (current + every past
+// role), proportional to its duration, oldest → newest.
 function computeEmploymentOverlap(work) {
   const parsed = (work || [])
     .map((w) => {
+      const present = w.current === true || !w.end_month_year || String(w.end_month_year).trim().toLowerCase() === "present";
       const start = parseMonthYear(w.start_month_year);
-      const present = !w.end_month_year || String(w.end_month_year).trim().toLowerCase() === "present";
       const end = present ? new Date() : parseMonthYear(w.end_month_year);
-      return start ? { company: w.company_name || "—", start, end: end || new Date(), present } : null;
+      if (!start && !present) return null;
+      return { company: w.company_name || "—", start: start || end || new Date(), end: end || new Date(), present };
     })
     .filter(Boolean)
     .sort((a, b) => a.start - b.start);
@@ -2267,19 +2348,23 @@ function computeEmploymentOverlap(work) {
   const overallStart = parsed[0].start;
   const overallEnd = parsed.reduce((mx, p) => (p.end > mx ? p.end : mx), parsed[0].end);
   const totalMonths = Math.max(monthsBetween(overallStart, overallEnd), 1);
+  const anyPresent = parsed.some((p) => p.present);
 
-  const chosen = parsed.slice(-2);
-  const sumMonths = chosen.reduce((s, p) => s + Math.max(monthsBetween(p.start, p.end), 1), 0) || 1;
-  const segs = chosen.map((p) => {
+  const sumMonths = parsed.reduce((s, p) => s + Math.max(monthsBetween(p.start, p.end), 1), 0) || 1;
+  const segs = parsed.map((p) => {
     const m = Math.max(monthsBetween(p.start, p.end), 1);
     return {
       company: p.company,
+      current: p.present,
       durationLabel: p.present ? fmtDuration(m, true) : fmtDuration(m),
-      pct: Math.round((m / sumMonths) * 100),
+      pct: Math.max(4, Math.round((m / sumMonths) * 100)),
     };
   });
 
-  return { rangeLabel: `${fmt(overallStart)} – Present (${fmtDuration(totalMonths)})`, segs };
+  return {
+    rangeLabel: `${fmt(overallStart)} – ${anyPresent ? "Present" : fmt(overallEnd)} (${fmtDuration(totalMonths)})`,
+    segs,
+  };
 }
 
 

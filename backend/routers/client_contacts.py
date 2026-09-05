@@ -317,6 +317,86 @@ async def list_client_contacts(
     return {"rows": rows, "total": total, "page": page, "page_size": page_size}
 
 
+@api_router.get("/client-contacts/{contact_id}/by-client")
+async def client_contact_by_client(contact_id: str, user=Depends(get_current_user)):
+    """Projects / Calls broken down by the contact's EMPLOYERS (current client +
+    previous work experience), computed from the MySQL mirror:
+        projects = COUNT(DISTINCT mysql_projects.id) whose client_contacts list
+                   contains the contact and whose client_id is that employer
+        calls    = COUNT(DISTINCT mysql_calls.id) with fk_project in those projects
+    Employers with no MySQL data are still listed with zeros. Order: current first,
+    then previous employers (most recent first)."""
+    doc = await db[COLL].find_one({"id": contact_id})
+    if not doc:
+        raise HTTPException(404, "Client contact not found")
+
+    employers = []
+    if doc.get("client_name"):
+        employers.append({"client": doc["client_name"], "current": True,
+                          "designation": doc.get("designation") or ""})
+    prev = list(doc.get("previous_work_experience") or [])
+    # most recent first (by start_month_year text is unreliable → keep stored order reversed)
+    for w in reversed(prev):
+        if w.get("company_name"):
+            employers.append({"client": w["company_name"], "current": False,
+                              "designation": w.get("designation") or "",
+                              "start": w.get("start_month_year"), "end": w.get("end_month_year")})
+
+    # Numbers from the mirror (only when this contact is linked to a MySQL id)
+    by_client: Dict[int, dict] = {}
+    mid = (doc.get("mysql_ref") or {}).get("mysql_id")
+    if mid is not None:
+        projs = [p async for p in db["mysql_projects"].find(
+            {"client_contact_ids": int(mid)}, {"_id": 1, "client_id": 1, "receiving_date": 1})]
+        pid_to_client = {p["_id"]: p.get("client_id") for p in projs}
+        for p in projs:
+            b = by_client.setdefault(p.get("client_id"), {"projects": set(), "last_project": None,
+                                                            "calls": set(), "last_call": None})
+            b["projects"].add(p["_id"])
+            rd = p.get("receiving_date")
+            if rd and (b["last_project"] is None or rd > b["last_project"]):
+                b["last_project"] = rd
+        if pid_to_client:
+            async for c in db["mysql_calls"].find({"fk_project": {"$in": list(pid_to_client)}},
+                                                  {"_id": 1, "fk_project": 1, "call_start_time": 1}):
+                b = by_client.get(pid_to_client.get(c["fk_project"]))
+                if b is None:
+                    continue
+                b["calls"].add(c["_id"])
+                st = c.get("call_start_time")
+                if st and (b["last_call"] is None or st > b["last_call"]):
+                    b["last_call"] = st
+    # client_id → name
+    names = {}
+    if by_client:
+        async for c in db["mysql_clients"].find({"_id": {"$in": [k for k in by_client if k is not None]}},
+                                                {"_id": 1, "name": 1}):
+            names[c["_id"]] = (c.get("name") or "").strip()
+    by_name = {names[k].lower(): v for k, v in by_client.items() if k in names}
+
+    def _iso(v):
+        return v.isoformat() if hasattr(v, "isoformat") else v
+
+    rows, used = [], set()
+    for e in employers:
+        b = by_name.get(e["client"].strip().lower())
+        used.add(e["client"].strip().lower())
+        rows.append({**e,
+                     "projects": len(b["projects"]) if b else 0,
+                     "last_project_date": _iso(b["last_project"]) if b else None,
+                     "calls": len(b["calls"]) if b else 0,
+                     "last_call_date": _iso(b["last_call"]) if b else None})
+    # Any MySQL client with data that is not in the work experience list
+    for k, b in by_client.items():
+        nm = names.get(k, "")
+        if not nm or nm.lower() in used:
+            continue
+        rows.append({"client": nm, "current": False, "designation": "", "unlisted": True,
+                     "projects": len(b["projects"]), "last_project_date": _iso(b["last_project"]),
+                     "calls": len(b["calls"]), "last_call_date": _iso(b["last_call"])})
+    return {"rows": rows, "linked": mid is not None}
+
+
 @api_router.get("/client-contacts/{contact_id}")
 async def get_client_contact(contact_id: str, user=Depends(get_current_user)):
     doc = await db[COLL].find_one({"id": contact_id})

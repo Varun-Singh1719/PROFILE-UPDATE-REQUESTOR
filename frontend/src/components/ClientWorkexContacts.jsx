@@ -74,6 +74,18 @@ function IconAction({ icon, tooltip, onClick, testId, primary = false }) {
   );
 }
 
+function fmtMini(v, money = false) {
+  if (v === null || v === undefined || v === "") return "—";
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "—";
+  if (money) {
+    if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+    if (Math.abs(n) >= 10_000) return `$${(n / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+    return `$${n.toLocaleString()}`;
+  }
+  return n.toLocaleString();
+}
+
 function ContactMiniCard({ c, ex, onOpen }) {
   const exp = c.ex_experience || {};
   const location = [c.city, c.country_name].filter(Boolean).join(", ") || c.base_location || "";
@@ -139,6 +151,21 @@ function ContactMiniCard({ c, ex, onOpen }) {
             <span className="text-gray-900 font-medium truncate">{location || "—"}</span>
           </div>
         )}
+      </div>
+
+      {/* Numbers — same as the Client Contact card view (totals_till_date) */}
+      <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-4 gap-1 text-center" data-testid={`workex-contact-metrics-${c.display_id}`}>
+        {[
+          ["Projects", fmtMini(c.totals_till_date?.projects)],
+          ["Serviced", fmtMini(c.totals_till_date?.serviced)],
+          ["Calls", fmtMini(c.totals_till_date?.calls)],
+          ["Revenue", fmtMini(c.totals_till_date?.revenue, true)],
+        ].map(([label, value]) => (
+          <div key={label} className="min-w-0">
+            <div className="text-[15px] font-bold text-[#ec9324] leading-tight tabular-nums">{value}</div>
+            <div className="text-[9px] uppercase tracking-wider text-gray-500 font-semibold truncate">{label}</div>
+          </div>
+        ))}
       </div>
 
       {ex && (

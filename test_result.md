@@ -13600,8 +13600,7 @@ metadata:
   run_ui: true
 
 test_plan:
-  current_focus:
-    - "CRM Overview - Font parity and client name truncation fix"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -13640,6 +13639,20 @@ agent_communication:
         - SVG visualization renders (32 ribbons visible)
         
         Screenshots attached. No issues found. Fix is production-ready.
+    - agent: "testing"
+      message: |
+        ✅ CLIENT CONTACT DETAIL VIEW UI CHANGES - ALL TESTS PASSED (Sep 5 2026)
+        
+        Comprehensive verification of Client Contact detail view redesign completed successfully.
+        All UI changes and API endpoints working as specified. No issues found.
+        
+        **SUMMARY:**
+        - TEST A: Client Contacts tab mini cards with metrics row ✅
+        - TEST B: Pop-up detail view (7 checks: header, tabs, employment, overlap, tables, sticky, edit) ✅
+        - TEST C: Full page detail view (spot-checks + sticky header) ✅
+        - TEST D: API endpoint /by-client (unlinked + MySQL-linked contacts) ✅
+        
+        All requirements from review_request verified and passing.
 
 
 #====================================================================================================
@@ -13912,3 +13925,160 @@ agent_communication:
         - working: true
           agent: "testing"
           comment: "Verified: Apex Partners Fund 20088 tiles 1/21/13/36/$1,823 == card == API; Global Materials Advisors 56161 tiles 2/20/9/29/$2,473 == API. Tabs/Back/Sync/Edit render, no console errors."
+
+backend:
+  - task: "GET /api/client-contacts/{id}/by-client — Projects/Calls per employer (current + past) from MySQL mirror"
+    implemented: true
+    working: true
+    file: "backend/routers/client_contacts.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Rows = [current client_name] + previous_work_experience (most recent first) with projects/last_project_date/calls/last_call_date from mysql_projects (client_contact_ids contains mysql_ref.mysql_id, grouped by client_id) and mysql_calls (fk_project). Unlinked contacts get zeros. Extra MySQL clients with data appended as unlisted."
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ ALL API TESTS PASSED (Sep 5 2026)
+            
+            Comprehensive API endpoint verification completed successfully.
+            
+            **TEST D.1: Divya Reddy (bf6c367f-2450-4789-9f60-9fba0e8a2d97) - Unlinked contact**
+            
+            GET /api/client-contacts/bf6c367f-2450-4789-9f60-9fba0e8a2d97/by-client → 200 OK
+            
+            ✅ Response structure correct:
+            - rows[0]: client="A T Kearney", current=true, designation="Vice President"
+            - rows[1]: client="Accenture", current=false, designation="Engagement Manager", start="Jul 2016", end="Apr 2018"
+            - All required keys present: projects, calls, last_project_date, last_call_date
+            - linked=false (as expected for unlinked contact)
+            - Values are 0/null (expected for unlinked contact)
+            - Order correct: current employer first, then past employers
+            - No BCG or Bain in results ✓
+            
+            **TEST D.2: Anjali Sharma (b4112ad2-a8ae-4d18-bae5-31096c4b267d) - MySQL-linked contact**
+            
+            GET /api/client-contacts/b4112ad2-a8ae-4d18-bae5-31096c4b267d/by-client → 200 OK
+            
+            ✅ MySQL-linked contact has non-zero numbers:
+            - rows[0]: client="Sterling Pharma Partners 46183", current=true, projects=17, calls=31
+            - last_project_date="2026-05-10T18:56:53" (non-null)
+            - last_call_date=null (MySQL calls.call_start_time is NULL for all rows per main agent note)
+            - linked=true ✓
+            
+            NO ISSUES FOUND. API endpoint working as specified.
+
+frontend:
+  - task: "Client Contact detail (pop-up + full page) redesign per user list"
+    implemented: true
+    working: true
+    file: "frontend/src/pages/ClientContactsPage.jsx, frontend/src/components/ClientWorkexContacts.jsx, frontend/src/components/Layout.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            - Employment History box: current employer (client_name/designation, start = end of latest past role,
+              "Present") on top then most recent past; only 2 shown in Overview; Employment History tab shows all.
+            - Title renamed "Employment History"; "+ Add New Employment / Client Association" button removed; Source removed.
+            - Icons: current orange (#ec9324) + orange name, past blue-500 + blue name; same in Projects/Calls tables.
+            - "Projects by Client Contact" / "Calls by Client Contact" from GET /by-client (auto from workex).
+            - Employment Overlap shows one segment per role (all roles).
+            - Header: POCStatusChip (Active/Dormant) right-aligned (cc-detail-status); Sync/Edit are icon-only
+              (w-7 h-7 rounded-md, native title tooltip "Sync"/"Edit Contact", same classes as Client card Edit).
+            - Sticky header (profile card + tabs) data-testid cc-detail-sticky-header: pop-up top-0, full page top-14.
+              Layout <main> overflow-x-hidden → overflow-x-clip so sticky (incl. app TopBar) works on window scroll.
+            - Tabs row: removed overflow-x-auto (stray scrollbar).
+            - ClientWorkexContacts mini cards: Projects/Serviced/Calls/Revenue row (workex-contact-metrics-<id>).
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ ALL UI TESTS PASSED (Sep 5 2026)
+            
+            Comprehensive UI verification completed successfully for Client Contact detail view redesign.
+            Test contact: Divya Reddy (ID: 1058, bf6c367f-2450-4789-9f60-9fba0e8a2d97)
+            Test client: A T Kearney (0405ec80-d304-4741-9160-39389518fa66)
+            
+            **TEST A: Client Contacts tab mini cards ✅**
+            - Navigate to A T Kearney → Client Contacts tab → workex-contacts-grid loaded
+            - Divya Reddy card (workex-contact-1058) found with metrics row (workex-contact-metrics-1058)
+            - Metrics display: 17 Projects / 11 Serviced / 179 Calls / $1.3M Revenue ✓
+            
+            **TEST B: Pop-up detail view (all 7 checks) ✅**
+            
+            B.1 Header ✅:
+            - Name: "Divya Reddy" ✓
+            - Status chip [cc-detail-status] on RIGHT side (flex-shrink-0 container) ✓
+            - Sync button [cc-detail-sync] icon-only with title="Sync" aria-label="Sync" ✓
+            - Edit button [cc-detail-edit] icon-only with title="Edit Contact" aria-label="Edit Contact" ✓
+            
+            B.2 Tabs row ✅:
+            - NO overflow-x-auto class (no scrollbar) ✓
+            - Classes: "sticky top-0 z-20 h-14 bg-white/95 backdrop-blur border-b border-gray-200 flex items-center px-4 gap-3"
+            
+            B.3 Employment History box [cc-employment-box] ✅:
+            - Title: "Employment History" (NOT "Employment / Client Association History") ✓
+            - NO "+ Add New Employment" button (cc-add-employment does not exist) ✓
+            - Exactly 2 cards: cc-employment-0 and cc-employment-1 ✓
+            
+            Card 0 (current) ✅:
+            - Company: "A T Kearney" ✓
+            - Designation: "Vice President" ✓
+            - "Current" badge present ✓
+            - Dates: "Apr 2018 – Present" ✓
+            - data-current="1" ✓
+            - Icon [cc-employment-icon-0] has bg-[#ec9324] (orange) ✓
+            - Company name has text-[#ec9324] (orange) ✓
+            - NO "Source" field ✓
+            
+            Card 1 (past) ✅:
+            - Company: "Accenture" ✓
+            - Designation: "Engagement Manager" ✓
+            - Dates: "Jul 2016 – Apr 2018" ✓
+            - data-current="0" ✓
+            - Icon [cc-employment-icon-1] has bg-blue-500 (blue) ✓
+            - Company name has text-blue-600 (blue) ✓
+            - NO "Source" field ✓
+            
+            B.4 Employment Overlap box [cc-employment-overlap] ✅:
+            - Shows ALL roles as segments ✓
+            - Exactly 2 segments: cc-overlap-seg-0 "Accenture", cc-overlap-seg-1 "A T Kearney" ✓
+            - Range text: "Jul 2016 – Present (10 yrs 2 mos)" ✓
+            
+            B.5 Tables ✅:
+            - Projects by Client Contact [cc-projects-by-client] title correct ✓
+            - Calls by Client Contact [cc-calls-by-client] title correct ✓
+            - Row 0 (cc-projects-by-client-row-0): "A T Kearney" with ORANGE icon (bg-[#ec9324]) ✓
+            - Row 1 (cc-projects-by-client-row-1): "Accenture" with BLUE icon (bg-blue-500) ✓
+            - Same for Calls table ✓
+            - NO "Boston Consulting Group" or "Bain & Company" in results ✓
+            - Values 0/"—" expected for unlinked contact ✓
+            
+            B.6 Sticky header ✅:
+            - Scrolled modal to top: 700
+            - Sticky header [cc-detail-sticky-header] bounding box top: 44.20px, modal top: 43.20px
+            - Difference: 1.00px (within 5px threshold) ✓
+            - Clicked cc-tab-employment → panel [cc-tabpanel-employment] shows full timeline ✓
+            - Both A T Kearney and Accenture visible in Employment History tab ✓
+            
+            B.7 Existing behaviour ✅:
+            - Clicked cc-detail-edit → edit dialog opened ✓
+            - Name field prefilled with "Divya Reddy" ✓
+            - Pressed Escape → edit dialog closed ✓
+            - Pressed Escape again → pop-up closed ✓
+            
+            **TEST C: Full page detail view ✅**
+            - Navigate to /crm/client-contacts/bf6c367f-2450-4789-9f60-9fba0e8a2d97
+            - Spot-check 3: Employment History box present with A T Kearney + Accenture ✓
+            - Spot-check 5: Projects/Calls tables have expected clients ✓
+            - Scrolled window to top: 700
+            - Sticky header top: 56.00px (exactly under app top bar at 56px) ✓
+            
+            NO ISSUES FOUND. All UI changes working as specified.
+        - working: true
+          agent: "testing"
+          comment: "All tests passed: mini-card metrics, header status chip + icon buttons, no tab scrollbar, Employment History (2 cards, colours, no Source/add button), overlap 2 segments, by-client-contact tables (A T Kearney/Accenture, no BCG/Bain), sticky header in pop-up (1px) and full page (56px), edit dialog, API by-client (unlinked + linked Anjali Sharma 17 projects/31 calls)."

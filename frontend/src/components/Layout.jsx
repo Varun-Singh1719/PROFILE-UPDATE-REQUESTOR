@@ -52,7 +52,7 @@ export default function Layout({
     <div className="min-h-screen bg-white">
       <Sidebar />
       <main
-        className="relative flex-1 overflow-x-hidden transition-[margin] duration-200 min-h-screen"
+        className="relative flex-1 overflow-x-clip transition-[margin] duration-200 min-h-screen"
         style={{ marginLeft: sidebarOffset }}
       >
         {!hideTopBar && <TopBar title={title} actions={actions} />}
