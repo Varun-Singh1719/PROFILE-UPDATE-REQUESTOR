@@ -354,15 +354,6 @@ export function ClientContactDetailModal({ contactId, open, onClose, navItems = 
         {contactId && (
           <ClientContactDetail contactId={contactId} inModal onClose={onClose} swipeNav={swipeNav} relation={relation} />
         )}
-        {/* Close (X) — ORIGINAL corner position; UI/UX identical to the Edit button
-            (gray → orange + light-orange bg on hover, native "Close" tooltip). */}
-        <CardStyleIconButton
-          icon={<CloseIcon sx={{ fontSize: 16 }} />}
-          tooltip="Close"
-          onClick={onClose}
-          testId="cc-detail-close"
-          className="absolute right-4 top-4 z-30"
-        />
       </DialogContent>
     </Dialog>
   );
@@ -1773,7 +1764,7 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
 
           {/* Sliding container — everything below animates when swiping */}
           <div
-            className="space-y-4 will-change-transform"
+            className="space-y-4 will-change-transform !mt-0"
             style={slideStyle}
             data-testid="cc-detail-slide"
             data-slide-phase={slide.phase}
@@ -1785,6 +1776,18 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
             className={`sticky z-20 !mt-0 space-y-4 pb-2 ${inModal ? "top-0 pt-3 sm:pt-4 bg-white" : "top-14 pt-4 bg-background"}`}
             data-testid="cc-detail-sticky-header"
           >
+          {/* Pop-up: Close (X) in its original top-right corner of the dialog
+              (16px inset). It lives INSIDE the sticky header so it stays pinned
+              while the content scrolls. UI/UX identical to the Edit button. */}
+          {inModal && (
+            <CardStyleIconButton
+              icon={<CloseIcon sx={{ fontSize: 16 }} />}
+              tooltip="Close"
+              onClick={() => onClose?.()}
+              testId="cc-detail-close"
+              className="absolute -right-3 top-4 z-30"
+            />
+          )}
           {/* Pop-up: tiny position counter (top-right, next to the dialog close) */}
           {swipeEnabled && (
             <div className="flex justify-end !mt-0 -mb-2 pr-8 h-4">
