@@ -62,6 +62,7 @@ import Upload from "@mui/icons-material/CloudUploadOutlined";
 import FileDown from "@mui/icons-material/DownloadOutlined";
 import FileSpreadsheet from "@mui/icons-material/DescriptionOutlined";
 import History from "@mui/icons-material/HistoryOutlined";
+import LockOutlined from "@mui/icons-material/LockOutlined";
 import Loader2 from "@mui/icons-material/Autorenew";
 import CheckCircle2 from "@mui/icons-material/CheckCircleOutlineOutlined";
 import AlertTriangle from "@mui/icons-material/WarningAmberOutlined";
@@ -1835,7 +1836,7 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
               { key: "employment", label: "Employment History" },
               { key: "interactions", label: "Interactions" },
               { key: "notes", label: "Notes" },
-              { key: "activity", label: "Activity Log" },
+              { key: "timeline", label: "Timeline" },
             ].map((t) => (
               <button
                 key={t.key}
@@ -1860,6 +1861,8 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
             <OverviewTab row={row} />
           ) : activeTab === "employment" ? (
             <EmploymentHistoryTab row={row} />
+          ) : activeTab === "timeline" ? (
+            <TimelineTab row={row} />
           ) : (
             <div data-testid={`cc-tabpanel-${activeTab}`} className="min-h-[240px]" />
           )}
@@ -2179,6 +2182,221 @@ function EmploymentHistoryTab({ row }) {
         <EmploymentTimeline items={employment} row={row} />
       </div>
     </div>
+  );
+}
+
+// ================================================================ Timeline (read-only audit history)
+// Every profile change is recorded server-side (routers/client_contact_timeline.py)
+// as ONE immutable entry per field, grouped into "batches" — one batch per Save
+// (same user + timestamp). Values are snapshots taken at the time of the
+// change; nothing here is derived from the current record, and there are no
+// edit / delete controls by design.
+const TIMELINE_PAGE_SIZE = 25;
+
+// "Sep 05, 2026 · 03:42 PM" (IST)
+function fmtTimelineStamp(v) {
+  const d = v ? new Date(v) : null;
+  if (!d || Number.isNaN(d.getTime())) return "—";
+  const date = d.toLocaleDateString("en-US", { timeZone: "Asia/Kolkata", month: "short", day: "2-digit", year: "numeric" });
+  const time = d.toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true });
+  return `${date} · ${time}`;
+}
+
+const TL_ACTION_STYLE = {
+  added:   { label: "Added",   cls: "bg-green-50 text-green-700 border-green-200" },
+  edited:  { label: "Edited",  cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  deleted: { label: "Deleted", cls: "bg-red-50 text-red-700 border-red-200" },
+};
+
+function TimelineTab({ row }) {
+  const [batches, setBatches] = useState([]);
+  const [total, setTotal] = useState({ batches: 0, changes: 0 });
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Reload from page 1 whenever the contact is saved (updated_on changes).
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    api.get(`/client-contacts/${row.id}/timeline`, { params: { page: 1, page_size: TIMELINE_PAGE_SIZE }, silent: true })
+      .then((r) => {
+        if (!alive) return;
+        setBatches(r.data?.batches || []);
+        setTotal({ batches: r.data?.total_batches || 0, changes: r.data?.total_changes || 0 });
+      })
+      .catch((e) => { if (alive) setError(formatApiError(e, "Failed to load timeline")); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [row.id, row.updated_on]);
+
+  const loadMore = async () => {
+    const next = page + 1;
+    setLoading(true);
+    try {
+      const r = await api.get(`/client-contacts/${row.id}/timeline`, { params: { page: next, page_size: TIMELINE_PAGE_SIZE }, silent: true });
+      setBatches((prev) => [...prev, ...(r.data?.batches || [])]);
+      setPage(next);
+    } catch (e) {
+      setError(formatApiError(e, "Failed to load timeline"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const hasMore = batches.length < total.batches;
+
+  return (
+    <div className="space-y-4" data-testid="cc-tabpanel-timeline">
+      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <SectionTitle>Timeline</SectionTitle>
+            <div className="text-[11px] text-gray-500 mt-0.5">
+              Complete history of every change made to this contact&apos;s profile — who, what, when, previous and new value.
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {total.changes > 0 && (
+              <span className="text-[11px] text-gray-500" data-testid="cc-timeline-count">
+                {total.changes} change{total.changes === 1 ? "" : "s"} · {total.batches} update{total.batches === 1 ? "" : "s"}
+              </span>
+            )}
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200"
+              title="This history is immutable. Entries cannot be added, edited or deleted."
+              data-testid="cc-timeline-readonly"
+            >
+              <LockOutlined sx={{ fontSize: 12 }} /> Read-only
+            </span>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mt-3 text-[12px] text-red-600 border border-red-200 bg-red-50 rounded p-3">{error}</div>
+        )}
+
+        {!error && loading && batches.length === 0 && (
+          <div className="mt-3 text-[12px] text-gray-400 italic">Loading…</div>
+        )}
+
+        {!error && !loading && batches.length === 0 && (
+          <div className="mt-3 text-[11px] text-gray-400 italic border border-dashed border-gray-200 rounded p-4 text-center" data-testid="cc-timeline-empty">
+            No changes recorded yet. Edits made to this contact will appear here automatically.
+          </div>
+        )}
+
+        {batches.length > 0 && (
+          <div className="relative mt-4 space-y-5">
+            {batches.length > 1 && (
+              <div className="absolute left-[15px] top-8 bottom-6 w-px bg-gray-200" aria-hidden="true" />
+            )}
+            {batches.map((b, i) => (
+              <TimelineBatch key={b.batch_id} batch={b} idx={i} />
+            ))}
+          </div>
+        )}
+
+        {hasMore && (
+          <div className="mt-4 flex justify-center">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={loadMore}
+              disabled={loading}
+              data-testid="cc-timeline-load-more"
+              className="text-xs"
+            >
+              {loading ? "Loading…" : `Load older changes (${total.batches - batches.length} more)`}
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TimelineBatch({ batch, idx }) {
+  const user = batch.user || {};
+  const name = user.name || user.email || "Unknown user";
+  const initials = name.trim().split(/\s+/).map((s) => s[0]).join("").slice(0, 2).toUpperCase() || "?";
+  const isCreate = batch.event === "created";
+  const changes = batch.changes || [];
+  return (
+    <div className="relative flex items-start gap-3" data-testid={`cc-timeline-batch-${idx}`} data-event={batch.event}>
+      {/* Marker — user initials (orange for create, blue for update) */}
+      <div
+        className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[11px] font-semibold shadow-sm ring-4 ring-white ${
+          isCreate ? "bg-[#ec9324]" : "bg-blue-500"
+        }`}
+        title={name}
+      >
+        {initials}
+      </div>
+
+      <div className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white">
+        {/* Batch header — Who · When */}
+        <div className="flex items-center justify-between gap-2 flex-wrap px-3 py-2 border-b border-gray-100 bg-gray-50/60 rounded-t-lg">
+          <div className="text-[12px] text-gray-700 min-w-0">
+            <span className="text-gray-500">{isCreate ? "Created by" : "Updated by"}</span>{" "}
+            <span className="font-semibold text-gray-900" data-testid="cc-timeline-user">{name}</span>
+            {user.emp_id ? <span className="text-gray-400"> · {user.emp_id}</span> : null}
+          </div>
+          <div className="text-[11px] text-gray-500 whitespace-nowrap flex items-center gap-1" data-testid="cc-timeline-at">
+            <History sx={{ fontSize: 13 }} className="text-gray-400" />
+            {fmtTimelineStamp(batch.at)}
+          </div>
+        </div>
+
+        {/* Field-level changes (same time + user) */}
+        <ul className="divide-y divide-gray-100">
+          {changes.map((c) => <TimelineChange key={c.id} change={c} />)}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function TimelineChange({ change }) {
+  const a = TL_ACTION_STYLE[change.action] || { label: change.action, cls: "bg-gray-50 text-gray-600 border-gray-200" };
+  const prev = change.previous_value;
+  const next = change.new_value;
+  return (
+    <li className="px-3 py-2" data-testid="cc-timeline-change" data-field={change.field} data-action={change.action}>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[12px] font-semibold text-gray-900">{change.field_label}</span>
+        <span className="text-gray-300 text-[12px]">—</span>
+        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${a.cls}`}>{a.label}</span>
+      </div>
+      <div className="mt-1 flex items-center gap-2 flex-wrap text-[12px]">
+        {change.action === "edited" && (
+          <>
+            <TLValue label="Previous" value={prev} tone="prev" />
+            <span className="text-gray-400">→</span>
+            <TLValue label="New" value={next} tone="new" />
+          </>
+        )}
+        {change.action === "added" && <TLValue label="Added" value={next} tone="new" />}
+        {change.action === "deleted" && <TLValue label="Previous" value={prev} tone="prev" />}
+      </div>
+    </li>
+  );
+}
+
+function TLValue({ label, value, tone }) {
+  const cls = tone === "new"
+    ? "bg-orange-50 border-orange-200 text-gray-900"
+    : "bg-gray-50 border-gray-200 text-gray-600";
+  return (
+    <span className="inline-flex items-baseline gap-1 min-w-0 max-w-full">
+      <span className="text-[11px] text-gray-500 flex-shrink-0">{label}:</span>
+      <code className={`px-1.5 py-0.5 rounded border text-[11.5px] font-mono break-all ${cls}`}>
+        {value === null || value === undefined || value === "" ? "—" : String(value)}
+      </code>
+    </span>
   );
 }
 

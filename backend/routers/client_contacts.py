@@ -34,6 +34,7 @@ from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
 from core import api_router, db, now_iso, get_current_user
+from routers.client_contact_timeline import record_contact_changes
 
 
 COLL = "client_contacts"
@@ -269,6 +270,8 @@ async def create_client_contact(
         "updated_on": now_iso(),
     }
     await db[COLL].insert_one(doc)
+    # Timeline: initial "Created" batch — every populated field recorded as Added.
+    await record_contact_changes(doc["id"], None, doc, user, event="created")
     return _serialize(doc)
 
 
@@ -446,6 +449,8 @@ async def update_client_contact(
     updates["updated_on"] = now_iso()
     await db[COLL].update_one({"id": contact_id}, {"$set": updates})
     doc = await db[COLL].find_one({"id": contact_id})
+    # Timeline: immutable per-field audit (old snapshot vs saved doc, one batch).
+    await record_contact_changes(contact_id, existing, doc, user, event="updated")
     row = _serialize(doc)
     # If the field driving POC Status changed, refresh cached key + annotate
     if "last_project_receiving_date" in updates:

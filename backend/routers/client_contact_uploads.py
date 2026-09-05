@@ -450,6 +450,8 @@ async def bulk_upload_client_contacts(
         }
         try:
             await db[CC_COLL].insert_one(doc)
+            from routers.client_contact_timeline import record_contact_changes as _rec_tl
+            await _rec_tl(doc["id"], None, doc, user, event="created")
         except Exception as e:  # noqa: BLE001
             errors.append({
                 "row": excel_row_num,
