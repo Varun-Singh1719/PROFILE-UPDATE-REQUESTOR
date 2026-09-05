@@ -390,3 +390,12 @@ Follow-up polish on the Team Auto Assignment mode:
 
 Verified end-to-end on the InfraXcellence team (16 members): mid-plan click centered the map on the I/J/L/M block; clicking `Z10` triggered the dialog, `Use Suggested Block` accepted `Y5…Z10` and re-centered on the Y-Z region.
 
+
+
+## Session Sep 05 2026 — CRM → Client Contact Detail: trackpad swipe navigation
+- **Env restore**: recreated `backend/.env` (Atlas `cluster0.vmgql1i` · `app_db` · user `sakshamsinghal_db_user`, fresh JWT_SECRET/FERNET_KEY, APP_PUBLIC_URL) and `frontend/.env` (`REACT_APP_BACKEND_URL` = preview URL). Login `admin@ticketing.com / Admin@123` OK.
+- **New** `hooks/useTrackpadSwipeNav.js`: document-level non-passive `wheel` listener → one `onSwipe('next'|'prev')` per horizontal gesture (dominance |dx|>1.5·|dy|, 70px threshold, lock until 350ms idle, vertical-cancel after 30px vertical travel, fresh-swipe-during-inertia detection, preventDefault on horizontal events to stop browser back/forward swipe). Ignores events inside `[role=dialog]`.
+- **New** `lib/clientContactNavContext.js`: sessionStorage ctx `{ids, pageStart, pageEnd, pageSize, total, params:{search, clientFilter, sortKey}}` saved by the list (`openDetail`) when a card is opened.
+- **`ClientContactDetail`**: swipe-enabled only when full-page + ctx contains current id. Slide out/in transition on a wrapper (`data-testid=cc-detail-slide`, `data-slide-phase`), silent prefetch of the target row (no global overlay), `navigate()` to new URL, tab state kept, scroll to top. Cross-page: fetches adjacent list page with same filters (client-side `sortRows`) when near the loaded edge; hard stop at first/last with bump + hint. Header shows small `n of N` counter (`cc-swipe-position`); floating auto-hiding pill `‹ Swipe to navigate ›` (`cc-swipe-hint`) on open / after move / at edge. `overscroll-behavior-x:none` on html/body while active.
+- **Bug fix (pre-existing)**: `Shell` was an inline arrow component → new type each render → `<Layout>` remounted on every state change (Sidebar/NotificationBell refetching, overlay flashes, sidebar auto-collapse timer reset). Replaced with module-level `DetailShell`.
+- Testing agent NOT deployed (per user). Verified by Playwright screenshots.

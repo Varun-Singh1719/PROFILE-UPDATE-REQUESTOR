@@ -2,7 +2,7 @@
 
 **Test Date:** July 29, 2026  
 **Tester:** Testing Agent (Automated)  
-**Environment:** https://client-contact-ui.preview.emergentagent.com  
+**Environment:** https://crm-contact-carousel.preview.emergentagent.com  
 **Test Approach:** FAST-PATH Impersonation with FIXED wait pattern for permsReady
 
 ---

@@ -16,8 +16,13 @@
  *     an Activity Summary section powered by the ProfiX-style DateFilter
  *     (default = Last 6 Months; all four modes: between/on/before/after).
  */
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import useTrackpadSwipeNav from "../hooks/useTrackpadSwipeNav";
+import {
+  saveClientContactNavContext,
+  loadClientContactNavContext,
+} from "../lib/clientContactNavContext";
 import Layout from "../components/Layout";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -55,6 +60,8 @@ import Business from "@mui/icons-material/BusinessOutlined";
 import Place from "@mui/icons-material/PlaceOutlined";
 import Public from "@mui/icons-material/PublicOutlined";
 import BackArrow from "@mui/icons-material/ArrowBackOutlined";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import Upload from "@mui/icons-material/CloudUploadOutlined";
 import FileDown from "@mui/icons-material/DownloadOutlined";
 import FileSpreadsheet from "@mui/icons-material/DescriptionOutlined";
@@ -485,6 +492,20 @@ function ClientContactsList() {
   // Client-side sort (backend returns newest-first by default).
   const displayed = useMemo(() => sortRows(rows, sortKey), [rows, sortKey]);
 
+  // Remember the on-screen order + active filters so the detail view can
+  // swipe prev/next in exactly this order (see useTrackpadSwipeNav).
+  const openDetail = (row) => {
+    saveClientContactNavContext({
+      ids: displayed.map((r) => r.id),
+      pageStart: page,
+      pageEnd: page,
+      pageSize,
+      total,
+      params: { search, clientFilter, sortKey },
+    });
+    navigate(`/crm/client-contacts/${row.id}`);
+  };
+
   const openCreate = () => {
     setEditing(null);
     setForm({ ...EMPTY_FORM, previous_work_experience: [] });
@@ -675,7 +696,7 @@ function ClientContactsList() {
                   <ContactCard
                     key={r.id}
                     row={r}
-                    onView={() => navigate(`/crm/client-contacts/${r.id}`)}
+                    onView={() => openDetail(r)}
                     onEdit={() => openEdit(r)}
                     onDelete={() => onDelete(r)}
                   />
@@ -1417,7 +1438,194 @@ function ClientContactDetail({ contactId, inModal = false, onClose }) {
       setLoading(false);
     }
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [contactId]);
+  // Skip the network round-trip when the row was already prefetched by a
+  // trackpad swipe (see goToNeighbour) — avoids the "Loading…" flicker.
+  const prefetchedRef = useRef(null);
+  useEffect(() => {
+    const pre = prefetchedRef.current;
+    if (pre && pre.id === contactId) {
+      prefetchedRef.current = null;
+      return;
+    }
+    load();
+    /* eslint-disable-next-line */
+  }, [contactId]);
+
+  // ------------------------------------------------------------------
+  // Trackpad swipe navigation between contacts (full-page view only).
+  // Order comes from the list the user came from (sessionStorage ctx);
+  // when the loaded ids run out we transparently fetch the adjacent list
+  // page with the same search / client filter / sort.
+  // ------------------------------------------------------------------
+  const [navCtx, setNavCtx] = useState(() => (inModal ? null : loadClientContactNavContext()));
+  const navCtxRef = useRef(navCtx);
+  navCtxRef.current = navCtx;
+  const extendingRef = useRef({ next: null, prev: null });
+  const busyRef = useRef(false);
+  const [slide, setSlide] = useState({ phase: "idle", dir: "next" });
+  const [hint, setHint] = useState(null); // { kind: 'intro'|'moved'|'edge', dir?, until }
+  const hintTimerRef = useRef(null);
+
+  // The id we are *showing*. `row.id` updates in the same render as the slide
+  // (react-router commits the URL param a frame later in a low-priority
+  // transition), so derive position/neighbours from it to stay in lock-step.
+  const curId = row?.id || contactId;
+  const swipeEnabled = !inModal && !!navCtx && navCtx.ids.includes(curId);
+  const navIdx = swipeEnabled ? navCtx.ids.indexOf(curId) : -1;
+  const navPos = swipeEnabled ? (navCtx.pageStart - 1) * navCtx.pageSize + navIdx + 1 : 0;
+  const navTotal = swipeEnabled ? Math.max(navCtx.total || 0, navCtx.ids.length) : 0;
+  const hasMore = (ctx, dir) =>
+    dir === "next"
+      ? ctx.pageEnd * ctx.pageSize < (ctx.total || 0)
+      : ctx.pageStart > 1;
+
+  const showHint = useCallback((kind, dir, ms) => {
+    if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+    setHint({ kind, dir });
+    hintTimerRef.current = setTimeout(() => setHint(null), ms);
+  }, []);
+
+  // Discoverability cue: show once when the page opens with swipe context.
+  useEffect(() => {
+    if (!swipeEnabled) return undefined;
+    const t = setTimeout(() => showHint("intro", null, 4200), 400);
+    return () => clearTimeout(t);
+    /* eslint-disable-next-line */
+  }, []);
+  useEffect(() => () => { if (hintTimerRef.current) clearTimeout(hintTimerRef.current); }, []);
+
+  // Stop macOS/Chrome from turning a horizontal swipe into history back/forward.
+  useEffect(() => {
+    if (!swipeEnabled) return undefined;
+    const html = document.documentElement;
+    const body = document.body;
+    const prev = [html.style.overscrollBehaviorX, body.style.overscrollBehaviorX];
+    html.style.overscrollBehaviorX = "none";
+    body.style.overscrollBehaviorX = "none";
+    return () => {
+      html.style.overscrollBehaviorX = prev[0];
+      body.style.overscrollBehaviorX = prev[1];
+    };
+  }, [swipeEnabled]);
+
+  // Fetch the adjacent list page (same filters + sort) and splice its ids
+  // into the context. Deduped per direction; persisted to sessionStorage.
+  const extendCtx = useCallback((dir) => {
+    const ctx = navCtxRef.current;
+    if (!ctx || !hasMore(ctx, dir)) return Promise.resolve(null);
+    if (extendingRef.current[dir]) return extendingRef.current[dir];
+    const p = (async () => {
+      const page = dir === "next" ? ctx.pageEnd + 1 : ctx.pageStart - 1;
+      const params = new URLSearchParams();
+      if (ctx.params?.search) params.set("search", ctx.params.search);
+      if (ctx.params?.clientFilter) params.set("client_name", ctx.params.clientFilter);
+      params.set("page", String(page));
+      params.set("page_size", String(ctx.pageSize));
+      const res = await api.get(`/client-contacts?${params.toString()}`, { silent: true });
+      const rows = sortRows(res.data.rows || [], ctx.params?.sortKey);
+      const known = new Set(ctx.ids);
+      const fresh = rows.map((r) => r.id).filter((id) => !known.has(id));
+      const next = {
+        ...ctx,
+        ids: dir === "next" ? [...ctx.ids, ...fresh] : [...fresh, ...ctx.ids],
+        pageStart: dir === "prev" ? page : ctx.pageStart,
+        pageEnd: dir === "next" ? page : ctx.pageEnd,
+        total: typeof res.data.total === "number" ? res.data.total : ctx.total,
+      };
+      navCtxRef.current = next;
+      setNavCtx(next);
+      saveClientContactNavContext(next);
+      return next;
+    })()
+      .catch(() => null)
+      .finally(() => { extendingRef.current[dir] = null; });
+    extendingRef.current[dir] = p;
+    return p;
+  }, []);
+
+  // Prefetch the neighbouring page as soon as we get near an edge so the
+  // swipe across a page boundary feels instant.
+  useEffect(() => {
+    if (!swipeEnabled) return;
+    if (navIdx >= navCtx.ids.length - 2 && hasMore(navCtx, "next")) extendCtx("next");
+    if (navIdx <= 1 && hasMore(navCtx, "prev")) extendCtx("prev");
+    /* eslint-disable-next-line */
+  }, [swipeEnabled, navIdx, navCtx]);
+
+  const neighbourId = async (dir) => {
+    let ctx = navCtxRef.current;
+    if (!ctx) return null;
+    let i = ctx.ids.indexOf(curId);
+    if (i < 0) return null;
+    let id = dir === "next" ? ctx.ids[i + 1] : ctx.ids[i - 1];
+    if (id) return id;
+    const ext = await extendCtx(dir);
+    if (!ext) return null;
+    ctx = ext;
+    i = ctx.ids.indexOf(curId);
+    return dir === "next" ? ctx.ids[i + 1] : ctx.ids[i - 1];
+  };
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  const goToNeighbour = useCallback(async (dir) => {
+    if (busyRef.current || !swipeEnabled) return;
+    busyRef.current = true;
+    try {
+      const targetId = await neighbourId(dir);
+      if (!targetId) {
+        // Boundary: subtle bump, no wrap-around.
+        setSlide({ phase: "bump", dir });
+        showHint("edge", dir, 1600);
+        await sleep(160);
+        setSlide({ phase: "idle", dir });
+        return;
+      }
+      // 1) slide the current profile out while the next one loads
+      setSlide({ phase: "out", dir });
+      const [data] = await Promise.all([
+        api.get(`/client-contacts/${targetId}`, { silent: true }).then((r) => r.data).catch(() => null),
+        sleep(220),
+      ]);
+      if (!data) {
+        notify.error("Could not load the next client contact");
+        setSlide({ phase: "idle", dir });
+        return;
+      }
+      // 2) swap content (invisible) and reposition on the opposite side
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      prefetchedRef.current = { id: targetId, data };
+      setRow(data);
+      setSlide({ phase: "enter", dir });
+      navigate(`/crm/client-contacts/${targetId}`);
+      // 3) slide the new profile in
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      setSlide({ phase: "in", dir });
+      showHint("moved", dir, 1800);
+      await sleep(260);
+      setSlide({ phase: "idle", dir });
+    } finally {
+      busyRef.current = false;
+    }
+    /* eslint-disable-next-line */
+  }, [swipeEnabled, curId, navigate, showHint]);
+
+  const SLIDE_PX = 56;
+  const slideStyle = (() => {
+    const sign = slide.dir === "next" ? -1 : 1; // next → content exits to the left
+    switch (slide.phase) {
+      case "out":
+        return { transform: `translateX(${sign * SLIDE_PX}px)`, opacity: 0, transition: "transform 220ms ease-in, opacity 200ms ease-in" };
+      case "enter":
+        return { transform: `translateX(${-sign * SLIDE_PX}px)`, opacity: 0, transition: "none" };
+      case "in":
+        return { transform: "translateX(0)", opacity: 1, transition: "transform 260ms cubic-bezier(.22,.61,.36,1), opacity 220ms ease-out" };
+      case "bump":
+        return { transform: `translateX(${sign * 14}px)`, opacity: 1, transition: "transform 140ms ease-out" };
+      default:
+        return { transform: "translateX(0)", opacity: 1, transition: "transform 160ms ease-out, opacity 160ms ease-out" };
+    }
+  })();
 
   const l1Options = useMemo(() => levelOneOptions(segments), [segments]);
   const l2Options = useMemo(
@@ -1447,6 +1655,14 @@ function ClientContactDetail({ contactId, inModal = false, onClose }) {
   };
   // Duplicate detection state (mirrors the list-page flow).
   const [dupState, setDupState] = useState(null);
+
+  useTrackpadSwipeNav({
+    enabled: swipeEnabled && !dialogOpen && !dupState,
+    onSwipe: goToNeighbour,
+    isBusy: () => busyRef.current,
+    threshold: 70,
+    idleMs: 350,
+  });
 
   const onSave = async (opts = {}) => {
     const missing = firstMissingContactField(form);
@@ -1485,24 +1701,44 @@ function ClientContactDetail({ contactId, inModal = false, onClose }) {
   const initials = (row.name || "?").trim().split(/\s+/)
     .map((s) => s[0]).join("").slice(0, 2).toUpperCase();
 
-  const Shell = inModal
-    ? ({ children }) => <>{children}</>
-    : ({ children }) => <Layout title="Client Contact">{children}</Layout>;
+  // NOTE: `Shell` is a stable module-level component (see DetailShell below).
+  // Defining it inline here created a NEW component type on every render,
+  // which remounted <Layout> (Sidebar / NotificationBell) on each state
+  // change and re-fired their API calls + the global "Loading…" overlay.
+  const Shell = DetailShell;
 
   return (
     <TooltipProvider delayDuration={150}>
-      <Shell>
+      <Shell inModal={inModal}>
         <div className={inModal ? "px-1 pb-2 space-y-4 w-full" : "px-6 pt-4 pb-8 space-y-4 w-full"}>
           {/* Back link (full-page view only) */}
           {!inModal && (
-            <button
-              onClick={() => navigate("/crm/client-contacts")}
-              className="text-xs text-gray-500 hover:text-[#ec9324] flex items-center gap-1"
-            >
-              <BackArrow sx={{ fontSize: 14 }} /> Back to Client Contacts
-            </button>
+            <div className="flex items-center justify-between gap-3">
+              <button
+                onClick={() => navigate("/crm/client-contacts")}
+                className="text-xs text-gray-500 hover:text-[#ec9324] flex items-center gap-1"
+              >
+                <BackArrow sx={{ fontSize: 14 }} /> Back to Client Contacts
+              </button>
+              {swipeEnabled && (
+                <span
+                  className="text-[11px] text-gray-400 tabular-nums select-none"
+                  data-testid="cc-swipe-position"
+                  title="Swipe horizontally on your trackpad to move between contacts"
+                >
+                  {navPos} of {navTotal}
+                </span>
+              )}
+            </div>
           )}
 
+          {/* Sliding container — everything below animates when swiping */}
+          <div
+            className="space-y-4 will-change-transform"
+            style={slideStyle}
+            data-testid="cc-detail-slide"
+            data-slide-phase={slide.phase}
+          >
           {/* Header card */}
           <div className="bg-white border border-gray-200 rounded-xl p-5 flex items-start gap-4 shadow-sm">
             <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#ec9324] to-[#d97706] text-white flex items-center justify-center font-semibold flex-shrink-0 text-lg">
@@ -1614,7 +1850,13 @@ function ClientContactDetail({ contactId, inModal = false, onClose }) {
           ) : (
             <div data-testid={`cc-tabpanel-${activeTab}`} className="min-h-[240px]" />
           )}
+          </div>{/* /sliding container */}
         </div>
+
+        {/* Unobtrusive swipe cue (auto-hides) */}
+        {swipeEnabled && (
+          <SwipeHint hint={hint} pos={navPos} total={navTotal} />
+        )}
 
         <ContactFormDialog
           open={dialogOpen}
@@ -1636,6 +1878,65 @@ function ClientContactDetail({ contactId, inModal = false, onClose }) {
         />
       </Shell>
     </TooltipProvider>
+  );
+}
+
+// Stable shell for the detail view: full-page → wrapped in <Layout>, modal → bare.
+function DetailShell({ inModal, children }) {
+  if (inModal) return <>{children}</>;
+  return <Layout title="Client Contact">{children}</Layout>;
+}
+
+// ================================================================ Swipe hint
+// Small floating pill that tells the user they can swipe horizontally on the
+// trackpad to move between contacts. Auto-hides; re-appears briefly after each
+// navigation (with the new position) and at the first/last boundary.
+function SwipeHint({ hint, pos, total }) {
+  const visible = !!hint;
+  let body;
+  if (hint?.kind === "edge") {
+    body = (
+      <span className="flex items-center gap-1.5">
+        {hint.dir === "prev" ? <ChevronLeftIcon sx={{ fontSize: 15 }} /> : null}
+        {hint.dir === "prev" ? "First contact in this list" : "Last contact in this list"}
+        {hint.dir === "next" ? <ChevronRightIcon sx={{ fontSize: 15 }} /> : null}
+      </span>
+    );
+  } else if (hint?.kind === "moved") {
+    body = (
+      <span className="flex items-center gap-1.5 tabular-nums">
+        <ChevronLeftIcon sx={{ fontSize: 15 }} />
+        {pos} of {total}
+        <ChevronRightIcon sx={{ fontSize: 15 }} />
+      </span>
+    );
+  } else {
+    body = (
+      <span className="flex items-center gap-1.5">
+        <ChevronLeftIcon sx={{ fontSize: 15 }} />
+        Swipe to navigate
+        <ChevronRightIcon sx={{ fontSize: 15 }} />
+        <span className="text-white/60 tabular-nums">· {pos} of {total}</span>
+      </span>
+    );
+  }
+  return (
+    <div
+      aria-live="polite"
+      data-testid="cc-swipe-hint"
+      data-visible={visible ? "1" : "0"}
+      className={`pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 z-40 transition-all duration-300 ${
+        visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
+      }`}
+    >
+      <div
+        className={`px-3 py-1.5 rounded-full text-[11px] font-medium text-white shadow-lg backdrop-blur ${
+          hint?.kind === "edge" ? "bg-gray-800/90 animate-[ccShake_.35s_ease-in-out]" : "bg-gray-900/85"
+        }`}
+      >
+        {body}
+      </div>
+    </div>
   );
 }
 

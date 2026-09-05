@@ -13,7 +13,7 @@ import time
 from typing import Dict, List, Tuple, Optional
 
 # Configuration
-BASE_URL = "https://client-contact-ui.preview.emergentagent.com/api"
+BASE_URL = "https://crm-contact-carousel.preview.emergentagent.com/api"
 SUPER_ADMIN_EMAIL = "admin@ticketing.com"
 SUPER_ADMIN_PASSWORD = "Admin@123"
 

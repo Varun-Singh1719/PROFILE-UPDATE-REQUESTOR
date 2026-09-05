@@ -71,3 +71,10 @@ input, textarea, select, button {
 /* Fully hidden scrollbar (scroll still works) — used by the collapsed sidebar rail */
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+/* CRM → Client Contact detail: boundary "bump" for the swipe hint pill */
+@keyframes ccShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
