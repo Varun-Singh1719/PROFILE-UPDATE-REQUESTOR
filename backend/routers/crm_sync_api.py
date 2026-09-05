@@ -36,7 +36,7 @@ async def crm_sync_status(user=Depends(get_current_user)):
     for table, spec in crm_sync.MIRROR_TABLES.items():
         counts[table] = await db[spec["collection"]].count_documents({})
     return {"last_run": last, "mirror_counts": counts,
-            "schedule": "Daily at 15:00 and 23:00 IST"}
+            "schedule": "Daily at 11:00 and 15:00 IST"}
 
 
 @api_router.get("/exports/{token}/{filename}")

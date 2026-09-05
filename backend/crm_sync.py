@@ -32,7 +32,7 @@ The app's own record of a MySQL row is kept in ``mysql_ref``:
     mysql_ref = { "mysql_id": <int>, "matched_by": "email"|"name"|"import",
                   "linked_at": iso }
 
-Schedule: twice a day at 15:00 and 23:00 IST (see server.py) + manual buttons.
+Schedule: twice a day at 11:00 and 15:00 IST (see server.py) + manual buttons.
 """
 import io
 import uuid
@@ -595,7 +595,7 @@ async def _append_numbers_sheets(wb, head_font, head_fill):
         ("Serviced", "Of those projects, the ones with at least one call having revenue_in_usd > 0"),
         ("Calls", "COUNT(DISTINCT calls.id) WHERE calls.fk_project IN (the entity's projects)"),
         ("Revenue (USD)", "SUM(calls.revenue_in_usd) over the same calls, rounded to whole USD"),
-        ("Source", "MySQL test_infollion mirrored into MongoDB (granted columns only); sync 15:00 & 23:00 IST"),
+        ("Source", "MySQL test_infollion mirrored into MongoDB (granted columns only); sync 11:00 & 15:00 IST"),
     ]:
         ws.append(list(row))
     ws.column_dimensions["B"].width = 120

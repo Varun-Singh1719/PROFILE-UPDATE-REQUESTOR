@@ -394,7 +394,7 @@ async def startup():
             id="no_action_sweep",
             replace_existing=True,
         )
-        # CRM MySQL → MongoDB mirror + numbers refresh, twice a day (15:00 & 23:00 IST).
+        # CRM MySQL → MongoDB mirror + numbers refresh, twice a day (11:00 & 15:00 IST).
         import crm_sync as _crm_sync_mod
 
         async def _run_crm_sync():
@@ -406,14 +406,14 @@ async def startup():
 
         _scheduler.add_job(
             _run_crm_sync,
-            CronTrigger(hour="15,23", minute=0, timezone=IST),
+            CronTrigger(hour="11,15", minute=0, timezone=IST),
             id="crm_mysql_sync",
             replace_existing=True,
             misfire_grace_time=3600,   # still run if the server was down at the slot
             coalesce=True,
         )
         _scheduler.start()
-        logger.info("Scheduler started — daily 'No Action Taken' sweep at 00:15 IST; CRM MySQL sync at 15:00 & 23:00 IST")
+        logger.info("Scheduler started — daily 'No Action Taken' sweep at 00:15 IST; CRM MySQL sync at 11:00 & 15:00 IST")
     except Exception as _e:  # noqa: BLE001 — scheduler is best-effort
         logger.warning(f"Scheduler start failed: {_e}")
 
