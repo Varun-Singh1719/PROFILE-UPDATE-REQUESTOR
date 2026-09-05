@@ -74,6 +74,7 @@ import POCStatusChip from "../components/POCStatusChip";
 import EmploymentRelationChip from "../components/EmploymentRelationChip";
 import { Textarea } from "../components/ui/textarea";
 import NotesIcon from "@mui/icons-material/StickyNote2Outlined";
+import LockIcon from "@mui/icons-material/LockOutlined";
 import CloseIcon from "@mui/icons-material/Close";
 
 // -------- constants --------
@@ -2585,20 +2586,31 @@ function NoteCard({ note, onEdit, onDelete }) {
             {note.text}
           </p>
         </div>
-        {/* Edit / Delete — same UI/UX as the Client card Edit button */}
-        <div className="flex items-center gap-0.5 flex-shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
-          <CardStyleIconButton icon={<Pencil sx={{ fontSize: 16 }} />} tooltip="Edit" onClick={onEdit} testId={`cc-note-edit-${note.id}`} />
-          <button
-            type="button"
-            onClick={onDelete}
-            title="Delete"
-            aria-label="Delete"
-            data-testid={`cc-note-delete-${note.id}`}
-            className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors flex-shrink-0"
+        {/* Edit / Delete — only for the author, Admin or Super Admin (server-enforced too).
+            Everyone else sees the note read-only with a small lock hint. */}
+        {note.can_manage ? (
+          <div className="flex items-center gap-0.5 flex-shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
+            <CardStyleIconButton icon={<Pencil sx={{ fontSize: 16 }} />} tooltip="Edit" onClick={onEdit} testId={`cc-note-edit-${note.id}`} />
+            <button
+              type="button"
+              onClick={onDelete}
+              title="Delete"
+              aria-label="Delete"
+              data-testid={`cc-note-delete-${note.id}`}
+              className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors flex-shrink-0"
+            >
+              <Trash sx={{ fontSize: 16 }} />
+            </button>
+          </div>
+        ) : (
+          <span
+            className="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+            title="Read-only — only the author, an Admin or a Super Admin can edit or delete this note"
+            data-testid={`cc-note-readonly-${note.id}`}
           >
-            <Trash sx={{ fontSize: 16 }} />
-          </button>
-        </div>
+            <LockIcon sx={{ fontSize: 15 }} />
+          </span>
+        )}
       </div>
     </li>
   );
