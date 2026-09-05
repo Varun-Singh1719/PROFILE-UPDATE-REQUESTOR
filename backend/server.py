@@ -394,26 +394,26 @@ async def startup():
             id="no_action_sweep",
             replace_existing=True,
         )
-        # CRM MySQL → MongoDB sync + metric refresh, every 2 hours.
+        # CRM MySQL → MongoDB mirror + numbers refresh, twice a day (15:00 & 23:00 IST).
         import crm_sync as _crm_sync_mod
-        from apscheduler.triggers.interval import IntervalTrigger
 
         async def _run_crm_sync():
             try:
-                res = await _crm_sync_mod.run_full_sync("all")
-                logger.info(f"CRM sync (2h): {res}")
+                res = await _crm_sync_mod.run_full_sync("all", trigger="scheduled")
+                logger.info(f"CRM sync (scheduled): ok={res.get('ok')} clients={res.get('clients')} contacts={res.get('contacts')}")
             except Exception as _e:  # noqa: BLE001
                 logger.warning(f"CRM sync failed: {_e}")
 
         _scheduler.add_job(
             _run_crm_sync,
-            IntervalTrigger(hours=2),
+            CronTrigger(hour="15,23", minute=0, timezone=IST),
             id="crm_mysql_sync",
             replace_existing=True,
-            next_run_time=None,   # first run scheduled 2h out; initial migration is manual/startup
+            misfire_grace_time=3600,   # still run if the server was down at the slot
+            coalesce=True,
         )
         _scheduler.start()
-        logger.info("Scheduler started — daily 'No Action Taken' sweep at 00:15 IST")
+        logger.info("Scheduler started — daily 'No Action Taken' sweep at 00:15 IST; CRM MySQL sync at 15:00 & 23:00 IST")
     except Exception as _e:  # noqa: BLE001 — scheduler is best-effort
         logger.warning(f"Scheduler start failed: {_e}")
 

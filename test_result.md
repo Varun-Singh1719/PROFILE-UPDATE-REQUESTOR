@@ -13722,3 +13722,30 @@ backend:
             NEW refresh_client_contact_counts() (end of run_full_sync): client_contact_count was a
             never-computed placeholder (always 0); now = count of client_contacts grouped by
             client_name (806 clients with contacts; e.g. BCG 176). Verified on the Clients list UI.
+  - task: "MySQL → MongoDB mirror (granted columns only), numbers from mirror, 15:00/23:00 IST schedule, Excel export"
+    implemented: true
+    working: true
+    file: "backend/crm_sync.py, backend/routers/crm_sync_api.py, backend/server.py, frontend/src/pages/ClientsPage.jsx, backend/scripts/verify_crm_numbers.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: |
+            crm_sync.py rewritten: MIRROR_TABLES spec (7 tables → mysql_clients, mysql_client_contacts,
+            mysql_client_offices, mysql_currencies, mysql_domains, mysql_projects, mysql_calls; _id =
+            MySQL id; only granted columns; derived projects.client_contact_ids[] / calls.client_contact_id;
+            indexes). Full snapshot each run: ReplaceOne upserts + delete of vanished ids. Numbers computed
+            from the mirror per agreed concept (Projects = COUNT DISTINCT projects.id by client_id;
+            Serviced = those projects with a revenue_in_usd>0 call; Calls = COUNT DISTINCT calls.id via
+            fk_project; Revenue = SUM revenue_in_usd; Contacts = current-mapped Mongo contacts). Contacts:
+            same with projects whose client_contacts list contains the contact id. sync_clients /
+            sync_contacts now in-memory match + bulk_write (~20s instead of ~12min). Runs logged in
+            crm_sync_runs. Scheduler: CronTrigger hour="15,23" IST (misfire grace 1h).
+            Endpoints: GET /api/crm-sync/status (last run + mirror counts), GET
+            /api/crm-sync/mysql-export.xlsx (one tab per table, openpyxl, ~1.85MB, 8s). Per-record link
+            lookups in crm_sync_api now use the mirror. Clients page: "MySQL Excel" download button
+            (data-testid clients-mysql-excel-btn) verified via Playwright download.
+            scripts/verify_crm_numbers.py cross-checks Mongo numbers vs raw SQL: ALL OK (3 clients, 3 contacts).
+            NOTE: editing backend files while a background sync runs triggers uvicorn reload and kills it.

@@ -1,25 +1,47 @@
-"""CRM MongoDB master ↔ MySQL activity synchronisation.
+"""CRM sync: external Infollion MySQL (READ-ONLY) → MongoDB.
 
-Design:
-  • MongoDB = master for Client & Client Contact CRM records (create/edit/etc).
-  • MySQL   = source of truth for activity metrics (Projects / Serviced / Calls
-              / Revenue) and for auto-importing records that only exist in MySQL.
+Two layers:
 
-Each Mongo doc carries a dedicated reference field:
+1. MIRROR — a faithful copy of every MySQL table the DB user has been granted
+   SELECT on, stored in Mongo collections prefixed ``mysql_`` (one collection per
+   table, ``_id`` = MySQL primary key). Only the granted columns are copied;
+   everything else is ignored. Each run takes a full snapshot: rows are
+   upserted and rows that disappeared from MySQL are deleted, so the mirror is
+   always an exact copy. Derived helper fields (``client_contact_ids``,
+   ``client_contact_id``) and indexes make the numbers / filters cheap to
+   compute directly in Mongo.
+
+2. NUMBERS — per-client / per-contact metrics computed from the mirror and
+   written onto the app's ``clients`` / ``client_contacts`` documents
+   (``totals_till_date`` etc.). Definitions (agreed with the business):
+
+   Client
+     Contacts  = client contacts CURRENTLY mapped to the client (``client_name``
+                 on the Mongo contact; ex-employees live in
+                 ``previous_work_experience`` and are NOT counted)
+     Projects  = COUNT(DISTINCT projects.id)  WHERE projects.client_id = client
+     Serviced  = of those projects, the ones with at least one call having
+                 revenue_in_usd > 0
+     Calls     = COUNT(DISTINCT calls.id) WHERE calls.fk_project IN (client's projects)
+     Revenue   = SUM(calls.revenue_in_usd) over the same calls
+
+   Client Contact — identical, with "the contact's projects" being every
+   project whose ``projects.client_contacts`` list contains the contact id.
+
+The app's own record of a MySQL row is kept in ``mysql_ref``:
     mysql_ref = { "mysql_id": <int>, "matched_by": "email"|"name"|"import",
                   "linked_at": iso }
 
-Matching keys:
-    • Client Contact → normalized email (trim + lowercase, case-insensitive)
-    • Client         → name (case-insensitive), the app's existing identity rule
-
-All operations are idempotent — re-running never creates duplicates.
-MySQL is only ever READ from here.
+Schedule: twice a day at 15:00 and 23:00 IST (see server.py) + manual buttons.
 """
-import re
+import io
 import uuid
 import logging
 from collections import defaultdict
+from datetime import datetime, date
+from decimal import Decimal
+
+from pymongo import ReplaceOne, UpdateOne, ASCENDING
 
 from core import db, now_iso
 from mysql_db import mysql_query
@@ -28,6 +50,7 @@ logger = logging.getLogger("crm_sync")
 
 CLIENTS = "clients"
 CONTACTS = "client_contacts"
+SYNC_RUNS = "crm_sync_runs"
 
 CLIENT_TYPES = {
     "Venture Capital/Private Equity",
@@ -36,14 +59,89 @@ CLIENT_TYPES = {
     "Corporations and Companies",
 }
 
+# ----------------------------------------------------------------- mirror spec
+# Exactly the columns the MySQL user has SELECT access to (from SHOW GRANTS).
+# Tables with full-table SELECT list all their columns explicitly so a new
+# (un-granted) column added upstream can never break the sync.
+MIRROR_TABLES = {
+    "clients": {
+        "collection": "mysql_clients",
+        "columns": ["id", "name", "type", "contract_valid_till", "created_at", "updated_at",
+                    "fk_cem", "client_specific_compliance_requirement", "compliance_start_after",
+                    "compliance_end_before", "compliance_email_format", "compliance_description",
+                    "meta", "ask_for_govt_employee"],
+        "indexes": [("name", ASCENDING), ("type", ASCENDING)],
+    },
+    "client_contacts": {
+        "collection": "mysql_client_contacts",
+        "columns": ["id", "salutation", "name", "email", "mobile", "designation", "fkClient",
+                    "created_at", "updated_at", "user_id", "is_compliance_officer"],
+        "indexes": [("fkClient", ASCENDING), ("email", ASCENDING), ("name", ASCENDING)],
+    },
+    "client_offices": {
+        "collection": "mysql_client_offices",
+        "columns": ["id", "name", "entityName", "address", "city", "country", "GSTIN",
+                    "client_id", "created_at", "updated_at"],
+        "indexes": [("client_id", ASCENDING)],
+    },
+    "currencies": {
+        "collection": "mysql_currencies",
+        "columns": ["id", "date", "base_currency", "other_currency", "exchange_rate"],
+        "indexes": [("date", ASCENDING)],
+    },
+    "domains": {
+        "collection": "mysql_domains",
+        "columns": ["id", "name", "parent_id", "level", "created_at", "updated_at"],
+        "indexes": [("parent_id", ASCENDING), ("level", ASCENDING)],
+    },
+    "projects": {
+        "collection": "mysql_projects",
+        # column-level grant
+        "columns": ["id", "client_id", "client_geography", "l0_domain", "l1_domain", "l2_domain",
+                    "l3_domain", "receiving_date", "billing_office", "domain_others",
+                    "client_contacts", "type", "category"],
+        "indexes": [("client_id", ASCENDING), ("client_contact_ids", ASCENDING),
+                    ("receiving_date", ASCENDING), ("type", ASCENDING)],
+    },
+    "calls": {
+        "collection": "mysql_calls",
+        # column-level grant
+        "columns": ["id", "fk_project", "billing_office_id", "call_start_time", "client_contact",
+                    "revenue_in_inr", "revenue_in_usd"],
+        "indexes": [("fk_project", ASCENDING), ("client_contact_id", ASCENDING),
+                    ("call_start_time", ASCENDING)],
+    },
+}
+MIRROR_BATCH = 2000
+
 
 # ----------------------------------------------------------------- helpers
 def _norm_email(v):
     return (v or "").strip().lower()
 
 
-def _esc(s):
-    return re.escape(s or "")
+def _digits(tok):
+    tok = str(tok or "").strip()
+    return int(tok) if tok.isdigit() else None
+
+
+def _id_list(csv):
+    """'437,592' → [437, 592] (projects.client_contacts / calls.client_contact)."""
+    out = []
+    for tok in str(csv or "").split(","):
+        n = _digits(tok)
+        if n is not None and n not in out:
+            out.append(n)
+    return out
+
+
+def _bsonable(v):
+    """MySQL → BSON-friendly scalar (Decimal → float, date → datetime)."""
+    if isinstance(v, Decimal):
+        return float(v)
+    if isinstance(v, date) and not isinstance(v, datetime):
+        return datetime(v.year, v.month, v.day)
+    return v
 
 
 async def _alloc_display_ids(counter_key, base_default, n):
@@ -62,208 +160,199 @@ async def _alloc_display_ids(counter_key, base_default, n):
     return list(range(start, start + n))
 
 
-def _digits(tok):
-    tok = str(tok or "").strip()
-    return int(tok) if tok.isdigit() else None
+# ----------------------------------------------------------------- mirror
+async def mirror_table(table: str) -> dict:
+    """Snapshot one MySQL table into its ``mysql_*`` Mongo collection."""
+    spec = MIRROR_TABLES[table]
+    coll = db[spec["collection"]]
+    cols = ", ".join(f"`{c}`" for c in spec["columns"])
+    rows = await mysql_query(f"SELECT {cols} FROM `{table}`")
+    synced_at = now_iso()
+
+    ops, seen = [], set()
+    for r in rows:
+        doc = {k: _bsonable(r.get(k)) for k in spec["columns"]}
+        doc["_id"] = r["id"]
+        doc["_synced_at"] = synced_at
+        if table == "projects":
+            doc["client_contact_ids"] = _id_list(r.get("client_contacts"))
+        elif table == "calls":
+            doc["client_contact_id"] = _digits(r.get("client_contact"))
+            doc["revenue_in_usd"] = float(r.get("revenue_in_usd") or 0)
+            doc["revenue_in_inr"] = float(r.get("revenue_in_inr") or 0)
+        seen.add(r["id"])
+        ops.append(ReplaceOne({"_id": r["id"]}, doc, upsert=True))
+
+    upserted = 0
+    for i in range(0, len(ops), MIRROR_BATCH):
+        res = await coll.bulk_write(ops[i:i + MIRROR_BATCH], ordered=False)
+        upserted += (res.upserted_count or 0)
+    # Mirror deletions: anything not in this snapshot is gone upstream.
+    deleted = 0
+    if seen:
+        res = await coll.delete_many({"_id": {"$nin": list(seen)}})
+        deleted = res.deleted_count
+    else:
+        res = await coll.delete_many({})
+        deleted = res.deleted_count
+    for field, direction in spec["indexes"]:
+        try:
+            await coll.create_index([(field, direction)])
+        except Exception:  # noqa: BLE001 — index creation is best-effort
+            pass
+    stats = {"rows": len(rows), "inserted": upserted, "deleted": deleted}
+    logger.info(f"mirror {table} → {spec['collection']}: {stats}")
+    return stats
 
 
-# ----------------------------------------------------------------- metrics (batch)
-async def compute_all_metrics():
-    """Load projects + calls once and compute per-contact and per-client metrics.
-
-    Returns (contact_metrics, client_metrics) keyed by MySQL id.
-    Metric shape: {projects, serviced, calls, revenue,
-                   last_project_receiving_date, last_call_date}
-    """
-    projects = await mysql_query(
-        "SELECT id, client_contacts, client_id, receiving_date FROM projects"
-    )
-    calls = await mysql_query(
-        "SELECT client_contact, fk_project, call_start_time, revenue_in_usd FROM calls"
-    )
-
-    proj_client = {}
-    proj_recv = {}
-    proj_contacts = defaultdict(set)          # contact_id -> {project_id}
-    client_projects = defaultdict(set)        # client_id  -> {project_id}
-    for p in projects:
-        pid = p["id"]
-        proj_client[pid] = p.get("client_id")
-        proj_recv[pid] = p.get("receiving_date")
-        if p.get("client_id") is not None:
-            client_projects[p["client_id"]].add(pid)
-        for tok in str(p.get("client_contacts") or "").split(","):
-            cid = _digits(tok)
-            if cid is not None:
-                proj_contacts[cid].add(pid)
-
-    proj_has_rev = set()
-    contact_calls = defaultdict(lambda: {"count": 0, "rev": 0.0, "last": None})
-    client_calls = defaultdict(lambda: {"count": 0, "rev": 0.0, "last": None})
-    for c in calls:
-        pid = c.get("fk_project")
-        rev = float(c.get("revenue_in_usd") or 0)
-        st = c.get("call_start_time")
-        if rev > 0:
-            proj_has_rev.add(pid)
-        cid = _digits(c.get("client_contact"))
-        if cid is not None:
-            m = contact_calls[cid]
-            m["count"] += 1
-            m["rev"] += rev
-            if st and (m["last"] is None or st > m["last"]):
-                m["last"] = st
-        clid = proj_client.get(pid)
-        if clid is not None:
-            cm = client_calls[clid]
-            cm["count"] += 1
-            cm["rev"] += rev
-            if st and (cm["last"] is None or st > cm["last"]):
-                cm["last"] = st
-
-    contact_metrics = {}
-    for cid in set(proj_contacts) | set(contact_calls):
-        pset = proj_contacts.get(cid, set())
-        cc = contact_calls.get(cid, {"count": 0, "rev": 0.0, "last": None})
-        recv = [proj_recv[p] for p in pset if proj_recv.get(p)]
-        contact_metrics[cid] = {
-            "totals_till_date": {
-                "projects": len(pset),
-                "serviced": len(pset & proj_has_rev),
-                "calls": cc["count"],
-                "revenue": int(round(cc["rev"])),
-            },
-            "last_project_receiving_date": max(recv) if recv else None,
-            "last_call_date": cc["last"],
-        }
-
-    client_metrics = {}
-    for clid in set(client_projects) | set(client_calls):
-        pset = client_projects.get(clid, set())
-        cc = client_calls.get(clid, {"count": 0, "rev": 0.0, "last": None})
-        recv = [proj_recv[p] for p in pset if proj_recv.get(p)]
-        client_metrics[clid] = {
-            "totals_till_date": {
-                "projects": len(pset),
-                "serviced": len(pset & proj_has_rev),
-                "calls": cc["count"],
-                "revenue": int(round(cc["rev"])),
-            },
-            "client_contact_count": None,   # filled from Mongo, not MySQL
-            "project_count": len(pset),
-            "serviced_count": len(pset & proj_has_rev),
-            "last_project_receiving_date": max(recv) if recv else None,
-            "last_call_date": cc["last"],
-        }
-
-    return contact_metrics, client_metrics
+async def mirror_all() -> dict:
+    out = {}
+    for table in MIRROR_TABLES:
+        out[table] = await mirror_table(table)
+    return out
 
 
-# ----------------------------------------------------------------- single-record metrics
-async def contact_metrics_for(mysql_id):
-    cid = int(mysql_id)
-    projs = await mysql_query(
-        "SELECT id, receiving_date FROM projects "
-        "WHERE CONCAT(',', IFNULL(client_contacts,''), ',') LIKE %s",
-        [f"%,{cid},%"],
-    )
-    pids = [p["id"] for p in projs]
-    recv = [p["receiving_date"] for p in projs if p.get("receiving_date")]
-    calls = await mysql_query(
-        "SELECT fk_project, call_start_time, revenue_in_usd FROM calls WHERE client_contact = %s",
-        [cid],
-    )
-    rev = sum(float(c.get("revenue_in_usd") or 0) for c in calls)
-    last_call = max([c["call_start_time"] for c in calls if c.get("call_start_time")], default=None)
-    serviced = 0
-    if pids:
-        placeholders = ",".join(["%s"] * len(pids))
-        rows = await mysql_query(
-            f"SELECT DISTINCT fk_project FROM calls WHERE revenue_in_usd > 0 AND fk_project IN ({placeholders})",
-            pids,
-        )
-        serviced = len(rows)
+# ----------------------------------------------------------------- metrics (from the mirror)
+async def _load_projects_and_calls():
+    projects = [p async for p in db["mysql_projects"].find(
+        {}, {"_id": 1, "client_id": 1, "client_contact_ids": 1, "receiving_date": 1})]
+    calls = [c async for c in db["mysql_calls"].find(
+        {}, {"_id": 1, "fk_project": 1, "call_start_time": 1, "revenue_in_usd": 1})]
+    return projects, calls
+
+
+def _metrics_from(pids: set, calls_by_project: dict, proj_recv: dict, proj_has_rev: set):
+    """Numbers for one entity given the set of ITS project ids."""
+    call_ids, rev, last_call = set(), 0.0, None
+    for pid in pids:
+        for c in calls_by_project.get(pid, ()):
+            call_ids.add(c["_id"])
+            rev += float(c.get("revenue_in_usd") or 0)
+            st = c.get("call_start_time")
+            if st and (last_call is None or st > last_call):
+                last_call = st
+    recv = [proj_recv[p] for p in pids if proj_recv.get(p)]
     return {
         "totals_till_date": {
-            "projects": len(pids),
-            "serviced": serviced,
-            "calls": len(calls),
-            "revenue": int(round(rev)),
+            "projects": len(pids),                      # COUNT(DISTINCT project id)
+            "serviced": len(pids & proj_has_rev),       # projects with a paid call
+            "calls": len(call_ids),                     # COUNT(DISTINCT call id) via fk_project
+            "revenue": int(round(rev)),                 # SUM(revenue_in_usd) of those calls
         },
         "last_project_receiving_date": max(recv) if recv else None,
         "last_call_date": last_call,
     }
 
 
+async def compute_all_metrics():
+    """Per-contact and per-client metrics keyed by MySQL id (from the mirror)."""
+    projects, calls = await _load_projects_and_calls()
+
+    proj_recv, client_projects, contact_projects = {}, defaultdict(set), defaultdict(set)
+    for p in projects:
+        pid = p["_id"]
+        proj_recv[pid] = p.get("receiving_date")
+        if p.get("client_id") is not None:
+            client_projects[p["client_id"]].add(pid)
+        for cid in p.get("client_contact_ids") or []:
+            contact_projects[cid].add(pid)
+
+    calls_by_project, proj_has_rev = defaultdict(list), set()
+    for c in calls:
+        calls_by_project[c.get("fk_project")].append(c)
+        if float(c.get("revenue_in_usd") or 0) > 0:
+            proj_has_rev.add(c.get("fk_project"))
+
+    contact_metrics = {cid: _metrics_from(pids, calls_by_project, proj_recv, proj_has_rev)
+                       for cid, pids in contact_projects.items()}
+    client_metrics = {}
+    for clid, pids in client_projects.items():
+        m = _metrics_from(pids, calls_by_project, proj_recv, proj_has_rev)
+        m["project_count"] = m["totals_till_date"]["projects"]
+        m["serviced_count"] = m["totals_till_date"]["serviced"]
+        client_metrics[clid] = m
+    return contact_metrics, client_metrics
+
+
+async def _metrics_for_projects(pids: set):
+    if not pids:
+        return _metrics_from(set(), {}, {}, set())
+    pid_list = list(pids)
+    proj_recv = {p["_id"]: p.get("receiving_date") async for p in db["mysql_projects"].find(
+        {"_id": {"$in": pid_list}}, {"_id": 1, "receiving_date": 1})}
+    calls_by_project, proj_has_rev = defaultdict(list), set()
+    async for c in db["mysql_calls"].find({"fk_project": {"$in": pid_list}},
+                                          {"_id": 1, "fk_project": 1, "call_start_time": 1, "revenue_in_usd": 1}):
+        calls_by_project[c["fk_project"]].append(c)
+        if float(c.get("revenue_in_usd") or 0) > 0:
+            proj_has_rev.add(c["fk_project"])
+    return _metrics_from(pids, calls_by_project, proj_recv, proj_has_rev)
+
+
+async def contact_metrics_for(mysql_id):
+    """Numbers for ONE contact (per-contact Sync button) — from the mirror."""
+    cid = int(mysql_id)
+    pids = {p["_id"] async for p in db["mysql_projects"].find({"client_contact_ids": cid}, {"_id": 1})}
+    return await _metrics_for_projects(pids)
+
+
 async def client_metrics_for(mysql_id):
+    """Numbers for ONE client (per-client Sync button) — from the mirror."""
     clid = int(mysql_id)
-    projs = await mysql_query(
-        "SELECT id, receiving_date FROM projects WHERE client_id = %s", [clid]
-    )
-    pids = [p["id"] for p in projs]
-    recv = [p["receiving_date"] for p in projs if p.get("receiving_date")]
-    calls = []
-    serviced = 0
-    if pids:
-        placeholders = ",".join(["%s"] * len(pids))
-        calls = await mysql_query(
-            f"SELECT fk_project, call_start_time, revenue_in_usd FROM calls WHERE fk_project IN ({placeholders})",
-            pids,
-        )
-        serviced = len({c["fk_project"] for c in calls if float(c.get("revenue_in_usd") or 0) > 0})
-    rev = sum(float(c.get("revenue_in_usd") or 0) for c in calls)
-    return {
-        "totals_till_date": {
-            "projects": len(pids),
-            "serviced": serviced,
-            "calls": len(calls),
-            "revenue": int(round(rev)),
-        },
-        "project_count": len(pids),
-        "serviced_count": serviced,
-        "last_project_receiving_date": max(recv) if recv else None,
-        "last_call_date": max([c["call_start_time"] for c in calls if c.get("call_start_time")], default=None),
-    }
+    pids = {p["_id"] async for p in db["mysql_projects"].find({"client_id": clid}, {"_id": 1})}
+    m = await _metrics_for_projects(pids)
+    m["project_count"] = m["totals_till_date"]["projects"]
+    m["serviced_count"] = m["totals_till_date"]["serviced"]
+    return m
 
 
 # ----------------------------------------------------------------- sync: clients
 async def sync_clients(client_metrics=None):
+    """Write client numbers onto app `clients` (match by mysql_ref, then by
+    case-insensitive name; create missing). Bulk — one round-trip per 1k rows."""
     stats = defaultdict(int)
     if client_metrics is None:
         _, client_metrics = await compute_all_metrics()
 
-    rows = await mysql_query("SELECT id, name, type, created_at, updated_at FROM clients")
-    to_create = []
+    rows = [r async for r in db["mysql_clients"].find({}, {"_id": 1, "name": 1, "type": 1, "created_at": 1})]
+    by_mid, by_name = {}, {}
+    async for c in db[CLIENTS].find({}, {"_id": 1, "name": 1, "mysql_ref.mysql_id": 1}):
+        mid = (c.get("mysql_ref") or {}).get("mysql_id")
+        if mid is not None:
+            by_mid.setdefault(mid, c["_id"])
+        by_name.setdefault((c.get("name") or "").strip().lower(), c["_id"])
+
+    ops, to_create, ts = [], [], now_iso()
     for r in rows:
-        mid = r["id"]
+        mid = r["_id"]
         name = (r.get("name") or "").strip()
         ctype = r.get("type") if r.get("type") in CLIENT_TYPES else (r.get("type") or "")
         metrics = client_metrics.get(mid, {})
-        totals = metrics.get("totals_till_date", {})
+        totals = metrics.get("totals_till_date", {"projects": 0, "serviced": 0, "calls": 0, "revenue": 0})
         set_fields = {
-            "mysql_ref": {"mysql_id": mid, "matched_by": "name", "linked_at": now_iso()},
+            "mysql_ref": {"mysql_id": mid, "matched_by": "name", "linked_at": ts},
             "totals_till_date": totals,
             "project_count": metrics.get("project_count", 0),
             "serviced_count": metrics.get("serviced_count", 0),
             "last_project_receiving_date": metrics.get("last_project_receiving_date"),
             "last_call_date": metrics.get("last_call_date"),
-            "updated_on": now_iso(),
+            "updated_on": ts,
         }
-        existing = await db[CLIENTS].find_one(
-            {"$or": [{"mysql_ref.mysql_id": mid},
-                     {"name": {"$regex": f"^{_esc(name)}$", "$options": "i"}}]},
-            {"_id": 1},
-        )
-        if existing:
-            await db[CLIENTS].update_one({"_id": existing["_id"]}, {"$set": set_fields})
+        target = by_mid.get(mid) or by_name.get(name.lower())
+        if target is not None:
+            ops.append(UpdateOne({"_id": target}, {"$set": set_fields}))
             stats["matched_linked"] += 1
         else:
             to_create.append((r, name, ctype, set_fields))
+
+    for i in range(0, len(ops), 1000):
+        await db[CLIENTS].bulk_write(ops[i:i + 1000], ordered=False)
 
     if to_create:
         ids = await _alloc_display_ids("client_seq", 1000, len(to_create))
         docs = []
         for (r, name, ctype, set_fields), disp in zip(to_create, ids):
+            created = r.get("created_at")
             docs.append({
                 "id": str(uuid.uuid4()),
                 "display_id": disp,
@@ -272,7 +361,7 @@ async def sync_clients(client_metrics=None):
                 "key_account_manager_ids": [],
                 "client_contact_count": 0,
                 "created_by": {"name": "MySQL Sync"},
-                "created_on": r.get("created_at") or now_iso(),
+                "created_on": created.isoformat() if isinstance(created, datetime) else (created or ts),
                 "updated_by": {"name": "MySQL Sync"},
                 **set_fields,
             })
@@ -285,44 +374,48 @@ async def sync_clients(client_metrics=None):
 
 # ----------------------------------------------------------------- sync: contacts
 async def sync_contacts(contact_metrics=None):
+    """Write contact numbers onto app `client_contacts` (match by mysql_ref,
+    then by case-insensitive email; create missing). Bulk."""
     stats = defaultdict(int)
     if contact_metrics is None:
         contact_metrics, _ = await compute_all_metrics()
 
-    # Map MySQL client id -> name so we can set client_name on the contact.
-    client_rows = await mysql_query("SELECT id, name FROM clients")
-    client_name_by_id = {c["id"]: (c.get("name") or "").strip() for c in client_rows}
+    client_name_by_id = {c["_id"]: (c.get("name") or "").strip()
+                         async for c in db["mysql_clients"].find({}, {"_id": 1, "name": 1})}
 
-    rows = await mysql_query(
-        "SELECT id, salutation, name, email, mobile, designation, fkClient FROM client_contacts"
-    )
-    to_create = []
+    rows = [r async for r in db["mysql_client_contacts"].find(
+        {}, {"_id": 1, "salutation": 1, "name": 1, "email": 1, "mobile": 1, "designation": 1, "fkClient": 1})]
+    by_mid, by_email = {}, {}
+    async for c in db[CONTACTS].find({}, {"_id": 1, "email": 1, "mysql_ref.mysql_id": 1}):
+        mid = (c.get("mysql_ref") or {}).get("mysql_id")
+        if mid is not None:
+            by_mid.setdefault(mid, c["_id"])
+        em = _norm_email(c.get("email"))
+        if em:
+            by_email.setdefault(em, c["_id"])
+
+    empty = {"projects": 0, "serviced": 0, "calls": 0, "revenue": 0}
+    ops, to_create, ts = [], [], now_iso()
     for r in rows:
-        mid = r["id"]
+        mid = r["_id"]
         email = _norm_email(r.get("email"))
         metrics = contact_metrics.get(mid, {})
         set_fields = {
-            "mysql_ref": {"mysql_id": mid, "matched_by": "email", "linked_at": now_iso()},
-            "totals_till_date": metrics.get("totals_till_date", {}),
+            "mysql_ref": {"mysql_id": mid, "matched_by": "email", "linked_at": ts},
+            "totals_till_date": metrics.get("totals_till_date", empty),
             "last_project_receiving_date": metrics.get("last_project_receiving_date"),
             "last_call_date": metrics.get("last_call_date"),
-            "updated_on": now_iso(),
+            "updated_on": ts,
         }
-        existing = None
-        if email:
-            existing = await db[CONTACTS].find_one(
-                {"$or": [{"mysql_ref.mysql_id": mid},
-                         {"email": {"$regex": f"^{_esc(r.get('email','').strip())}$", "$options": "i"}}]},
-                {"_id": 1, "client_name": 1, "designation": 1},
-            )
-        else:
-            existing = await db[CONTACTS].find_one({"mysql_ref.mysql_id": mid}, {"_id": 1})
-
-        if existing:
-            await db[CONTACTS].update_one({"_id": existing["_id"]}, {"$set": set_fields})
+        target = by_mid.get(mid) or (by_email.get(email) if email else None)
+        if target is not None:
+            ops.append(UpdateOne({"_id": target}, {"$set": set_fields}))
             stats["matched_linked"] += 1
         else:
             to_create.append((r, email, set_fields))
+
+    for i in range(0, len(ops), 1000):
+        await db[CONTACTS].bulk_write(ops[i:i + 1000], ordered=False)
 
     if to_create:
         ids = await _alloc_display_ids("client_contact_seq", 1041, len(to_create))
@@ -346,8 +439,9 @@ async def sync_contacts(contact_metrics=None):
                 "previous_work_experience": [],
                 "linkedin_url": "",
                 "salutation": (r.get("salutation") or "").strip(),
+                "status": "Active",
                 "created_by": {"name": "MySQL Sync"},
-                "created_on": now_iso(),
+                "created_on": ts,
                 "updated_by": {"name": "MySQL Sync"},
                 **set_fields,
             })
@@ -358,12 +452,11 @@ async def sync_contacts(contact_metrics=None):
     return dict(stats)
 
 
+# ----------------------------------------------------------------- contacts per client
 async def refresh_client_contact_counts():
-    """Recompute `client_contact_count` on every client from the Mongo
-    client_contacts collection (grouped by `client_name`). Covers contacts that
-    came from MySQL (fkClient → client name) as well as manually added ones.
-    Clients with no contacts are reset to 0."""
-    from pymongo import UpdateOne
+    """`client_contact_count` = contacts CURRENTLY mapped to the client
+    (Mongo client_contacts grouped by `client_name`; ex-employees are in
+    `previous_work_experience` and are not counted). Clients with none → 0."""
     counts = {}
     cursor = db[CONTACTS].aggregate([
         {"$match": {"client_name": {"$nin": [None, ""]}}},
@@ -374,29 +467,81 @@ async def refresh_client_contact_counts():
     await db[CLIENTS].update_many(
         {"name": {"$nin": list(counts.keys())}}, {"$set": {"client_contact_count": 0}}
     )
-    ops = [
-        UpdateOne({"name": name}, {"$set": {"client_contact_count": n}})
-        for name, n in counts.items()
-    ]
+    ops = [UpdateOne({"name": name}, {"$set": {"client_contact_count": n}}) for name, n in counts.items()]
     if ops:
         await db[CLIENTS].bulk_write(ops, ordered=False)
     logger.info(f"refresh_client_contact_counts: {len(counts)} clients with contacts")
     return len(counts)
 
 
-async def run_full_sync(scope="all"):
+# ----------------------------------------------------------------- orchestration
+async def run_full_sync(scope="all", trigger="manual"):
+    """1) mirror MySQL → Mongo, 2) recompute numbers, 3) write onto app records.
+    Every run is logged in `crm_sync_runs` (latest = "last synced")."""
+    started = now_iso()
+    run = {"id": str(uuid.uuid4()), "scope": scope, "trigger": trigger,
+           "started_at": started, "status": "running"}
+    await db[SYNC_RUNS].insert_one(dict(run))
     result = {}
     try:
+        result["mirror"] = await mirror_all()
         contact_metrics, client_metrics = await compute_all_metrics()
         if scope in ("all", "clients"):
             result["clients"] = await sync_clients(client_metrics)
         if scope in ("all", "contacts", "client-contacts"):
             result["contacts"] = await sync_contacts(contact_metrics)
-        # Contacts-per-client numbers shown on the Client cards / detail.
         result["client_contact_counts"] = await refresh_client_contact_counts()
         result["ok"] = True
     except Exception as e:  # noqa: BLE001
         logger.exception("run_full_sync failed")
         result["ok"] = False
         result["error"] = str(e)
+    await db[SYNC_RUNS].update_one(
+        {"id": run["id"]},
+        {"$set": {"status": "ok" if result.get("ok") else "failed",
+                  "finished_at": now_iso(), "result": result}},
+    )
     return result
+
+
+async def last_sync_run():
+    doc = await db[SYNC_RUNS].find_one({}, {"_id": 0}, sort=[("started_at", -1)])
+    return doc
+
+
+# ----------------------------------------------------------------- Excel export of the mirror
+async def build_mysql_excel() -> bytes:
+    """One workbook, one tab per mirrored MySQL table (granted columns only)."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    wb.remove(wb.active)
+    head_font = Font(bold=True, color="FFFFFF")
+    head_fill = PatternFill("solid", fgColor="EC9324")
+    for table, spec in MIRROR_TABLES.items():
+        ws = wb.create_sheet(title=table[:31])
+        cols = spec["columns"]
+        ws.append(cols)
+        for i in range(1, len(cols) + 1):
+            c = ws.cell(row=1, column=i)
+            c.font, c.fill = head_font, head_fill
+        n = 0
+        async for r in db[spec["collection"]].find({}, {c: 1 for c in cols}).sort("_id", 1):
+            row = []
+            for c in cols:
+                v = r.get(c)
+                if isinstance(v, (dict, list)):
+                    v = str(v)
+                row.append(v)
+            ws.append(row)
+            n += 1
+        for i, c in enumerate(cols, start=1):
+            ws.column_dimensions[get_column_letter(i)].width = max(12, min(40, len(c) + 4))
+        ws.freeze_panes = "A2"
+        ws.auto_filter.ref = ws.dimensions
+        logger.info(f"excel: {table} → {n} rows")
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()

@@ -23,7 +23,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
-import api, { formatApiError } from "../lib/api";
+import api, { API, formatApiError } from "../lib/api";
 import notify from "../lib/notify";
 import { confirm as confirmDialog } from "../lib/dialog";
 import {
@@ -36,6 +36,7 @@ import SearchSelect from "../components/SearchSelect";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import Plus from "@mui/icons-material/AddOutlined";
 import Autorenew from "@mui/icons-material/Autorenew";
+import FileDownload from "@mui/icons-material/FileDownloadOutlined";
 import Search from "@mui/icons-material/SearchOutlined";
 import Pencil from "@mui/icons-material/EditOutlined";
 import Eye from "@mui/icons-material/VisibilityOutlined";
@@ -216,9 +217,51 @@ export default function ClientsPage() {
     }
   };
 
+  // Download the mirrored MySQL database as Excel (one tab per table).
+  const [exporting, setExporting] = useState(false);
+  const handleMysqlExcel = async () => {
+    setExporting(true);
+    try {
+      const token =
+        (typeof window !== "undefined" && window.sessionStorage.getItem("access_token")) ||
+        localStorage.getItem("access_token") || "";
+      const res = await fetch(`${API}/crm-sync/mysql-export.xlsx`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+      const blob = await res.blob();
+      const cd = res.headers.get("content-disposition") || "";
+      const m = /filename="?([^"]+)"?/.exec(cd);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = m ? m[1] : "infollion_mysql.xlsx";
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { try { document.body.removeChild(a); } catch (_) { /* noop */ } URL.revokeObjectURL(url); }, 150);
+      notify.success("MySQL database exported to Excel");
+    } catch (e) {
+      notify.error(formatApiError(e, "Failed to export MySQL database"));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // Action button rendered in the global top bar (parallel to notification bell + user avatar)
   const topBarActions = (
     <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        onClick={handleMysqlExcel}
+        disabled={exporting}
+        className="h-9"
+        data-testid="clients-mysql-excel-btn"
+        title="Download the mirrored MySQL database as Excel (one tab per table)"
+      >
+        <FileDownload sx={{ fontSize: 16, marginRight: "4px" }} className={exporting ? "animate-pulse" : ""} />
+        {exporting ? "Exporting…" : "MySQL Excel"}
+      </Button>
       <Button
         variant="outline"
         onClick={handleSyncFromMysql}
