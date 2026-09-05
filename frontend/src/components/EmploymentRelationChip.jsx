@@ -1,28 +1,32 @@
 /**
- * EmploymentRelationChip — "Current" / "Former" pill for a Client Contact,
- * shaped exactly like POCStatusChip so the two stack neatly (Status on top,
- * employment relation right below it) on the card view and the detail view.
+ * EmploymentRelationChip — "Current" / "Former" pill for a Client Contact.
+ *
+ * Same chip as ProfiX → All Requests → Status (outlined, white bg, fixed
+ * w-28 h-7) so it stacks flush under POCStatusChip and never changes size.
+ *
+ *   Current → Green (#16a34a)
+ *   Former  → Blue  (#2563eb)
  *
  *   relation: "current" | "former"
  */
 import React from "react";
+import { PROFIX_PILL_CLASS } from "./POCStatusChip";
 
 const ACCENTS = {
-  current: { bg: "bg-blue-50",  text: "text-blue-700", dot: "bg-blue-500", border: "border-blue-200", label: "Current" },
-  former:  { bg: "bg-gray-100", text: "text-gray-600", dot: "bg-gray-400", border: "border-gray-200", label: "Former" },
+  current: { color: "#16a34a", label: "Current", title: "Currently working at this client" },
+  former:  { color: "#2563eb", label: "Former",  title: "Previously worked at this client" },
 };
 
-export default function EmploymentRelationChip({ relation, size = "sm", className = "" }) {
+export default function EmploymentRelationChip({ relation, className = "" }) {
   const a = ACCENTS[relation];
   if (!a) return null;
-  const cls = size === "lg" ? "px-2.5 py-1 text-[12px]" : "px-2 py-0.5 text-[11px]";
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full font-semibold border ${cls} ${a.bg} ${a.text} ${a.border} ${className}`}
+      className={`${PROFIX_PILL_CLASS} ${className}`}
+      style={{ color: a.color, borderColor: a.color, backgroundColor: "#ffffff" }}
       data-testid={`employment-relation-chip-${relation}`}
-      title={relation === "current" ? "Currently working at this client" : "Previously worked at this client"}
+      title={a.title}
     >
-      <span className={`w-1.5 h-1.5 rounded-full ${a.dot}`} />
       {a.label}
     </span>
   );

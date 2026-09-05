@@ -1,34 +1,39 @@
 /**
- * POCStatusChip — reusable status chip for the Client Contact POC Status.
+ * POCStatusChip — status pill for the Client Contact POC Status.
  *
- * Kept intentionally dumb: takes a `status` object of shape
- *   { key, label, color }
- * where `color` is one of green | red | amber | gray so future statuses
- * (Warm / Cold / Inactive / Archived) drop in without code changes.
+ * Visual = EXACTLY the ProfiX → All Requests → Status badge (components/Badges.jsx
+ * StatusBadge): outlined pill, white background, coloured 2px border + text,
+ * FIXED size (w-28 h-7) so the chip never resizes when the status changes.
+ *
+ *   Active  (color: green) → same as ProfiX "Open"   → #16a34a
+ *   Dormant (color: red)   → same as ProfiX "Closed" → #dc2626
+ *   amber / gray kept for any future statuses.
+ *
+ * Takes a `status` object of shape { key, label, color }.
  */
 import React from "react";
 
-const STATUS_ACCENTS = {
-  green:  { bg: "bg-emerald-100", text: "text-emerald-700", dot: "bg-emerald-500", border: "border-emerald-200" },
-  red:    { bg: "bg-red-100",     text: "text-red-700",     dot: "bg-red-500",     border: "border-red-200" },
-  amber:  { bg: "bg-amber-100",   text: "text-amber-700",   dot: "bg-amber-500",   border: "border-amber-200" },
-  gray:   { bg: "bg-gray-100",    text: "text-gray-700",    dot: "bg-gray-400",    border: "border-gray-200" },
+const COLORS = {
+  green: "#16a34a",
+  red:   "#dc2626",
+  amber: "#ec9324",
+  gray:  "#6b7280",
 };
 
-export default function POCStatusChip({ status, size = "sm" }) {
+// Shared class string — identical to ProfiX StatusBadge.
+export const PROFIX_PILL_CLASS =
+  "inline-flex items-center justify-center w-28 h-7 text-xs font-semibold rounded-full border-2 select-none whitespace-nowrap";
+
+export default function POCStatusChip({ status }) {
   if (!status) return null;
-  const a = STATUS_ACCENTS[status.color] || STATUS_ACCENTS.gray;
-  const cls =
-    size === "lg"
-      ? "px-2.5 py-1 text-[12px]"
-      : "px-2 py-0.5 text-[11px]";
+  const c = COLORS[status.color] || COLORS.gray;
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full font-semibold border ${cls} ${a.bg} ${a.text} ${a.border}`}
+      className={PROFIX_PILL_CLASS}
+      style={{ color: c, borderColor: c, backgroundColor: "#ffffff" }}
       data-testid={`poc-status-chip-${status.key}`}
       title="POC Status is auto-calculated (read-only)"
     >
-      <span className={`w-1.5 h-1.5 rounded-full ${a.dot}`} />
       {status.label}
     </span>
   );
