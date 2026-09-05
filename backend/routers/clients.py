@@ -297,15 +297,26 @@ async def get_client_contacts_by_workex(client_id: str, user=Depends(get_current
     exact_ci = {"$regex": f"^{_esc(name)}$", "$options": "i"}
     cc = db["client_contacts"]
 
-    current, ex = [], []
-    async for d in cc.find({"client_name": exact_ci}).sort("name", 1):
-        current.append(_contact_public(d, name))
+    cur_docs = [d async for d in cc.find({"client_name": exact_ci}).sort("name", 1)]
     # Worked here before but not currently (avoids double-listing rejoiners).
-    async for d in cc.find({
+    ex_docs = [d async for d in cc.find({
         "previous_work_experience.company_name": exact_ci,
         "client_name": {"$not": exact_ci},
-    }).sort("name", 1):
-        ex.append(_contact_public(d, name, ex=True))
+    }).sort("name", 1)]
+    # POC Status (Active / Dormant …) — central engine, annotated on the raw docs
+    # so the card view can show the same chip as the Client Contact pages.
+    from routers.poc_status import annotate_status as _poc_annotate
+    await _poc_annotate(cur_docs + ex_docs)
+
+    current, ex = [], []
+    for d in cur_docs:
+        row = _contact_public(d, name)
+        row["poc_status"] = d.get("poc_status")
+        current.append(row)
+    for d in ex_docs:
+        row = _contact_public(d, name, ex=True)
+        row["poc_status"] = d.get("poc_status")
+        ex.append(row)
 
     return {
         "client_id": client_id,

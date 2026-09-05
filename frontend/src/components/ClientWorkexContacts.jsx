@@ -1,5 +1,7 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import api, { formatApiError } from "../lib/api";
+import POCStatusChip from "./POCStatusChip";
+import EmploymentRelationChip from "./EmploymentRelationChip";
 import {
   ClientContactDetailModal,
   AddContactDialog,
@@ -121,16 +123,11 @@ function ContactMiniCard({ c, ex, onOpen }) {
             <div className="text-[11px] text-gray-400">ID: {c.display_id}</div>
           </div>
         </div>
-        {ex ? (
-          <span className="inline-flex items-center h-5 px-2 rounded-full bg-gray-500 text-white text-[10px] font-bold flex-shrink-0">
-            FORMER
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-medium flex-shrink-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            Current
-          </span>
-        )}
+        {/* Right column: POC Status (Active / Dormant) with Current / Former right below */}
+        <div className="flex flex-col items-end gap-1 flex-shrink-0" data-testid={`workex-contact-chips-${c.display_id}`}>
+          {c.poc_status && <POCStatusChip status={c.poc_status} />}
+          <EmploymentRelationChip relation={ex ? "former" : "current"} />
+        </div>
       </div>
 
       <div className="mt-3 space-y-1 text-[13px]">
@@ -269,6 +266,7 @@ const ClientWorkexContacts = forwardRef(function ClientWorkexContacts(
         onClose={() => setOpenContactId(null)}
         navItems={navItems}
         onNavigate={setOpenContactId}
+        relation={subTab === "ex" ? "former" : "current"}
       />
 
       {/* Add new client contact — Client field pre-filled with this client */}

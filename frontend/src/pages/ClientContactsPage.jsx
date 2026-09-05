@@ -71,6 +71,8 @@ import WorkOutline from "@mui/icons-material/WorkOutlineOutlined";
 import Payments from "@mui/icons-material/PaymentsOutlined";
 import InfoOutlined from "@mui/icons-material/InfoOutlined";
 import POCStatusChip from "../components/POCStatusChip";
+import EmploymentRelationChip from "../components/EmploymentRelationChip";
+import CloseIcon from "@mui/icons-material/Close";
 
 // -------- constants --------
 const EMPTY_WORK = {
@@ -322,7 +324,7 @@ export default function ClientContactsPage() {
 // ============================================================ Reusable modals
 // Popup detail view — renders the exact same Client Contact detail body inside a
 // dialog (used from the Client → Client Contacts tab, no page redirect).
-export function ClientContactDetailModal({ contactId, open, onClose, navItems = null, navIds = null, onNavigate = null }) {
+export function ClientContactDetailModal({ contactId, open, onClose, navItems = null, navIds = null, onNavigate = null, relation = null }) {
   // The dialog body is the scroll container; the swipe listener attaches to it
   // and it is scrolled back to the top when the contact changes.
   const [scrollEl, setScrollEl] = useState(null);
@@ -344,12 +346,13 @@ export function ClientContactDetailModal({ contactId, open, onClose, navItems = 
         // Timeline) must not shrink the dialog; content scrolls inside.
         className="w-[96vw] max-w-[1500px] h-[92vh] max-h-[92vh] overflow-y-auto px-4 sm:px-6 pb-4 sm:pb-6 pt-0"
         data-testid="cc-detail-modal"
+        hideClose
       >
         <DialogHeader className="sr-only">
           <DialogTitle>Client Contact</DialogTitle>
         </DialogHeader>
         {contactId && (
-          <ClientContactDetail contactId={contactId} inModal onClose={onClose} swipeNav={swipeNav} />
+          <ClientContactDetail contactId={contactId} inModal onClose={onClose} swipeNav={swipeNav} relation={relation} />
         )}
       </DialogContent>
     </Dialog>
@@ -1419,7 +1422,7 @@ function Field({ label, labelBg = "bg-white", children }) {
 }
 
 // ================================================================ DETAIL
-function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = null }) {
+function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = null, relation = null }) {
   const navigate = useNavigate();
   const [row, setRow] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1724,6 +1727,11 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
   const initials = (row.name || "?").trim().split(/\s+/)
     .map((s) => s[0]).join("").slice(0, 2).toUpperCase();
 
+  // Current / Former chip: explicit `relation` from the opener (Client → Client
+  // Contacts card view) wins; otherwise the contact is "Current" with its own
+  // client when one is mapped.
+  const effectiveRelation = relation || (row.client_name ? "current" : null);
+
   // NOTE: `Shell` is a stable module-level component (see DetailShell below).
   // Defining it inline here created a NEW component type on every render,
   // which remounted <Layout> (Sidebar / NotificationBell) on each state
@@ -1832,35 +1840,44 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
               </div>
             </div>
 
-            {/* Right — Active / Dormant status (parallel to the name) + icon-only
-                Sync / Edit buttons (same UI + hover tooltip as the Client card Edit). */}
-            <div className="flex-shrink-0 flex items-center gap-2">
+            {/* Right column (top → bottom): POC Status chip → Current / Former chip
+                → Sync + Edit round icon buttons (same UI/UX as the Notification Bell).
+                In the pop-up the Close (X) button sits at the far right of the
+                button row with the identical style + "Close" tooltip. */}
+            <div className="flex-shrink-0 flex flex-col items-end gap-1.5" data-testid="cc-detail-right-column">
               {row.poc_status && (
-                <div data-testid="cc-detail-status" className="mr-1">
+                <div data-testid="cc-detail-status">
                   <POCStatusChip status={row.poc_status} />
                 </div>
               )}
-              <button
-                type="button"
-                onClick={handleSyncOne}
-                disabled={syncingOne}
-                title={syncingOne ? "Syncing…" : "Sync"}
-                aria-label="Sync"
-                data-testid="cc-detail-sync"
-                className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 hover:text-[#ec9324] hover:bg-orange-50 transition-colors flex-shrink-0 disabled:opacity-60"
-              >
-                <Loader2 sx={{ fontSize: 16 }} className={syncingOne ? "animate-spin" : ""} />
-              </button>
-              <button
-                type="button"
-                onClick={openEdit}
-                title="Edit Contact"
-                aria-label="Edit Contact"
-                data-testid="cc-detail-edit"
-                className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 hover:text-[#ec9324] hover:bg-orange-50 transition-colors flex-shrink-0"
-              >
-                <Pencil sx={{ fontSize: 16 }} />
-              </button>
+              {effectiveRelation && (
+                <div data-testid="cc-detail-relation">
+                  <EmploymentRelationChip relation={effectiveRelation} />
+                </div>
+              )}
+              <div className="flex items-center gap-1 mt-0.5">
+                <BellStyleIconButton
+                  icon={<Loader2 sx={{ fontSize: 20 }} className={syncingOne ? "animate-spin" : ""} />}
+                  tooltip={syncingOne ? "Syncing…" : "Sync"}
+                  onClick={handleSyncOne}
+                  disabled={syncingOne}
+                  testId="cc-detail-sync"
+                />
+                <BellStyleIconButton
+                  icon={<Pencil sx={{ fontSize: 20 }} />}
+                  tooltip="Edit"
+                  onClick={openEdit}
+                  testId="cc-detail-edit"
+                />
+                {inModal && (
+                  <BellStyleIconButton
+                    icon={<CloseIcon sx={{ fontSize: 20 }} />}
+                    tooltip="Close"
+                    onClick={() => onClose?.()}
+                    testId="cc-detail-close"
+                  />
+                )}
+              </div>
             </div>
           </div>
 
@@ -1930,6 +1947,27 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
         />
       </Shell>
     </TooltipProvider>
+  );
+}
+
+// Round icon button — EXACT same UI/UX as the top-bar Notification Bell trigger
+// (w-9 h-9 rounded-full, hover:bg-gray-100, gray-600 icon, dark tooltip that
+// appears below on hover). Used for Sync / Edit / Close in the detail view.
+function BellStyleIconButton({ icon, tooltip, onClick, disabled = false, testId, className = "" }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={tooltip}
+      data-testid={testId}
+      className={`group relative inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-100 text-gray-600 disabled:opacity-60 disabled:hover:bg-transparent ${className}`}
+    >
+      {icon}
+      <span className="pointer-events-none absolute top-full mt-1.5 right-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+        {tooltip}
+      </span>
+    </button>
   );
 }
 
