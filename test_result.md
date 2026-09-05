@@ -13765,3 +13765,150 @@ backend:
             /app/exports/<32-hex token>/infollion_mysql_2026-09-05.xlsx and served by the unauthenticated
             tokenized route (404 on bad token). Verified 200 / 1.99MB, 10 tabs. Note: MySQL
             calls.call_start_time is NULL for all 24008 rows → last_call_date empty everywhere.
+  - task: "BUG FIX: Client detail view total-till-date tiles showed 0 while cards showed synced numbers"
+    implemented: true
+    working: true
+    file: "frontend/src/pages/ClientDetailPage.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Root cause: <TotalTillDateChips totals={buildTotals(...)}/> used a leftover seeded demo
+            generator (per-segment × month random) → 0 when the client has no segmentation and never
+            the real numbers. Now totals = { contacts: row.client_contact_count, projects/serviced/calls/
+            revenue: row.totals_till_date.* } — same fields as the Client cards. Removed buildTotals.
+            Verify on /crm/clients/<id> for a MySQL-synced client (e.g. name 'Global Materials Advisors
+            56161' or 'Apex Partners Fund 20088': card shows 1 contact / 21 projects / 13 serviced) that
+            data-testid client-total-chip-{contacts,projects,serviced,calls,revenue} match the card and
+            GET /api/clients/{id} (client_contact_count, totals_till_date).
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ ALL TESTS PASSED (9/9) - Bug fix completely verified (Sep 5 2026)
+            
+            Comprehensive testing of Client detail page total-till-date tiles bug fix completed successfully.
+            Test credentials: admin@ticketing.com / Admin@123
+            
+            **TEST RESULTS:**
+            
+            **CLIENT 1: Apex Partners Fund 20088 (ID: 1110)**
+            
+            1.1 ✅ Card values on /crm/clients:
+            - CONTACTS: 1
+            - PROJECTS: 21
+            - SERVICED: 13
+            
+            1.2 ✅ Detail page tiles (/crm/clients/7e87034e-57d2-4e1a-80ec-3e07c0ed77fb):
+            - CONTACTS: 1 (matches card ✓)
+            - PROJECTS: 21 (matches card ✓)
+            - SERVICED: 13 (matches card ✓)
+            - CALLS: 36
+            - REVENUE: $1,823
+            
+            1.3 ✅ API response (GET /api/clients/{id}):
+            - client_contact_count: 1 (matches detail tile ✓)
+            - totals_till_date.projects: 21 (matches detail tile ✓)
+            - totals_till_date.serviced: 13 (matches detail tile ✓)
+            - totals_till_date.calls: 36 (matches detail tile ✓)
+            - totals_till_date.revenue: 1823 (matches detail tile $1,823 ✓)
+            
+            **CLIENT 2: Global Materials Advisors 56161 (ID: 1600)**
+            
+            2.1 ✅ Card values on /crm/clients:
+            - CONTACTS: 2
+            - PROJECTS: 20
+            - SERVICED: 9
+            
+            2.2 ✅ Detail page tiles (/crm/clients/e91c602b-5d11-4d57-8b65-f624c21b35e2):
+            - CONTACTS: 2 (matches card ✓)
+            - PROJECTS: 20 (matches card ✓)
+            - SERVICED: 9 (matches card ✓)
+            - CALLS: 29
+            - REVENUE: $2,473
+            - ✅ Tiles are NOT all 0 (as expected)
+            
+            2.3 ✅ API response (GET /api/clients/{id}):
+            - client_contact_count: 2 (matches detail tile ✓)
+            - totals_till_date.projects: 20 (matches detail tile ✓)
+            - totals_till_date.serviced: 9 (matches detail tile ✓)
+            - totals_till_date.calls: 29 (matches detail tile ✓)
+            - totals_till_date.revenue: 2473 (matches detail tile $2,473 ✓)
+            
+            **SANITY CHECK:**
+            
+            3.1 ✅ Detail page UI elements all visible:
+            - Overview tab ✓
+            - Client Contacts tab ✓
+            - Link Segmentation tab ✓
+            - Back to Clients link ✓
+            - Sync button ✓
+            - Edit button ✓
+            
+            **KEY FINDINGS:**
+            - All 5 tiles (contacts, projects, serviced, calls, revenue) display correct values from API
+            - Tiles match the card values for the 3 shared metrics (contacts, projects, serviced)
+            - Revenue formatting works correctly ($1,823 format for values < $10K)
+            - Both MySQL-synced clients tested show correct non-zero values
+            - No console errors detected
+            - All detail page UI elements render correctly
+            
+            **IMPLEMENTATION VERIFIED:**
+            - ClientDetailPage.jsx lines 509-517: TotalTillDateChips now receives correct data
+            - contacts = row.client_contact_count (same as card)
+            - projects/serviced/calls/revenue = row.totals_till_date.* (same as card for projects/serviced)
+            - buildTotals() removed (was generating random 0 values)
+            
+            NO ISSUES FOUND. Bug fix is complete and working as specified.
+
+
+agent_communication:
+    - agent: "main"
+      message: |
+        Fixed the Client detail page total-till-date tiles bug. The tiles were showing 0 because
+        they were using a leftover seeded demo generator (buildTotals) instead of the real synced
+        numbers. Now the tiles read from the same fields as the Client cards:
+        - contacts = client_contact_count
+        - projects/serviced/calls/revenue = totals_till_date.*
+        
+        Please verify via Playwright that the tiles on /crm/clients/<id> match the card values
+        and the API response for MySQL-synced clients like "Apex Partners Fund 20088" and
+        "Global Materials Advisors 56161".
+    - agent: "testing"
+      message: |
+        ✅ BUG FIX VERIFIED COMPLETELY (Sep 5 2026)
+        
+        Comprehensive testing of the Client detail page total-till-date tiles bug fix completed.
+        All 9 tests passed. No issues found.
+        
+        **TEST SUMMARY:**
+        - Tested 2 MySQL-synced clients: "Apex Partners Fund 20088" and "Global Materials Advisors 56161"
+        - All 5 tiles (contacts, projects, serviced, calls, revenue) display correct values
+        - Tiles match card values for the 3 shared metrics (contacts, projects, serviced)
+        - Tiles match API response (client_contact_count, totals_till_date.*)
+        - Revenue formatting works correctly ($1,823 format)
+        - Both clients show correct non-zero values (not all 0 as before)
+        - All detail page UI elements render correctly (tabs, buttons, links)
+        - No console errors detected
+        
+        **VERIFIED VALUES:**
+        
+        Apex Partners Fund 20088:
+        - Card: 1 contact, 21 projects, 13 serviced
+        - Detail tiles: 1 contact, 21 projects, 13 serviced, 36 calls, $1,823 revenue
+        - API: client_contact_count=1, totals_till_date={projects:21, serviced:13, calls:36, revenue:1823}
+        - ✅ All values match
+        
+        Global Materials Advisors 56161:
+        - Card: 2 contacts, 20 projects, 9 serviced
+        - Detail tiles: 2 contacts, 20 projects, 9 serviced, 29 calls, $2,473 revenue
+        - API: client_contact_count=2, totals_till_date={projects:20, serviced:9, calls:29, revenue:2473}
+        - ✅ All values match
+        
+        The bug fix is production-ready. The tiles now correctly display the synced MySQL numbers
+        instead of showing 0 for all clients.
+        - working: true
+          agent: "testing"
+          comment: "Verified: Apex Partners Fund 20088 tiles 1/21/13/36/$1,823 == card == API; Global Materials Advisors 56161 tiles 2/20/9/29/$2,473 == API. Tabs/Back/Sync/Edit render, no console errors."

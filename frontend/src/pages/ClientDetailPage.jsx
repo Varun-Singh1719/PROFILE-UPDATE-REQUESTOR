@@ -504,8 +504,16 @@ export default function ClientDetailPage() {
             </div>
 
             {/* ============ TOTAL-TILL-DATE CHIPS ============ */}
+            {/* Real synced numbers (same fields the Client cards use):
+                contacts = client_contact_count, rest = totals_till_date from the MySQL sync. */}
             <TotalTillDateChips
-              totals={buildTotals(seg?.exists ? row.id : null, l2Nodes)}
+              totals={{
+                contacts: row.client_contact_count ?? 0,
+                projects: row.totals_till_date?.projects ?? row.project_count ?? 0,
+                serviced: row.totals_till_date?.serviced ?? row.serviced_count ?? 0,
+                calls: row.totals_till_date?.calls ?? 0,
+                revenue: row.totals_till_date?.revenue ?? 0,
+              }}
             />
 
             {/* ============ SEGMENT SECTION ============ */}
@@ -625,29 +633,6 @@ const RANGES = {
   calls:    [0, 12],
   revenue:  [0, 25000], // dollars
 };
-
-// Build total-till-date sums across all L2 × months (seeded random).
-// We use months in the last 12 months window regardless of DateFilter so
-// "till date" stays stable while the pivot filter is interactive.
-function buildTotals(clientId, l2Nodes) {
-  if (!clientId || !l2Nodes?.length) return null;
-  const now = new Date();
-  const months = [];
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-  }
-  const t = { contacts: 0, projects: 0, serviced: 0, calls: 0, revenue: 0 };
-  l2Nodes.forEach((n) => {
-    months.forEach((m) => {
-      Object.keys(RANGES).forEach((k) => {
-        const [lo, hi] = RANGES[k];
-        t[k] += seededInt(clientId, n.name, m, k, lo, hi);
-      });
-    });
-  });
-  return t;
-}
 
 // ============================================================
 // Total-till-date chips (5) — same visual as Client Contacts detail
