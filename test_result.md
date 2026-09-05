@@ -13749,3 +13749,19 @@ backend:
             (data-testid clients-mysql-excel-btn) verified via Playwright download.
             scripts/verify_crm_numbers.py cross-checks Mongo numbers vs raw SQL: ALL OK (3 clients, 3 contacts).
             NOTE: editing backend files while a background sync runs triggers uvicorn reload and kills it.
+  - task: "Excel handed to user via tokenized link (in-app MySQL Excel button removed)"
+    implemented: true
+    working: true
+    file: "backend/routers/crm_sync_api.py (GET /api/exports/{token}/{filename}), backend/crm_sync.py (numbers tabs), frontend/src/pages/ClientsPage.jsx (button removed)"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: |
+            Removed clients-mysql-excel-btn + authenticated export endpoint. build_mysql_excel now adds
+            client_numbers / contact_numbers / definitions tabs. Workbook written to
+            /app/exports/<32-hex token>/infollion_mysql_2026-09-05.xlsx and served by the unauthenticated
+            tokenized route (404 on bad token). Verified 200 / 1.99MB, 10 tabs. Note: MySQL
+            calls.call_start_time is NULL for all 24008 rows → last_call_date empty everywhere.

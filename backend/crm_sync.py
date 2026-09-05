@@ -510,7 +510,7 @@ async def last_sync_run():
 
 
 # ----------------------------------------------------------------- Excel export of the mirror
-async def build_mysql_excel() -> bytes:
+async def build_mysql_excel(include_numbers: bool = True) -> bytes:
     """One workbook, one tab per mirrored MySQL table (granted columns only)."""
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill
@@ -542,6 +542,60 @@ async def build_mysql_excel() -> bytes:
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = ws.dimensions
         logger.info(f"excel: {table} → {n} rows")
+    if include_numbers:
+        await _append_numbers_sheets(wb, head_font, head_fill)
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+async def _append_numbers_sheets(wb, head_font, head_fill):
+    """Verification tabs: the numbers the app shows, per client / per contact,
+    exactly as written by the last sync (so they can be checked against SQL)."""
+    from openpyxl.utils import get_column_letter
+
+    def _sheet(title, header):
+        ws = wb.create_sheet(title=title)
+        ws.append(header)
+        for i in range(1, len(header) + 1):
+            c = ws.cell(row=1, column=i)
+            c.font, c.fill = head_font, head_fill
+            ws.column_dimensions[get_column_letter(i)].width = max(14, min(40, len(header[i - 1]) + 4))
+        ws.freeze_panes = "A2"
+        return ws
+
+    ws = _sheet("client_numbers", ["mysql_client_id", "app_client_id", "client_name", "type",
+                                   "contacts_current", "projects", "serviced", "calls", "revenue_usd",
+                                   "last_project_receiving_date", "last_call_date", "synced_at"])
+    async for c in db[CLIENTS].find({"mysql_ref.mysql_id": {"$exists": True}}).sort("mysql_ref.mysql_id", 1):
+        t = c.get("totals_till_date") or {}
+        ws.append([c["mysql_ref"]["mysql_id"], c.get("display_id"), c.get("name"), c.get("type"),
+                   c.get("client_contact_count", 0), t.get("projects", 0), t.get("serviced", 0),
+                   t.get("calls", 0), t.get("revenue", 0),
+                   c.get("last_project_receiving_date"), c.get("last_call_date"),
+                   (c.get("mysql_ref") or {}).get("linked_at")])
+    ws.auto_filter.ref = ws.dimensions
+
+    ws = _sheet("contact_numbers", ["mysql_contact_id", "app_contact_id", "contact_name", "email",
+                                    "current_client", "projects", "serviced", "calls", "revenue_usd",
+                                    "last_project_receiving_date", "last_call_date", "synced_at"])
+    async for c in db[CONTACTS].find({"mysql_ref.mysql_id": {"$exists": True}}).sort("mysql_ref.mysql_id", 1):
+        t = c.get("totals_till_date") or {}
+        ws.append([c["mysql_ref"]["mysql_id"], c.get("display_id"), c.get("name"), c.get("email"),
+                   c.get("client_name"), t.get("projects", 0), t.get("serviced", 0),
+                   t.get("calls", 0), t.get("revenue", 0),
+                   c.get("last_project_receiving_date"), c.get("last_call_date"),
+                   (c.get("mysql_ref") or {}).get("linked_at")])
+    ws.auto_filter.ref = ws.dimensions
+
+    ws = _sheet("definitions", ["metric", "definition"])
+    for row in [
+        ("Contacts (client)", "Client contacts CURRENTLY mapped to the client (ex-employees not counted)"),
+        ("Projects", "COUNT(DISTINCT projects.id) WHERE projects.client_id = client  |  contact: projects whose client_contacts list contains the contact id"),
+        ("Serviced", "Of those projects, the ones with at least one call having revenue_in_usd > 0"),
+        ("Calls", "COUNT(DISTINCT calls.id) WHERE calls.fk_project IN (the entity's projects)"),
+        ("Revenue (USD)", "SUM(calls.revenue_in_usd) over the same calls, rounded to whole USD"),
+        ("Source", "MySQL test_infollion mirrored into MongoDB (granted columns only); sync 15:00 & 23:00 IST"),
+    ]:
+        ws.append(list(row))
+    ws.column_dimensions["B"].width = 120
