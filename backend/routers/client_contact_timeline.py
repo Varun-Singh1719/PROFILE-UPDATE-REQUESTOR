@@ -66,7 +66,7 @@ IGNORED_FIELDS = {
     "mysql_ref",
 }
 
-WE_KEYS = ("company_name", "designation", "start_month_year", "end_month_year")
+WE_KEYS = ("company_name", "designation", "start_month_year", "end_month_year", "city", "country_name")
 
 
 # ---------------------------------------------------------------- value helpers
@@ -99,7 +99,9 @@ def _we_display(w: Dict[str, str]) -> str:
     desig = w.get("designation") or "—"
     start = w.get("start_month_year") or "—"
     end = w.get("end_month_year") or "Present"
-    return f"{company} · {desig} · {start} – {end}"
+    out = f"{company} · {desig} · {start} – {end}"
+    loc = ", ".join(x for x in (w.get("city"), w.get("country_name")) if x)
+    return f"{out} · {loc}" if loc else out
 
 
 def _we_is_blank(w: Dict[str, str]) -> bool:

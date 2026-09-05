@@ -78,7 +78,12 @@ const EMPTY_WORK = {
   designation: "",
   start_month_year: "",
   end_month_year: "",
+  city: "",
+  country_id: null,
+  country_name: "",
 };
+// City text: collapse runs of whitespace + trim (applied on blur / save).
+const tidyCity = (v) => String(v ?? "").replace(/\s+/g, " ").trim();
 const EMPTY_FORM = {
   name: "",
   email: "",
@@ -1332,6 +1337,27 @@ function ContactFormDialog({
                         </button>
                       </div>
                     </Field>
+                    <Field label="City" labelBg="bg-gray-50">
+                      <Input
+                        value={w.city || ""}
+                        onChange={(e) => setWork(i, "city", e.target.value)}
+                        onBlur={(e) => setWork(i, "city", tidyCity(e.target.value))}
+                        placeholder="e.g. Mumbai"
+                        data-testid={`cc-work-${i}-city`}
+                      />
+                    </Field>
+                    <Field label="Country" labelBg="bg-gray-50">
+                      <SearchSelect
+                        options={COUNTRY_OPTIONS}
+                        value={w.country_id ?? null}
+                        onChange={(v) => {
+                          setWork(i, "country_id", v);
+                          setWork(i, "country_name", v != null ? getCountryName(v) : "");
+                        }}
+                        placeholder="Select country…"
+                        testId={`cc-work-${i}-country`}
+                      />
+                    </Field>
                   </div>
                 </div>
               ))}
@@ -2218,7 +2244,7 @@ function EmploymentHistoryTab({ row, onSaved }) {
 // work-experience rows inside the Edit Client Contact form, but it PATCHes
 // ONLY `previous_work_experience` (existing rows + the new one). The change
 // flows through the normal save path, so the Timeline records it as well.
-const EMPTY_WORKEX = { company_name: "", designation: "", start_month_year: "", end_month_year: "" };
+const EMPTY_WORKEX = { ...EMPTY_WORK };
 
 function AddWorkExDialog({ open, onOpenChange, row, onSaved }) {
   const [w, setW] = useState(EMPTY_WORKEX);
@@ -2245,6 +2271,9 @@ function AddWorkExDialog({ open, onOpenChange, row, onSaved }) {
           designation: w.designation.trim(),
           start_month_year: w.start_month_year,
           end_month_year: w.end_month_year,
+          city: tidyCity(w.city),
+          country_id: w.country_id ?? null,
+          country_name: w.country_id != null ? (w.country_name || getCountryName(w.country_id)) : "",
         },
       ];
       // force=true: only the work-experience list changes here, so the
@@ -2262,21 +2291,18 @@ function AddWorkExDialog({ open, onOpenChange, row, onSaved }) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!saving) onOpenChange(o); }}>
-      <DialogContent className="max-w-lg" data-testid="cc-add-workex-dialog">
+      <DialogContent className="max-w-3xl" data-testid="cc-add-workex-dialog">
         <DialogHeader>
           <DialogTitle>Add Previous Work Experience</DialogTitle>
-          <DialogDescription>
-            Adds a past role to {row?.name || "this contact"}&apos;s employment history.
-          </DialogDescription>
+          <DialogDescription className="sr-only">Add a previous work experience entry</DialogDescription>
         </DialogHeader>
 
-        <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 mt-1">
-          <div className="grid grid-cols-2 gap-x-2 gap-y-4">
+        <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 mt-1">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-5">
             <Field label="Company Name *" labelBg="bg-gray-50">
               <Input
                 value={w.company_name}
                 onChange={(e) => set("company_name", e.target.value)}
-                placeholder="e.g. Acme Corp"
                 data-testid="cc-add-workex-company"
                 autoFocus
               />
@@ -2285,7 +2311,6 @@ function AddWorkExDialog({ open, onOpenChange, row, onSaved }) {
               <Input
                 value={w.designation}
                 onChange={(e) => set("designation", e.target.value)}
-                placeholder="e.g. Manager"
                 data-testid="cc-add-workex-designation"
               />
             </Field>
@@ -2302,6 +2327,26 @@ function AddWorkExDialog({ open, onOpenChange, row, onSaved }) {
                 onChange={(v) => set("end_month_year", v)}
                 allowPresent
                 testId="cc-add-workex-end"
+              />
+            </Field>
+            <Field label="City" labelBg="bg-gray-50">
+              <Input
+                value={w.city || ""}
+                onChange={(e) => set("city", e.target.value)}
+                onBlur={(e) => set("city", tidyCity(e.target.value))}
+                data-testid="cc-add-workex-city"
+              />
+            </Field>
+            <Field label="Country" labelBg="bg-gray-50">
+              <SearchSelect
+                options={COUNTRY_OPTIONS}
+                value={w.country_id ?? null}
+                onChange={(v) => {
+                  set("country_id", v);
+                  set("country_name", v != null ? getCountryName(v) : "");
+                }}
+                placeholder="Select country…"
+                testId="cc-add-workex-country"
               />
             </Field>
           </div>
@@ -2622,7 +2667,14 @@ function EmploymentCard({ w, row, idx }) {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-2 gap-x-3 mt-3 pt-3 border-t border-gray-100">
             <MetaCell label="Primary Email" value={row.email} />
             <MetaCell label="Primary Phone" value={row.phone ? `${row.phone_isd ? row.phone_isd + " " : ""}${row.phone}` : ""} />
-            <MetaCell label="Location" value={[row.city, row.country_name].filter(Boolean).join(", ") || row.base_location} />
+            <MetaCell
+              label="Location"
+              value={
+                w.current === true
+                  ? ([row.city, row.country_name].filter(Boolean).join(", ") || row.base_location)
+                  : [w.city, w.country_name].filter(Boolean).join(", ")
+              }
+            />
           </div>
         </div>
       </div>

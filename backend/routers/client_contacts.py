@@ -112,6 +112,17 @@ class WorkExperience(BaseModel):
     designation: Optional[str] = Field(None, max_length=200)
     start_month_year: Optional[str] = Field(None, max_length=20)   # e.g. "Jan 2024"
     end_month_year: Optional[str] = Field(None, max_length=20)     # e.g. "Aug 2026" or "Present"
+    city: Optional[str] = Field(None, max_length=120)              # free text, whitespace-normalised
+    country_id: Optional[int] = None                               # Country List id (same source as contact.country_id)
+    country_name: Optional[str] = Field(None, max_length=120)
+
+    @field_validator("city", "company_name", "designation")
+    @classmethod
+    def _collapse_ws(cls, v):
+        if v is None:
+            return None
+        v = re.sub(r"\s+", " ", str(v)).strip()
+        return v or None
 
 
 CONTACT_TYPES = ["Domain Specific", "Domain Agnostic", "Central Team"]
