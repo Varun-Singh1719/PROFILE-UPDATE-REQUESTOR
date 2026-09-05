@@ -1809,8 +1809,14 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
                   </span>
                 )}
                 {(row.city || row.country_name || row.base_location) && (
-                  <span className="flex items-center gap-1">
+                  <span className="flex items-center gap-1" title="Location">
                     <Place sx={{ fontSize: 14 }} /> {[row.city, row.country_name].filter(Boolean).join(", ") || row.base_location}
+                  </span>
+                )}
+                {/* Geography — auto-derived from Country (never stored) */}
+                {getRegionByCountryId(row.country_id) && (
+                  <span className="flex items-center gap-1" title="Geography" data-testid="cc-detail-geography">
+                    <Public sx={{ fontSize: 14 }} /> {getRegionByCountryId(row.country_id)}
                   </span>
                 )}
                 {row.linkedin_url && (
@@ -2664,7 +2670,7 @@ function EmploymentCard({ w, row, idx }) {
               {months > 0 && <div className="text-[11px] text-gray-400">{isCurrent ? fmtDuration(months, true) : fmtDuration(months)}</div>}
             </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-2 gap-x-3 mt-3 pt-3 border-t border-gray-100">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-y-2 gap-x-3 mt-3 pt-3 border-t border-gray-100">
             <MetaCell label="Primary Email" value={row.email} />
             <MetaCell label="Primary Phone" value={row.phone ? `${row.phone_isd ? row.phone_isd + " " : ""}${row.phone}` : ""} />
             <MetaCell
@@ -2674,6 +2680,11 @@ function EmploymentCard({ w, row, idx }) {
                   ? ([row.city, row.country_name].filter(Boolean).join(", ") || row.base_location)
                   : [w.city, w.country_name].filter(Boolean).join(", ")
               }
+            />
+            {/* Geography — auto-derived from the role's Country (contact's Country for the current role) */}
+            <MetaCell
+              label="Geography"
+              value={getRegionByCountryId(w.current === true ? row.country_id : w.country_id)}
             />
           </div>
         </div>

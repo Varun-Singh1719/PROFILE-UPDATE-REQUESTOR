@@ -432,3 +432,7 @@ Verified end-to-end on the InfraXcellence team (16 members): mid-plan click cent
 - `WorkExperience` (backend `client_contacts.py`) gained `city`, `country_id`, `country_name`; validator collapses whitespace in city/company/designation. Timeline `_we_display` appends "· City, Country" when present and diffs on city/country_name.
 - Frontend `EMPTY_WORK` + `tidyCity()` helper (collapse spaces + trim on blur/save). City (Input) + Country (`SearchSelect` with `COUNTRY_OPTIONS`, same as the contact's Country field) added to every work-ex row in the Add/Edit Client Contact form (`cc-work-{i}-city|country`) AND to the standalone `AddWorkExDialog` (`cc-add-workex-city|country`). Past-role `EmploymentCard`s show the role's own City, Country as Location (current role keeps the contact's location).
 - `AddWorkExDialog`: widened to `max-w-3xl`; removed the subtitle sentence and all "e.g." placeholders per user.
+
+## Sep 05 2026 — Geography (auto from Country) shown in top bar + employment cards
+- `ClientContactDetail` name bar: after Location, a globe (`Public`) + region label derived via `getRegionByCountryId(row.country_id)` (`cc-detail-geography`); hidden when no country.
+- `EmploymentCard`: meta grid now 4 cols — Primary Email · Primary Phone · Location · **Geography** (current role → contact's country; past role → that row's `country_id`). Never stored; always derived from Country at render time.
