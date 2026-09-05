@@ -1,20 +1,21 @@
 /**
  * EmploymentRelationChip — "Current" / "Former" pill for a Client Contact.
  *
- * Same chip as ProfiX → All Requests → Status (outlined, white bg, fixed
- * w-28 h-7) so it stacks flush under POCStatusChip and never changes size.
+ * Soft-filled pill (tinted background + light border + dark text) — like the
+ * "Current" badge on the Employment History cards — NOT the outlined ProfiX
+ * status style used by POCStatusChip. Size is FIXED (w-28 h-7, same footprint
+ * as POCStatusChip) so it never changes between Current and Former.
  *
- *   Current → Green (#16a34a)
- *   Former  → Blue  (#2563eb)
+ *   Current → Green (bg-green-50 / border-green-200 / text-green-700)
+ *   Former  → Blue  (bg-blue-50  / border-blue-200  / text-blue-700)
  *
  *   relation: "current" | "former"
  */
 import React from "react";
-import { PROFIX_PILL_CLASS } from "./POCStatusChip";
 
 const ACCENTS = {
-  current: { color: "#16a34a", label: "Current", title: "Currently working at this client" },
-  former:  { color: "#2563eb", label: "Former",  title: "Previously worked at this client" },
+  current: { cls: "bg-green-50 border-green-200 text-green-700", label: "Current", title: "Currently working at this client" },
+  former:  { cls: "bg-blue-50 border-blue-200 text-blue-700",   label: "Former",  title: "Previously worked at this client" },
 };
 
 export default function EmploymentRelationChip({ relation, className = "" }) {
@@ -22,8 +23,7 @@ export default function EmploymentRelationChip({ relation, className = "" }) {
   if (!a) return null;
   return (
     <span
-      className={`${PROFIX_PILL_CLASS} ${className}`}
-      style={{ color: a.color, borderColor: a.color, backgroundColor: "#ffffff" }}
+      className={`inline-flex items-center justify-center w-28 h-7 text-xs font-medium rounded-full border select-none whitespace-nowrap ${a.cls} ${className}`}
       data-testid={`employment-relation-chip-${relation}`}
       title={a.title}
     >

@@ -451,3 +451,4 @@ Verified end-to-end on the InfraXcellence team (16 members): mid-plan click cent
 
 ## Sep 05 2026 — Status / Current-Former chips now = ProfiX StatusBadge style
 - `POCStatusChip` + `EmploymentRelationChip` re-styled to the exact ProfiX → All Requests → Status pill (`PROFIX_PILL_CLASS`: outlined, white bg, 2px border, FIXED `w-28 h-7`, text-xs semibold). Active = ProfiX Open green `#16a34a`; Dormant = ProfiX Closed red `#dc2626`; Current = green `#16a34a`; Former = blue `#2563eb`. All four states share one fixed size. `size` prop removed (ignored). Applies everywhere POCStatusChip is used (CC list cards, CC detail, Client → Client Contacts cards).
+- (follow-up) `EmploymentRelationChip` switched to a SOFT-FILLED pill per user reference (Current: `bg-green-50 border-green-200 text-green-700`; Former: `bg-blue-50 border-blue-200 text-blue-700`), still fixed `w-28 h-7`. POCStatusChip stays ProfiX-outlined.
