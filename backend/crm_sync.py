@@ -358,6 +358,32 @@ async def sync_contacts(contact_metrics=None):
     return dict(stats)
 
 
+async def refresh_client_contact_counts():
+    """Recompute `client_contact_count` on every client from the Mongo
+    client_contacts collection (grouped by `client_name`). Covers contacts that
+    came from MySQL (fkClient → client name) as well as manually added ones.
+    Clients with no contacts are reset to 0."""
+    from pymongo import UpdateOne
+    counts = {}
+    cursor = db[CONTACTS].aggregate([
+        {"$match": {"client_name": {"$nin": [None, ""]}}},
+        {"$group": {"_id": "$client_name", "n": {"$sum": 1}}},
+    ])
+    async for g in cursor:
+        counts[g["_id"]] = g["n"]
+    await db[CLIENTS].update_many(
+        {"name": {"$nin": list(counts.keys())}}, {"$set": {"client_contact_count": 0}}
+    )
+    ops = [
+        UpdateOne({"name": name}, {"$set": {"client_contact_count": n}})
+        for name, n in counts.items()
+    ]
+    if ops:
+        await db[CLIENTS].bulk_write(ops, ordered=False)
+    logger.info(f"refresh_client_contact_counts: {len(counts)} clients with contacts")
+    return len(counts)
+
+
 async def run_full_sync(scope="all"):
     result = {}
     try:
@@ -366,6 +392,8 @@ async def run_full_sync(scope="all"):
             result["clients"] = await sync_clients(client_metrics)
         if scope in ("all", "contacts", "client-contacts"):
             result["contacts"] = await sync_contacts(contact_metrics)
+        # Contacts-per-client numbers shown on the Client cards / detail.
+        result["client_contact_counts"] = await refresh_client_contact_counts()
         result["ok"] = True
     except Exception as e:  # noqa: BLE001
         logger.exception("run_full_sync failed")

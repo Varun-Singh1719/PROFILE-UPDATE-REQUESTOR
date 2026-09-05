@@ -13700,3 +13700,25 @@ frontend:
             fetched silently on arrival, consumed on use) makes moves ~230ms regardless of Atlas
             latency. Verified via Playwright: keys next/prev, both boundaries, rapid double press =
             one move, arrows inside Edit input do nothing, peek click navigates, scroll resets.
+
+backend:
+  - task: "CRM MySQL (read-only) sync wired to user-supplied test_infollion DB + client_contact_count refresh"
+    implemented: true
+    working: true
+    file: "backend/.env (MYSQL_*), backend/crm_sync.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: |
+            Added MYSQL_HOST/PORT/USER/PASSWORD/DB (172.105.61.195 / test_infollion_user /
+            test_infollion, SELECT-only grants) to backend/.env (single-quoted). Verified connect +
+            schema matches every column used by crm_sync.py. Ran POST /api/crm-sync/run?scope=all:
+            sync_clients matched_linked=800, sync_contacts matched_linked=1072, totals_till_date /
+            project_count / serviced_count refreshed. Scheduler keeps running it every 2h; manual
+            Sync buttons on Clients / Client Contacts / detail pages also work.
+            NEW refresh_client_contact_counts() (end of run_full_sync): client_contact_count was a
+            never-computed placeholder (always 0); now = count of client_contacts grouped by
+            client_name (806 clients with contacts; e.g. BCG 176). Verified on the Clients list UI.
