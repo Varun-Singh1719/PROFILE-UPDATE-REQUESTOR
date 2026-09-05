@@ -334,7 +334,10 @@ export function ClientContactDetailModal({ contactId, open, onClose, navItems = 
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose?.(); }}>
       <DialogContent
         ref={setScrollEl}
-        className="w-[96vw] max-w-[1500px] max-h-[92vh] overflow-y-auto px-4 sm:px-6 pb-4 sm:pb-6 pt-0"
+        // Fixed height (not max-h) so the pop-up keeps the SAME size on every
+        // tab — short / blank tabs (Employment History, Interactions, Notes,
+        // Timeline) must not shrink the dialog; content scrolls inside.
+        className="w-[96vw] max-w-[1500px] h-[92vh] max-h-[92vh] overflow-y-auto px-4 sm:px-6 pb-4 sm:pb-6 pt-0"
         data-testid="cc-detail-modal"
       >
         <DialogHeader className="sr-only">

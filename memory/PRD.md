@@ -418,3 +418,6 @@ Verified end-to-end on the InfraXcellence team (16 members): mid-plan click cent
 - **Frontend** `ClientContactsPage.jsx` → `TimelineTab` / `TimelineBatch` / `TimelineChange`: batch header "Updated by <User> · EMP · Sep 05, 2026 · 03:50 PM" (orange marker = Created, blue = Updated), per-field rows with Added/Edited/Deleted pill and `Previous:` → `New:` chips; "Read-only" lock badge; count label; Load-older paging; refetches on `row.updated_on`. No edit/delete controls.
 - Demo record left in DB for review: "Timeline Demo Contact" (display id 2149) with 4 batches.
 - Env restored again (backend/.env Atlas creds per user, frontend/.env preview URL; `yarn install`). Smoke-tested via API script + Playwright screenshots. Testing agent NOT deployed (per user instruction).
+
+## Sep 05 2026 — Client Contact detail POP-UP keeps a constant size across tabs
+- `ClientContactDetailModal` (`ClientContactsPage.jsx`): `DialogContent` changed from `max-h-[92vh]` to fixed `h-[92vh] max-h-[92vh]` (width already fixed `w-[96vw] max-w-[1500px]`). The pop-up (opened from CRM → Client → Client Contacts) no longer shrinks on short/blank tabs (Employment History, Interactions, Notes, Timeline); content scrolls inside. Verified via Playwright: bounding box identical (1500×994 @1920×800) on all 5 tabs. Testing agent NOT deployed (user instruction).
