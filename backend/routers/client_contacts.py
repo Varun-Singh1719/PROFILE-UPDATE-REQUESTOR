@@ -35,6 +35,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from core import api_router, db, now_iso, get_current_user
 from routers.client_contact_timeline import record_contact_changes
+from routers.industry_paths import resolve_paths as _resolve_industry_paths, labels_of as _industry_labels, load_nodes as _load_industry_nodes
 
 
 COLL = "client_contacts"
@@ -154,6 +155,9 @@ class ClientContactBase(BaseModel):
     previous_work_experience: Optional[List[WorkExperience]] = None
     linkedin_url: Optional[str] = Field(None, max_length=400)
     industries: Optional[List[str]] = None      # L2 segment names
+    # Hierarchical Infollion paths [[ext_id L0, L1, L2, L3], ...] — when sent,
+    # the server validates them and DERIVES `industries` (display labels).
+    industry_paths: Optional[List[Any]] = None
     # Metric placeholders — will be replaced by the real calc pipeline later.
     # `totals_till_date` = { projects, serviced, calls, revenue } ints.
     # `activity_by_month` = { projects: {"YYYY-MM": n}, serviced: {...}, ... }.
@@ -196,6 +200,7 @@ class ClientContactUpdate(BaseModel):
     previous_work_experience: Optional[List[WorkExperience]] = None
     linkedin_url: Optional[str] = Field(None, max_length=400)
     industries: Optional[List[str]] = None
+    industry_paths: Optional[List[Any]] = None
     totals_till_date: Optional[Dict[str, int]] = None
     activity_by_month: Optional[Dict[str, Dict[str, int]]] = None
     last_project_receiving_date: Optional[str] = Field(None, max_length=32)
@@ -266,6 +271,13 @@ async def create_client_contact(
                     "duplicates": dups,
                 },
             )
+    # Hierarchical industries → validate against the Infollion tree and derive
+    # the legacy `industries` display labels from them.
+    if payload.industry_paths is not None:
+        payload.industry_paths = await _resolve_industry_paths(payload.industry_paths)
+        labels = _industry_labels(payload.industry_paths)
+        # keep any legacy free-text industries the user did not remove
+        payload.industries = labels + [i for i in (payload.industries or []) if i not in labels]
     # Conditional requirement: "Domain Specific" contacts must have at least
     # one Industry selected.
     if payload.type == "Domain Specific" and not (payload.industries or []):
@@ -411,6 +423,16 @@ async def client_contact_by_client(contact_id: str, user=Depends(get_current_use
     return {"rows": rows, "linked": mid is not None}
 
 
+@api_router.get("/client-contacts/industry-tree")
+async def client_contact_industry_tree(user=Depends(get_current_user)):
+    """Infollion Research hierarchy for the Add/Edit Client Contact cascading
+    Industry dropdowns: flat node list (Level 0..3) with parent links.
+    Nothing hard-coded — read live from the (MySQL-synced) segmentation."""
+    data = await _load_industry_nodes()
+    nodes = sorted(data["nodes"].values(), key=lambda n: (n["level"], n["name"].lower()))
+    return {"segmentation_name": data["segmentation_name"], "nodes": nodes}
+
+
 @api_router.get("/client-contacts/{contact_id}")
 async def get_client_contact(contact_id: str, user=Depends(get_current_user)):
     doc = await db[COLL].find_one({"id": contact_id})
@@ -433,6 +455,14 @@ async def update_client_contact(
     if not existing:
         raise HTTPException(404, "Client contact not found")
     updates = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None or True}
+    if "industry_paths" in updates and updates["industry_paths"] is not None:
+        updates["industry_paths"] = await _resolve_industry_paths(updates["industry_paths"])
+        labels = _industry_labels(updates["industry_paths"])
+        legacy = updates.get("industries")
+        if legacy is None:
+            legacy = [i for i in (existing.get("industries") or [])
+                      if i not in {p["label"] for p in (existing.get("industry_paths") or [])}]
+        updates["industries"] = labels + [i for i in legacy if i not in labels]
     # Duplicate check runs only when the user actually changed email/phone.
     if not force:
         new_email = updates.get("email", existing.get("email"))

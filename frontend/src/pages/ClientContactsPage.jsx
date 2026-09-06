@@ -32,6 +32,7 @@ import {
   Popover, PopoverTrigger, PopoverContent,
 } from "../components/ui/popover";
 import SearchSelect from "../components/SearchSelect";
+import IndustryPathPicker from "../components/IndustryPathPicker";
 import { COUNTRY_OPTIONS, getRegionByCountryId, getCountryName } from "../data/countries";
 import DateFilter from "../components/DateFilter";
 import Pagination from "../components/Pagination";
@@ -103,6 +104,7 @@ const EMPTY_FORM = {
   country_name: "",
   linkedin_url: "",
   industries: [],
+  industry_paths: [],   // hierarchical Infollion paths [{ext_ids, names, shorts, label}]
   previous_work_experience: [],
 };
 
@@ -152,7 +154,7 @@ function firstMissingContactField(form) {
   const miss = REQUIRED_CC_FIELDS.find(([k]) => !String(form[k] || "").trim());
   if (miss) return miss[1];
   // Conditional: "Domain Specific" contacts must have at least one Industry.
-  if (form.type === "Domain Specific" && !(form.industries || []).length) {
+  if (form.type === "Domain Specific" && !(form.industries || []).length && !(form.industry_paths || []).length) {
     return "Industry";
   }
   return null;
@@ -559,6 +561,7 @@ function ClientContactsList() {
       base_location: row.base_location || "",
       linkedin_url: row.linkedin_url || "",
       industries: row.industries || [],
+      industry_paths: row.industry_paths || [],
       previous_work_experience: row.previous_work_experience || [],
     });
     setDialogOpen(true);
@@ -1127,7 +1130,7 @@ function ActionIcon({
 // ================================================================ Form Dialog
 function ContactFormDialog({
   open, onOpenChange, editing, form, setForm,
-  l1Options, l2Options, onSubmit, saving,
+  l1Options, onSubmit, saving,
 }) {
   const patch = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -1145,17 +1148,12 @@ function ContactFormDialog({
     previous_work_experience: (f.previous_work_experience || []).filter((_, i) => i !== idx),
   }));
 
-  // Auto-clear industries when Client Name changes (they were L2 children of
-  // the previous client and are no longer valid).
-  useEffect(() => {
-    if (!form.client_name) return;
-    const valid = new Set(l2Options.map((o) => o.value));
-    const filtered = (form.industries || []).filter((i) => valid.has(i));
-    if (filtered.length !== (form.industries || []).length) {
-      setForm((f) => ({ ...f, industries: filtered }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.client_name, l2Options.length]);
+  // Industries are hierarchical paths through the Infollion Research
+  // segmentation (independent of the chosen Client). Legacy free-text
+  // industries (saved before the hierarchy existed) are shown as removable
+  // "legacy" chips; they are dropped only when the user removes them.
+  const pathLabels = new Set((form.industry_paths || []).map((p) => p.label));
+  const legacyIndustries = (form.industries || []).filter((i) => !pathLabels.has(i));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1263,29 +1261,23 @@ function ContactFormDialog({
             </div>
           </Field>
 
-          {/* Industry (L2) — same UX as Teams → Team Member. Becomes a
-              REQUIRED field when Type is "Domain Specific". */}
-          <div className="relative">
-            <label className="absolute -top-2 left-3 px-1.5 bg-white text-[11px] font-medium text-gray-500 z-10 pointer-events-none">
-              Industry (Level 0 of {form.client_name || "chosen client"})
-              {form.type === "Domain Specific" && <span className="text-red-500"> *</span>}
-            </label>
-            <SearchSelect
-              multiple
-              options={l2Options}
-              value={form.industries || []}
-              onChange={(v) => patch("industries", v)}
-              placeholder={
-                !form.client_name
-                  ? "Choose a Client Name first"
-                  : l2Options.length === 0
-                  ? "No Segmentation for this client yet"
-                  : "Select one or more industries…"
-              }
-              testId="cc-industries"
-              disabled={!form.client_name}
+          {/* Industries — hierarchical Infollion Segmentation paths
+              (Level 0 → 1 → 2 → 3), multiple paths as chips. REQUIRED when
+              Type is "Domain Specific". */}
+          <div>
+            <IndustryPathPicker
+              value={form.industry_paths || []}
+              onChange={(paths) => {
+                // `industries` keeps ONLY legacy strings from here on — the
+                // server derives the path labels itself.
+                setForm((f) => ({ ...f, industry_paths: paths, industries: legacyIndustries }));
+              }}
+              legacy={legacyIndustries}
+              onLegacyChange={(kept) => patch("industries", kept)}
+              required={form.type === "Domain Specific"}
+              testId="cc-industry"
             />
-            {form.type === "Domain Specific" && (form.industries || []).length === 0 && (
+            {form.type === "Domain Specific" && (form.industry_paths || []).length === 0 && legacyIndustries.length === 0 && (
               <div className="mt-1 text-[11px] text-red-500">
                 {'Industry is required for "Domain Specific" contacts.'}
               </div>
@@ -1679,6 +1671,7 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
       base_location: row.base_location || "",
       linkedin_url: row.linkedin_url || "",
       industries: row.industries || [],
+      industry_paths: row.industry_paths || [],
       previous_work_experience: row.previous_work_experience || [],
     });
     setDialogOpen(true);
@@ -2178,7 +2171,7 @@ function OverviewTab({ row }) {
       {/* Industries — placed above Employment History & Summary */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
         <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-2">
-          Industries (Level 0)
+          Industries
         </div>
         {row.industries?.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
