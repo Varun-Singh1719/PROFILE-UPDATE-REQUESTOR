@@ -614,23 +614,24 @@ function ClientContactsList() {
         actions={
           <div className="flex items-center gap-2">
             {/* Sync / Upload History / Upload Contacts → icon-only buttons with the
-                exact UI/UX of the top-bar Notification Bell (full name on hover). */}
-            <BellStyleIconButton
-              icon={<Loader2 sx={{ fontSize: 22 }} className={syncing ? "animate-spin" : ""} />}
-              label={syncing ? "Syncing…" : "Sync"}
+                exact UI/UX of the Edit (pencil) icon on the Client card view
+                (grey → orange + light-orange bg on hover, full name as tooltip). */}
+            <CardStyleIconButton
+              icon={<Loader2 sx={{ fontSize: 16 }} className={syncing ? "animate-spin" : ""} />}
+              tooltip={syncing ? "Syncing…" : "Sync"}
               onClick={handleSyncFromMysql}
               disabled={syncing}
               testId="cc-sync-btn"
             />
-            <BellStyleIconButton
-              icon={<History sx={{ fontSize: 22 }} />}
-              label="Upload History"
+            <CardStyleIconButton
+              icon={<History sx={{ fontSize: 16 }} />}
+              tooltip="Upload History"
               onClick={() => setHistoryOpen(true)}
               testId="cc-upload-history-btn"
             />
-            <BellStyleIconButton
-              icon={<Upload sx={{ fontSize: 22 }} />}
-              label="Upload Contacts"
+            <CardStyleIconButton
+              icon={<Upload sx={{ fontSize: 16 }} />}
+              tooltip="Upload Contacts"
               onClick={() => setBulkOpen(true)}
               testId="cc-open-bulk-upload-btn"
             />
@@ -1968,30 +1969,6 @@ function CardStyleIconButton({ icon, tooltip, onClick, disabled = false, testId,
       className={`w-7 h-7 rounded-md flex items-center justify-center text-gray-500 hover:text-[#ec9324] hover:bg-orange-50 transition-colors flex-shrink-0 disabled:opacity-60 disabled:hover:bg-transparent disabled:hover:text-gray-500 ${className}`}
     >
       {icon}
-    </button>
-  );
-}
-
-// Icon button — EXACT same UI/UX as the top-bar Notification Bell trigger
-// (components/NotificationBell.jsx): w-9 h-9 round, gray icon (22px), light-gray
-// background on hover, native "title" + dark hover tooltip (full name) that drops
-// below the icon, right-aligned. Used for Sync / Upload History / Upload Contacts
-// in the Client Contacts page header.
-function BellStyleIconButton({ icon, label, onClick, disabled = false, testId }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={label}
-      aria-label={label}
-      data-testid={testId}
-      className="group relative inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-100 text-gray-600 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-    >
-      {icon}
-      <span className="pointer-events-none absolute top-full mt-1.5 right-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
-        {label}
-      </span>
     </button>
   );
 }
