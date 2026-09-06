@@ -363,6 +363,7 @@ async def sync_clients(client_metrics=None):
         set_fields = {
             "mysql_ref": {"mysql_id": mid, "matched_by": "name", "linked_at": ts},
             "totals_till_date": totals,
+            "activity_by_month": metrics.get("activity_by_month", {}),
             "project_count": metrics.get("project_count", 0),
             "serviced_count": metrics.get("serviced_count", 0),
             "last_project_receiving_date": metrics.get("last_project_receiving_date"),

@@ -23,6 +23,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "../components/ui/dialog";
 import DateFilter from "../components/DateFilter";
+import CprMonthlyChart, { getLast12MonthsRange } from "../components/CprMonthlyChart";
 import POCStatusChip from "../components/POCStatusChip";
 import ArrowBack from "@mui/icons-material/ArrowBackOutlined";
 import BusinessCenter from "@mui/icons-material/BusinessCenterOutlined";
@@ -122,6 +123,9 @@ export default function ClientDetailPage() {
   const [employees, setEmployees] = useState([]);   // employee directory for KAM dropdown
 
   const [filter, setFilter] = useState(getLast6MonthsRange);
+  // CPR-Monthly chart has its own date range (default = Last 12 Months),
+  // matching the Client Contact detail view's CPR graph.
+  const [cprFilter, setCprFilter] = useState(getLast12MonthsRange);
 
   // ---- Tabs (Overview | Link Segmentation) ----
   const [activeTab, setActiveTab] = useState("overview");
@@ -658,6 +662,16 @@ export default function ClientDetailPage() {
                 </>
               )}
             </div>
+
+            {/* ============ CPR-MONTHLY CHART ============ */}
+            {/* Same graph as the Client Contact detail view — Calls / Revenue $ /
+                Projects monthly trend, default range = Last 12 Months. */}
+            <CprMonthlyChart
+              filter={cprFilter}
+              onFilterChange={setCprFilter}
+              data={row.activity_by_month}
+              testId="client-detail"
+            />
           </div>
         )}
       </div>

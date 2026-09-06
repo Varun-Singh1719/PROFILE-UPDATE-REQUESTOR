@@ -530,3 +530,10 @@ Verified end-to-end on the InfraXcellence team (16 members): mid-plan click cent
 - Plots 3 monthly series from the existing `row.activity_by_month` ({projects|calls|revenue: {"YYYY-MM": n}}): Calls (green, left axis), Projects (yellow, left axis), Revenue $ (red, right axis / dual-axis).
 - Shares the SAME DateFilter state (`actFilter`) as the Activity Summary, so both stay in sync. Default = Last 12 Months (`getLast12MonthsRange`).
 - Frontend-only change; no backend/db changes. Data already produced by `crm_sync._metrics_from`.
+
+## CPR-Monthly: rename + Client Detail view (follow-up)
+- Extracted the CPR-Monthly chart into a shared component `frontend/src/components/CprMonthlyChart.jsx` (self-contained: monthsInRange, DateFilter, recharts, black snap-in tooltip). Exports `getLast12MonthsRange`.
+- Renamed the Projects series label from "Projects - Monthly Trend - N" to "Projects".
+- `ClientContactsPage.jsx` now imports the shared component (removed its local copy + recharts import); usage passes testId="cc".
+- `ClientDetailPage.jsx` renders the same chart below the Overview pivot with its own 12-month filter (`cprFilter`), testId="client-detail". The pivot keeps its existing 6-month default (untouched).
+- Backend: `crm_sync.sync_clients` now also writes `activity_by_month` onto `clients` docs (data was already computed by `_metrics_from`). Ran a one-off `sync_clients()` to backfill 800 existing clients. `GET /api/clients/{id}` returns the whole doc so no router change needed.
