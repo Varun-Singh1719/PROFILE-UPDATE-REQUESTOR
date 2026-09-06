@@ -23,7 +23,7 @@ from typing import Dict, Any, List, Optional
 import sys
 
 # Backend base URL
-BASE_URL = "https://change-history-6.preview.emergentagent.com/api"
+BASE_URL = "https://crm-ui-update-1.preview.emergentagent.com/api"
 
 # Test credentials (from test_credentials.md)
 SUPER_ADMIN = {"email": "admin@ticketing.com", "password": "Admin@123"}

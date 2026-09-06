@@ -10,7 +10,7 @@ import sys
 from typing import Optional, List, Dict, Any
 
 # Backend URL from frontend/.env
-BASE_URL = "https://change-history-6.preview.emergentagent.com/api"
+BASE_URL = "https://crm-ui-update-1.preview.emergentagent.com/api"
 
 # Test credentials
 ADMIN_EMAIL = "admin@ticketing.com"

@@ -11,7 +11,7 @@ from datetime import datetime
 from playwright.async_api import async_playwright, Page, expect
 
 # Configuration
-FRONTEND_URL = "https://change-history-6.preview.emergentagent.com"
+FRONTEND_URL = "https://crm-ui-update-1.preview.emergentagent.com"
 BACKEND_URL = f"{FRONTEND_URL}/api"
 SUPER_ADMIN_EMAIL = "admin@ticketing.com"
 SUPER_ADMIN_PASSWORD = "Admin@123"
