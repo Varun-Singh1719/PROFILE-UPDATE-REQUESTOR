@@ -3315,19 +3315,19 @@ function CprTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   const get = (k) => payload.find((p) => p.dataKey === k)?.value ?? 0;
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-xs">
-      <div className="font-semibold text-gray-800 mb-1.5">{label}</div>
-      <div className="flex items-center gap-2 text-gray-600">
+    <div className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl px-3 py-2 text-xs">
+      <div className="font-semibold text-white mb-1.5">{label}</div>
+      <div className="flex items-center gap-2 text-gray-300">
         <span className="inline-block w-2 h-2 rounded-full" style={{ background: CPR_COLORS.calls }} />
-        Calls<span className="ml-auto font-semibold text-gray-900 tabular-nums">{get("calls").toLocaleString()}</span>
+        Calls<span className="ml-auto font-semibold text-white tabular-nums">{get("calls").toLocaleString()}</span>
       </div>
-      <div className="flex items-center gap-2 text-gray-600 mt-1">
+      <div className="flex items-center gap-2 text-gray-300 mt-1">
         <span className="inline-block w-2 h-2 rounded-full" style={{ background: CPR_COLORS.revenue }} />
-        Revenue $<span className="ml-auto font-semibold text-gray-900 tabular-nums">${get("revenue").toLocaleString()}</span>
+        Revenue $<span className="ml-auto font-semibold text-white tabular-nums">${get("revenue").toLocaleString()}</span>
       </div>
-      <div className="flex items-center gap-2 text-gray-600 mt-1">
+      <div className="flex items-center gap-2 text-gray-300 mt-1">
         <span className="inline-block w-2 h-2 rounded-full" style={{ background: CPR_COLORS.projects }} />
-        Projects<span className="ml-auto font-semibold text-gray-900 tabular-nums">{get("projects").toLocaleString()}</span>
+        Projects<span className="ml-auto font-semibold text-white tabular-nums">{get("projects").toLocaleString()}</span>
       </div>
     </div>
   );
@@ -3436,7 +3436,12 @@ function CprMonthlyChart({ filter, onFilterChange, data = null }) {
                 tickFormatter={fmtMoneyAxis}
                 label={{ value: "Revenue $", angle: 90, position: "insideRight", fontSize: 11, fill: "#9ca3af" }}
               />
-              <RechartsTooltip content={<CprTooltip />} />
+              <RechartsTooltip
+                content={<CprTooltip />}
+                isAnimationActive={false}
+                wrapperStyle={{ transition: "none", pointerEvents: "none" }}
+                cursor={{ stroke: "#d1d5db", strokeWidth: 1, strokeDasharray: "3 3" }}
+              />
               <Line
                 yAxisId="right"
                 type="monotone"
