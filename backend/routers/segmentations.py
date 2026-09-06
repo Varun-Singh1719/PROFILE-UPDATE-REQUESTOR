@@ -190,6 +190,49 @@ async def list_segmentations(
     return {"rows": rows_raw, "total": len(rows_raw)}
 
 
+@api_router.get("/segmentations/client-options")
+async def segmentation_client_options(user=Depends(get_current_user)):
+    """Dropdown data for the New / Edit Segmentation "Client Name" field.
+
+    Every Client from the Clients tab, alphabetically, with
+    `has_segmentation` = a segmentation with exactly that name already exists
+    (each Client may own ONE segmentation — the UI freezes those at the bottom)
+    and `segmentation_id` so the caller can keep the one being edited selectable.
+    """
+    clients = await db["clients"].find({}, {"_id": 0, "id": 1, "name": 1}).to_list(None)
+    segs = await db[COLL].find({}, {"_id": 0, "id": 1, "name": 1}).to_list(None)
+    seg_by_name = {(s.get("name") or "").strip().lower(): s["id"] for s in segs if s.get("name")}
+
+    seen = set()
+    out = []
+    for c in clients:
+        nm = (c.get("name") or "").strip()
+        key = nm.lower()
+        if not nm or key in seen:
+            continue
+        seen.add(key)
+        out.append({
+            "client_id": c.get("id"),
+            "name": nm,
+            "has_segmentation": key in seg_by_name,
+            "segmentation_id": seg_by_name.get(key),
+        })
+    out.sort(key=lambda o: o["name"].lower())
+    return {"rows": out, "total": len(out)}
+
+
+async def _assert_client_exists(name: str):
+    """Segmentation names are Client Names — the value must be an existing
+    Client (case-insensitive) from the Clients tab."""
+    import re
+    hit = await db["clients"].find_one(
+        {"name": {"$regex": f"^{re.escape((name or '').strip())}$", "$options": "i"}},
+        {"_id": 1},
+    )
+    if not hit:
+        raise HTTPException(400, "Client Name must be an existing Client from the Clients tab")
+
+
 @api_router.get("/segmentations/{seg_id}")
 async def get_segmentation(seg_id: str, user=Depends(get_current_user)):
     doc = await db[COLL].find_one({"id": seg_id})
@@ -206,6 +249,7 @@ async def create_segmentation(body: SegmentationCreate, user=Depends(get_current
     })
     if existing:
         raise HTTPException(400, "A segmentation with this name already exists")
+    await _assert_client_exists(body.name)
 
     now = now_iso()
     # Default seed tree = root node with the segmentation name; the user can
@@ -253,6 +297,7 @@ async def update_segmentation(seg_id: str, body: SegmentationUpdate, user=Depend
         })
         if dup:
             raise HTTPException(400, "A segmentation with this name already exists")
+        await _assert_client_exists(body.name)
         updates["name"] = body.name
     if body.description is not None:
         updates["description"] = body.description

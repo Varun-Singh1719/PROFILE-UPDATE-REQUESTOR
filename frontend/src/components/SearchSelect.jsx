@@ -20,7 +20,9 @@ import { useWheelScrollIsolation } from "../hooks/useWheelScrollIsolation";
  *   • portal popup so it is never clipped by overflow:hidden parents.
  *
  * Props:
- *   options     [{ value, label }]
+ *   options     [{ value, label, disabled?, hint? }]
+ *               disabled → shown greyed-out / frozen (not selectable, skipped by
+ *               keyboard nav); hint → small right-aligned note (e.g. why frozen)
  *   value       single: value | null      multi: value[]
  *   onChange    single: (value|null)       multi: (value[])
  *   multiple    boolean (default false)
@@ -124,7 +126,17 @@ export default function SearchSelect({
     if (el) el.scrollIntoView({ block: "nearest" });
   }, [activeIndex, open]);
 
+  const isDisabledOpt = (o) => !!(o && o.disabled);
+  // next enabled index in `dir` (+1 / -1) starting from `from` (exclusive)
+  const stepEnabled = (from, dir) => {
+    let i = from + dir;
+    while (i >= 0 && i < filtered.length && isDisabledOpt(filtered[i])) i += dir;
+    return i >= 0 && i < filtered.length ? i : from;
+  };
+
   const pick = (v) => {
+    const opt = options.find((o) => String(o.value) === String(v));
+    if (isDisabledOpt(opt)) return;
     if (multiple) {
       const vals = new Set((Array.isArray(value) ? value : []).map(String));
       if (vals.has(String(v))) vals.delete(String(v));
@@ -200,11 +212,11 @@ export default function SearchSelect({
                 if (e.key === "ArrowDown") {
                   e.preventDefault();
                   if (!open) { setOpen(true); return; }
-                  setActiveIndex((i) => Math.min(filtered.length - 1, i + 1));
+                  setActiveIndex((i) => stepEnabled(i, +1));
                 } else if (e.key === "ArrowUp") {
                   e.preventDefault();
                   if (!open) { setOpen(true); return; }
-                  setActiveIndex((i) => Math.max(0, i - 1));
+                  setActiveIndex((i) => stepEnabled(i, -1));
                 } else if (e.key === "Home" && open) {
                   e.preventDefault();
                   setActiveIndex(0);
@@ -272,17 +284,21 @@ export default function SearchSelect({
             ) : (
               filtered.map((o, idx) => {
                 const sel = isSel(o.value);
-                const active = idx === activeIndex;
+                const dis = isDisabledOpt(o);
+                const active = idx === activeIndex && !dis;
                 return (
                   <button
                     key={o.value}
                     type="button"
                     data-index={idx}
-                    onMouseEnter={() => setActiveIndex(idx)}
+                    disabled={dis}
+                    aria-disabled={dis || undefined}
+                    title={dis && o.hint ? o.hint : undefined}
+                    onMouseEnter={() => { if (!dis) setActiveIndex(idx); }}
                     onClick={() => pick(o.value)}
                     className={
                       "w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors " +
-                      (active ? "bg-orange-100/70 " : sel ? "bg-orange-50 " : "")
+                      (dis ? "opacity-50 cursor-not-allowed bg-gray-50 " : active ? "bg-orange-100/70 " : sel ? "bg-orange-50 " : "")
                     }
                     data-testid={testId ? `${testId}-opt-${o.value}` : undefined}
                   >
@@ -300,6 +316,11 @@ export default function SearchSelect({
                     <span className={"truncate " + (sel ? "text-[#ec9324] font-medium" : "text-gray-700")}>
                       {o.label}
                     </span>
+                    {o.hint && (
+                      <span className="ml-auto shrink-0 text-[10px] text-gray-400 whitespace-nowrap">
+                        {o.hint}
+                      </span>
+                    )}
                   </button>
                 );
               })

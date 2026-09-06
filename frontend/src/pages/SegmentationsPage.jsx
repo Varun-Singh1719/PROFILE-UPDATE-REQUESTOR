@@ -5,6 +5,7 @@ import api, { formatApiError } from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { FloatingField } from "../components/FloatingField";
+import SearchSelect from "../components/SearchSelect";
 import { Textarea } from "../components/ui/textarea";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -214,7 +215,7 @@ export default function SegmentationsPage() {
   const submit = async () => {
     const name = (form.name || "").trim();
     if (!name) {
-      notify.error("Name is required");
+      notify.error("Client Name is required");
       return;
     }
     // ---- New segmentation → open an UNSAVED draft (no DB write yet) ----
@@ -1200,6 +1201,50 @@ function ReviewChangesDialog({ open, onOpenChange, changes, onConfirm, saving })
 
 function SegmentationFormDialog({ open, onOpenChange, editing, form, setForm, onSubmit, saving }) {
   const patch = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  // "Client Name" dropdown — every Client from the Clients tab (alphabetical).
+  // Each Client may own ONE segmentation: clients that already have one are
+  // moved to the bottom and frozen (unselectable). When editing, the
+  // segmentation's own client stays selectable.
+  const [clientOpts, setClientOpts] = useState([]);
+  const [loadingClients, setLoadingClients] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setLoadingClients(true);
+    api.get("/segmentations/client-options")
+      .then((r) => { if (!cancelled) setClientOpts(r.data?.rows || []); })
+      .catch(() => { if (!cancelled) setClientOpts([]); })
+      .finally(() => { if (!cancelled) setLoadingClients(false); });
+    return () => { cancelled = true; };
+  }, [open]);
+
+  const nameOptions = useMemo(() => {
+    const byName = (a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" });
+    const free = [];
+    const taken = [];
+    clientOpts.forEach((c) => {
+      const isOwn = editing && c.segmentation_id && c.segmentation_id === editing.id;
+      const frozen = !!c.has_segmentation && !isOwn;
+      (frozen ? taken : free).push({
+        value: c.name,
+        label: c.name,
+        disabled: frozen,
+        hint: frozen ? "Segmentation exists" : undefined,
+      });
+    });
+    free.sort(byName);
+    taken.sort(byName);
+    const out = [...free, ...taken];
+    // Legacy segmentation whose name is not a Client → keep it selectable so
+    // the Edit form still shows the current value.
+    const cur = (form.name || "").trim();
+    if (cur && !out.some((o) => o.value.toLowerCase() === cur.toLowerCase())) {
+      out.unshift({ value: cur, label: cur });
+    }
+    return out;
+  }, [clientOpts, editing, form.name]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md" data-testid="segmentation-form-dialog">
@@ -1209,16 +1254,16 @@ function SegmentationFormDialog({ open, onOpenChange, editing, form, setForm, on
         <div className="space-y-5 pt-3">
           <FloatingField
             htmlFor="seg-name"
-            label={<>Name <span className="text-red-500">*</span></>}
+            label={<>Client Name <span className="text-red-500">*</span></>}
           >
-            <Input
-              id="seg-name"
-              value={form.name}
-              onChange={(e) => patch("name", e.target.value)}
-              placeholder="e.g. Enterprise Clients"
-              data-testid="segmentation-form-name"
-              maxLength={120}
-              autoFocus
+            {/* Same dropdown as the Country field in Add Client Contact */}
+            <SearchSelect
+              options={nameOptions}
+              value={form.name || null}
+              onChange={(v) => patch("name", v || "")}
+              placeholder="Select client…"
+              loading={loadingClients}
+              testId="segmentation-form-name"
             />
           </FloatingField>
 
