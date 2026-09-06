@@ -743,7 +743,11 @@ export default function CollapsibleTree({
         // preservation. Double-click = smooth focus/zoom onto the node.
         // We debounce the single-click by 220 ms so a double-click never
         // fires a spurious toggle-toggle-focus sequence.
-        .on("click", (evt, d) => {
+        .on("click", (evt, d) => toggleNodeClick(evt, d))
+        .on("dblclick", (evt, d) => focusNodeClick(evt, d));
+
+      // Shared click handlers (circle AND, in view mode, the label text).
+      function toggleNodeClick(evt, d) {
           evt.stopPropagation();
           if (!hasKids(d)) return;
           if (clickTimerRef.current) {
@@ -778,20 +782,24 @@ export default function CollapsibleTree({
             update(d, evt);
             fitToView(true);
           }, 220);
-        })
-        .on("dblclick", (evt, d) => {
+      }
+      function focusNodeClick(evt, d) {
           evt.stopPropagation();
           if (clickTimerRef.current) {
             clearTimeout(clickTimerRef.current);
             clickTimerRef.current = null;
           }
           focusNode(d);
-        });
+      }
 
       // Label — hidden when this node is currently being edited (replaced
       // by a foreignObject <input> in renderInlineEditor below). Always
       // rendered on the RIGHT of the circle so long names never clip and
       // the outgoing link doesn't cross the text.
+      //   • VIEW mode : click = expand / collapse (same as the circle),
+      //                 double-click = focus/zoom — the label is a far bigger
+      //                 hit target than the 12 px circle.
+      //   • EDIT mode : click = select node, double-click = inline rename.
       nodeEnter.append("text")
         .attr("class", "seg-label")
         .attr("dy", "0.32em")
@@ -805,17 +813,18 @@ export default function CollapsibleTree({
         .style("font-size", "13px")
         .style("font-family", "Inter, system-ui, sans-serif")
         .style("font-weight", (d) => (d.depth === 0 ? "700" : "500"))
+        .style("cursor", (d) => (editable || hasKids(d) ? "pointer" : "default"))
         .text((d) => d.data.name || "")
         .on("click", (evt, d) => {
+          if (!editable) { toggleNodeClick(evt, d); return; }
           evt.stopPropagation();
-          if (!editable) return;
           selectedIdRef.current = d.id;
           renderSelectionRing();
           renderAddChips();
         })
         .on("dblclick", (evt, d) => {
+          if (!editable) { focusNodeClick(evt, d); return; }
           evt.stopPropagation();
-          if (!editable) return;
           handlersRef.current.startRename(d);
         });
 

@@ -106,11 +106,11 @@ SAMPLE_ROWS = [
         "rahul.menon@acme.com",
         "+91",
         "9812345678",
-        "Infollion Research",
+        "Boston Consulting Group",
         "Vice President — Strategy",
         "Bengaluru, IN",
         "https://linkedin.com/in/rahul-menon",
-        "BFSI; Chemicals",
+        "Automotive Industry; Education",
     ],
 ]
 
@@ -187,7 +187,7 @@ async def download_cc_sample_template(
         ("Email", "No", "Standard email format. Must be unique across the whole client-contact directory."),
         ("ISD", "No", "Country dial-code — e.g. '+91', '+1'. Defaults to '+91' if left blank."),
         ("Phone", "No", "Digits only (or any format). Must be unique — formatting is ignored, we dedup on the trailing 10 digits."),
-        ("Client Name", "No", "Must exactly match an existing Segmentation (Client Name) — e.g. 'McKinsey', 'Infollion Research'. Rows with an unknown Client Name are rejected."),
+        ("Client Name", "No", "Must exactly match an existing Client from the Clients tab — e.g. 'McKinsey', 'Boston Consulting Group'. Rows with an unknown Client Name are rejected."),
         ("Designation", "No", "Free text — e.g. 'Partner', 'Director'."),
         ("Base Location", "No", "Free text — e.g. 'Mumbai, IN'."),
         ("LinkedIn URL", "No", "Full LinkedIn profile URL — e.g. 'https://linkedin.com/in/…'."),
@@ -310,7 +310,13 @@ async def bulk_upload_client_contacts(
         if p:
             existing_phones.add(p)
 
-    # Preload segmentations for Client Name + Industries validation.
+    # Preload CLIENTS (Clients tab — MySQL-synced) for Client Name validation,
+    # and segmentations (keyed by client name) for Industries validation.
+    client_by_name: Dict[str, str] = {}
+    async for c in db.clients.find({}, {"_id": 0, "name": 1}):
+        nm = (c.get("name") or "").strip()
+        if nm:
+            client_by_name.setdefault(nm.lower(), nm)
     seg_by_name: Dict[str, dict] = {}
     async for s in db.segmentations.find({}, {"_id": 0, "name": 1, "tree": 1}):
         nm = (s.get("name") or "").strip()
@@ -357,18 +363,21 @@ async def bulk_upload_client_contacts(
         resolved_client: Optional[str] = None
         seg_doc: Optional[dict] = None
         if client_name:
-            seg_doc = seg_by_name.get(client_name.strip().lower())
-            if not seg_doc:
-                row_errors.append(f"Client Name '{client_name}' does not exist in Segmentations")
-            else:
-                resolved_client = seg_doc.get("name")
+            key = client_name.strip().lower()
+            resolved_client = client_by_name.get(key)
+            if not resolved_client:
+                row_errors.append(f"Client Name '{client_name}' does not exist in Clients")
+            # Segmentation (if the client has one) drives the Industries list.
+            seg_doc = seg_by_name.get(key)
 
         # Industries — keep only those that are direct L2 children of the client's tree.
         industries_final: List[str] = []
         indus_input = _split_industries(industries_raw)
         if indus_input:
             if not seg_doc:
-                if client_name:
+                if client_name and resolved_client:
+                    row_warnings.append("Industries ignored (this Client has no Segmentation yet)")
+                elif client_name:
                     row_warnings.append("Industries ignored (Client Name missing / invalid)")
                 else:
                     row_warnings.append("Industries ignored (Client Name is blank)")

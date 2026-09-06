@@ -221,12 +221,23 @@ function fmtMetric(v, opts = {}) {
   return n.toLocaleString();
 }
 
-// Level 1 = segmentation names (each Segmentation record IS a client).
-function levelOneOptions(segRows) {
-  return (segRows || [])
-    .map((s) => ({ value: s.name, label: s.name, sublabel: s.description || "" }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+// Client Name options — the SAME client list used across the whole CRM module
+// (Clients tab, Segmentations → "Client Name"): every Client, including the
+// ones synced from MySQL, alphabetical. Source: GET /segmentations/client-options.
+// `ensure` = a value that must always be present (e.g. the contact's current
+// client while editing) so the field is never blank.
+function clientNameOptions(clientRows, ensure = "") {
+  const opts = (clientRows || [])
+    .map((c) => ({ value: c.name, label: c.name }))
+    .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+  const cur = (ensure || "").trim();
+  if (cur && !opts.some((o) => o.value.toLowerCase() === cur.toLowerCase())) {
+    opts.unshift({ value: cur, label: cur });
+  }
+  return opts;
 }
+const fetchClientOptions = () =>
+  api.get(`/segmentations/client-options`).then((r) => r.data?.rows || []).catch(() => []);
 
 // Level 2 = tree.children of the chosen Segmentation.
 function levelTwoOptions(segRows, clientName) {
@@ -367,6 +378,7 @@ export function ClientContactDetailModal({ contactId, open, onClose, navItems = 
 // Client field — used when adding from within a specific Client's page.
 export function AddContactDialog({ open, onClose, defaultClientName = "", onSaved }) {
   const [segments, setSegments] = useState([]);
+  const [clients, setClients] = useState([]);
   const [form, setForm] = useState({ ...EMPTY_FORM, previous_work_experience: [] });
   const [saving, setSaving] = useState(false);
   const [dupState, setDupState] = useState(null);
@@ -376,16 +388,14 @@ export function AddContactDialog({ open, onClose, defaultClientName = "", onSave
     setForm({ ...EMPTY_FORM, previous_work_experience: [], client_name: defaultClientName || "" });
     setDupState(null);
     api.get(`/segmentations`).then((r) => setSegments(r.data.rows || [])).catch(() => {});
+    fetchClientOptions().then(setClients);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultClientName]);
 
-  const l1Options = useMemo(() => {
-    const base = levelOneOptions(segments);
-    if (defaultClientName && !base.some((o) => o.value === defaultClientName)) {
-      return [{ value: defaultClientName, label: defaultClientName, sublabel: "" }, ...base];
-    }
-    return base;
-  }, [segments, defaultClientName]);
+  const l1Options = useMemo(
+    () => clientNameOptions(clients, defaultClientName),
+    [clients, defaultClientName]
+  );
   const l2Options = useMemo(() => levelTwoOptions(segments, form.client_name), [segments, form.client_name]);
 
   const onSave = async (opts = {}) => {
@@ -442,8 +452,9 @@ function ClientContactsList() {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [segments, setSegments] = useState([]);
+  const [clients, setClients] = useState([]);   // Client Name options (all Clients)
   const [search, setSearch] = useState("");
-  const [clientFilter, setClientFilter] = useState(""); // Level-1 chip
+  const [clientFilter, setClientFilter] = useState(""); // Client Name chip
   const [sortKey, setSortKey] = useState("newest");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
@@ -477,7 +488,12 @@ function ClientContactsList() {
     }
   };
 
-  const l1Options = useMemo(() => levelOneOptions(segments), [segments]);
+  // Client Name list = every Client (incl. MySQL-synced); while editing, the
+  // contact's current client is always included so the field is never blank.
+  const l1Options = useMemo(
+    () => clientNameOptions(clients, form.client_name),
+    [clients, form.client_name]
+  );
   const l2Options = useMemo(
     () => levelTwoOptions(segments, form.client_name),
     [segments, form.client_name]
@@ -491,13 +507,15 @@ function ClientContactsList() {
       if (clientFilter) params.set("client_name", clientFilter);
       params.set("page", String(page));
       params.set("page_size", String(pageSize));
-      const [contactsRes, segRes] = await Promise.all([
+      const [contactsRes, segRes, clientRows] = await Promise.all([
         api.get(`/client-contacts?${params.toString()}`),
         api.get(`/segmentations`),
+        fetchClientOptions(),
       ]);
       setRows(contactsRes.data.rows || []);
       setTotal(contactsRes.data.total || 0);
       setSegments(segRes.data.rows || []);
+      setClients(clientRows);
     } catch (e) {
       notify.error(formatApiError(e, "Failed to load client contacts"));
     } finally {
@@ -1258,9 +1276,11 @@ function ContactFormDialog({
               value={form.industries || []}
               onChange={(v) => patch("industries", v)}
               placeholder={
-                form.client_name
-                  ? "Select one or more industries…"
-                  : "Choose a Client Name first"
+                !form.client_name
+                  ? "Choose a Client Name first"
+                  : l2Options.length === 0
+                  ? "No Segmentation for this client yet"
+                  : "Select one or more industries…"
               }
               testId="cc-industries"
               disabled={!form.client_name}
@@ -1272,7 +1292,10 @@ function ContactFormDialog({
             )}
           </div>
 
-          {/* Previous work experience — repeatable */}
+          {/* Previous work experience — repeatable. ADD form only: for an
+              existing contact past roles are managed from the detail page's
+              Employment History tab, so the Edit form does not repeat them. */}
+          {!editing && (
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
@@ -1366,6 +1389,7 @@ function ContactFormDialog({
               ))}
             </div>
           </div>
+          )}
         </div>
 
         <DialogFooter>
@@ -1427,6 +1451,7 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
   const [row, setRow] = useState(null);
   const [loading, setLoading] = useState(true);
   const [segments, setSegments] = useState([]);
+  const [clients, setClients] = useState([]);   // Client Name options (all Clients)
 
   // Edit dialog
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -1457,12 +1482,14 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
   const load = async () => {
     setLoading(true);
     try {
-      const [c, s] = await Promise.all([
+      const [c, s, clientRows] = await Promise.all([
         api.get(`/client-contacts/${contactId}`),
         api.get(`/segmentations`),
+        fetchClientOptions(),
       ]);
       setRow(c.data);
       setSegments(s.data.rows || []);
+      setClients(clientRows);
     } catch (e) {
       notify.error(formatApiError(e, "Failed to load"));
     } finally {
@@ -1627,7 +1654,10 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
     }
   })();
 
-  const l1Options = useMemo(() => levelOneOptions(segments), [segments]);
+  const l1Options = useMemo(
+    () => clientNameOptions(clients, form.client_name),
+    [clients, form.client_name]
+  );
   const l2Options = useMemo(
     () => levelTwoOptions(segments, form.client_name),
     [segments, form.client_name]
