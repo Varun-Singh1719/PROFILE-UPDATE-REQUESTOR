@@ -524,3 +524,9 @@ Verified end-to-end on the InfraXcellence team (16 members): mid-plan click cent
 - NEW `GET /api/clients/{client_id}/overview-pivot?from&to` (routers/clients.py): rows = Infollion Research Level 0 nodes (A→Z); cells[<L0 name>][<YYYY-MM>] = {contacts (distinct client_contact_ids), projects, serviced, calls, revenue} from `mysql_projects` (client_id = client's mysql_ref.mysql_id, Level 0 via `l0_domain` = tree ext_id) + `mysql_calls`. `linked_to_mysql` flag.
 - `ClientDetailPage.jsx`: Overview pivot no longer needs the client's own segmentation and no longer uses the seeded MOCK numbers (`seededInt`/`RANGES` removed). Fetches the endpoint for the selected month range; caption "Rows: Infollion Research · Level 0 · numbers from MySQL projects & calls" (+ amber note when client not linked). `PivotTable` takes `cells`.
 - Verified via API + screenshots (Anjali Sharma activity months; Sterling Pharma Partners 46183 pivot). No testing agent.
+
+## CPR-Monthly chart (Client Contact detail → Overview)
+- Added `CprMonthlyChart` (recharts ComposedChart) in `frontend/src/pages/ClientContactsPage.jsx`, rendered inside `OverviewTab` directly below the Activity Summary.
+- Plots 3 monthly series from the existing `row.activity_by_month` ({projects|calls|revenue: {"YYYY-MM": n}}): Calls (green, left axis), Projects (yellow, left axis), Revenue $ (red, right axis / dual-axis).
+- Shares the SAME DateFilter state (`actFilter`) as the Activity Summary, so both stay in sync. Default = Last 12 Months (`getLast12MonthsRange`).
+- Frontend-only change; no backend/db changes. Data already produced by `crm_sync._metrics_from`.
