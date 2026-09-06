@@ -264,26 +264,21 @@ export default function ClientDetailPage() {
 
   // ---- Pivot data ----
   const months = useMemo(() => monthsInRange(filter), [filter]);
-  // Rows = deepest / leaf nodes of the client's segmentation tree.
-  // Falls back to leaves so segmentations that only go one level deep
-  // (industry taxonomies like McKinsey) still populate the pivot.
-  const l2Nodes = useMemo(() => {
-    if (!seg?.segmentation?.tree) return [];
-    const leaves = [];
-    const walk = (node, parentName) => {
-      const kids = node.children || [];
-      if (!kids.length) {
-        if (parentName !== null) {
-          // exclude the root itself (depth 0). It always has a parentName after first descent.
-          leaves.push({ name: node.name, parent: parentName });
-        }
-        return;
-      }
-      kids.forEach((c) => walk(c, node.name));
-    };
-    walk(seg.segmentation.tree, null);
-    return leaves;
-  }, [seg]);
+
+  // Overview pivot data: Infollion Level 0 rows × months, numbers from the
+  // MySQL mirror. Re-fetched when the client or the month range changes.
+  const [pivot, setPivot] = useState(null);
+  const monthFrom = months.length ? months[0].key : null;
+  const monthTo = months.length ? months[months.length - 1].key : null;
+  useEffect(() => {
+    if (!row?.id || !monthFrom || !monthTo) return;
+    let cancelled = false;
+    setPivot(null);
+    api.get(`/clients/${row.id}/overview-pivot`, { params: { from: `${monthFrom}-01`, to: `${monthTo}-31` } })
+      .then((r) => { if (!cancelled) setPivot(r.data); })
+      .catch(() => { if (!cancelled) setPivot({ rows: [], cells: {}, linked_to_mysql: false, segmentation: "Infollion Research" }); });
+    return () => { cancelled = true; };
+  }, [row?.id, monthFrom, monthTo]);
 
   // Top-bar action = Edit / Save / Cancel
   const topBarActions = editing ? (
@@ -639,20 +634,28 @@ export default function ClientDetailPage() {
                 />
               </div>
 
-              {!seg?.exists ? (
-                <div className="text-center py-10 text-sm text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/40">
-                  Add a Segmentation for this client to unlock the Level-0 × Month pivot.
-                </div>
-              ) : l2Nodes.length === 0 ? (
-                <div className="text-center py-10 text-sm text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/40">
-                  This segmentation has no Level-0 nodes yet. Open it in Segmentations and add some.
-                </div>
-              ) : months.length === 0 ? (
+              {/* Rows = Infollion Segmentation Level 0; numbers = MySQL mirror */}
+              {months.length === 0 ? (
                 <div className="text-center py-10 text-sm text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/40">
                   Pick a valid date range to see the pivot.
                 </div>
+              ) : !pivot ? (
+                <div className="text-center py-10 text-sm text-gray-400">Loading numbers…</div>
+              ) : pivot.rows.length === 0 ? (
+                <div className="text-center py-10 text-sm text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/40">
+                  The Infollion Research segmentation has no Level 0 segments yet.
+                </div>
               ) : (
-                <PivotTable l2Nodes={l2Nodes} months={months} clientId={row.id} />
+                <>
+                  <div className="text-[11px] text-gray-500 mb-2" data-testid="client-pivot-caption">
+                    Rows: <span className="font-medium text-gray-700">{pivot.segmentation}</span> · Level 0
+                    {" · "}numbers from MySQL projects &amp; calls
+                    {!pivot.linked_to_mysql && (
+                      <span className="ml-2 text-amber-600">— this client is not linked to a MySQL client yet, so all numbers are 0</span>
+                    )}
+                  </div>
+                  <PivotTable l2Nodes={pivot.rows} months={months} clientId={row.id} cells={pivot.cells} />
+                </>
               )}
             </div>
           </div>
@@ -663,41 +666,6 @@ export default function ClientDetailPage() {
 }
 
 // ============================================================
-// Deterministic seeded random helpers
-// ============================================================
-// Simple string-hash → 32-bit int, then mulberry32 PRNG so the same
-// (client, l2, month, metric) tuple always yields the same value.
-function _hash(str) {
-  let h = 2166136261 >>> 0;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 16777619) >>> 0;
-  }
-  return h >>> 0;
-}
-function _rand(seed) {
-  let s = seed >>> 0;
-  s = (s + 0x6D2B79F5) >>> 0;
-  let t = s;
-  t = Math.imul(t ^ (t >>> 15), t | 1);
-  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-}
-// Get a seeded random integer in [min, max] inclusive for a given tuple.
-function seededInt(clientId, l2, month, metric, min, max) {
-  if (!clientId) return 0;
-  const seed = _hash(`${clientId}|${l2}|${month}|${metric}`);
-  const r = _rand(seed);
-  return Math.floor(min + r * (max - min + 1));
-}
-// Value ranges per metric for the pivot cells
-const RANGES = {
-  contacts: [0, 4],
-  projects: [0, 3],
-  serviced: [0, 2],
-  calls:    [0, 12],
-  revenue:  [0, 25000], // dollars
-};
 
 // ============================================================
 // Total-till-date chips (5) — same visual as Client Contacts detail
@@ -769,7 +737,7 @@ const METRICS = [
   { key: "revenue",  label: "$",  full: "Revenue", money: true },
 ];
 
-function PivotTable({ l2Nodes, months, clientId }) {
+function PivotTable({ l2Nodes, months, clientId, cells }) {
   const fmt = (val, money) => {
     if (val === 0 || val === null || val === undefined) return money ? "$0" : "0";
     if (money) {
@@ -779,9 +747,11 @@ function PivotTable({ l2Nodes, months, clientId }) {
     }
     return val.toLocaleString();
   };
+  // Real numbers from the MySQL mirror (GET /clients/{id}/overview-pivot):
+  // cells[<Level 0 name>][<YYYY-MM>][metric]. Missing = 0.
   const cellValue = (l2Name, monthKey, metricKey) => {
-    const [lo, hi] = RANGES[metricKey] || [0, 0];
-    return seededInt(clientId, l2Name, monthKey, metricKey, lo, hi);
+    const v = cells?.[l2Name]?.[monthKey]?.[metricKey];
+    return typeof v === "number" ? v : 0;
   };
 
   // ---- Precompute row totals, column totals, and grand total ----
@@ -811,7 +781,7 @@ function PivotTable({ l2Nodes, months, clientId }) {
     });
     return { rowTotalsByMetric: rowT, colTotalsByMetric: colT, grandTotalsByMetric: gt };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId, l2Nodes, months]);
+  }, [clientId, l2Nodes, months, cells]);
 
   return (
     <div className="border border-gray-200 rounded-lg overflow-auto max-h-[640px]">

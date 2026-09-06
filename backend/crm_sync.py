@@ -221,16 +221,41 @@ async def _load_projects_and_calls():
     return projects, calls
 
 
+def month_key(iso: str):
+    """'2026-07-30T10:18:33' → '2026-07' (None when missing/malformed)."""
+    if not iso or not isinstance(iso, str) or len(iso) < 7:
+        return None
+    return iso[:7]
+
+
 def _metrics_from(pids: set, calls_by_project: dict, proj_recv: dict, proj_has_rev: set):
-    """Numbers for one entity given the set of ITS project ids."""
+    """Numbers for one entity given the set of ITS project ids.
+
+    Also returns `activity_by_month` = {metric: {"YYYY-MM": value}} — the
+    Activity Summary table on the Client Contact detail page. Month buckets:
+    projects / serviced by the project's receiving_date; calls / revenue by
+    call_start_time, falling back to the project's receiving month (the
+    mirror's call_start_time is often NULL)."""
     call_ids, rev, last_call = set(), 0.0, None
+    by_month = {"projects": defaultdict(int), "serviced": defaultdict(int),
+                "calls": defaultdict(int), "revenue": defaultdict(float)}
     for pid in pids:
+        pm = month_key(proj_recv.get(pid))
+        if pm:
+            by_month["projects"][pm] += 1
+            if pid in proj_has_rev:
+                by_month["serviced"][pm] += 1
         for c in calls_by_project.get(pid, ()):
             call_ids.add(c["_id"])
-            rev += float(c.get("revenue_in_usd") or 0)
+            amt = float(c.get("revenue_in_usd") or 0)
+            rev += amt
             st = c.get("call_start_time")
             if st and (last_call is None or st > last_call):
                 last_call = st
+            cm = month_key(st) or pm
+            if cm:
+                by_month["calls"][cm] += 1
+                by_month["revenue"][cm] += amt
     recv = [proj_recv[p] for p in pids if proj_recv.get(p)]
     return {
         "totals_till_date": {
@@ -238,6 +263,12 @@ def _metrics_from(pids: set, calls_by_project: dict, proj_recv: dict, proj_has_r
             "serviced": len(pids & proj_has_rev),       # projects with a paid call
             "calls": len(call_ids),                     # COUNT(DISTINCT call id) via fk_project
             "revenue": int(round(rev)),                 # SUM(revenue_in_usd) of those calls
+        },
+        "activity_by_month": {
+            "projects": dict(by_month["projects"]),
+            "serviced": dict(by_month["serviced"]),
+            "calls": dict(by_month["calls"]),
+            "revenue": {k: int(round(v)) for k, v in by_month["revenue"].items()},
         },
         "last_project_receiving_date": max(recv) if recv else None,
         "last_call_date": last_call,
@@ -403,6 +434,7 @@ async def sync_contacts(contact_metrics=None):
         set_fields = {
             "mysql_ref": {"mysql_id": mid, "matched_by": "email", "linked_at": ts},
             "totals_till_date": metrics.get("totals_till_date", empty),
+            "activity_by_month": metrics.get("activity_by_month", {}),
             "last_project_receiving_date": metrics.get("last_project_receiving_date"),
             "last_call_date": metrics.get("last_call_date"),
             "updated_on": ts,

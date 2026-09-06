@@ -653,3 +653,97 @@ async def sync_from_segmentations(user=Depends(get_current_user)):
         "skipped_existing": skipped_existing,
         "skipped_excluded": skipped_excluded,
     }
+
+
+# ---------------------------------------------------------------------------
+# Client → Overview pivot: Infollion Segmentation Level 0 × Month, numbers
+# from the MySQL mirror (projects / calls). Sep 06 2026.
+#   rows    = every Level 0 node of the Infollion Research segmentation
+#   columns = months in [from, to]
+#   cells   = { contacts, projects, serviced, calls, revenue }
+#     contacts = DISTINCT client_contact_ids of the client's projects in that
+#                (Level 0, month); projects = COUNT(DISTINCT project);
+#     serviced = projects with a paid call; calls / revenue via fk_project.
+#   Month bucket = project receiving_date (calls follow their project).
+#   Level 0 of a project = its `l0_domain` (Domains id = tree ext_id).
+# ---------------------------------------------------------------------------
+@api_router.get("/clients/{client_id}/overview-pivot")
+async def client_overview_pivot(
+    client_id: str,
+    date_from: Optional[str] = Query(None, alias="from", description="YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, alias="to", description="YYYY-MM-DD"),
+    user=Depends(get_current_user),
+):
+    from collections import defaultdict
+    from routers.industry_paths import load_nodes
+    from crm_sync import month_key
+
+    client = await db[COLL].find_one({"id": client_id}, {"_id": 0, "id": 1, "name": 1, "mysql_ref": 1})
+    if not client:
+        raise HTTPException(404, "Client not found")
+
+    tree = await load_nodes()
+    level0 = sorted(
+        [n for n in tree["nodes"].values() if n["level"] == 0],
+        key=lambda n: n["name"].lower(),
+    )
+    rows = [{"name": n["name"], "ext_id": n["ext_id"]} for n in level0]
+    l0_name = {n["ext_id"]: n["name"] for n in level0}
+
+    mid = (client.get("mysql_ref") or {}).get("mysql_id")
+    from_m = (date_from or "")[:7] or None
+    to_m = (date_to or "")[:7] or None
+
+    cells: dict = {}
+    linked = mid is not None
+    if linked:
+        projects = [p async for p in db["mysql_projects"].find(
+            {"client_id": mid},
+            {"_id": 1, "l0_domain": 1, "receiving_date": 1, "client_contact_ids": 1},
+        )]
+        pids = [p["_id"] for p in projects]
+        calls_by_project = defaultdict(list)
+        if pids:
+            async for c in db["mysql_calls"].find(
+                {"fk_project": {"$in": pids}}, {"_id": 1, "fk_project": 1, "revenue_in_usd": 1}
+            ):
+                calls_by_project[c["fk_project"]].append(c)
+
+        agg = defaultdict(lambda: {"contacts": set(), "projects": 0, "serviced": 0, "calls": 0, "revenue": 0.0})
+        for p in projects:
+            m = month_key(p.get("receiving_date"))
+            if not m or (from_m and m < from_m) or (to_m and m > to_m):
+                continue
+            try:
+                l0 = l0_name.get(int(p.get("l0_domain")))
+            except (TypeError, ValueError):
+                l0 = None
+            if not l0:
+                continue
+            cell = agg[(l0, m)]
+            cell["projects"] += 1
+            cell["contacts"].update(int(x) for x in (p.get("client_contact_ids") or []))
+            paid = False
+            for c in calls_by_project.get(p["_id"], ()):
+                amt = float(c.get("revenue_in_usd") or 0)
+                cell["calls"] += 1
+                cell["revenue"] += amt
+                paid = paid or amt > 0
+            if paid:
+                cell["serviced"] += 1
+        for (l0, m), v in agg.items():
+            cells.setdefault(l0, {})[m] = {
+                "contacts": len(v["contacts"]),
+                "projects": v["projects"],
+                "serviced": v["serviced"],
+                "calls": v["calls"],
+                "revenue": int(round(v["revenue"])),
+            }
+
+    return {
+        "client_id": client["id"],
+        "segmentation": tree["segmentation_name"],
+        "linked_to_mysql": linked,
+        "rows": rows,
+        "cells": cells,
+    }
