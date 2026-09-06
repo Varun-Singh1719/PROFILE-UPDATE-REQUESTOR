@@ -25,6 +25,7 @@ import AccountTree from "@mui/icons-material/AccountTreeOutlined";
 import InfoOutlined from "@mui/icons-material/InfoOutlined";
 import Check from "@mui/icons-material/CheckOutlined";
 import CloseIcon from "@mui/icons-material/CloseOutlined";
+import LockOutlined from "@mui/icons-material/LockOutlined";
 import CollapsibleTree from "../components/CollapsibleTree";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
@@ -395,11 +396,19 @@ export default function SegmentationsPage() {
                         />
                         <div className="min-w-0 flex-1">
                           <div
-                            className={`text-sm truncate ${
+                            className={`text-sm truncate flex items-center gap-1.5 ${
                               active ? "font-semibold text-[#ec9324]" : "font-medium text-gray-800"
                             }`}
                           >
-                            {r.name}
+                            <span className="truncate">{r.name}</span>
+                            {r.read_only && (
+                              <LockOutlined
+                                sx={{ fontSize: 13 }}
+                                className="text-gray-400 flex-shrink-0"
+                                titleAccess="Read-only — synced from MySQL"
+                                data-testid={`segmentation-readonly-${r.id}`}
+                              />
+                            )}
                           </div>
                           {r.description && (
                             <div className="text-[11px] text-gray-500 truncate">
@@ -407,6 +416,8 @@ export default function SegmentationsPage() {
                             </div>
                           )}
                         </div>
+                        {/* Read-only (MySQL-synced) segmentations expose no Edit / Delete menu. */}
+                        {!r.read_only && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <span
@@ -437,6 +448,7 @@ export default function SegmentationsPage() {
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
+                        )}
                       </button>
                     </li>
                   );
@@ -477,6 +489,11 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved, isDraft = fals
   // { added: [name], renamed: [{from, to}], deleted: [{name, subCount}] }
   const [pendingChanges, setPendingChanges] = useState(null);
 
+  // Segmentations mirrored from MySQL (Infollion Research ← `domains`) are
+  // read-only for EVERYONE, Super Admin included — the backend also rejects
+  // PATCH / DELETE with 403. No edit mode, no Edit / Delete controls.
+  const readOnly = !!row.read_only && !isDraft;
+
   // Reset draft state whenever the user switches segmentations.
   useEffect(() => {
     setTreeEditMode(false);
@@ -497,6 +514,7 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved, isDraft = fals
 
   // ------ Enter / exit edit mode ------
   const enterEditMode = () => {
+    if (readOnly) return;
     // Clone the persisted tree into a working draft.
     setDraftTree(JSON.parse(JSON.stringify(seedTree)));
     setTreeEditMode(true);
@@ -750,7 +768,18 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved, isDraft = fals
           <div className="w-px h-6 bg-black/10 mx-1" />
           <div className="flex items-center gap-0.5">
             <SegmentationInfoPopover row={row} />
-            {treeEditMode ? (
+            {readOnly ? (
+              /* MySQL-synced segmentation: no Edit / Delete for anyone (incl. Super Admin). */
+              <span
+                data-testid="segmentation-readonly-badge"
+                title={`Synced from the Infollion MySQL Domains table${row.source?.synced_at ? ` · last synced ${fmtDateTime(row.source.synced_at)}` : ""}. Changes must be made in MySQL.`}
+                className="inline-flex items-center gap-1 text-[9.5px] font-semibold uppercase
+                           tracking-wide rounded-full px-2 py-0.5 border border-gray-300
+                           bg-gray-100 text-gray-600 whitespace-nowrap"
+              >
+                <LockOutlined sx={{ fontSize: 12 }} /> Read-only · Synced from MySQL
+              </span>
+            ) : treeEditMode ? (
               <>
                 <IconAction
                   onClick={handleSaveClick}
@@ -779,7 +808,7 @@ function SegmentationDetail({ row, onEdit, onDelete, onTreeSaved, isDraft = fals
                 <Pencil sx={{ fontSize: 18 }} />
               </IconAction>
             )}
-            {!isDraft && (
+            {!isDraft && !readOnly && (
               <IconAction
                 onClick={onDelete}
                 title="Delete"
@@ -888,6 +917,16 @@ function SegmentationInfoPopover({ row }) {
       empId: row.updated_by?.emp_id || "—",
       date: fmtDateTime(row.updated_on),
     },
+    // MySQL-synced (read-only) segmentation → surface the sync provenance.
+    ...(row.source?.kind === "mysql_domains"
+      ? [{
+          action: "Last Synced",
+          userName: "MySQL · domains table",
+          userEmail: `${row.source.rows ?? "—"} domains · read-only`,
+          empId: "—",
+          date: fmtDateTime(row.source.synced_at),
+        }]
+      : []),
   ];
   return (
     <Popover open={open} onOpenChange={setOpen}>

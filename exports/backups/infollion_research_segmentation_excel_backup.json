@@ -1,0 +1,866 @@
+{
+ "id": "4ad7b103-c7b9-45e6-8af8-15ce3dde3050",
+ "name": "Infollion Research",
+ "description": "Imported from Infollion Research taxonomy Excel (L0-L3 \u2192 Levels 2-5). Root injected as Level 1.",
+ "status": "Active",
+ "tree": {
+  "name": "Infollion Research",
+  "ext_id": null,
+  "level": "L_ROOT",
+  "children": [
+   {
+    "name": "Agriculture",
+    "ext_id": 1,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Agri Inputs",
+      "ext_id": 26,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Agri Produce and Crops",
+      "ext_id": 29,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Agri Services",
+      "ext_id": 27,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "AgriTech",
+      "ext_id": 28,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Automotive",
+    "ext_id": 21,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Auto Agri Manufactures",
+      "ext_id": 949,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Auto Component Manufacturers",
+      "ext_id": 109,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Automotive Casting & Forging",
+      "ext_id": 950,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Automotive Lubricants",
+      "ext_id": 947,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Automotive Services",
+      "ext_id": 113,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "EVs and EV Infrastructure",
+      "ext_id": 114,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "OEMs (Auto Manufacturers)",
+      "ext_id": 112,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "BFSI",
+    "ext_id": 11,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Banking",
+      "ext_id": 63,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Consumer Finance/ Lending",
+      "ext_id": 64,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Financial Services",
+      "ext_id": 65,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Fintech",
+      "ext_id": 67,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Insurance",
+      "ext_id": 70,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Insurtech",
+      "ext_id": 68,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Non -Banking Financial Services",
+      "ext_id": 66,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Regtech",
+      "ext_id": 69,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Chemicals",
+    "ext_id": 15,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Commodity Chemicals",
+      "ext_id": 86,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Diversified and Industrial Chemicals",
+      "ext_id": 87,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Fertilizers and Agriculture Chemicals",
+      "ext_id": 88,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Industrial Gases",
+      "ext_id": 89,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Speciality Chemicals",
+      "ext_id": 90,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Commercial and Professional Services",
+    "ext_id": 16,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Commercial Services and Supplies",
+      "ext_id": 91,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Professional Services 1",
+      "ext_id": 92,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Consumer Discretionary",
+    "ext_id": 13,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Gaming and Casinos",
+      "ext_id": 80,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "HORECA",
+      "ext_id": 78,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Leisure Facilities",
+      "ext_id": 82,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Resorts and Cruise Lines",
+      "ext_id": 81,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Travel and Tourism",
+      "ext_id": 79,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Consumer Durables",
+    "ext_id": 18,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Consumer Appliances",
+      "ext_id": 97,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Consumer Electronics and FMEG",
+      "ext_id": 98,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Furniture and Furnishings",
+      "ext_id": 100,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Other Consumer and Home Products",
+      "ext_id": 99,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Consumer Non-Durables (FMCG)",
+    "ext_id": 19,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Beauty and Personal Care",
+      "ext_id": 101,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Fashion and Accessories",
+      "ext_id": 105,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Footwear",
+      "ext_id": 104,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Home Care",
+      "ext_id": 102,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Other Consumable Products",
+      "ext_id": 106,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Textile and Apparel",
+      "ext_id": 103,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Consumer Staples  - Food & Beverages",
+    "ext_id": 12,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Alcoholic Beverages",
+      "ext_id": 76,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Dairy",
+      "ext_id": 75,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Distribution and Retail",
+      "ext_id": 72,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Food Services",
+      "ext_id": 73,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Non Alcoholic Beverages",
+      "ext_id": 77,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Packaged Food",
+      "ext_id": 71,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Tobacco Products",
+      "ext_id": 74,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Education",
+    "ext_id": 7,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Ed -Tech",
+      "ext_id": 52,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Education Services",
+      "ext_id": 51,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Educational Institutions",
+      "ext_id": 50,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Engineering and Capital Goods",
+    "ext_id": 24,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Aerospace and Defense",
+      "ext_id": 125,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Construction and Engineering",
+      "ext_id": 126,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Electrical Goods",
+      "ext_id": 128,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Machinery and Equipment",
+      "ext_id": 127,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Trading Companies and Distributors",
+      "ext_id": 129,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Healthcare System and Services",
+    "ext_id": 9,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Healthcare Payers",
+      "ext_id": 921,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Healthcare Providers",
+      "ext_id": 56,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Healthcare Services",
+      "ext_id": 57,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "HealthTech",
+      "ext_id": 58,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Medical Devices/ Equipment/ and Supplies",
+      "ext_id": 59,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Information Technology",
+    "ext_id": 3,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Cloud Computing and Software",
+      "ext_id": 35,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Emerging Technologies & Others",
+      "ext_id": 36,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "IT Hardware",
+      "ext_id": 34,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "IT Service Providers/ System Integrators",
+      "ext_id": 37,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Life Sciences",
+    "ext_id": 8,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Biotechnology",
+      "ext_id": 54,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "CDMO/ CRAMs",
+      "ext_id": 55,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Pharmaceuticals",
+      "ext_id": 53,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Logistics",
+    "ext_id": 6,
+    "level": "L0",
+    "children": [
+     {
+      "name": "2PL Logistics/ Freight Forwarding",
+      "ext_id": 45,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "3PL/ 4PL/ and 5PL Logistics",
+      "ext_id": 46,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Express and Reverse Logistics",
+      "ext_id": 47,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Logistics Aggregation Services",
+      "ext_id": 48,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Logistics Infrastructure",
+      "ext_id": 49,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Materials",
+    "ext_id": 17,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Containers and Packaging Products",
+      "ext_id": 93,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Glass and Glass Products",
+      "ext_id": 95,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Paper and Forest Products",
+      "ext_id": 94,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Plastic and Plastic Products",
+      "ext_id": 96,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Media and Entertainment",
+    "ext_id": 5,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Entertainment",
+      "ext_id": 43,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Interactive Media and Services",
+      "ext_id": 44,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Media",
+      "ext_id": 42,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Metals and Mining",
+    "ext_id": 14,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Metal Manufacturing/ Production",
+      "ext_id": 84,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Metals and Metal Products",
+      "ext_id": 83,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Mining",
+      "ext_id": 85,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Oil and Gas",
+    "ext_id": 25,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Downstream Oil and Gas",
+      "ext_id": 132,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Midstream Oil and Gas",
+      "ext_id": 131,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Upstream Oil and Gas",
+      "ext_id": 130,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Public Sector and Social Services",
+    "ext_id": 22,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Government Services",
+      "ext_id": 115,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Non -Profit/ Non -Governmental Orgs",
+      "ext_id": 116,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Public Utilities and Infrastructure",
+    "ext_id": 23,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Energy Exchanges",
+      "ext_id": 123,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Energy/ Power",
+      "ext_id": 118,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Independent Power Producers and Traders",
+      "ext_id": 121,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Power Distribution Companies (Discoms)",
+      "ext_id": 119,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Power Transmission Companies",
+      "ext_id": 120,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Services for Renewable Energy",
+      "ext_id": 122,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Transportation",
+      "ext_id": 124,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Water Supply and Services",
+      "ext_id": 117,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Real Estate",
+    "ext_id": 10,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Real Estate Investment Trusts (REITs)",
+      "ext_id": 62,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Real Estate Management and Development",
+      "ext_id": 60,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Real Estate Services",
+      "ext_id": 61,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Retail and Ecommerce",
+    "ext_id": 20,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Ecommerce",
+      "ext_id": 108,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Retail",
+      "ext_id": 107,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Semiconductors",
+    "ext_id": 2,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Semiconductor IP, Software",
+      "ext_id": 32,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Semiconductor Manufacturers",
+      "ext_id": 30,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Semiconductor Raw Materials",
+      "ext_id": 33,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Semiconductor Services",
+      "ext_id": 31,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   },
+   {
+    "name": "Telecommunications",
+    "ext_id": 4,
+    "level": "L0",
+    "children": [
+     {
+      "name": "Telecom Infrastructure Providers",
+      "ext_id": 40,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Telecom Managed Services",
+      "ext_id": 41,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Telecom Network Equipment",
+      "ext_id": 39,
+      "level": "L1",
+      "children": []
+     },
+     {
+      "name": "Telecom Service Providers",
+      "ext_id": 38,
+      "level": "L1",
+      "children": []
+     }
+    ]
+   }
+  ]
+ },
+ "created_by": {
+  "id": "ab8c25e6-5823-46fe-937d-4dfe05924cec",
+  "name": "Admin User",
+  "email": "admin@ticketing.com"
+ },
+ "created_on": "2026-07-31T15:04:13.492133+05:30",
+ "updated_by": {
+  "id": "ab8c25e6-5823-46fe-937d-4dfe05924cec",
+  "name": "Admin User",
+  "email": "admin@ticketing.com",
+  "emp_id": "EMP-0001"
+ },
+ "updated_on": "2026-08-03T10:00:09.113619+05:30",
+ "source": {
+  "kind": "excel_import",
+  "file": "segments.xlsx",
+  "row_count": 1002,
+  "by_level": {
+   "L0": 26,
+   "L1": 110,
+   "L3": 508,
+   "L2": 358
+  }
+ }
+}

@@ -95,8 +95,7 @@ const NAV_CONFIG = [
   },
 ];
 
-const STORAGE_KEY = "sidebar:userPreference";   // 'expanded' | 'collapsed' | null
-const AUTO_COLLAPSE_MS = 5000;
+const STORAGE_KEY = "sidebar:userPreference";   // 'expanded' | 'collapsed' | null (null → collapsed)
 const MOBILE_BREAKPOINT = 768;
 
 // --------------------------------------------------------------------------
@@ -383,9 +382,13 @@ export default function Sidebar() {
     !!getDashboardAccess("profix");
 
   // ---- Width / collapse state
+  // The Sidebar is re-mounted on every route change (each page renders its own
+  // <Layout/>), so this state must be derived ONLY from the persisted user
+  // preference. Default = collapsed. It expands only when the user clicks the
+  // expand toggle (persisted below), and stays that way until they collapse it.
+  // No auto-expand / auto-collapse timers — navigation must never change it.
   const initialPref = (typeof window !== "undefined") ? window.localStorage.getItem(STORAGE_KEY) : null;
-  const [collapsed, setCollapsed] = useState(initialPref === "collapsed");
-  const [userTouched, setUserTouched] = useState(initialPref !== null);
+  const [collapsed, setCollapsed] = useState(initialPref !== "expanded");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < MOBILE_BREAKPOINT);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -396,13 +399,6 @@ export default function Sidebar() {
     window.addEventListener("resize", handler);
     return () => window.removeEventListener("resize", handler);
   }, []);
-
-  // Auto-collapse after AUTO_COLLAPSE_MS unless user has manually set a preference
-  useEffect(() => {
-    if (userTouched || isMobile) return;
-    const t = setTimeout(() => setCollapsed(true), AUTO_COLLAPSE_MS);
-    return () => clearTimeout(t);
-  }, [userTouched, isMobile]);
 
   // Close mobile drawer on route change
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
@@ -423,7 +419,6 @@ export default function Sidebar() {
     setCollapsed(prev => {
       const next = !prev;
       window.localStorage.setItem(STORAGE_KEY, next ? "collapsed" : "expanded");
-      setUserTouched(true);
       return next;
     });
   }, []);

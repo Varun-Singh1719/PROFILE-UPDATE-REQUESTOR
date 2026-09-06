@@ -491,6 +491,15 @@ async def run_full_sync(scope="all", trigger="manual"):
         if scope in ("all", "contacts", "client-contacts"):
             result["contacts"] = await sync_contacts(contact_metrics)
         result["client_contact_counts"] = await refresh_client_contact_counts()
+        # Infollion Research segmentation ← MySQL `domains` (read-only mirror).
+        # Isolated so a domains hiccup never fails the clients/contacts sync.
+        if scope == "all":
+            try:
+                from domain_sync import sync_domains
+                result["domains"] = await sync_domains(mode="merge")
+            except Exception as e:  # noqa: BLE001
+                logger.exception("domains sync failed")
+                result["domains"] = {"ok": False, "error": str(e)}
         result["ok"] = True
     except Exception as e:  # noqa: BLE001
         logger.exception("run_full_sync failed")

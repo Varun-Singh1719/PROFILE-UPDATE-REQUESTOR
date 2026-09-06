@@ -226,11 +226,23 @@ async def create_segmentation(body: SegmentationCreate, user=Depends(get_current
     return await _enrich_doc(_serialize(doc))
 
 
+READ_ONLY_MSG = ("This segmentation is synced from the Infollion MySQL Domains table and is "
+                 "read-only. Changes must be made in MySQL; they are picked up by the scheduled sync.")
+
+
+def _assert_writable(doc: dict):
+    """Segmentations mirrored from MySQL (`read_only: true`) can never be edited
+    or deleted from the app — not even by a Super Admin."""
+    if doc and doc.get("read_only"):
+        raise HTTPException(403, READ_ONLY_MSG)
+
+
 @api_router.patch("/segmentations/{seg_id}")
 async def update_segmentation(seg_id: str, body: SegmentationUpdate, user=Depends(get_current_user)):
     existing = await db[COLL].find_one({"id": seg_id})
     if not existing:
         raise HTTPException(404, "Segmentation not found")
+    _assert_writable(existing)
 
     updates: dict = {}
     if body.name is not None and body.name != existing.get("name"):
@@ -262,6 +274,10 @@ async def update_segmentation(seg_id: str, body: SegmentationUpdate, user=Depend
 
 @api_router.delete("/segmentations/{seg_id}")
 async def delete_segmentation(seg_id: str, user=Depends(get_current_user)):
+    existing = await db[COLL].find_one({"id": seg_id}, {"_id": 0, "id": 1, "read_only": 1})
+    if not existing:
+        raise HTTPException(404, "Segmentation not found")
+    _assert_writable(existing)
     res = await db[COLL].delete_one({"id": seg_id})
     if res.deleted_count == 0:
         raise HTTPException(404, "Segmentation not found")
