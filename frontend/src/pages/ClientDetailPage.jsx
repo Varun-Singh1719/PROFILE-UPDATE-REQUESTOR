@@ -641,11 +641,11 @@ export default function ClientDetailPage() {
 
               {!seg?.exists ? (
                 <div className="text-center py-10 text-sm text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/40">
-                  Add a Segmentation for this client to unlock the Level-2 × Month pivot.
+                  Add a Segmentation for this client to unlock the Level-0 × Month pivot.
                 </div>
               ) : l2Nodes.length === 0 ? (
                 <div className="text-center py-10 text-sm text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/40">
-                  This segmentation has no Level-2 nodes yet. Open it in Segmentations and add some.
+                  This segmentation has no Level-0 nodes yet. Open it in Segmentations and add some.
                 </div>
               ) : months.length === 0 ? (
                 <div className="text-center py-10 text-sm text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/40">

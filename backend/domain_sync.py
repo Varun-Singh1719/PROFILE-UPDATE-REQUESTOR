@@ -3,12 +3,13 @@
 The Infollion Research segmentation is a READ-ONLY mirror of the external
 Infollion MySQL `domains` table (id, name, parent_id, level L0..L3):
 
-    MySQL level   →   Segmentation level (user-facing)
-    (root)            Level 1  = "Infollion Research" (injected)
-    L0                Level 2  = direct children of the root
-    L1                Level 3  (linked to its L0 via parent_id)
-    L2                Level 4
-    L3                Level 5
+    MySQL level   →   Segmentation level (user-facing, Sep 2026 naming)
+    (root)            Client Name = "Infollion Research" (injected)
+    L0                Level 0  = direct children of the root
+    L1                Level 1  (linked to its L0 via parent_id)
+    L2                Level 2
+    L3                Level 3
+    (internally the tree depth is still 0 = root, 1 = Level 0, 2 = Level 1 …)
 
 Rules (agreed Sep 06 2026):
   * Node identity = MySQL `id`, stored on every tree node as `ext_id`.
@@ -19,7 +20,7 @@ Rules (agreed Sep 06 2026):
     vanish, its node is KEPT (`stale: true`) under its previous parent in
     `merge` mode (the default). `replace` mode (one-off initial load) drops
     such orphans.
-  * A Level-2 rename (same ext_id, new name) is propagated to everything
+  * A Level-0 rename (root's direct child; same ext_id, new name) is propagated to everything
     keyed by that name: `segmentation_links.mappings` keys (Clients → Link
     Segmentation) and `client_contacts.industries` values (Timeline entry
     recorded on each contact). Skipped in `replace` mode (initial load —
@@ -47,7 +48,7 @@ CONTACTS_COLL = "client_contacts"
 INFOLLION_NAME = "Infollion Research"
 SOURCE_KIND = "mysql_domains"
 SYSTEM_ACTOR = {"id": "system:mysql-sync", "name": "MySQL Sync (domains)", "email": None, "emp_id": None}
-DESCRIPTION = ("Synced from the Infollion MySQL `domains` table (L0–L3 → Levels 2–5). "
+DESCRIPTION = ("Synced from the Infollion MySQL `domains` table (L0–L3 → Level 0–3 under the Client Name). "
                "Read-only — changes are made in MySQL and picked up by the scheduled sync.")
 
 LEVEL_ORDER = ["L0", "L1", "L2", "L3"]
@@ -56,7 +57,7 @@ LEVEL_ORDER = ["L0", "L1", "L2", "L3"]
 # ----------------------------------------------------------------- helpers
 def _walk(node: dict, depth: int, parent_ext: Optional[int], out: dict):
     """Flatten a tree into {ext_id: {name, depth, parent_ext_id, node}}.
-    depth 0 = root (Level 1), depth 1 = Level 2, ..."""
+    depth 0 = root (Client Name), depth 1 = Level 0, depth 2 = Level 1 ..."""
     for ch in node.get("children") or []:
         ext = ch.get("ext_id")
         if ext is not None:
@@ -137,7 +138,7 @@ def _attach_orphans(tree: dict, old_nodes: dict, by_id: dict) -> int:
 
 
 async def _propagate_level2_renames(renames: list) -> dict:
-    """renames: [{ext_id, old, new, depth}] — only depth==1 (Level 2) matter."""
+    """renames: [{ext_id, old, new, depth}] — only depth==1 (Level 0, direct children of the root) matter."""
     out = {"links_updated": 0, "contacts_updated": 0}
     l2 = [r for r in renames if r["depth"] == 1 and r["old"] and r["new"] and r["old"] != r["new"]]
     if not l2:
@@ -193,7 +194,7 @@ async def sync_domains(mode: str = "merge") -> dict:
     """Rebuild the Infollion Research segmentation tree from MySQL `domains`.
 
     mode = "merge"   → keep (stale-flag) nodes missing from MySQL, propagate
-                       Level-2 renames to links / industries.   (scheduled)
+                       Level-0 renames to links / industries.  (scheduled)
     mode = "replace" → one-off initial load: tree = MySQL exactly, no rename
                        propagation.
     """
@@ -233,7 +234,7 @@ async def sync_domains(mode: str = "merge") -> dict:
 
     level_counts = defaultdict(int)
     for info in new_nodes.values():
-        level_counts[f"level_{info['depth'] + 1}"] += 1
+        level_counts[f"level_{info['depth'] - 1}"] += 1  # depth 1 → "Level 0"
 
     now = now_iso()
     source = {

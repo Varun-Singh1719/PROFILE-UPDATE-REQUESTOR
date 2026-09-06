@@ -1192,7 +1192,7 @@ function ContactFormDialog({
                 />
               </div>
             </Field>
-            <Field label="Client Name (Level 1) *">
+            <Field label="Client Name *">
               <SearchSelect
                 options={l1Options}
                 value={form.client_name || ""}
@@ -1249,7 +1249,7 @@ function ContactFormDialog({
               REQUIRED field when Type is "Domain Specific". */}
           <div className="relative">
             <label className="absolute -top-2 left-3 px-1.5 bg-white text-[11px] font-medium text-gray-500 z-10 pointer-events-none">
-              Industry (Level 2 of {form.client_name || "chosen client"})
+              Industry (Level 0 of {form.client_name || "chosen client"})
               {form.type === "Domain Specific" && <span className="text-red-500"> *</span>}
             </label>
             <SearchSelect
@@ -2148,7 +2148,7 @@ function OverviewTab({ row }) {
       {/* Industries — placed above Employment History & Summary */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
         <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-2">
-          Industries (Level 2)
+          Industries (Level 0)
         </div>
         {row.industries?.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
@@ -3621,7 +3621,7 @@ export function BulkUploadModal({ open, onClose, onComplete }) {
               <AlertOctagon sx={{ fontSize: 14 }} className="mt-[1px] text-blue-500" />
               <div>
                 Rows sharing an email or phone with an existing contact are rejected so the directory stays clean.
-                <b> Client Name</b> must exactly match a Segmentation (Level 1) name. Unknown <b>Industries</b> are dropped and reported per row.
+                <b> Client Name</b> must exactly match a Segmentation (Client Name). Unknown <b>Industries</b> are dropped and reported per row.
               </div>
             </div>
 

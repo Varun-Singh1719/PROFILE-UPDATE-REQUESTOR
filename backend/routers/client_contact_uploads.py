@@ -187,11 +187,11 @@ async def download_cc_sample_template(
         ("Email", "No", "Standard email format. Must be unique across the whole client-contact directory."),
         ("ISD", "No", "Country dial-code — e.g. '+91', '+1'. Defaults to '+91' if left blank."),
         ("Phone", "No", "Digits only (or any format). Must be unique — formatting is ignored, we dedup on the trailing 10 digits."),
-        ("Client Name", "No", "Must exactly match an existing Segmentation (Level 1) name — e.g. 'McKinsey', 'Infollion Research'. Rows with an unknown Client Name are rejected."),
+        ("Client Name", "No", "Must exactly match an existing Segmentation (Client Name) — e.g. 'McKinsey', 'Infollion Research'. Rows with an unknown Client Name are rejected."),
         ("Designation", "No", "Free text — e.g. 'Partner', 'Director'."),
         ("Base Location", "No", "Free text — e.g. 'Mumbai, IN'."),
         ("LinkedIn URL", "No", "Full LinkedIn profile URL — e.g. 'https://linkedin.com/in/…'."),
-        ("Industries", "No", "Semicolon- or comma-separated list of Level-2 segments belonging to the chosen Client Name. Unknown industries are skipped and reported in the row error."),
+        ("Industries", "No", "Semicolon- or comma-separated list of Level-0 segments belonging to the chosen Client Name. Unknown industries are skipped and reported in the row error."),
         ("", "", ""),
         ("System-generated fields", "", "Do NOT include — handled automatically: ID (numeric), UUID, Created By, Created On, Updated By, Updated On."),
     ]

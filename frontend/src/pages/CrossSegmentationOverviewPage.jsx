@@ -730,8 +730,12 @@ function StatBlock({ label, value }) {
 }
 
 // Small level chooser rendered next to each segmentation chip.
-// `options` is a list of user-facing level numbers (Level 2 → max depth).
+// `options` is a list of INTERNAL level numbers (2 → max depth). Display uses
+// the Sep 2026 naming: root = "Client Name", internal 2 → "Level 0",
+// internal 3 → "Level 1", … i.e. shown label = internal − 2.
 // When only one level exists it renders disabled (nothing else to pick).
+export const levelLabel = (internal) => `Level ${Number(internal) - 2}`;
+
 function LevelSelect({ value, options, onChange, accent, testid, ariaLabel }) {
   const opts = options && options.length ? options : [2];
   const disabled = opts.length <= 1;
@@ -752,10 +756,10 @@ function LevelSelect({ value, options, onChange, accent, testid, ariaLabel }) {
           "disabled:bg-gray-50 disabled:text-gray-500"
         }
         style={{ boxShadow: `inset 0 0 0 1px ${accent}22` }}
-        title={disabled ? "Only Level 2 exists in this segmentation" : "Choose level"}
+        title={disabled ? "Only Level 0 exists in this segmentation" : "Choose level"}
       >
         {opts.map((l) => (
-          <option key={l} value={l}>{`Level ${l}`}</option>
+          <option key={l} value={l}>{levelLabel(l)}</option>
         ))}
       </select>
       <ChevronDown
