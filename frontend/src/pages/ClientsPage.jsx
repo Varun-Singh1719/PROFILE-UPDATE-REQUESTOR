@@ -25,6 +25,7 @@ import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import api, { formatApiError } from "../lib/api";
 import notify from "../lib/notify";
+import { pollSyncCompletion, formatSyncSummary } from "../lib/syncStatus";
 import { confirm as confirmDialog } from "../lib/dialog";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -207,8 +208,18 @@ export default function ClientsPage() {
   const handleSyncFromMysql = async () => {
     setSyncing(true);
     try {
-      await api.post(`/crm-sync/run?scope=clients`);
-      notify.success("Sync started — new clients & metrics will refresh in a few minutes.");
+      const res = await api.post(`/crm-sync/run?scope=clients`);
+      const runId = res.data?.run_id;
+      notify.info("Sync in progress…", { description: "Fetching Clients & activity from MySQL. This can take a few minutes." });
+      const run = await pollSyncCompletion(api, runId);
+      if (run && run.status === "ok") {
+        notify.success("Sync Completed", { description: formatSyncSummary("clients", run) });
+        await load();
+      } else if (run && run.status === "failed") {
+        notify.error("Sync failed — please try again.");
+      } else {
+        notify.warning("Sync is still running", { description: "It's taking longer than expected; numbers will refresh once it finishes." });
+      }
     } catch (e) {
       notify.error(formatApiError(e, "Failed to start sync"));
     } finally {

@@ -10,6 +10,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import api, { formatApiError } from "../lib/api";
 import notify from "../lib/notify";
+import { formatLastSynced } from "../lib/syncStatus";
 import { confirm as confirmDialog } from "../lib/dialog";
 import LinkSegmentationTab from "../components/LinkSegmentationTab";
 import ClientWorkexContacts, { SubTab as CcSubTab, IconAction as CcIconAction } from "../components/ClientWorkexContacts";
@@ -113,7 +114,7 @@ export default function ClientDetailPage() {
     try {
       const r = await api.post(`/clients/${id}/sync`);
       setRow(r.data);
-      notify.success("Synced from MySQL");
+      notify.success("Sync Completed", { description: "The Client has been synchronized with MySQL." });
     } catch (e) {
       notify.error(formatApiError(e, "Sync failed"));
     } finally {
@@ -306,6 +307,11 @@ export default function ClientDetailPage() {
     </div>
   ) : (
     <div className="flex items-center gap-2">
+      {formatLastSynced(row?.last_synced_at) && (
+        <span className="text-[11px] text-gray-400 whitespace-nowrap mr-1" data-testid="client-detail-last-synced">
+          Last synced: {formatLastSynced(row.last_synced_at)}
+        </span>
+      )}
       <Button
         variant="outline"
         onClick={handleSyncOne}

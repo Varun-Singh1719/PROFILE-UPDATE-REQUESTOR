@@ -41,6 +41,7 @@ import MonthYearPicker from "../components/MonthYearPicker";
 import ISDPicker from "../components/ISDPicker";
 import { DEFAULT_ISD } from "../lib/isdCodes";
 import notify from "../lib/notify";
+import { pollSyncCompletion, formatSyncSummary, formatLastSynced } from "../lib/syncStatus";
 import CprMonthlyChart from "../components/CprMonthlyChart";
 import api, { API, formatApiError } from "../lib/api";
 import { confirm as confirmDialog } from "../lib/dialog";
@@ -482,8 +483,18 @@ function ClientContactsList() {
   const handleSyncFromMysql = async () => {
     setSyncing(true);
     try {
-      await api.post(`/crm-sync/run?scope=contacts`);
-      notify.success("Sync started — new records & metrics will refresh in a few minutes.");
+      const res = await api.post(`/crm-sync/run?scope=contacts`);
+      const runId = res.data?.run_id;
+      notify.info("Sync in progress…", { description: "Fetching Client Contacts & activity from MySQL. This can take a few minutes." });
+      const run = await pollSyncCompletion(api, runId);
+      if (run && run.status === "ok") {
+        notify.success("Sync Completed", { description: formatSyncSummary("contacts", run) });
+        await load();
+      } else if (run && run.status === "failed") {
+        notify.error("Sync failed — please try again.");
+      } else {
+        notify.warning("Sync is still running", { description: "It's taking longer than expected; numbers will refresh once it finishes." });
+      }
     } catch (e) {
       notify.error(formatApiError(e, "Failed to start sync"));
     } finally {
@@ -1464,7 +1475,7 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
     try {
       const r = await api.post(`/client-contacts/${contactId}/sync`);
       setRow(r.data);
-      notify.success("Synced from MySQL");
+      notify.success("Sync Completed", { description: "Client Contact data and activity metrics have been synchronized." });
     } catch (e) {
       notify.error(formatApiError(e, "Sync failed"));
     } finally {
@@ -1905,6 +1916,11 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
                   testId="cc-detail-edit"
                 />
               </div>
+              {formatLastSynced(row.last_synced_at) && (
+                <div className="text-[10px] text-gray-400 mt-0.5 whitespace-nowrap" data-testid="cc-detail-last-synced">
+                  Last synced: {formatLastSynced(row.last_synced_at)}
+                </div>
+              )}
             </div>
           </div>
 

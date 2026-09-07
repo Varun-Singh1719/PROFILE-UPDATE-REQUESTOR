@@ -22,16 +22,29 @@ def _serialize(doc):
 async def crm_sync_run(scope: str = Query("all", regex="^(all|clients|contacts|client-contacts)$"),
                        user=Depends(get_current_user)):
     """Kick off a full (idempotent) MySQL → MongoDB sync + metric refresh in the
-    background and return immediately (a full run takes a few minutes)."""
-    asyncio.create_task(crm_sync.run_full_sync(scope, trigger="manual"))
-    return {"status": "started", "scope": scope,
+    background and return immediately (a full run takes a few minutes). The
+    returned `run_id` can be polled via GET /crm-sync/status?run_id=…"""
+    import uuid as _uuid
+    run_id = str(_uuid.uuid4())
+    await db[crm_sync.SYNC_RUNS].update_one(
+        {"id": run_id},
+        {"$set": {"id": run_id, "scope": scope, "trigger": "manual",
+                  "status": "running", "started_at": now_iso()}},
+        upsert=True,
+    )
+    asyncio.create_task(crm_sync.run_full_sync(scope, trigger="manual", run_id=run_id))
+    return {"status": "started", "scope": scope, "run_id": run_id,
             "message": "Sync started in the background. Records and metrics will refresh in a few minutes."}
 
 
 @api_router.get("/crm-sync/status")
-async def crm_sync_status(user=Depends(get_current_user)):
-    """Latest sync run (status, timestamps, per-table mirror stats) + mirror row counts."""
-    last = await crm_sync.last_sync_run()
+async def crm_sync_status(run_id: str = Query(None), user=Depends(get_current_user)):
+    """Sync run status. With `run_id` → that specific run (for polling a manual
+    sync); otherwise the latest run. Includes per-scope summary once finished."""
+    if run_id:
+        last = await db[crm_sync.SYNC_RUNS].find_one({"id": run_id}, {"_id": 0})
+    else:
+        last = await crm_sync.last_sync_run()
     counts = {}
     for table, spec in crm_sync.MIRROR_TABLES.items():
         counts[table] = await db[spec["collection"]].count_documents({})
@@ -69,7 +82,7 @@ async def sync_one_client(client_id: str, user=Depends(get_current_user)):
         )
         if m:
             mid = m["_id"]
-    update = {"updated_on": now_iso()}
+    update = {"updated_on": now_iso(), "last_synced_at": now_iso()}
     if mid is not None:
         metrics = await crm_sync.client_metrics_for(mid)
         update.update(metrics)
@@ -94,7 +107,7 @@ async def sync_one_contact(contact_id: str, user=Depends(get_current_user)):
             )
             if m:
                 mid = m["_id"]
-    update = {"updated_on": now_iso()}
+    update = {"updated_on": now_iso(), "last_synced_at": now_iso()}
     if mid is not None:
         metrics = await crm_sync.contact_metrics_for(mid)
         update.update(metrics)

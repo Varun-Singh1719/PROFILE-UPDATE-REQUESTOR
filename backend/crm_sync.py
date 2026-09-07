@@ -42,6 +42,7 @@ from datetime import datetime, date
 from decimal import Decimal
 
 from pymongo import ReplaceOne, UpdateOne, ASCENDING
+from pymongo.errors import BulkWriteError
 
 from core import db, now_iso
 from mysql_db import mysql_query
@@ -217,7 +218,8 @@ async def _load_projects_and_calls():
     projects = [p async for p in db["mysql_projects"].find(
         {}, {"_id": 1, "client_id": 1, "client_contact_ids": 1, "receiving_date": 1})]
     calls = [c async for c in db["mysql_calls"].find(
-        {}, {"_id": 1, "fk_project": 1, "call_start_time": 1, "revenue_in_usd": 1})]
+        {}, {"_id": 1, "fk_project": 1, "client_contact_id": 1,
+             "call_start_time": 1, "revenue_in_usd": 1})]
     return projects, calls
 
 
@@ -275,6 +277,69 @@ def _metrics_from(pids: set, calls_by_project: dict, proj_recv: dict, proj_has_r
     }
 
 
+def _contact_metrics_from(pids: set, own_calls, proj_recv: dict):
+    """Numbers for ONE Client Contact — activity attributed via the CONTACT'S
+    OWN calls (`calls.client_contact`), not merely by project membership.
+
+    • projects  = projects the contact is listed on (`projects.client_contacts`)
+    • calls      = COUNT of the contact's own calls
+    • revenue    = SUM(revenue_in_usd) of the contact's own calls
+    • serviced   = the contact's listed projects on which THIS contact had a
+                   paid (revenue > 0) call
+    • last_call_date              = MAX(call_start_time) of the contact's calls
+    • last_project_receiving_date = MAX(receiving_date) of the contact's projects
+    Month buckets mirror `_metrics_from`: projects/serviced by the project's
+    receiving_date; calls/revenue by call_start_time (falling back to the
+    project's receiving month when the call timestamp is NULL)."""
+    call_ids, rev, last_call = set(), 0.0, None
+    paid_pids = set()
+    by_month = {"projects": defaultdict(int), "serviced": defaultdict(int),
+                "calls": defaultdict(int), "revenue": defaultdict(float)}
+    # Projects (by receiving month) — the contact's listed projects.
+    for pid in pids:
+        pm = month_key(proj_recv.get(pid))
+        if pm:
+            by_month["projects"][pm] += 1
+    # Calls / revenue — ONLY the contact's own calls.
+    for c in own_calls or ():
+        call_ids.add(c["_id"])
+        amt = float(c.get("revenue_in_usd") or 0)
+        rev += amt
+        pid = c.get("fk_project")
+        st = c.get("call_start_time")
+        if st and (last_call is None or st > last_call):
+            last_call = st
+        pm = month_key(proj_recv.get(pid))
+        cm = month_key(st) or pm
+        if cm:
+            by_month["calls"][cm] += 1
+            by_month["revenue"][cm] += amt
+        if amt > 0 and pid in pids:
+            paid_pids.add(pid)
+    # Serviced (by receiving month) — listed projects with a paid call by contact.
+    for pid in paid_pids:
+        pm = month_key(proj_recv.get(pid))
+        if pm:
+            by_month["serviced"][pm] += 1
+    recv = [proj_recv[p] for p in pids if proj_recv.get(p)]
+    return {
+        "totals_till_date": {
+            "projects": len(pids),
+            "serviced": len(paid_pids),
+            "calls": len(call_ids),
+            "revenue": int(round(rev)),
+        },
+        "activity_by_month": {
+            "projects": dict(by_month["projects"]),
+            "serviced": dict(by_month["serviced"]),
+            "calls": dict(by_month["calls"]),
+            "revenue": {k: int(round(v)) for k, v in by_month["revenue"].items()},
+        },
+        "last_project_receiving_date": max(recv) if recv else None,
+        "last_call_date": last_call,
+    }
+
+
 async def compute_all_metrics():
     """Per-contact and per-client metrics keyed by MySQL id (from the mirror)."""
     projects, calls = await _load_projects_and_calls()
@@ -288,14 +353,25 @@ async def compute_all_metrics():
         for cid in p.get("client_contact_ids") or []:
             contact_projects[cid].add(pid)
 
-    calls_by_project, proj_has_rev = defaultdict(list), set()
+    # Group calls by project (for CLIENT metrics — exact for a whole client) and
+    # by contact (for CONTACT metrics — each call belongs to exactly one contact
+    # via `calls.client_contact`, so contacts are never over-credited).
+    calls_by_project, calls_by_contact, proj_has_rev = defaultdict(list), defaultdict(list), set()
     for c in calls:
         calls_by_project[c.get("fk_project")].append(c)
+        ccid = c.get("client_contact_id")
+        if ccid is not None:
+            calls_by_contact[ccid].append(c)
         if float(c.get("revenue_in_usd") or 0) > 0:
             proj_has_rev.add(c.get("fk_project"))
 
-    contact_metrics = {cid: _metrics_from(pids, calls_by_project, proj_recv, proj_has_rev)
-                       for cid, pids in contact_projects.items()}
+    # Contacts = everyone listed on a project OR who made at least one call.
+    contact_ids = set(contact_projects) | set(calls_by_contact)
+    contact_metrics = {
+        cid: _contact_metrics_from(contact_projects.get(cid, set()),
+                                   calls_by_contact.get(cid, ()), proj_recv)
+        for cid in contact_ids
+    }
     client_metrics = {}
     for clid, pids in client_projects.items():
         m = _metrics_from(pids, calls_by_project, proj_recv, proj_has_rev)
@@ -321,10 +397,24 @@ async def _metrics_for_projects(pids: set):
 
 
 async def contact_metrics_for(mysql_id):
-    """Numbers for ONE contact (per-contact Sync button) — from the mirror."""
+    """Numbers for ONE contact (per-contact Sync button) — from the mirror.
+
+    Uses the SAME contact-aware attribution as the bulk sync: projects via
+    `projects.client_contacts`, but calls/revenue/last-call from the contact's
+    OWN calls (`calls.client_contact`)."""
     cid = int(mysql_id)
-    pids = {p["_id"] async for p in db["mysql_projects"].find({"client_contact_ids": cid}, {"_id": 1})}
-    return await _metrics_for_projects(pids)
+    pids = {p["_id"] async for p in db["mysql_projects"].find(
+        {"client_contact_ids": cid}, {"_id": 1})}
+    own_calls = [c async for c in db["mysql_calls"].find(
+        {"client_contact_id": cid},
+        {"_id": 1, "fk_project": 1, "call_start_time": 1, "revenue_in_usd": 1})]
+    # receiving_date for the contact's listed projects + any project they called on
+    all_pids = set(pids) | {c.get("fk_project") for c in own_calls if c.get("fk_project") is not None}
+    proj_recv = {}
+    if all_pids:
+        proj_recv = {p["_id"]: p.get("receiving_date") async for p in db["mysql_projects"].find(
+            {"_id": {"$in": list(all_pids)}}, {"_id": 1, "receiving_date": 1})}
+    return _contact_metrics_from(pids, own_calls, proj_recv)
 
 
 async def client_metrics_for(mysql_id):
@@ -340,8 +430,10 @@ async def client_metrics_for(mysql_id):
 # ----------------------------------------------------------------- sync: clients
 async def sync_clients(client_metrics=None):
     """Write client numbers onto app `clients` (match by mysql_ref, then by
-    case-insensitive name; create missing). Bulk — one round-trip per 1k rows."""
-    stats = defaultdict(int)
+    case-insensitive name; create missing). Bulk — one round-trip per 1k rows.
+
+    Returns a summary: processed / updated / created / newly_linked / failed /
+    duplicates (always 0 — matching is idempotent, we never insert a duplicate)."""
     if client_metrics is None:
         _, client_metrics = await compute_all_metrics()
 
@@ -352,7 +444,9 @@ async def sync_clients(client_metrics=None):
         if mid is not None:
             by_mid.setdefault(mid, c["_id"])
         by_name.setdefault((c.get("name") or "").strip().lower(), c["_id"])
+    linked_mongo_ids = set(by_mid.values())   # docs that already carry a mysql_ref
 
+    updated = newly_linked = created = failed = 0
     ops, to_create, ts = [], [], now_iso()
     for r in rows:
         mid = r["_id"]
@@ -368,23 +462,32 @@ async def sync_clients(client_metrics=None):
             "serviced_count": metrics.get("serviced_count", 0),
             "last_project_receiving_date": metrics.get("last_project_receiving_date"),
             "last_call_date": metrics.get("last_call_date"),
+            "last_synced_at": ts,
             "updated_on": ts,
         }
-        target = by_mid.get(mid) or by_name.get(name.lower())
+        target = by_mid.get(mid)
+        if target is None and name:
+            target = by_name.get(name.lower())
+            if target is not None and target not in linked_mongo_ids:
+                newly_linked += 1   # existing Mongo-only client linked to MySQL now
         if target is not None:
             ops.append(UpdateOne({"_id": target}, {"$set": set_fields}))
-            stats["matched_linked"] += 1
+            updated += 1
         else:
             to_create.append((r, name, ctype, set_fields))
 
     for i in range(0, len(ops), 1000):
-        await db[CLIENTS].bulk_write(ops[i:i + 1000], ordered=False)
+        try:
+            await db[CLIENTS].bulk_write(ops[i:i + 1000], ordered=False)
+        except BulkWriteError as e:  # continue-on-failure: count & keep going
+            failed += len(e.details.get("writeErrors", []))
+            logger.exception("sync_clients bulk_write batch failed")
 
     if to_create:
         ids = await _alloc_display_ids("client_seq", 1000, len(to_create))
         docs = []
         for (r, name, ctype, set_fields), disp in zip(to_create, ids):
-            created = r.get("created_at")
+            created_at = r.get("created_at")
             docs.append({
                 "id": str(uuid.uuid4()),
                 "display_id": disp,
@@ -393,22 +496,31 @@ async def sync_clients(client_metrics=None):
                 "key_account_manager_ids": [],
                 "client_contact_count": 0,
                 "created_by": {"name": "MySQL Sync"},
-                "created_on": created.isoformat() if isinstance(created, datetime) else (created or ts),
+                "created_on": created_at.isoformat() if isinstance(created_at, datetime) else (created_at or ts),
                 "updated_by": {"name": "MySQL Sync"},
                 **set_fields,
             })
         if docs:
-            await db[CLIENTS].insert_many(docs)
-            stats["created"] += len(docs)
-    logger.info(f"sync_clients: {dict(stats)}")
-    return dict(stats)
+            try:
+                await db[CLIENTS].insert_many(docs, ordered=False)
+                created = len(docs)
+            except BulkWriteError as e:
+                created = e.details.get("nInserted", 0)
+                failed += len(e.details.get("writeErrors", []))
+                logger.exception("sync_clients insert_many failed")
+    summary = {"processed": len(rows), "updated": updated, "created": created,
+               "newly_linked": newly_linked, "failed": failed, "duplicates": 0}
+    logger.info(f"sync_clients: {summary}")
+    return summary
 
 
 # ----------------------------------------------------------------- sync: contacts
 async def sync_contacts(contact_metrics=None):
     """Write contact numbers onto app `client_contacts` (match by mysql_ref,
-    then by case-insensitive email; create missing). Bulk."""
-    stats = defaultdict(int)
+    then by case-insensitive email; create missing). Bulk.
+
+    Returns a summary: processed / updated / created / newly_linked / failed /
+    duplicates (always 0 — idempotent matching, never inserts a duplicate)."""
     if contact_metrics is None:
         contact_metrics, _ = await compute_all_metrics()
 
@@ -425,8 +537,10 @@ async def sync_contacts(contact_metrics=None):
         em = _norm_email(c.get("email"))
         if em:
             by_email.setdefault(em, c["_id"])
+    linked_mongo_ids = set(by_mid.values())   # docs that already carry a mysql_ref
 
     empty = {"projects": 0, "serviced": 0, "calls": 0, "revenue": 0}
+    updated = newly_linked = created = failed = 0
     ops, to_create, ts = [], [], now_iso()
     for r in rows:
         mid = r["_id"]
@@ -438,17 +552,26 @@ async def sync_contacts(contact_metrics=None):
             "activity_by_month": metrics.get("activity_by_month", {}),
             "last_project_receiving_date": metrics.get("last_project_receiving_date"),
             "last_call_date": metrics.get("last_call_date"),
+            "last_synced_at": ts,
             "updated_on": ts,
         }
-        target = by_mid.get(mid) or (by_email.get(email) if email else None)
+        target = by_mid.get(mid)
+        if target is None and email:
+            target = by_email.get(email)
+            if target is not None and target not in linked_mongo_ids:
+                newly_linked += 1   # existing Mongo-only contact linked to MySQL now
         if target is not None:
             ops.append(UpdateOne({"_id": target}, {"$set": set_fields}))
-            stats["matched_linked"] += 1
+            updated += 1
         else:
             to_create.append((r, email, set_fields))
 
     for i in range(0, len(ops), 1000):
-        await db[CONTACTS].bulk_write(ops[i:i + 1000], ordered=False)
+        try:
+            await db[CONTACTS].bulk_write(ops[i:i + 1000], ordered=False)
+        except BulkWriteError as e:  # continue-on-failure
+            failed += len(e.details.get("writeErrors", []))
+            logger.exception("sync_contacts bulk_write batch failed")
 
     if to_create:
         ids = await _alloc_display_ids("client_contact_seq", 1041, len(to_create))
@@ -479,10 +602,17 @@ async def sync_contacts(contact_metrics=None):
                 **set_fields,
             })
         if docs:
-            await db[CONTACTS].insert_many(docs)
-            stats["created"] += len(docs)
-    logger.info(f"sync_contacts: {dict(stats)}")
-    return dict(stats)
+            try:
+                await db[CONTACTS].insert_many(docs, ordered=False)
+                created = len(docs)
+            except BulkWriteError as e:
+                created = e.details.get("nInserted", 0)
+                failed += len(e.details.get("writeErrors", []))
+                logger.exception("sync_contacts insert_many failed")
+    summary = {"processed": len(rows), "updated": updated, "created": created,
+               "newly_linked": newly_linked, "failed": failed, "duplicates": 0}
+    logger.info(f"sync_contacts: {summary}")
+    return summary
 
 
 # ----------------------------------------------------------------- contacts per client
@@ -508,13 +638,16 @@ async def refresh_client_contact_counts():
 
 
 # ----------------------------------------------------------------- orchestration
-async def run_full_sync(scope="all", trigger="manual"):
+async def run_full_sync(scope="all", trigger="manual", run_id=None):
     """1) mirror MySQL → Mongo, 2) recompute numbers, 3) write onto app records.
-    Every run is logged in `crm_sync_runs` (latest = "last synced")."""
+    Every run is logged in `crm_sync_runs` (latest = "last synced"). A `run_id`
+    may be supplied by the caller (so the API can return it immediately for
+    status polling); otherwise one is generated here."""
     started = now_iso()
-    run = {"id": str(uuid.uuid4()), "scope": scope, "trigger": trigger,
+    run = {"id": run_id or str(uuid.uuid4()), "scope": scope, "trigger": trigger,
            "started_at": started, "status": "running"}
-    await db[SYNC_RUNS].insert_one(dict(run))
+    # Idempotent: caller may have pre-created the run doc → upsert, don't duplicate.
+    await db[SYNC_RUNS].update_one({"id": run["id"]}, {"$set": run}, upsert=True)
     result = {}
     try:
         result["mirror"] = await mirror_all()
