@@ -1764,18 +1764,19 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
 
   return (
     <TooltipProvider delayDuration={150}>
-      <Shell inModal={inModal}>
+      <Shell
+        inModal={inModal}
+        actions={!inModal ? (
+          <button
+            onClick={() => navigate("/crm/client-contacts")}
+            className="text-xs text-gray-500 hover:text-[#ec9324] flex items-center gap-1"
+            data-testid="cc-detail-back"
+          >
+            <BackArrow sx={{ fontSize: 14 }} /> Back
+          </button>
+        ) : null}
+      >
         <div className={inModal ? "px-1 pb-2 space-y-4 w-full [&>*:first-child]:!mt-0" : "px-6 pt-4 pb-8 space-y-4 w-full"}>
-          {/* Back link (full-page view only) */}
-          {!inModal && (
-            <button
-              onClick={() => navigate("/crm/client-contacts")}
-              className="text-xs text-gray-500 hover:text-[#ec9324] flex items-center gap-1"
-            >
-              <BackArrow sx={{ fontSize: 14 }} /> Back to Client Contacts
-            </button>
-          )}
-
           {/* Pop-up: faint prev / next "peek" chips pinned to the edges */}
           {swipeEnabled && (
             <PeekNeighbours
@@ -1998,9 +1999,9 @@ function CardStyleIconButton({ icon, tooltip, onClick, disabled = false, testId,
 }
 
 // Stable shell for the detail view: full-page → wrapped in <Layout>, modal → bare.
-function DetailShell({ inModal, children }) {
+function DetailShell({ inModal, actions, children }) {
   if (inModal) return <>{children}</>;
-  return <Layout title="Client Contact">{children}</Layout>;
+  return <Layout title="Client Contact" actions={actions}>{children}</Layout>;
 }
 
 // ================================================================ Peek neighbours
