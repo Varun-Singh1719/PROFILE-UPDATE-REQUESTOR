@@ -2155,6 +2155,28 @@ function buildEmployment(row) {
   return list;
 }
 
+// Split the contact's Industries into 4 hierarchy buckets (Level 0 → Level 3).
+// Structured `industry_paths` carry a short name per level; legacy free-text
+// industries (no path) are split on the separator and slotted by position so a
+// plain single-word industry still lands under Level 0.
+function buildIndustryLevels(row) {
+  const levels = [new Set(), new Set(), new Set(), new Set()];
+  (row.industry_paths || []).forEach((p) => {
+    const parts = (p.shorts && p.shorts.length ? p.shorts : p.names) || [];
+    parts.forEach((name, i) => {
+      if (i < 4 && name && String(name).trim()) levels[i].add(String(name).trim());
+    });
+  });
+  const pathLabels = new Set((row.industry_paths || []).map((p) => p.label));
+  (row.industries || []).forEach((i) => {
+    if (!i || pathLabels.has(i)) return;
+    String(i).split(" → ").forEach((name, idx) => {
+      if (idx < 4 && name.trim()) levels[idx].add(name.trim());
+    });
+  });
+  return levels.map((s) => Array.from(s));
+}
+
 function OverviewTab({ row }) {
   const totals = row.totals_till_date || {};
   const employment = useMemo(() => buildEmployment(row), [row]);
@@ -2186,25 +2208,42 @@ function OverviewTab({ row }) {
 
   return (
     <div className="space-y-4" data-testid="cc-tabpanel-overview">
-      {/* Industries — placed above Employment History & Summary */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-        <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-2">
+      {/* Industries — organised into 4 hierarchy columns (Level 0 → Level 3),
+          each level's segments shown as orange-on-white chips. */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm" data-testid="cc-industries-box">
+        <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-3">
           Industries
         </div>
-        {row.industries?.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5">
-            {row.industries.map((i) => (
-              <span
-                key={i}
-                className="text-xs px-2.5 py-1 rounded-full bg-[#ec9324]/10 text-[#ec9324] border border-[#ec9324]/30 font-medium"
-              >
-                {i}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <div className="text-sm text-gray-400">—</div>
-        )}
+        {(() => {
+          const levels = buildIndustryLevels(row);
+          const hasAny = levels.some((l) => l.length > 0);
+          if (!hasAny) return <div className="text-sm text-gray-400">—</div>;
+          return (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {levels.map((items, lvl) => (
+                <div key={lvl} className="min-w-0" data-testid={`cc-industry-level-${lvl}`}>
+                  <div className="text-[11px] font-semibold text-[#ec9324] mb-2 pb-1.5 border-b border-[#ec9324]/25">
+                    {`Level ${lvl}`}
+                  </div>
+                  {items.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {items.map((name) => (
+                        <span
+                          key={name}
+                          className="text-xs px-2.5 py-1 rounded-full bg-white text-[#ec9324] border border-[#ec9324]/50 font-medium"
+                        >
+                          {name}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-300">—</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Employment History (left) + Summary/Overlap (right) */}
