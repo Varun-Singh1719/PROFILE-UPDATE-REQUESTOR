@@ -1842,79 +1842,84 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
               {initials}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl font-bold text-gray-900">{row.name}</h1>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-gray-100 text-gray-500">
-                  ID: {row.display_id}
-                </span>
-              </div>
+              <h1 className="text-xl font-bold text-gray-900">{row.name}</h1>
               <div className="mt-0.5 text-sm text-gray-600">
                 {row.designation || "—"}
                 {row.client_name ? <span className="text-gray-400"> • </span> : null}
                 {row.client_name || ""}
               </div>
-              <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-x-6 gap-y-3">
-                {/* Email — bold orange, click-to-copy (tooltip UI matches the
-                    notification bell). Shows "—" when absent. */}
-                <HeaderField label="Email">
-                  <CopyableValue
-                    icon={<Mail sx={{ fontSize: 15 }} />}
-                    display={row.email || "—"}
-                    copyValue={row.email}
-                    copiedText="Email Copied"
-                    testId="cc-detail-email"
-                  />
-                </HeaderField>
+              {/* ID — now shown below the designation (not next to the name). */}
+              <div className="mt-1.5">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-gray-100 text-gray-500">
+                  ID: {row.display_id}
+                </span>
+              </div>
 
-                {/* Phone No. — bold orange, click-to-copy. */}
-                <HeaderField label="Phone No.">
-                  <CopyableValue
-                    icon={<Phone sx={{ fontSize: 15 }} />}
-                    display={row.phone ? `${row.phone_isd ? `${row.phone_isd} ` : ""}${row.phone}` : "—"}
-                    copyValue={row.phone ? `${row.phone_isd ? `${row.phone_isd} ` : ""}${row.phone}` : ""}
-                    copiedText="Phone No Copied"
-                    testId="cc-detail-phone"
-                  />
-                </HeaderField>
+              {/* Contact row — no field labels. Email is never truncated and sits
+                  first; the remaining items wrap below it as space allows. */}
+              <div className="mt-3 flex items-center gap-x-5 gap-y-2 flex-wrap">
+                {/* Email — orange, click-to-copy ("Click to Copy" → "Email Copied"). */}
+                <CopyableValue
+                  icon={<Mail sx={{ fontSize: 15 }} />}
+                  display={row.email || "—"}
+                  copyValue={row.email}
+                  copiedText="Email Copied"
+                  testId="cc-detail-email"
+                />
 
-                {/* Location — city, country (falls back to base_location). */}
-                <HeaderField label="Location">
-                  <span className="flex items-center gap-1.5 text-sm text-gray-700 min-w-0" data-testid="cc-detail-location">
-                    <Place sx={{ fontSize: 15 }} className="text-gray-400 shrink-0" />
-                    <span className="truncate">
-                      {[row.city, row.country_name].filter(Boolean).join(", ") || row.base_location || "—"}
+                {/* Phone No. — orange, click-to-copy. */}
+                <CopyableValue
+                  icon={<Phone sx={{ fontSize: 15 }} />}
+                  display={row.phone ? `${row.phone_isd ? `${row.phone_isd} ` : ""}${row.phone}` : "—"}
+                  copyValue={row.phone ? `${row.phone_isd ? `${row.phone_isd} ` : ""}${row.phone}` : ""}
+                  copiedText="Phone No Copied"
+                  testId="cc-detail-phone"
+                />
+
+                {/* Location — hover (icon or value) reveals a "Location" tooltip. */}
+                <IconInfo
+                  icon={<Place sx={{ fontSize: 15 }} />}
+                  label="Location"
+                  value={[row.city, row.country_name].filter(Boolean).join(", ") || row.base_location || "—"}
+                  testId="cc-detail-location"
+                />
+
+                {/* Geography — auto-derived from Country; hover reveals "Geography". */}
+                <IconInfo
+                  icon={<Public sx={{ fontSize: 15 }} />}
+                  label="Geography"
+                  value={getRegionByCountryId(row.country_id) || "—"}
+                  testId="cc-detail-geography"
+                />
+
+                {/* LinkedIn — icon-only, hyperlinked (opens the profile in a new
+                    tab). Greyed-out & non-clickable when no URL is set. */}
+                {row.linkedin_url ? (
+                  <a
+                    href={row.linkedin_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="Open LinkedIn profile"
+                    data-testid="cc-detail-linkedin"
+                    className="group relative inline-flex items-center text-[#0a66c2] hover:text-[#004182] transition-colors"
+                  >
+                    <LinkedIn sx={{ fontSize: 18 }} />
+                    <span className="pointer-events-none absolute top-full mt-1.5 left-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+                      LinkedIn
+                    </span>
+                  </a>
+                ) : (
+                  <span
+                    aria-label="LinkedIn not available"
+                    data-testid="cc-detail-linkedin-empty"
+                    className="group relative inline-flex items-center text-gray-300"
+                  >
+                    <LinkedIn sx={{ fontSize: 18 }} />
+                    <span className="pointer-events-none absolute top-full mt-1.5 left-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+                      LinkedIn
                     </span>
                   </span>
-                </HeaderField>
-
-                {/* Geography — auto-derived from Country (never stored). */}
-                <HeaderField label="Geography">
-                  <span className="flex items-center gap-1.5 text-sm text-gray-700 min-w-0" data-testid="cc-detail-geography">
-                    <Public sx={{ fontSize: 15 }} className="text-gray-400 shrink-0" />
-                    <span className="truncate">{getRegionByCountryId(row.country_id) || "—"}</span>
-                  </span>
-                </HeaderField>
-
-                {/* LinkedIn — link when present, otherwise a greyed-out icon + dash. */}
-                <HeaderField label="LinkedIn">
-                  {row.linkedin_url ? (
-                    <a
-                      href={row.linkedin_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-1.5 text-sm text-[#0a66c2] hover:underline min-w-0"
-                      data-testid="cc-detail-linkedin"
-                    >
-                      <LinkedIn sx={{ fontSize: 15 }} className="shrink-0" />
-                      <span className="truncate">View Profile</span>
-                    </a>
-                  ) : (
-                    <span className="flex items-center gap-1.5 text-sm text-gray-400" data-testid="cc-detail-linkedin-empty">
-                      <LinkedIn sx={{ fontSize: 15 }} className="text-gray-300 shrink-0" />
-                      —
-                    </span>
-                  )}
-                </HeaderField>
+                )}
               </div>
             </div>
 
@@ -2025,21 +2030,26 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
   );
 }
 
-// Small labelled field used in the detail header (tiny uppercase label above
-// the value) — mirrors the "PRIMARY EMAIL / LOCATION / GEOGRAPHY" style used in
-// the Employment History card so the header reads consistently.
-function HeaderField({ label, children }) {
+// Small icon + value used in the detail header (Location / Geography). No text
+// label is rendered inline; instead, hovering EITHER the icon or the value
+// reveals a dark-pill tooltip (same UI/UX as the notification bell) naming the
+// field. Empty values render as a grey dash but the field is never removed.
+function IconInfo({ icon, label, value, testId }) {
   return (
-    <div className="min-w-0">
-      <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">
+    <span
+      className="group relative inline-flex items-center gap-1.5 text-sm text-gray-700"
+      data-testid={testId}
+    >
+      <span className="text-gray-400 shrink-0">{icon}</span>
+      <span>{value}</span>
+      <span className="pointer-events-none absolute top-full mt-1.5 left-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
         {label}
-      </div>
-      {children}
-    </div>
+      </span>
+    </span>
   );
 }
 
-// Copyable value (Email / Phone) — bold orange, click-to-copy. The hover
+// Copyable value (Email / Phone) — orange, click-to-copy. The hover
 // tooltip uses the EXACT same dark-pill UI/UX as the notification bell tooltip
 // (top-full, bg-gray-900, white 11px, shadow-lg). After a click it briefly
 // swaps to a "<X> Copied" confirmation in the same pill. When `copyValue` is
@@ -2087,10 +2097,10 @@ function CopyableValue({ icon, display, copyValue, copiedText, testId }) {
       data-testid={testId}
       data-copied={copied ? "1" : "0"}
       title=""
-      className="group relative inline-flex items-center gap-1.5 text-sm font-bold text-[#ec9324] hover:text-[#d4811f] transition-colors max-w-full"
+      className="group relative inline-flex items-center gap-1.5 text-sm font-normal text-[#ec9324] hover:text-[#d4811f] transition-colors"
     >
       {icon ? <span className="shrink-0">{icon}</span> : null}
-      <span className="truncate">{display}</span>
+      <span className="whitespace-nowrap">{display}</span>
       <span
         className={`pointer-events-none absolute top-full mt-1.5 left-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap transition-opacity z-50 shadow-lg ${
           copied ? "opacity-100" : "opacity-0 group-hover:opacity-100"
