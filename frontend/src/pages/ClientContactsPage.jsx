@@ -362,7 +362,7 @@ export function ClientContactDetailModal({ contactId, open, onClose, navItems = 
         // Fixed height (not max-h) so the pop-up keeps the SAME size on every
         // tab — short / blank tabs (Employment History, Interactions, Notes,
         // Timeline) must not shrink the dialog; content scrolls inside.
-        className="w-[96vw] max-w-[1500px] h-[92vh] max-h-[92vh] overflow-y-auto px-4 sm:px-6 pb-4 sm:pb-6 pt-0"
+        className="w-[96vw] max-w-[1500px] h-[92vh] max-h-[92vh] overflow-y-auto px-4 sm:px-6 pb-4 sm:pb-6 pt-0 outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 focus-visible:ring-0"
         data-testid="cc-detail-modal"
         hideClose
       >
@@ -1853,38 +1853,68 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
                 {row.client_name ? <span className="text-gray-400"> • </span> : null}
                 {row.client_name || ""}
               </div>
-              <div className="flex items-center gap-4 text-[12px] text-gray-500 mt-2 flex-wrap">
-                {row.email && (
-                  <span className="flex items-center gap-1">
-                    <Mail sx={{ fontSize: 14 }} /> {row.email}
+              <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-x-6 gap-y-3">
+                {/* Email — bold orange, click-to-copy (tooltip UI matches the
+                    notification bell). Shows "—" when absent. */}
+                <HeaderField label="Email">
+                  <CopyableValue
+                    icon={<Mail sx={{ fontSize: 15 }} />}
+                    display={row.email || "—"}
+                    copyValue={row.email}
+                    copiedText="Email Copied"
+                    testId="cc-detail-email"
+                  />
+                </HeaderField>
+
+                {/* Phone No. — bold orange, click-to-copy. */}
+                <HeaderField label="Phone No.">
+                  <CopyableValue
+                    icon={<Phone sx={{ fontSize: 15 }} />}
+                    display={row.phone ? `${row.phone_isd ? `${row.phone_isd} ` : ""}${row.phone}` : "—"}
+                    copyValue={row.phone ? `${row.phone_isd ? `${row.phone_isd} ` : ""}${row.phone}` : ""}
+                    copiedText="Phone No Copied"
+                    testId="cc-detail-phone"
+                  />
+                </HeaderField>
+
+                {/* Location — city, country (falls back to base_location). */}
+                <HeaderField label="Location">
+                  <span className="flex items-center gap-1.5 text-sm text-gray-700 min-w-0" data-testid="cc-detail-location">
+                    <Place sx={{ fontSize: 15 }} className="text-gray-400 shrink-0" />
+                    <span className="truncate">
+                      {[row.city, row.country_name].filter(Boolean).join(", ") || row.base_location || "—"}
+                    </span>
                   </span>
-                )}
-                {row.phone && (
-                  <span className="flex items-center gap-1">
-                    <Phone sx={{ fontSize: 14 }} /> {row.phone_isd ? `${row.phone_isd} ` : ""}{row.phone}
+                </HeaderField>
+
+                {/* Geography — auto-derived from Country (never stored). */}
+                <HeaderField label="Geography">
+                  <span className="flex items-center gap-1.5 text-sm text-gray-700 min-w-0" data-testid="cc-detail-geography">
+                    <Public sx={{ fontSize: 15 }} className="text-gray-400 shrink-0" />
+                    <span className="truncate">{getRegionByCountryId(row.country_id) || "—"}</span>
                   </span>
-                )}
-                {(row.city || row.country_name || row.base_location) && (
-                  <span className="flex items-center gap-1" title="Location">
-                    <Place sx={{ fontSize: 14 }} /> {[row.city, row.country_name].filter(Boolean).join(", ") || row.base_location}
-                  </span>
-                )}
-                {/* Geography — auto-derived from Country (never stored) */}
-                {getRegionByCountryId(row.country_id) && (
-                  <span className="flex items-center gap-1" title="Geography" data-testid="cc-detail-geography">
-                    <Public sx={{ fontSize: 14 }} /> {getRegionByCountryId(row.country_id)}
-                  </span>
-                )}
-                {row.linkedin_url && (
-                  <a
-                    href={row.linkedin_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-1 text-[#0a66c2] hover:underline"
-                  >
-                    <LinkedIn sx={{ fontSize: 14 }} /> LinkedIn
-                  </a>
-                )}
+                </HeaderField>
+
+                {/* LinkedIn — link when present, otherwise a greyed-out icon + dash. */}
+                <HeaderField label="LinkedIn">
+                  {row.linkedin_url ? (
+                    <a
+                      href={row.linkedin_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 text-sm text-[#0a66c2] hover:underline min-w-0"
+                      data-testid="cc-detail-linkedin"
+                    >
+                      <LinkedIn sx={{ fontSize: 15 }} className="shrink-0" />
+                      <span className="truncate">View Profile</span>
+                    </a>
+                  ) : (
+                    <span className="flex items-center gap-1.5 text-sm text-gray-400" data-testid="cc-detail-linkedin-empty">
+                      <LinkedIn sx={{ fontSize: 15 }} className="text-gray-300 shrink-0" />
+                      —
+                    </span>
+                  )}
+                </HeaderField>
               </div>
             </div>
 
@@ -1992,6 +2022,83 @@ function ClientContactDetail({ contactId, inModal = false, onClose, swipeNav = n
         />
       </Shell>
     </TooltipProvider>
+  );
+}
+
+// Small labelled field used in the detail header (tiny uppercase label above
+// the value) — mirrors the "PRIMARY EMAIL / LOCATION / GEOGRAPHY" style used in
+// the Employment History card so the header reads consistently.
+function HeaderField({ label, children }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">
+        {label}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// Copyable value (Email / Phone) — bold orange, click-to-copy. The hover
+// tooltip uses the EXACT same dark-pill UI/UX as the notification bell tooltip
+// (top-full, bg-gray-900, white 11px, shadow-lg). After a click it briefly
+// swaps to a "<X> Copied" confirmation in the same pill. When `copyValue` is
+// empty the value renders as a non-interactive grey dash.
+function CopyableValue({ icon, display, copyValue, copiedText, testId }) {
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef(null);
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+
+  if (!copyValue) {
+    return (
+      <span className="flex items-center gap-1.5 text-sm text-gray-400" data-testid={testId ? `${testId}-empty` : undefined}>
+        {icon ? <span className="text-gray-300 shrink-0">{icon}</span> : null}
+        {display}
+      </span>
+    );
+  }
+
+  const doCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(copyValue);
+    } catch {
+      // Fallback for environments without the async clipboard API
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = copyValue;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      } catch { /* ignore */ }
+    }
+    setCopied(true);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setCopied(false), 1600);
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={doCopy}
+      data-testid={testId}
+      data-copied={copied ? "1" : "0"}
+      title=""
+      className="group relative inline-flex items-center gap-1.5 text-sm font-bold text-[#ec9324] hover:text-[#d4811f] transition-colors max-w-full"
+    >
+      {icon ? <span className="shrink-0">{icon}</span> : null}
+      <span className="truncate">{display}</span>
+      <span
+        className={`pointer-events-none absolute top-full mt-1.5 left-0 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded whitespace-nowrap transition-opacity z-50 shadow-lg ${
+          copied ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        }`}
+      >
+        {copied ? copiedText : "Click to Copy"}
+      </span>
+    </button>
   );
 }
 
